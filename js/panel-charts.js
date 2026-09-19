@@ -1,8 +1,12 @@
     function computeTimeSeriesData(baseTemp) {
-      // [CHANGE] 기존엔 "평년"과 "1년 추정치" 두 줄만 있고, 정작 "올해 실제로
-      // 어떻게 흘러왔는지"를 보여주는 선이 없었어요. 연초(1/1)~오늘까지는
-      // 실측값(실선, 붉은색 계열)으로, 오늘~연말까지는 추정값(점선)으로
-      // 나눠서 그립니다. 평년(5~6년 평균) 기준선은 그대로 유지해요.
+      // [FIX] "5년 평균은 19.6도인데 실측값이 8도대로 나온다" - 실제 버그였어요.
+      // 평년선(12개 점)과 실측/추정선(각각 다른 개수의 점)이 서로 다른 x
+      // 간격을 쓰고 있었는데, Chart.js의 interaction mode:'index'는 x값이
+      // 아니라 "배열상 같은 순번(인덱스)"끼리 짝지어서 툴팁을 보여줘요.
+      // 그래서 "7월"에 커서를 올려도 평년선은 진짜 7월(19.6도)을, 실측선은
+      // 순번이 우연히 같았던 2월대(8도대)를 보여주는 식으로 엇갈렸던 거예요.
+      // 세 선 모두 동일한 x 그리드를 쓰게 통일하고, 각 선이 해당하지 않는
+      // 구간은 null로 비워서(Chart.js가 자동으로 건너뜀) 완전히 정렬시켰습니다.
       const daysInCurMonth = new Date(todayObj.getFullYear(), curMonth + 1, 0).getDate();
       const todayX = curMonth + (curDate - 1) / daysInCurMonth;
 
@@ -11,28 +15,29 @@
         return Math.max(0, baseTemp + annualCycle);
       }
 
-      const climLine = [];
-      for (let i = 0; i <= 11; i++) climLine.push({ x: i, y: +climAt(i).toFixed(1) });
-
       const baseAnomaly = baseTemp - climAt(todayX);
 
-      // 실측값: 1월 1일(x=0)부터 오늘까지 - 편차가 0에서 시작해 오늘 시점엔 실제 편차만큼
-      const actualLine = [];
-      const steps = Math.max(4, Math.round(todayX * 4));
-      for (let s = 0; s <= steps; s++) {
-        const x = (todayX * s) / steps;
-        const frac = todayX > 0 ? x / todayX : 1;
-        actualLine.push({ x, y: +(climAt(x) + baseAnomaly * frac).toFixed(1) });
-      }
+      const STEPS = 48; // 0~11(1월~12월)을 세 선이 공유하는 촘촘한 그리드
+      const climLine = [], actualLine = [], projectedLine = [];
+      for (let s = 0; s <= STEPS; s++) {
+        const x = (11 * s) / STEPS;
+        climLine.push({ x, y: +climAt(x).toFixed(1) });
 
-      // 추정값: 오늘부터 12월까지 - 편차가 서서히 평년으로 수렴
-      const projectedLine = [];
-      const remain = Math.max(0.01, 11 - todayX);
-      const remainSteps = Math.max(4, Math.round(remain * 4));
-      for (let s = 0; s <= remainSteps; s++) {
-        const x = todayX + (remain * s) / remainSteps;
-        const decay = Math.exp(-(x - todayX) / 3.2);
-        projectedLine.push({ x, y: +(climAt(x) + baseAnomaly * decay).toFixed(1) });
+        // 실측값: 연초(1/1)부터 오늘까지 - 편차가 0에서 시작해 오늘 시점엔 실제 편차만큼
+        if (x <= todayX) {
+          const frac = todayX > 0 ? x / todayX : 1;
+          actualLine.push({ x, y: +(climAt(x) + baseAnomaly * frac).toFixed(1) });
+        } else {
+          actualLine.push({ x, y: null });
+        }
+
+        // 추정값: 오늘부터 12월까지 - 편차가 서서히 평년으로 수렴
+        if (x >= todayX) {
+          const decay = Math.exp(-(x - todayX) / 3.2);
+          projectedLine.push({ x, y: +(climAt(x) + baseAnomaly * decay).toFixed(1) });
+        } else {
+          projectedLine.push({ x, y: null });
+        }
       }
 
       const todayPoint = [{ x: todayX, y: +baseTemp.toFixed(1) }];

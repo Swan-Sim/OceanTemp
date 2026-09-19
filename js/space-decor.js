@@ -86,8 +86,8 @@
       geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       const mat = new THREE.PointsMaterial({
-        size: 5, map: buildMilkyWayGlowTexture(), vertexColors: true,
-        transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending,
+        size: 7, map: buildMilkyWayGlowTexture(), vertexColors: true,
+        transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending,
         depthWrite: false, sizeAttenuation: true
       });
       return new THREE.Points(geo, mat);
@@ -112,16 +112,25 @@
 
     function buildSolarSystemDecor() {
       const group = new THREE.Group();
+      // [FIX] 수성·금성(지구보다 안쪽 궤도)은 실제로 지구에서 볼 때 태양과
+      // 항상 가까운 각도 안에서만 보여요(최대이각 - 수성 약 28°, 금성 약 47°).
+      // 그래서 태양 쪽에 모아뒀고, 화성·목성·토성·천왕성·해왕성(바깥 궤도 행성)은
+      // 하늘 어디에도 나타날 수 있어서 태양 반대편 쪽에 흩어지게 배치했어요.
       const bodies = [
-        { color: '#fff4d6', size: 90, pos: [260, 130, -720] },   // 태양
-        { color: '#c9c9c9', size: 26, pos: [-190, -95, -430] },  // 달
-        { color: '#b5a897', size: 12, pos: [140, 60, -480] },    // 수성
-        { color: '#e8d9b5', size: 16, pos: [320, -60, -560] },   // 금성
-        { color: '#c1440e', size: 14, pos: [-270, 150, -610] },  // 화성
-        { color: '#d8a774', size: 40, pos: [190, -190, -880] },  // 목성
-        { color: '#e3c78a', size: 34, pos: [-330, 85, -930], ring: 'rgba(210,190,150,0.7)' }, // 토성
-        { color: '#a9d8e0', size: 20, pos: [60, 230, -970] },    // 천왕성
-        { color: '#5b7fe0', size: 20, pos: [-100, -230, -1000] } // 해왕성
+        // 태양 + 안쪽 궤도(수성·금성) - 태양과 같은 방향(+x)에 모음
+        { color: '#fff4d6', size: 180, pos: [300, 150, -700] },  // 태양
+        { color: '#b5a897', size: 24, pos: [250, 90, -480] },    // 수성 (태양 근처)
+        { color: '#e8d9b5', size: 32, pos: [340, -40, -560] },   // 금성 (태양 근처)
+
+        // 달은 지구 궤도상 물체라 태양 방향과 무관
+        { color: '#c9c9c9', size: 52, pos: [-190, -95, -430] },  // 달
+
+        // 바깥 궤도 행성 - 태양 반대편(-x) 쪽에 흩어서 배치
+        { color: '#c1440e', size: 28, pos: [-270, 150, -610] },  // 화성
+        { color: '#d8a774', size: 80, pos: [-190, -190, -880] }, // 목성
+        { color: '#e3c78a', size: 68, pos: [-330, 85, -930], ring: 'rgba(210,190,150,0.7)' }, // 토성
+        { color: '#a9d8e0', size: 40, pos: [-60, 230, -970] },   // 천왕성
+        { color: '#5b7fe0', size: 40, pos: [-100, -230, -1000] } // 해왕성
       ];
       bodies.forEach(b => {
         const sprite = createGlowSprite(b.color, b.size, b.ring);

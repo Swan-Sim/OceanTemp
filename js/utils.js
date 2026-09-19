@@ -1,5 +1,15 @@
     function cToF(c) { return Number((c * 9/5 + 32).toFixed(1)); }
-    function formatTemp(c) { return `${c.toFixed(1)}°C (${cToF(c)}°F)`; }
+    // [CHANGE] 항상 섭씨/화씨를 병행 표기하던 것을 - 섭씨를 기본값으로 하고
+    // 현재 선택된 단위(tempUnit) 하나만 보여주도록 바꿨습니다.
+    // 버튼(°C/°F)으로 전환할 수 있어요.
+    function formatTemp(c) {
+      if (tempUnit === 'F') return `${cToF(c).toFixed(1)}°F`;
+      return `${c.toFixed(1)}°C`;
+    }
+    function formatAxisTemp(v) {
+      if (tempUnit === 'F') return `${Math.round(cToF(v))}°`;
+      return `${v}°`;
+    }
 
     // [CHANGE] 3단계(파랑-흰색-빨강) 부드러운 그라데이션은 중간 온도대가
     // 전부 옅은 파스텔/핑크색으로 뭉개져서 바다 전체가 핑크빛으로 보이고

@@ -9,16 +9,16 @@
     const i18n = {
       ko: {
         appTitle: "전 세계 해양 수온 모니터링 (3D 위성 지구공)",
-        hudCtrl: "위성 지구공 드래그 회전 • 확대 시 평면 상세도 전환",
-        legendBeach: "🤿 다이빙/물놀이 해변 정점",
+        legendBeach: "원하는 곳을 클릭하세요",
         reset: "지구공",
         stationCount: (n) => `총 ${n.toLocaleString()}개 정점`,
         selectPrompt: "정점을 선택하세요",
         infoCoord: (net, lat, lon) => `${net} | 위도: ${lat.toFixed(3)}°, 경도: ${lon.toFixed(3)}°`,
         tabForecast: "과거 5~6년 평균 vs 1년 추정",
         tabDepth: "수심별 수온 (CTD/Argo)",
-        chartPast: "과거 5~6년 평균",
-        chartFuture: "미래 1년 추정치",
+        chartPast: "평년(5~6년 평균)",
+        chartActual: "실측값(연초~오늘)",
+        chartFuture: "추정값(오늘~연말)",
         chartDepthLabel: "수심별 수온",
         todayBadge: `오늘 (${todayLabel})`,
         months: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
@@ -31,20 +31,21 @@
         expandNote: "확대시 전체",
         depthAxisLabel: "수심 (m)",
         tempAxisLabel: "수온 (°C)",
-        fsUnsupported: "이 브라우저는 전체화면 API를 지원하지 않아요.\niOS Safari라면 공유 버튼 → \"홈 화면에 추가\"로 실행하면 주소창 없이 열립니다."
+        fsUnsupported: "이 브라우저는 전체화면 API를 지원하지 않아요.\niOS Safari라면 공유 버튼 → \"홈 화면에 추가\"로 실행하면 주소창 없이 열립니다.",
+        rotateMsg: "화면을 세로로 돌려주세요 — 가로모드에서는 화면이 너무 좁아 지구본과 그래프를 함께 보기 어려워요."
       },
       en: {
         appTitle: "Global Ocean Temp Monitor (3D Satellite Globe)",
-        hudCtrl: "Rotate 3D globe • Zoom for detailed planar map",
-        legendBeach: "🤿 Beach & Shore Dives",
+        legendBeach: "Tap anywhere to explore",
         reset: "Globe",
         stationCount: (n) => `${n.toLocaleString()} Stations`,
         selectPrompt: "Select a station",
         infoCoord: (net, lat, lon) => `${net} | Lat: ${lat.toFixed(3)}°, Lon: ${lon.toFixed(3)}°`,
         tabForecast: "Past 5-6Y Avg vs 1Y Forecast",
         tabDepth: "Depth Profile (CTD/Argo)",
-        chartPast: "Past 5-6Y Avg",
-        chartFuture: "Estimated 1Y Forecast",
+        chartPast: "5-6Y Average",
+        chartActual: "Actual (Jan–Today)",
+        chartFuture: "Projected (Today–Dec)",
         chartDepthLabel: "Depth Water Temp",
         todayBadge: `Today (${todayObj.toLocaleString('en-US', { month: 'short', day: 'numeric' })})`,
         months: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
@@ -57,15 +58,14 @@
         expandNote: "full list on zoom-in",
         depthAxisLabel: "Depth (m)",
         tempAxisLabel: "Temp (°C)",
-        fsUnsupported: "This browser doesn't support the Fullscreen API.\nOn iOS Safari, use Share → \"Add to Home Screen\" to open it without an address bar."
+        fsUnsupported: "This browser doesn't support the Fullscreen API.\nOn iOS Safari, use Share → \"Add to Home Screen\" to open it without an address bar.",
+        rotateMsg: "Please rotate your device to portrait — landscape mode is too narrow to show the globe and chart together."
       }
     };
     const t = i18n[lang] || i18n.en;
 
     document.getElementById('txt-app-title').innerText = t.appTitle;
-    document.getElementById('txt-hud-ctrl').innerText = t.hudCtrl;
     document.getElementById('txt-legend-beach').innerText = t.legendBeach;
-    document.getElementById('btn-reset').innerText = t.reset;
     document.getElementById('st-name').innerText = t.selectPrompt;
     document.getElementById('btn-ts').innerText = t.tabForecast;
     document.getElementById('btn-dp').innerText = t.tabDepth;
@@ -73,6 +73,7 @@
     document.getElementById('btn-fullscreen').title = t.fullscreenTitle;
     document.getElementById('txt-disclaimer-label').innerText = t.disclaimerLabel + ':';
     document.getElementById('txt-disclaimer-body').innerText = t.disclaimer;
+    document.getElementById('txt-rotate-msg').innerText = t.rotateMsg;
 
     // [FIX] 모바일 핀치줌으로 브라우저 자체가 확대되면서 레이아웃 비율이 틀어지는 문제 방지.
     // viewport 메타(user-scalable=no)만으로는 iOS Safari 등에서 완전히 막히지 않아서

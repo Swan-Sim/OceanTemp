@@ -42,7 +42,6 @@
   <main>
     <div id="viewport-container">
       <div class="hud-overlay">
-        <div id="txt-hud-ctrl">위성 지구공 드래그 회전 • 확대 시 평면 상세도 전환</div>
         <div class="color-legend">
           <span>0°C (파랑)</span>
           <div class="legend-bar"></div>
@@ -50,7 +49,7 @@
         </div>
         <div class="legend-item">
           <div class="dot-beach"></div>
-          <span id="txt-legend-beach">🤿 다이빙/물놀이 해변 정점</span>
+          <span id="txt-legend-beach">원하는 곳을 클릭하세요</span>
         </div>
       </div>
 
@@ -65,7 +64,7 @@
         <button class="ctrl-btn" onclick="zoomOut()">−</button>
         <button class="ctrl-btn" onclick="locateUser()" title="내 위치" style="font-size: 13px;" id="btn-locate">🎯</button>
         <button class="ctrl-btn" onclick="toggleFullscreen()" title="전체화면" style="font-size: 13px;" id="btn-fullscreen">⛶</button>
-        <button class="ctrl-btn" onclick="resetGlobeView()" style="font-size: 9px;" id="btn-reset">지구공</button>
+        <button class="ctrl-btn" onclick="toggleTempUnit()" style="font-size: 12px; font-weight:700;" id="btn-reset">°C</button>
       </div>
 
       <!-- 3D 위성 지구공 레이어 -->
@@ -82,7 +81,7 @@
     <section id="bottom-sheet">
       <div class="meta-row">
         <div class="station-name" id="st-name">정점을 선택하세요</div>
-        <div class="temp-val" id="st-temp">--.-°C (--.-°F)</div>
+        <div class="temp-val" id="st-temp">--.-°C</div>
       </div>
       <div class="station-sub" id="st-info">위도 / 경도 / 관측망</div>
 
@@ -93,6 +92,7 @@
 
       <div class="chart-box">
         <canvas id="detailChart"></canvas>
+        <div class="chart-legend-overlay" id="chart-legend"></div>
       </div>
     </section>
   </main>

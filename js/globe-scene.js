@@ -223,6 +223,7 @@ function getCurrentCenterLatLng() {
       // 태양/달/행성은 지구를 드래그해서 돌릴 때 같이 움직여야 한다는 요청 반영 -
       // globeGroup의 자식으로 넣어서 지구 회전에 함께 딸려가게 합니다.
       scene.add(buildStarfield());
+      scene.add(buildMilkyWay());
 
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(width, height);

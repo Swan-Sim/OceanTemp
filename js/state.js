@@ -5,6 +5,7 @@
     let maxTempStation = null;
     let activeMode = 'forecast';
     let chartInstance = null;
+    let tempUnit = 'C'; // [ADD] 섭씨 기본값, 버튼으로 화씨와 전환
 
     function refreshMaxTempStation() {
       maxTempStation = stations.reduce((max, cur) => cur.curTemp > max.curTemp ? cur : max, stations[0]);

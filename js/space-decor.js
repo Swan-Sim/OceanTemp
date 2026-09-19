@@ -36,6 +36,63 @@
       return sprite;
     }
 
+    // [ADD] 은하수(밀키웨이) 배경띠. 별과 마찬가지로 scene에 붙여서
+    // 지구를 드래그해도 같이 돌지 않고 고정된 먼 배경으로 유지합니다.
+    function buildMilkyWayGlowTexture() {
+      const cvs = document.createElement('canvas');
+      cvs.width = 64; cvs.height = 64;
+      const c = cvs.getContext('2d');
+      const grad = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+      grad.addColorStop(0.4, 'rgba(210,215,255,0.35)');
+      grad.addColorStop(1, 'rgba(210,215,255,0)');
+      c.fillStyle = grad;
+      c.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(cvs);
+    }
+
+    function buildMilkyWay() {
+      const count = 7000;
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const tiltX = 0.75, tiltZ = 0.35; // 은하수 띠의 기울기(순전히 장식용 값)
+      const cosX = Math.cos(tiltX), sinX = Math.sin(tiltX);
+      const cosZ = Math.cos(tiltZ), sinZ = Math.sin(tiltZ);
+
+      for (let i = 0; i < count; i++) {
+        const r = 1500 + Math.random() * 300;
+        const along = Math.random() * Math.PI * 2;
+        const spread = (Math.random() - 0.5) * 0.32; // 띠 두께
+        const x0 = Math.cos(along) * r;
+        const z0 = Math.sin(along) * r;
+        const y0 = spread * r;
+
+        const y1 = y0 * cosX - z0 * sinX;
+        const z1 = y0 * sinX + z0 * cosX;
+        const x1 = x0 * cosZ - y1 * sinZ;
+        const y2 = x0 * sinZ + y1 * cosZ;
+
+        positions[i * 3] = x1;
+        positions[i * 3 + 1] = y2;
+        positions[i * 3 + 2] = z1;
+
+        const tint = 0.75 + Math.random() * 0.25;
+        colors[i * 3] = tint * 0.95;
+        colors[i * 3 + 1] = tint * 0.96;
+        colors[i * 3 + 2] = tint;
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const mat = new THREE.PointsMaterial({
+        size: 5, map: buildMilkyWayGlowTexture(), vertexColors: true,
+        transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending,
+        depthWrite: false, sizeAttenuation: true
+      });
+      return new THREE.Points(geo, mat);
+    }
+
     function buildStarfield() {
       const count = 3000;
       const positions = new Float32Array(count * 3);

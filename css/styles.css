@@ -22,15 +22,22 @@
     /* HUD */
     .hud-overlay {
       position: absolute; top: 12px; left: 12px;
-      background: rgba(11, 19, 41, 0.92); border: 1px solid #334155;
+      background: rgba(11, 19, 41, 0.4); border: 1px solid rgba(51,65,85,.5);
       border-radius: 8px; padding: 8px 12px; font-size: 10.5px;
-      pointer-events: none; backdrop-filter: blur(6px); z-index: 50;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+      pointer-events: none; backdrop-filter: blur(4px); z-index: 50;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
     }
-    .color-legend { display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+    .color-legend { display: flex; align-items: center; gap: 5px; }
     .legend-bar { width: 120px; height: 7px; border-radius: 3px; background: linear-gradient(to right, #1e1b4b, #1d4ed8, #2563eb, #3b82f6, #60a5fa, #134e4a, #0f766e, #0d9488, #14b8a6, #5eead4, #fca5a5, #f87171, #ef4444, #dc2626, #991b1b); }
     .legend-item { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
     .dot-beach { width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; border: 1.5px solid #fff; }
+
+    /* [ADD] 모바일에서는 헤더(타이틀)를 없애고, 지구본:그래프 비율을 60:40으로 */
+    @media (max-width: 600px) {
+      header { display: none; }
+      #viewport-container { flex: 0 0 60%; }
+      #bottom-sheet { flex: 0 0 40%; }
+    }
 
     /* 컨트롤 */
     .map-controls {
@@ -72,6 +79,15 @@
     .tab-btn { flex: 1; padding: 4px; font-size: 10px; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; cursor: pointer; }
     .tab-btn.active { background: #0284c7; color: #fff; border-color: #38bdf8; }
     .chart-box { flex: 1; position: relative; min-height: 110px; }
+    .chart-legend-overlay {
+      position: absolute; top: 2px; right: 2px; z-index: 5;
+      display: flex; flex-direction: column; gap: 2px;
+      background: rgba(11,19,41,0.6); border-radius: 5px; padding: 4px 7px;
+      font-size: 8.5px; color: #cbd5e1; pointer-events: none;
+    }
+    .chart-legend-overlay .item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .chart-legend-overlay .swatch { width: 9px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+    .chart-legend-overlay .swatch.dashed { background-image: linear-gradient(to right, currentColor 50%, transparent 50%); background-size: 4px 2px; background-color: transparent !important; }
 
     /* Leaflet 마커 라벨 */
     .lf-marker-wrap { display: flex; align-items: center; white-space: nowrap; cursor: pointer; }

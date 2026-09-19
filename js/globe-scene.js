@@ -114,6 +114,28 @@ function worldPointToLatLon(worldPoint) {
 }
 
 // 현재 화면 정중앙이 가리키는 실제 위경도를 정밀 역산
+// [ADD] "초기 화면을 내 위치 기반으로" 요청 - 임의의 위경도가 카메라를
+// 정면으로 바라보도록 하는 globeGroup 회전값(x, y / z는 항상 0)을 역산합니다.
+// getCurrentCenterLatLng()의 반대 방향 계산이에요.
+function computeRotationForLatLon(lat, lon) {
+  const L = latLonToSpherePos(lat, lon, 1);
+  const candidates = [Math.atan2(L.x, -L.z), Math.atan2(-L.x, L.z)];
+  let best = null;
+  for (const y of candidates) {
+    const c2 = Math.cos(y), s2 = Math.sin(y);
+    const A = L.z * c2 - L.x * s2;
+    const x = Math.atan2(L.y, A);
+    // 검증: 이 (x,y)로 회전했을 때 L이 실제로 (0,0,1) 쪽을 보는지 오차 확인
+    const c1 = Math.cos(x), s1 = Math.sin(x);
+    const rx = L.x * c2 + L.z * s2;
+    const ry = L.x * (s1 * s2) + L.y * c1 + L.z * (-s1 * c2);
+    const rz = L.x * (-c1 * s2) + L.y * s1 + L.z * (c1 * c2);
+    const err = Math.abs(rx) + Math.abs(ry) + Math.abs(rz - 1);
+    if (best === null || err < best.err) best = { x, y, err };
+  }
+  return { x: best.x, y: best.y };
+}
+
 function getCurrentCenterLatLng() {
   // [FIX] 카메라가 "바라보는" 방향(전방 벡터, -Z)이 아니라
   // "카메라 쪽을 향한" 지구 표면 방향을 써야 합니다.

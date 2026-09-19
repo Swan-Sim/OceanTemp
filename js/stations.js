@@ -16,6 +16,13 @@
         { name: "Monastery Beach (Carmel)", shortName: "Monastery Beach", lat: 36.523, lon: -121.928, curTemp: 12.5, depth: true, net: "NOAA/CeNCOOS" },
         { name: "Catalina Island (Casino Point)", shortName: "Casino Point", lat: 33.348, lon: -118.326, curTemp: 18.2, depth: true, net: "NOAA/SCCOOS" },
         { name: "La Jolla Shores Beach (San Diego)", shortName: "La Jolla Shores", lat: 32.858, lon: -117.256, curTemp: 17.5, depth: true, net: "NOAA/SCCOOS" },
+        { name: "Laguna Beach (California, USA)", shortName: "Laguna Beach", lat: 33.542, lon: -117.783, curTemp: 18.0, depth: true, net: "NOAA/SCCOOS" },
+        { name: "Venice Beach (Los Angeles, USA)", shortName: "Venice Beach", lat: 33.985, lon: -118.469, curTemp: 18.5, depth: true, net: "NOAA/SCCOOS" },
+        { name: "Santa Monica Beach (California, USA)", shortName: "Santa Monica", lat: 34.010, lon: -118.496, curTemp: 18.3, depth: true, net: "NOAA/SCCOOS" },
+        { name: "Zuma Beach (Malibu, USA)", shortName: "Malibu", lat: 34.028, lon: -118.821, curTemp: 17.8, depth: true, net: "NOAA/SCCOOS" },
+        { name: "Cocoa Beach (Florida, USA)", shortName: "Cocoa Beach", lat: 28.320, lon: -80.608, curTemp: 27.5, depth: true, net: "NOAA/NDBC" },
+        { name: "Daytona Beach (Florida, USA)", shortName: "Daytona Beach", lat: 29.211, lon: -81.023, curTemp: 27.0, depth: true, net: "NOAA/NDBC" },
+        { name: "Lanikai Beach (Oahu, Hawaii)", shortName: "Lanikai", lat: 21.393, lon: -157.715, curTemp: 26.3, depth: true, net: "NOAA/PacIOOS" },
 
         { name: "고성 아야진 해변 (Ayajin Beach)", shortName: "아야진 해변", lat: 38.272, lon: 128.555, curTemp: 15.2, depth: true, net: "Beach/NIFS" },
         { name: "속초 등대해변 (Sokcho Light Beach)", shortName: "속초등대", lat: 38.214, lon: 128.601, curTemp: 15.5, depth: true, net: "Beach/NIFS" },
@@ -235,7 +242,20 @@
 
         // 대만 추가
         { name: "Green Island (Taiwan)", shortName: "뤼다오", lat: 22.662, lon: 121.491, curTemp: 26.8, depth: true, net: "Beach/CWA" },
-        { name: "Xiaoliuqiu (Taiwan)", shortName: "샤오류추", lat: 22.352, lon: 120.377, curTemp: 27.0, depth: true, net: "Beach/CWA" }
+        { name: "Xiaoliuqiu (Taiwan)", shortName: "샤오류추", lat: 22.352, lon: 120.377, curTemp: 27.0, depth: true, net: "Beach/CWA" },
+
+        // 그 밖의 유명하지만 빠져있던 정점
+        { name: "Patong Beach (Phuket, Thailand)", shortName: "파통비치", lat: 7.896, lon: 98.296, curTemp: 29.0, depth: true, net: "Beach/TMD" },
+        { name: "Railay Beach (Krabi, Thailand)", shortName: "라일레이", lat: 8.010, lon: 98.837, curTemp: 29.2, depth: true, net: "Beach/TMD" },
+        { name: "Saint-Tropez Beach (France)", shortName: "생트로페", lat: 43.267, lon: 6.638, curTemp: 21.8, depth: true, net: "Beach/local" },
+        { name: "Positano Beach (Amalfi, Italy)", shortName: "포지타노", lat: 40.628, lon: 14.485, curTemp: 22.2, depth: true, net: "Beach/local" },
+        { name: "Lido di Venezia (Italy)", shortName: "리도디베네치아", lat: 45.410, lon: 12.370, curTemp: 20.5, depth: true, net: "Beach/local" },
+        { name: "Surfers Paradise (Gold Coast, Australia)", shortName: "서퍼스파라다이스", lat: -28.003, lon: 153.430, curTemp: 21.5, depth: true, net: "Beach/BOM" },
+        { name: "Anse Source d'Argent (Seychelles)", shortName: "앙스소스다르장", lat: -4.371, lon: 55.826, curTemp: 27.5, depth: true, net: "Beach/local" },
+        { name: "Clifton Beach (Cape Town, South Africa)", shortName: "클리프턴비치", lat: -33.951, lon: 18.377, curTemp: 16.5, depth: true, net: "Beach/SAWS" },
+        { name: "Seminyak Beach (Bali, Indonesia)", shortName: "스미냑", lat: -8.690, lon: 115.164, curTemp: 28.4, depth: true, net: "Beach/BMKG" },
+        { name: "Playa del Carmen (Mexico)", shortName: "플라야델카르멘", lat: 20.629, lon: -87.073, curTemp: 28.0, depth: true, net: "Beach/SMN" },
+        { name: "Pink Sands Beach (Harbour Island, Bahamas)", shortName: "핑크샌즈비치", lat: 25.508, lon: -76.635, curTemp: 27.8, depth: true, net: "Beach/local" }
       ];
 
       beachSpots.forEach(s => {

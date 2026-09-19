@@ -52,6 +52,23 @@
 
       refreshMaxTempStation();
       initThreeGlobe();
+
+      // [ADD] "초기 화면을 내 위치 기반으로, 줌인은 하지 말고" 요청 반영.
+      // 페이지 로딩을 막지 않도록 비동기로 위치를 물어보고, 응답이 오면
+      // 카메라 거리(줌)는 그대로 둔 채 방향(회전)만 사용자 위치 쪽으로 돌립니다.
+      // 허용 안 하거나 실패해도 조용히 기존 기본 방향을 유지합니다.
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (!globeGroup) return;
+            const { x, y } = computeRotationForLatLon(pos.coords.latitude, pos.coords.longitude);
+            globeGroup.rotation.set(x, y, 0);
+            if (typeof updateLabelOrientation === 'function') updateLabelOrientation();
+          },
+          (err) => { console.warn('[geo] 위치 기반 초기 방향 설정 실패 - 기본 방향 유지:', err.message); },
+          { timeout: 8000, maximumAge: 600000 }
+        );
+      }
     }
 
     window.addEventListener('DOMContentLoaded', () => {

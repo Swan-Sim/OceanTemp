@@ -74,14 +74,18 @@
           type: 'line',
           data: {
             datasets: [
-              { label: t.chartPast, data: data.climLine, borderColor: '#64748b', borderDash: [4, 4], tension: 0.3, pointRadius: 0 },
-              { label: t.chartActual, data: data.actualLine, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.12)', fill: true, tension: 0.25, pointRadius: 0, borderWidth: 2.2 },
-              { label: t.chartFuture, data: data.projectedLine, borderColor: '#38bdf8', borderDash: [5, 4], tension: 0.25, pointRadius: 0, borderWidth: 2 },
-              { label: t.todayBadge, data: data.todayPoint, borderColor: '#ef4444', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHoverRadius: 7, showLine: false }
+              { label: t.chartPast, data: data.climLine, borderColor: '#64748b', borderDash: [4, 4], tension: 0.3, pointRadius: 0, pointHitRadius: 20 },
+              { label: t.chartActual, data: data.actualLine, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.12)', fill: true, tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2.2 },
+              { label: t.chartFuture, data: data.projectedLine, borderColor: '#fca5a5', borderDash: [5, 4], tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2 },
+              { label: t.todayBadge, data: data.todayPoint, borderColor: '#ef4444', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHitRadius: 16, pointHoverRadius: 7, showLine: false }
             ]
           },
           options: {
             responsive: true, maintainAspectRatio: false,
+            // [FIX] "손가락으로 선택이 잘 안 된다" - 점 자체(반경 0)에 정확히
+            // 닿아야만 반응하던 기본 동작 대신, x축 세로 전체 어디를 눌러도
+            // 그 지점에서 가장 가까운 값을 찾아 보여주도록 히트 영역을 키웠습니다.
+            interaction: { mode: 'index', intersect: false },
             plugins: {
               legend: { display: false }, // [CHANGE] 기본 범례는 끄고, 차트 안 커스텀 범례로 대체
               tooltip: {
@@ -112,7 +116,7 @@
         legendBox.innerHTML = `
           <div class="item"><span class="swatch dashed" style="color:#64748b;background:#64748b;"></span>${t.chartPast}</div>
           <div class="item"><span class="swatch" style="background:#ef4444;"></span>${t.chartActual}</div>
-          <div class="item"><span class="swatch dashed" style="color:#38bdf8;background:#38bdf8;"></span>${t.chartFuture}</div>
+          <div class="item"><span class="swatch dashed" style="color:#fca5a5;background:#fca5a5;"></span>${t.chartFuture}</div>
         `;
       } else {
         const data = getDepthProfile(selectedStation.curTemp, selectedStation.isBeach);
@@ -120,10 +124,11 @@
           type: 'line',
           data: {
             labels: data.depths.map(d => `${d}m`),
-            datasets: [{ label: t.chartDepthLabel, data: data.profile, borderColor: '#f43f5e', backgroundColor: 'rgba(244, 63, 94, 0.15)', fill: true, tension: 0.2, pointRadius: 3 }]
+            datasets: [{ label: t.chartDepthLabel, data: data.profile, borderColor: '#f43f5e', backgroundColor: 'rgba(244, 63, 94, 0.15)', fill: true, tension: 0.2, pointRadius: 3, pointHitRadius: 20 }]
           },
           options: {
             responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
             plugins: {
               legend: { display: false },
               tooltip: { callbacks: { label: (ctx) => `${formatTemp(ctx.parsed.y)}` } }

@@ -8,54 +8,51 @@ function latLonToSpherePos(lat, lon, radius) {
   );
 }
 
-    // [CHANGE] "선택되면 정점 크기가 커지고 테두리가 다른 색으로 두꺼워지게"
-    // 요청 반영 - 별도의 링을 덧대는 대신, 정점 자체를 두 가지 텍스처(평소/선택)로
-    // 미리 만들어두고 선택 상태에 따라 스프라이트의 텍스처를 통째로 바꿉니다.
-    function drawDotTexture(station, selected) {
+    // [CHANGE] "정점 선택 방식을 통일" + "왼쪽 반구에서는 라벨이 정점 왼쪽으로
+    // 가야 함" 두 요청을 하나의 공용 함수로 처리합니다. selected=true면 해변이든
+    // NOAA 격자 정점이든 동일한 스타일(큰 원 + 두꺼운 주황 테두리 + 큰 라벨)로
+    // 그려지고, labelOnLeft로 라벨을 점의 왼쪽/오른쪽 중 어디에 그릴지 정합니다.
+    function drawMarkerTexture(station, opts) {
+      const selected = !!opts.selected;
+      const labelOnLeft = !!opts.labelOnLeft;
+      const label = opts.label;
+
       const canvas = document.createElement('canvas');
-      canvas.width = 256;
+      canvas.width = 340;
       canvas.height = 64;
       const ctx = canvas.getContext('2d');
 
       const colorRGB = getTempColor(station.curTemp);
-      const dotX = 22, dotY = 32;
-      const dotR = selected ? 16 : 10; // 선택되면 더 크게
-      const borderColor = selected ? '#f97316' : '#ffffff'; // 선택되면 주황색 굵은 테두리
+      const dotY = 32;
+      const dotR = selected ? 16 : 10;
+      const dotX = labelOnLeft ? (canvas.width - 26) : 26;
+      const borderColor = selected ? '#f97316' : '#ffffff';
       const borderWidth = selected ? 4 : 2;
 
+      ctx.save();
       if (selected) {
-        // 은은한 바깥 발광으로 눈에 확 띄게
-        ctx.save();
         ctx.shadowColor = '#f97316';
         ctx.shadowBlur = 14;
-        ctx.beginPath();
-        ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
-        ctx.fillStyle = `rgb(${colorRGB})`;
-        ctx.globalAlpha = 0.95;
-        ctx.fill();
-        ctx.restore();
-      } else {
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.fillStyle = `rgb(${colorRGB})`;
-        ctx.beginPath();
-        ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
       }
+      ctx.globalAlpha = selected ? 0.95 : 0.85;
+      ctx.fillStyle = `rgb(${colorRGB})`;
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
       ctx.lineWidth = borderWidth;
       ctx.strokeStyle = borderColor;
       ctx.beginPath();
       ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 반투명 캡슐 라벨 - 선택되면 글씨도 더 크게
-      if (station.label) {
+      if (label) {
         ctx.font = `bold ${selected ? 26 : 22}px -apple-system, BlinkMacSystemFont, sans-serif`;
-        const textWidth = ctx.measureText(station.label).width;
-        const boxX = dotX + dotR + 14;
+        const textWidth = Math.min(ctx.measureText(label).width, canvas.width - dotR * 2 - 40);
         const boxH = selected ? 40 : 36;
         const boxY = dotY - boxH / 2;
+        const boxX = labelOnLeft ? (dotX - dotR - 14 - (textWidth + 18)) : (dotX + dotR + 14);
 
         ctx.fillStyle = selected ? 'rgba(249, 115, 22, 0.28)' : 'rgba(15, 23, 42, 0.72)';
         ctx.strokeStyle = selected ? '#f97316' : 'rgba(255, 255, 255, 0.45)';
@@ -67,26 +64,33 @@ function latLonToSpherePos(lat, lon, radius) {
         ctx.stroke();
 
         ctx.fillStyle = '#f8fafc';
-        ctx.fillText(station.label, boxX + 9, dotY + (selected ? 9 : 7));
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(boxX, boxY, textWidth + 18, boxH);
+        ctx.clip();
+        ctx.fillText(label, boxX + 9, dotY + (selected ? 9 : 7));
+        ctx.restore();
       }
 
       return { texture: new THREE.CanvasTexture(canvas), dotX, dotY, canvasW: canvas.width, canvasH: canvas.height };
     }
 
     function createBeachSprite(station) {
-      const normal = drawDotTexture(station, false);
-      const selected = drawDotTexture(station, true);
+      const label = station.label;
+      const rightVariant = drawMarkerTexture(station, { selected: false, labelOnLeft: false, label });
+      const leftVariant = drawMarkerTexture(station, { selected: false, labelOnLeft: true, label });
 
-      const material = new THREE.SpriteMaterial({ map: normal.texture, depthTest: true });
+      const material = new THREE.SpriteMaterial({ map: rightVariant.texture, depthTest: true });
       const sprite = new THREE.Sprite(material);
       sprite.userData.baseScale = [16, 4]; // 줌 반응형 크기 조절 기준값
       sprite.userData.stationId = station.id;
-      sprite.userData.normalTexture = normal.texture;
-      sprite.userData.selectedTexture = selected.texture;
+      sprite.userData.rightVariant = rightVariant;
+      sprite.userData.leftVariant = leftVariant;
+      sprite.userData.labelOnLeft = false;
       sprite.scale.set(16, 4, 1);
 
       // [FIX] 기준점을 캔버스 정중앙이 아니라 점(dot)의 실제 좌표로 이동
-      sprite.center.set(normal.dotX / normal.canvasW, 1 - normal.dotY / normal.canvasH);
+      sprite.center.set(rightVariant.dotX / rightVariant.canvasW, 1 - rightVariant.dotY / rightVariant.canvasH);
 
       const pos = latLonToSpherePos(station.coords[1], station.coords[0], GLOBE_RADIUS + 0.3);
       sprite.position.copy(pos);
@@ -161,52 +165,88 @@ function getCurrentCenterLatLng() {
       updateZoomGauge();
     }
 
-    // [CHANGE] 링은 이름표가 없는 원양(NOAA) 격자 정점 선택 표시 전용으로만 씁니다.
-    // 해변 정점은 이제 마커 자체가 커지고 테두리 색이 바뀌는 방식으로 표시돼서
-    // 링이 필요 없어요. 색도 "다른 색"으로(기존 노란색 → 주황색) 바꿨습니다.
-    function createSelectionRing() {
-      const cvs = document.createElement('canvas');
-      cvs.width = 64; cvs.height = 64;
-      const c = cvs.getContext('2d');
-      c.beginPath();
-      c.arc(32, 32, 22, 0, Math.PI * 2);
-      c.lineWidth = 7;
-      c.strokeStyle = '#f97316';
-      c.shadowColor = '#f97316';
-      c.shadowBlur = 10;
-      c.stroke();
-      const texture = new THREE.CanvasTexture(cvs);
-      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true });
-      return new THREE.Sprite(material);
+    // [CHANGE] "선택 표시를 해변 정점 스타일로 통일" 요청 반영 - 해변이든
+    // NOAA 격자 정점이든 상관없이, 선택된 정점 자리에 딱 하나의 재사용
+    // 마커(크고 주황 테두리+이름표)를 올려서 보여줍니다. 별도의 링이나
+    // 정점별 텍스처 스왑이 아니라 이 마커 하나만 관리하면 돼서 더 단순합니다.
+    function createSelectionMarker() {
+      const material = new THREE.SpriteMaterial({ transparent: true, depthTest: true });
+      const sprite = new THREE.Sprite(material);
+      sprite.userData.baseScale = [16, 4];
+      sprite.visible = false;
+      return sprite;
+    }
+
+    function refreshSelectionMarker() {
+      if (!selectionMarker) return;
+      if (!selectedStation) { selectionMarker.visible = false; return; }
+      if (selectionMarker.userData.forId !== selectedStation.id) {
+        selectionMarker.userData.forId = selectedStation.id;
+        const label = selectedStation.label || selectedStation.name.split(' (')[0];
+        selectionMarker.userData.rightVariant = drawMarkerTexture(selectedStation, { selected: true, labelOnLeft: false, label });
+        selectionMarker.userData.leftVariant = drawMarkerTexture(selectedStation, { selected: true, labelOnLeft: true, label });
+        selectionMarker.userData.labelOnLeft = null; // 강제로 다시 계산되게
+        const v = selectionMarker.userData.rightVariant;
+        selectionMarker.material.map = v.texture;
+        selectionMarker.material.needsUpdate = true;
+        selectionMarker.center.set(v.dotX / v.canvasW, 1 - v.dotY / v.canvasH);
+      }
+      const pos = latLonToSpherePos(selectedStation.coords[1], selectedStation.coords[0], GLOBE_RADIUS + 0.33);
+      selectionMarker.position.copy(pos);
+      selectionMarker.visible = true;
+    }
+
+    // [FIX] "정점명 텍스트 상자가 지구 왼쪽에서 아래로 숨어버림" - 스프라이트는
+    // 화면 전체가 하나의 평평한 판이라 하나의 깊이값을 쓰는데, 라벨이 지구
+    // 중심 쪽(안쪽)으로 뻗으면 그 자리의 실제 지구 표면(더 가까운 깊이)에
+    // 가려지는 문제였어요. 라벨이 지구 중심에서 "바깥쪽"으로(화면에서 정점이
+    // 왼쪽 반구에 있으면 라벨도 왼쪽으로) 뻗도록 매 프레임 방향을 다시 계산합니다.
+    function updateLabelOrientation() {
+      if (!camera) return;
+      const tmp = new THREE.Vector3();
+      beachSprites.forEach(s => {
+        s.getWorldPosition(tmp);
+        tmp.project(camera);
+        const wantLeft = tmp.x < 0;
+        if (s.userData.labelOnLeft !== wantLeft) {
+          s.userData.labelOnLeft = wantLeft;
+          const v = wantLeft ? s.userData.leftVariant : s.userData.rightVariant;
+          s.material.map = v.texture;
+          s.material.needsUpdate = true;
+          s.center.set(v.dotX / v.canvasW, 1 - v.dotY / v.canvasH);
+        }
+      });
+      if (selectionMarker && selectionMarker.visible) {
+        selectionMarker.getWorldPosition(tmp);
+        tmp.project(camera);
+        const wantLeft = tmp.x < 0;
+        if (selectionMarker.userData.labelOnLeft !== wantLeft) {
+          selectionMarker.userData.labelOnLeft = wantLeft;
+          const v = wantLeft ? selectionMarker.userData.leftVariant : selectionMarker.userData.rightVariant;
+          if (v) {
+            selectionMarker.material.map = v.texture;
+            selectionMarker.material.needsUpdate = true;
+            selectionMarker.center.set(v.dotX / v.canvasW, 1 - v.dotY / v.canvasH);
+          }
+        }
+      }
     }
 
     // [ADD] 지구본을 축소(줌아웃)해도 마커가 너무 작아져서 안 보이지 않도록,
     // 카메라 거리에 비례해서 마커의 월드 스케일을 키워 화면상 크기를 어느 정도
     // 일정하게 유지합니다 (거리가 멀어질수록 실제 크기를 키우는 방식).
-    // 선택된 해변 정점은 텍스처를 "선택됨" 버전으로 바꿔서 표시합니다.
     function updateBeachSpriteScale() {
       const factor = cameraDistance / 170; // 170 = 기본(리셋) 거리 기준
       beachSprites.forEach(s => {
         const [bw, bh] = s.userData.baseScale;
-        const isSelected = selectedStation && s.userData.stationId === selectedStation.id;
         s.scale.set(bw * factor, bh * factor, 1);
-        const wantMap = isSelected ? s.userData.selectedTexture : s.userData.normalTexture;
-        if (s.material.map !== wantMap) {
-          s.material.map = wantMap;
-          s.material.needsUpdate = true;
-        }
       });
-      if (selectionRing) {
-        // 원양 격자(해변이 아닌) 정점을 선택했을 때만 링을 보여줍니다.
-        if (selectedStation && !selectedStation.isBeach) {
-          const pos = latLonToSpherePos(selectedStation.coords[1], selectedStation.coords[0], GLOBE_RADIUS + 0.32);
-          selectionRing.position.copy(pos);
-          selectionRing.scale.set(13 * factor, 13 * factor, 1);
-          selectionRing.visible = true;
-        } else {
-          selectionRing.visible = false;
-        }
+      refreshSelectionMarker();
+      if (selectionMarker && selectionMarker.visible) {
+        const [bw, bh] = selectionMarker.userData.baseScale;
+        selectionMarker.scale.set(bw * factor, bh * factor, 1);
       }
+      updateLabelOrientation();
     }
 
     function updateZoomGauge() {
@@ -228,7 +268,11 @@ function getCurrentCenterLatLng() {
     // 저해상도 캔버스를 구체에 입히면 GPU가 자동으로 부드럽게 보간해 줘서
     // 계산량을 줄이면서도 매끄러운 그라데이션 느낌을 낼 수 있어요.
     function buildHeatOverlayTexture() {
-      const W = 180, H = 90;
+      // [FIX] 해상도를 올려서(180x90 → 320x160) 확대했을 때 보이던 계단현상을
+      // 줄였습니다. 완전 불투명(1.0)으로 바꿔서 아래 위성 텍스처의 구름(흰색)이
+      // 비쳐 보이던 것도 없앴어요 - "여전히 하얀색이 있다"의 실제 원인이
+      // 색상표가 아니라 구름이 살짝 비쳐 보이던 거였습니다.
+      const W = 320, H = 160;
       const canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
@@ -257,7 +301,7 @@ function getCurrentCenterLatLng() {
           const influence = Math.max(0, Math.min(1, 1 - nearest / 35));
           const finalTemp = ambient * (1 - influence) + idw * influence;
 
-          ctx.fillStyle = `rgba(${getTempColor(finalTemp)}, 0.92)`;
+          ctx.fillStyle = `rgba(${getTempColor(finalTemp)}, 1)`;
           ctx.fillRect(px, py, 1, 1);
         }
       }
@@ -355,9 +399,8 @@ function getCurrentCenterLatLng() {
       });
 
       // [ADD] 선택된 정점 표시용 링 (처음엔 숨김, selectStation 시 표시)
-      selectionRing = createSelectionRing();
-      selectionRing.visible = false;
-      globeGroup.add(selectionRing);
+      selectionMarker = createSelectionMarker();
+      globeGroup.add(selectionMarker);
 
       // 태평양 방면 기본 회전
       globeGroup.rotation.set(0.35, -2.1, 0);
@@ -414,6 +457,7 @@ function getCurrentCenterLatLng() {
         globeGroup.rotation.y += deltaX * 0.005;
         globeGroup.rotation.x += deltaY * 0.005;
         globeGroup.rotation.x = Math.max(-1.2, Math.min(1.2, globeGroup.rotation.x));
+        updateLabelOrientation();
 
         prevMousePos = { x: clientX, y: clientY };
       }

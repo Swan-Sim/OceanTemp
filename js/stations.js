@@ -181,11 +181,19 @@
     // 초기 로딩 시간과 불필요한 연산을 줄이기 위한 지연 로딩입니다.
     function generateOceanGridStations() {
       const list = [];
-      for (let lat = -70; lat <= 70; lat += 4.5) {
-        for (let lon = -180; lon <= 180; lon += 5.5) {
+      // [FIX] "일부 정점들이 유독 붙어있다" - 위도/경도를 똑같은 각도 간격으로
+      // 찍으면, 위도선은 극에 가까워질수록 실제 거리가 좁아지기 때문에
+      // (경도 1도가 적도에서는 약 111km지만 위도 70도에서는 약 38km) 고위도
+      // 지역 정점들이 실제로는 훨씬 촘촘하게 뭉쳐 보였어요. 위도가 높아질수록
+      // 경도 간격을 1/cos(위도)만큼 넓혀서 실제 거리 기준으로 고르게 폅니다.
+      const latStep = 4.5;
+      const baseLonStep = 5.5;
+      for (let lat = -70; lat <= 70; lat += latStep) {
+        const lonStep = Math.min(30, baseLonStep / Math.max(0.28, Math.cos(lat * Math.PI / 180)));
+        for (let lon = -180; lon <= 180; lon += lonStep) {
           // 지터(무작위 흔들림)를 먼저 적용한 좌표로 육지 판정을 합니다.
           const jLat = lat + (Math.random() * 0.5);
-          const jLon = lon + (Math.random() * 0.5);
+          const jLon = lon + (Math.random() * lonStep * 0.1);
           if (isOnLand(jLon, jLat)) continue;
 
           let base = 31.0 - Math.abs(jLat) * 0.45 + (Math.random() * 2 - 1);

@@ -21,30 +21,21 @@ function latLonToSpherePos(lat, lon, radius) {
       const ctx = canvas.getContext('2d');
 
       const colorRGB = getTempColor(station.curTemp);
-      const dotX = 26, dotY = 32, sq = 30;
+      const dotX = 22, dotY = 32, dotR = 10;
 
-      // [CHANGE] 작은 원형 점 대신 더 큼직하고 반투명한 사각형 마커로 변경 —
-      // 가독성 개선 요청 반영 (원형 + 무지개색보다 인식하기 쉬움)
+      // [CHANGE] 네모 마커를 다시 원형으로, 크기도 줄였습니다.
       ctx.save();
-      ctx.globalAlpha = 0.82;
+      ctx.globalAlpha = 0.85;
       ctx.fillStyle = `rgb(${colorRGB})`;
-      if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(dotX - sq / 2, dotY - sq / 2, sq, sq, 6);
-        ctx.fill();
-      } else {
-        ctx.fillRect(dotX - sq / 2, dotY - sq / 2, sq, sq);
-      }
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 2;
       ctx.strokeStyle = '#ffffff';
-      if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(dotX - sq / 2, dotY - sq / 2, sq, sq, 6);
-        ctx.stroke();
-      } else {
-        ctx.strokeRect(dotX - sq / 2, dotY - sq / 2, sq, sq);
-      }
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+      ctx.stroke();
 
       // 반투명 캡슐 라벨
       if (station.label) {
@@ -217,12 +208,8 @@ function getCurrentCenterLatLng() {
     }
 
     function initThreeGlobe() {
-      // [FIX-지연로딩] 처음엔 해변/다이빙 정점(가벼움, ~80개)만 만들고,
-      // 무거운 전세계 해양 격자(~2천여 개, 육지 판정 포함)는 실제로 확대해서
-      // 상세지도로 들어갈 때(showDetailMap) 딱 한 번만 계산합니다.
       stations = generateBeachStations();
       refreshMaxTempStation();
-      document.getElementById('point-counter').innerText = t.stationCount(stations.length) + ' · ' + t.expandNote;
 
       const container = document.getElementById('globe-canvas-container');
       const width = container.clientWidth;
@@ -254,14 +241,44 @@ function getCurrentCenterLatLng() {
       globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
       globeGroup.add(globeMesh);
 
-      // [ADD] 바다 위에 덧씌우는 부드러운 수온 색상 필드 (windy.com/earth.nullschool 느낌)
+      // [ADD] 히트필드는 해변(실제 지명) 정점만으로 계산합니다 -
+      // 격자 정점까지 넣으면 IDW 보간 계산량이 커져서 무겁고, 의미도 크게
+      // 달라지지 않아요. 바다 위에 덧씌우는 부드러운 수온 색상 필드
+      // (windy.com/earth.nullschool 느낌)
       const heatTexture = buildHeatOverlayTexture();
       const heatGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.15, 64, 64);
       const heatMaterial = new THREE.MeshBasicMaterial({ map: heatTexture, transparent: true, depthWrite: false });
       const heatMesh = new THREE.Mesh(heatGeometry, heatMaterial);
       globeGroup.add(heatMesh);
 
-      // 해변 정점 (초기 로딩엔 이것만 표시 - 원양 격자는 상세지도 진입 시 지연 로드)
+      // [ADD] "지구공 상태에서도 NOAA 정점들 보이게" 요청 반영 -
+      // 전세계 해양 격자 정점을 여기서 바로 생성해 지구본에도 표시합니다.
+      // (이전엔 상세지도 진입 시에만 지연 로드했는데, 육지 판정이 이미
+      //  가벼워졌으니 처음부터 만들어도 부담이 적어요.)
+      const gridStations = generateOceanGridStations();
+      stations = stations.concat(gridStations);
+      fullGridLoaded = true;
+      refreshMaxTempStation();
+      document.getElementById('point-counter').innerText = t.stationCount(stations.length);
+
+      const dotGeometry = new THREE.SphereGeometry(0.4, 6, 6);
+      const dotMaterial = new THREE.MeshBasicMaterial();
+      const instancedDots = new THREE.InstancedMesh(dotGeometry, dotMaterial, gridStations.length);
+      const dummy = new THREE.Object3D();
+      const colorHelper = new THREE.Color();
+      gridStations.forEach((st, i) => {
+        const pos = latLonToSpherePos(st.coords[1], st.coords[0], GLOBE_RADIUS + 0.25);
+        dummy.position.copy(pos);
+        dummy.updateMatrix();
+        instancedDots.setMatrixAt(i, dummy.matrix);
+        colorHelper.setStyle(`rgb(${getTempColor(st.curTemp)})`);
+        instancedDots.setColorAt(i, colorHelper);
+      });
+      instancedDots.instanceMatrix.needsUpdate = true;
+      instancedDots.instanceColor.needsUpdate = true;
+      globeGroup.add(instancedDots);
+
+      // 해변 정점 (사람이 알아보는 지명 - 스프라이트로 표시)
       const beachStations = stations.filter(d => d.isBeach);
       beachStations.forEach(st => {
         const sprite = createBeachSprite(st);

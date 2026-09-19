@@ -196,7 +196,7 @@ function getCurrentCenterLatLng() {
           const influence = Math.max(0, Math.min(1, 1 - nearest / 35));
           const finalTemp = ambient * (1 - influence) + idw * influence;
 
-          ctx.fillStyle = `rgba(${getTempColor(finalTemp)}, 0.68)`;
+          ctx.fillStyle = `rgba(${getTempColor(finalTemp)}, 0.92)`;
           ctx.fillRect(px, py, 1, 1);
         }
       }

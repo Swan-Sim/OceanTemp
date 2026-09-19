@@ -82,7 +82,7 @@ function latLonToSpherePos(lat, lon, radius) {
 
       const material = new THREE.SpriteMaterial({ map: rightVariant.texture, depthTest: true });
       const sprite = new THREE.Sprite(material);
-      sprite.userData.baseScale = [16, 4]; // 줌 반응형 크기 조절 기준값
+      sprite.userData.baseScale = [16, 3.01]; // [FIX] 캔버스 비율(340:64)에 맞춤 - 세로로 늘어져 보이던 버그
       sprite.userData.stationId = station.id;
       sprite.userData.rightVariant = rightVariant;
       sprite.userData.leftVariant = leftVariant;
@@ -97,6 +97,21 @@ function latLonToSpherePos(lat, lon, radius) {
       sprite.stationData = station;
       return sprite;
     }
+
+// [ADD] "정점 클릭이 잘 안 됨" 문제 대응 - 클릭한 지점(임의의 월드 좌표)을
+// 위경도로 역산합니다. getCurrentCenterLatLng과 같은 수학이지만, 화면
+// 정중앙이 아니라 실제로 클릭한 지점 좌표를 입력으로 받습니다.
+function worldPointToLatLon(worldPoint) {
+  const local = worldPoint.clone();
+  const invRotation = globeGroup.quaternion.clone().invert();
+  local.applyQuaternion(invRotation).normalize();
+  const phi = Math.acos(Math.max(-1, Math.min(1, local.y)));
+  const lat = 90 - (phi * 180 / Math.PI);
+  const theta = Math.atan2(local.z, -local.x);
+  let lon = (theta * 180 / Math.PI) - 180;
+  lon = ((lon + 180) % 360 + 360) % 360 - 180;
+  return { lat, lon };
+}
 
 // 현재 화면 정중앙이 가리키는 실제 위경도를 정밀 역산
 function getCurrentCenterLatLng() {
@@ -172,7 +187,7 @@ function getCurrentCenterLatLng() {
     function createSelectionMarker() {
       const material = new THREE.SpriteMaterial({ transparent: true, depthTest: true });
       const sprite = new THREE.Sprite(material);
-      sprite.userData.baseScale = [16, 4];
+      sprite.userData.baseScale = [16, 3.01]; // [FIX] 캔버스 비율(340:64)에 맞춤
       sprite.visible = false;
       return sprite;
     }
@@ -240,6 +255,10 @@ function getCurrentCenterLatLng() {
       beachSprites.forEach(s => {
         const [bw, bh] = s.userData.baseScale;
         s.scale.set(bw * factor, bh * factor, 1);
+        // [FIX] "선택하면 원래 있던 글씨가 안 사라지고 겹쳐 보임" - 선택된
+        // 해변 정점은 원래(작은) 마커를 숨기고, 그 자리엔 확대된 선택 마커
+        // 하나만 보이도록 합니다.
+        s.visible = !(selectedStation && s.userData.stationId === selectedStation.id);
       });
       refreshSelectionMarker();
       if (selectionMarker && selectionMarker.visible) {
@@ -267,6 +286,41 @@ function getCurrentCenterLatLng() {
     // 지구본 표면 위에 한 겹 더 씌웁니다. 육지는 완전히 투명 처리합니다.
     // 저해상도 캔버스를 구체에 입히면 GPU가 자동으로 부드럽게 보간해 줘서
     // 계산량을 줄이면서도 매끄러운 그라데이션 느낌을 낼 수 있어요.
+    // [ADD] 참고 이미지처럼 지구 테두리에 대기권 느낌의 하얀 빛(림 라이트)을
+    // 추가합니다. 지구보다 살짝 큰 구를 안쪽 면만 렌더링하고, 시야각이
+    // 표면에 거의 스치듯 얕아지는(테두리) 곳일수록 밝아지는 프레넬 효과를
+    // 셰이더로 계산합니다.
+    function buildAtmosphereGlow() {
+      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.05, 64, 64);
+      const material = new THREE.ShaderMaterial({
+        uniforms: { glowColor: { value: new THREE.Color('#cfe8ff') } },
+        vertexShader: `
+          varying vec3 vNormal;
+          varying vec3 vViewDir;
+          void main() {
+            vNormal = normalize(normalMatrix * normal);
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            vViewDir = normalize(-mvPosition.xyz);
+            gl_Position = projectionMatrix * mvPosition;
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vNormal;
+          varying vec3 vViewDir;
+          uniform vec3 glowColor;
+          void main() {
+            float intensity = pow(0.75 - dot(vNormal, vViewDir), 3.0);
+            gl_FragColor = vec4(glowColor, clamp(intensity, 0.0, 1.0));
+          }
+        `,
+        side: THREE.BackSide,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false
+      });
+      return new THREE.Mesh(geometry, material);
+    }
+
     function buildHeatOverlayTexture() {
       // [FIX] 해상도를 올려서(180x90 → 320x160) 확대했을 때 보이던 계단현상을
       // 줄였습니다. 완전 불투명(1.0)으로 바꿔서 아래 위성 텍스처의 구름(흰색)이
@@ -291,7 +345,15 @@ function getCurrentCenterLatLng() {
 
           let wSum = 0, tSum = 0, nearest = Infinity;
           for (let i = 0; i < pts.length; i++) {
-            const dLat = lat - pts[i].lat, dLon = lon - pts[i].lon;
+            const dLat = lat - pts[i].lat;
+            // [FIX] "뉴질랜드 옆에 세로줄" - 경도차를 그냥 뺄셈으로 구하면
+            // 날짜변경선(180도) 근처에서 실제로는 몇 도 안 떨어진 두 지점이
+            // 350도 넘게 떨어진 것처럼 계산돼서, 그 지점 정점들의 영향력이
+            // 사실상 0이 되어버렸어요(뉴질랜드가 딱 그 경계에 걸쳐 있습니다).
+            // -180~180 범위로 정규화해서 "짧은 쪽" 거리를 쓰도록 고쳤습니다.
+            let dLon = lon - pts[i].lon;
+            if (dLon > 180) dLon -= 360;
+            if (dLon < -180) dLon += 360;
             const d = Math.sqrt(dLat * dLat + dLon * dLon);
             if (d < nearest) nearest = d;
             const w = 1 / Math.pow(d + 1, 2);
@@ -356,6 +418,7 @@ function getCurrentCenterLatLng() {
       const heatMaterial = new THREE.MeshBasicMaterial({ map: heatTexture, transparent: true, depthWrite: false });
       const heatMesh = new THREE.Mesh(heatGeometry, heatMaterial);
       globeGroup.add(heatMesh);
+      globeGroup.add(buildAtmosphereGlow());
 
       // [ADD] "지구공 상태에서도 NOAA 정점들 보이게" 요청 반영 -
       // 전세계 해양 격자 정점을 여기서 바로 생성해 지구본에도 표시합니다.
@@ -486,6 +549,7 @@ function getCurrentCenterLatLng() {
 
           raycaster.setFromCamera(mouse, camera);
           const intersects = raycaster.intersectObjects(globeGroup.children);
+          let matched = false;
           for (let hit of intersects) {
             // 지구본 표면을 직접 클릭했을 때 실제 텍스처 UV를 찍어볼 수 있는 보정용 로그.
             // (혹시 나중에 육지 텍스처와 정점 좌표가 다시 어긋나 보이면,
@@ -496,14 +560,32 @@ function getCurrentCenterLatLng() {
             }
             if (hit.object.stationData) {
               selectStation(hit.object.stationData);
+              matched = true;
               break;
             }
             // [ADD] NOAA 격자 정점(InstancedMesh)은 개별 오브젝트가 아니라
             // instanceId로 어떤 정점인지 찾아야 합니다.
             if (hit.object === instancedDotsRef && typeof hit.instanceId === 'number') {
               const st = gridStationsRef[hit.instanceId];
-              if (st) { selectStation(st); break; }
+              if (st) { selectStation(st); matched = true; break; }
             }
+          }
+          // [FIX] "정점 선택이 잘 안 됨" - 점 자체가 작아서(특히 NOAA 격자)
+          // 정확히 맞히기 어려웠어요. 정확히 안 맞았어도 지구 표면은 맞혔다면
+          // 그 위경도에서 가장 가까운 정점을 찾아 (일정 범위 안이면) 대신
+          // 선택해주는 "관대한 클릭 판정"을 추가했습니다.
+          if (!matched && intersects.length > 0) {
+            const { lat: cLat, lon: cLon } = worldPointToLatLon(intersects[0].point);
+            let nearest = null, nearestDist = Infinity;
+            stations.forEach(st => {
+              const dLat = cLat - st.coords[1];
+              let dLon = cLon - st.coords[0];
+              if (dLon > 180) dLon -= 360;
+              if (dLon < -180) dLon += 360;
+              const d = Math.sqrt(dLat * dLat + dLon * dLon);
+              if (d < nearestDist) { nearestDist = d; nearest = st; }
+            });
+            if (nearest && nearestDist < 4) selectStation(nearest);
           }
         }
       }

@@ -189,8 +189,16 @@
       const latStep = 4.5;
       const baseLonStep = 5.5;
       for (let lat = -70; lat <= 70; lat += latStep) {
-        const lonStep = Math.min(30, baseLonStep / Math.max(0.28, Math.cos(lat * Math.PI / 180)));
-        for (let lon = -180; lon <= 180; lon += lonStep) {
+        const rawLonStep = Math.min(30, baseLonStep / Math.max(0.28, Math.cos(lat * Math.PI / 180)));
+        // [FIX] "뉴질랜드 옆에서만 정점 간격이 너무 좁다" - 360을 lonStep으로
+        // 나누면 딱 안 떨어지는 경우가 대부분이라, 날짜변경선(180도)에서
+        // 마지막 정점과 첫 정점 사이의 "이어붙는 틈"만 다른 간격보다 훨씬
+        // 좁아졌어요. 360을 정수로 나누어떨어지는 스텝 수를 먼저 정해서
+        // 이음매 없이 고르게 한 바퀴 돌도록 고쳤습니다.
+        const numLonSteps = Math.max(4, Math.round(360 / rawLonStep));
+        const lonStep = 360 / numLonSteps;
+        for (let i = 0; i < numLonSteps; i++) {
+          const lon = -180 + i * lonStep;
           // 지터(무작위 흔들림)를 먼저 적용한 좌표로 육지 판정을 합니다.
           const jLat = lat + (Math.random() * 0.5);
           const jLon = lon + (Math.random() * lonStep * 0.1);

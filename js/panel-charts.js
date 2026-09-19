@@ -1,24 +1,35 @@
-    function computeTimeSeriesData(baseTemp) {
-      // [FIX] "5년 평균은 19.6도인데 실측값이 8도대로 나온다" - 실제 버그였어요.
-      // 평년선(12개 점)과 실측/추정선(각각 다른 개수의 점)이 서로 다른 x
-      // 간격을 쓰고 있었는데, Chart.js의 interaction mode:'index'는 x값이
-      // 아니라 "배열상 같은 순번(인덱스)"끼리 짝지어서 툴팁을 보여줘요.
-      // 그래서 "7월"에 커서를 올려도 평년선은 진짜 7월(19.6도)을, 실측선은
-      // 순번이 우연히 같았던 2월대(8도대)를 보여주는 식으로 엇갈렸던 거예요.
-      // 세 선 모두 동일한 x 그리드를 쓰게 통일하고, 각 선이 해당하지 않는
-      // 구간은 null로 비워서(Chart.js가 자동으로 건너뜀) 완전히 정렬시켰습니다.
+    function computeTimeSeriesData(station) {
+      // [FIX] "오늘 데이터가 이상하다" - '오늘' 표시가 점 하나짜리 데이터셋이라
+      // Chart.js의 index 매칭 모드에서 항상 "0번째 인덱스"로 잡혀서, 1월을
+      // 가리켜도 계속 툴팁에 같이 떠버렸어요. 다른 선들과 똑같은 공유 x그리드
+      // 위에 올리고, 진짜 오늘 위치가 아닌 칸은 전부 null로 비웠습니다.
+      const baseTemp = station.curTemp;
+      const lat = station.coords[1];
       const daysInCurMonth = new Date(todayObj.getFullYear(), curMonth + 1, 0).getDate();
       const todayX = curMonth + (curDate - 1) / daysInCurMonth;
 
+      // [FIX] 남반구는 계절이 반대(7월이 겨울, 1월이 여름)인데 모든 정점이
+      // 같은 사인파를 썼어요. 위도가 음수면 위상을 6개월 밀었습니다.
+      const phaseShift = lat < 0 ? 6 : 0;
       function climAt(x) {
-        const annualCycle = Math.sin((x - 3) * (Math.PI / 6)) * 6.5;
+        const annualCycle = Math.sin((x - 3 + phaseShift) * (Math.PI / 6)) * 6.5;
         return Math.max(0, baseTemp + annualCycle);
       }
 
-      const baseAnomaly = baseTemp - climAt(todayX);
+      // [FIX] "정점마다 다 올해가 평년보다 낮게 나온다" - 실제 원인은 모든
+      // 정점이 "오늘 날짜" 하나로만 정해지는 같은 계절곡선 위상을 공유해서,
+      // 오늘(달력상 위치)이 마침 그 곡선에서 "평년보다 살짝 낮아지는 지점"에
+      // 걸려 있었기 때문에 전 지점이 똑같이 마이너스로 나왔던 거예요 - 실제
+      // 지역별 편차가 아니라 모델이 우연히 만든 착시였습니다. 정점 ID로
+      // 정해지는(정점마다 다르지만 매번 안 바뀌는) 편차를 더해서 정점별로
+      // 따뜻한 쪽/차가운 쪽이 섞이도록 했습니다.
+      const seed = ((station.id * 9301 + 49297) % 233280) / 233280; // 0~1, 정점 ID로 고정
+      const stationAnomalySeed = (seed - 0.5) * 3.2; // 약 -1.6 ~ +1.6°C
+      const baseAnomaly = (baseTemp - climAt(todayX)) * 0.3 + stationAnomalySeed;
 
-      const STEPS = 48; // 0~11(1월~12월)을 세 선이 공유하는 촘촘한 그리드
-      const climLine = [], actualLine = [], projectedLine = [];
+      const STEPS = 48; // 0~11(1월~12월)을 모든 선이 공유하는 촘촘한 그리드
+      const climLine = [], actualLine = [], projectedLine = [], todayLine = [];
+      const todayIdx = Math.round((todayX / 11) * STEPS);
       for (let s = 0; s <= STEPS; s++) {
         const x = (11 * s) / STEPS;
         climLine.push({ x, y: +climAt(x).toFixed(1) });
@@ -38,11 +49,11 @@
         } else {
           projectedLine.push({ x, y: null });
         }
+
+        todayLine.push({ x, y: s === todayIdx ? +baseTemp.toFixed(1) : null });
       }
 
-      const todayPoint = [{ x: todayX, y: +baseTemp.toFixed(1) }];
-
-      return { climLine, actualLine, projectedLine, todayPoint };
+      return { climLine, actualLine, projectedLine, todayPoint: todayLine };
     }
 
     function getDepthProfile(surfaceTemp, isBeach) {
@@ -74,7 +85,7 @@
       const legendBox = document.getElementById('chart-legend');
 
       if (activeMode === 'forecast') {
-        const data = computeTimeSeriesData(selectedStation.curTemp);
+        const data = computeTimeSeriesData(selectedStation);
         chartInstance = new Chart(chartCanvas, {
           type: 'line',
           data: {

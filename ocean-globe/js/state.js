@@ -13,8 +13,10 @@
 
     let scene, camera, renderer, globeGroup, globeMesh;
     let beachSprites = []; // [ADD] 줌 반응형 마커 크기 조절을 위해 참조 보관
+    let selectionRing = null; // [ADD] 선택된 정점 표시용 링
     let isDetailMode = false;
     let leafletMap = null;
+    let leafletMarkersByStationId = {}; // [ADD] 선택 하이라이트용 마커 참조
 
     const GLOBE_RADIUS = 100;
     let cameraDistance = 270;

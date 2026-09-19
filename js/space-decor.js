@@ -43,16 +43,42 @@
       cvs.width = 64; cvs.height = 64;
       const c = cvs.getContext('2d');
       const grad = c.createRadialGradient(32, 32, 0, 32, 32, 32);
-      grad.addColorStop(0, 'rgba(255,255,255,0.9)');
-      grad.addColorStop(0.4, 'rgba(210,215,255,0.35)');
-      grad.addColorStop(1, 'rgba(210,215,255,0)');
+      grad.addColorStop(0, 'rgba(255,250,240,0.95)');
+      grad.addColorStop(0.4, 'rgba(235,210,175,0.4)');
+      grad.addColorStop(1, 'rgba(235,210,175,0)');
       c.fillStyle = grad;
       c.fillRect(0, 0, 64, 64);
       return new THREE.CanvasTexture(cvs);
     }
 
+    // [ADD] 은하수 띠 전체를 은은하게 덮는 큰 헤이즈(뿌연 발광) 패치 -
+    // 참고 이미지처럼 하나의 몽글몽글한 띠 느낌을 살리기 위한 배경층입니다.
+    function buildMilkyWayHaze(tiltX, tiltZ, cosX, sinX, cosZ, sinZ) {
+      const group = new THREE.Group();
+      const patchCount = 10;
+      for (let i = 0; i < patchCount; i++) {
+        const r = 1550 + Math.random() * 150;
+        const along = (i / patchCount) * Math.PI * 2 + Math.random() * 0.3;
+        const x0 = Math.cos(along) * r;
+        const z0 = Math.sin(along) * r;
+        const y0 = (Math.random() - 0.5) * 60;
+        const y1 = y0 * cosX - z0 * sinX;
+        const z1 = y0 * sinX + z0 * cosX;
+        const x1 = x0 * cosZ - y1 * sinZ;
+        const y2 = x0 * sinZ + y1 * cosZ;
+
+        const sprite = createGlowSprite('rgba(255,235,205,0.5)', 380);
+        sprite.material.blending = THREE.AdditiveBlending;
+        sprite.material.opacity = 0.35;
+        sprite.position.set(x1, y2, z1);
+        group.add(sprite);
+      }
+      return group;
+    }
+
     function buildMilkyWay() {
-      const count = 7000;
+      const group = new THREE.Group();
+      const count = 9000;
       const positions = new Float32Array(count * 3);
       const colors = new Float32Array(count * 3);
       const tiltX = 0.75, tiltZ = 0.35; // 은하수 띠의 기울기(순전히 장식용 값)
@@ -62,7 +88,10 @@
       for (let i = 0; i < count; i++) {
         const r = 1500 + Math.random() * 300;
         const along = Math.random() * Math.PI * 2;
-        const spread = (Math.random() - 0.5) * 0.32; // 띠 두께
+        // [CHANGE] 균일 분포 대신 가우시안에 가깝게(3개 랜덤값 평균) 흩어서
+        // 띠 중심부가 더 밀도 있게 보이도록 했습니다 (참고 이미지의 몽글한 느낌).
+        const g = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+        const spread = g * 0.22;
         const x0 = Math.cos(along) * r;
         const z0 = Math.sin(along) * r;
         const y0 = spread * r;
@@ -76,21 +105,25 @@
         positions[i * 3 + 1] = y2;
         positions[i * 3 + 2] = z1;
 
-        const tint = 0.75 + Math.random() * 0.25;
-        colors[i * 3] = tint * 0.95;
-        colors[i * 3 + 1] = tint * 0.96;
-        colors[i * 3 + 2] = tint;
+        // 중심부는 밝은 흰색, 가장자리로 갈수록 따뜻한 황갈색(성간먼지 느낌)
+        const core = 1 - Math.min(1, Math.abs(spread) / 0.22);
+        const warm = 0.55 + Math.random() * 0.2;
+        colors[i * 3] = 0.9 + core * 0.1;
+        colors[i * 3 + 1] = warm + core * (0.95 - warm);
+        colors[i * 3 + 2] = (warm - 0.15) + core * (0.95 - (warm - 0.15));
       }
 
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       const mat = new THREE.PointsMaterial({
-        size: 7, map: buildMilkyWayGlowTexture(), vertexColors: true,
-        transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending,
+        size: 6, map: buildMilkyWayGlowTexture(), vertexColors: true,
+        transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending,
         depthWrite: false, sizeAttenuation: true
       });
-      return new THREE.Points(geo, mat);
+      group.add(new THREE.Points(geo, mat));
+      group.add(buildMilkyWayHaze(tiltX, tiltZ, cosX, sinX, cosZ, sinZ));
+      return group;
     }
 
     function buildStarfield() {

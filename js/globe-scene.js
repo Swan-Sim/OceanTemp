@@ -137,6 +137,25 @@ function getCurrentCenterLatLng() {
       updateZoomGauge();
     }
 
+    // [ADD] "선택된 정점은 다르게 표시" - 클릭한 정점 위치에 노란 링을 띄웁니다.
+    // 해변 스프라이트든 원양 격자(InstancedMesh) 점이든 상관없이 좌표만
+    // 있으면 되므로 동일한 방식으로 둘 다 지원됩니다.
+    function createSelectionRing() {
+      const cvs = document.createElement('canvas');
+      cvs.width = 64; cvs.height = 64;
+      const c = cvs.getContext('2d');
+      c.beginPath();
+      c.arc(32, 32, 23, 0, Math.PI * 2);
+      c.lineWidth = 6;
+      c.strokeStyle = '#ffd166';
+      c.shadowColor = '#ffd166';
+      c.shadowBlur = 8;
+      c.stroke();
+      const texture = new THREE.CanvasTexture(cvs);
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true });
+      return new THREE.Sprite(material);
+    }
+
     // [ADD] 지구본을 축소(줌아웃)해도 마커가 너무 작아져서 안 보이지 않도록,
     // 카메라 거리에 비례해서 마커의 월드 스케일을 키워 화면상 크기를 어느 정도
     // 일정하게 유지합니다 (거리가 멀어질수록 실제 크기를 키우는 방식).
@@ -146,6 +165,16 @@ function getCurrentCenterLatLng() {
         const [bw, bh] = s.userData.baseScale;
         s.scale.set(bw * factor, bh * factor, 1);
       });
+      if (selectionRing) {
+        if (selectedStation) {
+          const pos = latLonToSpherePos(selectedStation.coords[1], selectedStation.coords[0], GLOBE_RADIUS + 0.32);
+          selectionRing.position.copy(pos);
+          selectionRing.scale.set(13 * factor, 13 * factor, 1);
+          selectionRing.visible = true;
+        } else {
+          selectionRing.visible = false;
+        }
+      }
     }
 
     function updateZoomGauge() {
@@ -286,6 +315,11 @@ function getCurrentCenterLatLng() {
         beachSprites.push(sprite);
         globeGroup.add(sprite);
       });
+
+      // [ADD] 선택된 정점 표시용 링 (처음엔 숨김, selectStation 시 표시)
+      selectionRing = createSelectionRing();
+      selectionRing.visible = false;
+      globeGroup.add(selectionRing);
 
       // 태평양 방면 기본 회전
       globeGroup.rotation.set(0.35, -2.1, 0);

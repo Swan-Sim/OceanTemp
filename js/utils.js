@@ -21,15 +21,24 @@
       '#1e1b4b', '#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', // 13.3~26.7°C 파랑 5단계
       '#f9a8d4', '#f472b6', '#ec4899', '#db2777', '#be185d'  // 26.7~40°C 핫핑크 5단계
     ];
-    function hexToRgbStr(hex) {
+    function hexToRgbArr(hex) {
       const n = parseInt(hex.slice(1), 16);
-      return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
     }
+    const TEMP_BANDS_RGB = TEMP_BANDS.map(hexToRgbArr);
+    // [CHANGE] 딱딱 끊기는 15단계 밴딩 대신, 같은 색상 여정(검정→파랑→핫핑크)을
+    // 유지하면서 인접 구간끼리 부드럽게 보간해서 참고 이미지처럼 매끄러운
+    // 그라데이션으로 바꿨습니다.
     function getTempColor(temp) {
       const clamped = Math.max(0, Math.min(40, temp));
-      let idx = Math.floor((clamped / 40) * 15);
-      if (idx > 14) idx = 14;
-      if (idx < 0) idx = 0;
-      return hexToRgbStr(TEMP_BANDS[idx]);
+      const pos = (clamped / 40) * (TEMP_BANDS_RGB.length - 1);
+      const i0 = Math.floor(pos);
+      const i1 = Math.min(TEMP_BANDS_RGB.length - 1, i0 + 1);
+      const frac = pos - i0;
+      const c0 = TEMP_BANDS_RGB[i0], c1 = TEMP_BANDS_RGB[i1];
+      const r = Math.round(c0[0] + (c1[0] - c0[0]) * frac);
+      const g = Math.round(c0[1] + (c1[1] - c0[1]) * frac);
+      const b = Math.round(c0[2] + (c1[2] - c0[2]) * frac);
+      return `${r},${g},${b}`;
     }
 

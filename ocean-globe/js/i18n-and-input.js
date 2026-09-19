@@ -65,7 +65,6 @@
     const t = i18n[lang] || i18n.en;
 
     document.getElementById('txt-app-title').innerText = t.appTitle;
-    document.getElementById('txt-legend-beach').innerText = t.legendBeach;
     document.getElementById('st-name').innerText = t.selectPrompt;
     document.getElementById('btn-ts').innerText = t.tabForecast;
     document.getElementById('btn-dp').innerText = t.tabDepth;

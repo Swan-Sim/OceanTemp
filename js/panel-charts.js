@@ -144,10 +144,10 @@
       document.getElementById('st-name').innerText = `${st.name} ${isHotspot ? `🔥 [${t.hotspot}]` : ''}`;
       document.getElementById('st-temp').innerText = formatTemp(st.curTemp);
 
-      // [ADD] 지구본 위 HUD의 안내 문구("원하는 곳을 클릭하세요")를
-      // 클릭한 정점 이름으로 바꿔서 보여줍니다.
-      const hudLabel = document.getElementById('txt-legend-beach');
-      if (hudLabel) hudLabel.innerText = st.name;
+      // [CHANGE] HUD에 정점명을 텍스트로 보여주던 것은 제거했습니다 -
+      // 이제 지구본/지도에서 선택된 마커 자체가 다르게 표시되니 중복이라서요.
+      if (typeof updateBeachSpriteScale === 'function') updateBeachSpriteScale();
+      if (typeof updateLeafletSelection === 'function') updateLeafletSelection();
 
       const tagStr = st.isBeach ? ` [${t.beachTag}]` : '';
       document.getElementById('st-info').innerText = t.infoCoord(st.network, st.coords[1], st.coords[0]) + tagStr;

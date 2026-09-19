@@ -48,13 +48,28 @@
             iconSize: [20, 20],
             iconAnchor: [10, 10]
           });
-          L.marker([st.coords[1], st.coords[0]], { icon: customIcon })
+          const marker = L.marker([st.coords[1], st.coords[0]], { icon: customIcon })
             .addTo(leafletMap)
             .on('click', () => selectStation(st));
+          leafletMarkersByStationId[st.id] = marker; // [ADD]
         });
       } else {
         leafletMap.setView([lat, lon], zoom, { animate: true, duration: 0.4 });
       }
+    }
+
+    // [ADD] "선택된 정점은 다르게 표시" 요청 - 상세지도에서도 선택된 마커에
+    // .selected 클래스를 붙여 눈에 띄게 합니다 (css/styles.css 참고).
+    function updateLeafletSelection() {
+      Object.keys(leafletMarkersByStationId).forEach(id => {
+        const marker = leafletMarkersByStationId[id];
+        const el = marker.getElement && marker.getElement();
+        if (!el) return;
+        const dot = el.querySelector('.lf-dot');
+        if (!dot) return;
+        const isSelected = selectedStation && String(selectedStation.id) === id;
+        dot.classList.toggle('selected', !!isSelected);
+      });
     }
 
     function switchToGlobe() {

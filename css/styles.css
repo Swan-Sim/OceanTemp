@@ -1,0 +1,16 @@
+/* 변경 전: background: linear-gradient(to right, #2166ac, #f7f7f7, #b2182b); */
+    /* 변경 후: */
+    .legend-bar { 
+      width: 100px; 
+      height: 7px; 
+      border-radius: 3px; 
+      background: linear-gradient(to right, 
+        rgb(49, 54, 149), 
+        rgb(69, 117, 180), 
+        rgb(116, 173, 209), 
+        rgb(171, 217, 233), 
+        rgb(254, 224, 144), 
+        rgb(244, 109, 67), 
+        rgb(165, 0, 38)
+      ); 
+    }

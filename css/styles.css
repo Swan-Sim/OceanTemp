@@ -21,14 +21,14 @@
 
     /* HUD */
     .hud-overlay {
-      position: absolute; top: 12px; left: 12px;
+      position: absolute; top: 12px; right: 12px;
       background: rgba(11, 19, 41, 0.4); border: 1px solid rgba(51,65,85,.5);
       border-radius: 8px; padding: 8px 12px; font-size: 10.5px;
       pointer-events: none; backdrop-filter: blur(4px); z-index: 50;
       box-shadow: 0 4px 15px rgba(0,0,0,0.4);
     }
     .color-legend { display: flex; align-items: center; gap: 5px; }
-    .legend-bar { width: 120px; height: 7px; border-radius: 3px; background: linear-gradient(to right, #000000, #18181b, #27272a, #3f3f46, #52525b, #1e1b4b, #1d4ed8, #2563eb, #3b82f6, #60a5fa, #f9a8d4, #f472b6, #ec4899, #db2777, #be185d); }
+    .legend-bar { width: 120px; height: 7px; border-radius: 3px; background: linear-gradient(to right, #000000, #050b1a, #0a1730, #122a52, #1a2f6e, #1e3a8a, #1e40af, #1d4ed8, #2563eb, #3b82f6, #ec4899, #db2777, #be185d, #9d174d, #831843); }
     .legend-item { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
     .dot-beach { width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; border: 1.5px solid #fff; }
 
@@ -39,9 +39,9 @@
       #bottom-sheet { flex: 0 0 40%; }
     }
 
-    /* 컨트롤 */
+    /* 컨트롤 - HUD가 같은 오른쪽으로 옮겨져서 그 아래로 내렸습니다 */
     .map-controls {
-      position: absolute; top: 12px; right: 12px;
+      position: absolute; top: 92px; right: 12px;
       display: flex; flex-direction: column; align-items: center; gap: 6px; z-index: 50;
     }
     .ctrl-btn {
@@ -72,7 +72,7 @@
     /* 하단 패널 */
     #bottom-sheet { flex: 1.05; background: #0b1329; border-top: 1px solid #1e293b; border-radius: 14px 14px 0 0; padding: 10px 14px; display: flex; flex-direction: column; z-index: 60; box-shadow: 0 -4px 20px rgba(0,0,0,0.7); }
     .meta-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
-    .station-name { font-size: 14px; font-weight: 700; color: #f8fafc; max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .station-name { font-size: 19px; font-weight: 800; color: #f8fafc; max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.01em; }
     .temp-val { font-size: 16px; font-weight: 800; color: #38bdf8; text-align: right; }
     .station-sub { font-size: 10.5px; color: #94a3b8; margin-bottom: 5px; }
     .tab-bar { display: flex; gap: 6px; margin-bottom: 6px; }
@@ -92,7 +92,7 @@
     /* Leaflet 마커 라벨 */
     .lf-marker-wrap { display: flex; align-items: center; white-space: nowrap; cursor: pointer; }
     .lf-dot { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.85); flex-shrink: 0; box-shadow: 0 0 4px rgba(0,0,0,0.6); transition: transform .15s ease; }
-    .lf-dot.selected { transform: scale(1.6); border: 2.5px solid #ffd166; box-shadow: 0 0 10px rgba(255,209,102,0.9); }
+    .lf-dot.selected { transform: scale(1.6); border: 2.5px solid #f97316; box-shadow: 0 0 10px rgba(249,115,22,0.9); }
     .lf-dot.beach { width: 14px; height: 14px; border-width: 2px; }
     .lf-label {
       margin-left: 6px; padding: 2px 6px; font-size: 10.5px; font-weight: 600; color: #f8fafc;

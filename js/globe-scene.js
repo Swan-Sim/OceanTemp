@@ -8,61 +8,85 @@ function latLonToSpherePos(lat, lon, radius) {
   );
 }
 
-    // 해변 포인트용 2D 마커 텍스처 (구체 표면에 밀착되는 Sprite)
-    // [FIX] 캔버스 안에서 점(dot)이 정중앙이 아니라 왼쪽(x=22/256)에 그려지는데,
-    // 기존 코드는 Sprite의 기준점(center)을 캔버스 정중앙(0.5,0.5)에 그대로 뒀습니다.
-    // 그 결과 "점"의 실제 화면 위치가 sprite.position(=진짜 위경도 좌표)보다
-    // 화면상 옆으로(대체로 카메라 기준 서쪽 방향) 밀려 보였던 것이 1번 버그의 원인입니다.
-    // sprite.center를 점의 실제 캔버스 좌표로 맞춰서 고정합니다.
-    function createBeachSprite(station) {
+    // [CHANGE] "선택되면 정점 크기가 커지고 테두리가 다른 색으로 두꺼워지게"
+    // 요청 반영 - 별도의 링을 덧대는 대신, 정점 자체를 두 가지 텍스처(평소/선택)로
+    // 미리 만들어두고 선택 상태에 따라 스프라이트의 텍스처를 통째로 바꿉니다.
+    function drawDotTexture(station, selected) {
       const canvas = document.createElement('canvas');
       canvas.width = 256;
       canvas.height = 64;
       const ctx = canvas.getContext('2d');
 
       const colorRGB = getTempColor(station.curTemp);
-      const dotX = 22, dotY = 32, dotR = 10;
+      const dotX = 22, dotY = 32;
+      const dotR = selected ? 16 : 10; // 선택되면 더 크게
+      const borderColor = selected ? '#f97316' : '#ffffff'; // 선택되면 주황색 굵은 테두리
+      const borderWidth = selected ? 4 : 2;
 
-      // [CHANGE] 네모 마커를 다시 원형으로, 크기도 줄였습니다.
-      ctx.save();
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = `rgb(${colorRGB})`;
-      ctx.beginPath();
-      ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ffffff';
+      if (selected) {
+        // 은은한 바깥 발광으로 눈에 확 띄게
+        ctx.save();
+        ctx.shadowColor = '#f97316';
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+        ctx.fillStyle = `rgb(${colorRGB})`;
+        ctx.globalAlpha = 0.95;
+        ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = `rgb(${colorRGB})`;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.lineWidth = borderWidth;
+      ctx.strokeStyle = borderColor;
       ctx.beginPath();
       ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 반투명 캡슐 라벨
+      // 반투명 캡슐 라벨 - 선택되면 글씨도 더 크게
       if (station.label) {
-        ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.font = `bold ${selected ? 26 : 22}px -apple-system, BlinkMacSystemFont, sans-serif`;
         const textWidth = ctx.measureText(station.label).width;
+        const boxX = dotX + dotR + 14;
+        const boxH = selected ? 40 : 36;
+        const boxY = dotY - boxH / 2;
 
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-        ctx.lineWidth = 1.5;
+        ctx.fillStyle = selected ? 'rgba(249, 115, 22, 0.28)' : 'rgba(15, 23, 42, 0.72)';
+        ctx.strokeStyle = selected ? '#f97316' : 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = selected ? 2 : 1.5;
 
         ctx.beginPath();
-        ctx.roundRect(46, 14, textWidth + 18, 36, 6);
+        ctx.roundRect(boxX, boxY, textWidth + 18, boxH, 6);
         ctx.fill();
         ctx.stroke();
 
         ctx.fillStyle = '#f8fafc';
-        ctx.fillText(station.label, 55, 40);
+        ctx.fillText(station.label, boxX + 9, dotY + (selected ? 9 : 7));
       }
 
-      const texture = new THREE.CanvasTexture(canvas);
-      const material = new THREE.SpriteMaterial({ map: texture, depthTest: true });
+      return { texture: new THREE.CanvasTexture(canvas), dotX, dotY, canvasW: canvas.width, canvasH: canvas.height };
+    }
+
+    function createBeachSprite(station) {
+      const normal = drawDotTexture(station, false);
+      const selected = drawDotTexture(station, true);
+
+      const material = new THREE.SpriteMaterial({ map: normal.texture, depthTest: true });
       const sprite = new THREE.Sprite(material);
       sprite.userData.baseScale = [16, 4]; // 줌 반응형 크기 조절 기준값
+      sprite.userData.stationId = station.id;
+      sprite.userData.normalTexture = normal.texture;
+      sprite.userData.selectedTexture = selected.texture;
       sprite.scale.set(16, 4, 1);
 
       // [FIX] 기준점을 캔버스 정중앙이 아니라 점(dot)의 실제 좌표로 이동
-      sprite.center.set(dotX / canvas.width, 1 - dotY / canvas.height);
+      sprite.center.set(normal.dotX / normal.canvasW, 1 - normal.dotY / normal.canvasH);
 
       const pos = latLonToSpherePos(station.coords[1], station.coords[0], GLOBE_RADIUS + 0.3);
       sprite.position.copy(pos);
@@ -137,19 +161,19 @@ function getCurrentCenterLatLng() {
       updateZoomGauge();
     }
 
-    // [ADD] "선택된 정점은 다르게 표시" - 클릭한 정점 위치에 노란 링을 띄웁니다.
-    // 해변 스프라이트든 원양 격자(InstancedMesh) 점이든 상관없이 좌표만
-    // 있으면 되므로 동일한 방식으로 둘 다 지원됩니다.
+    // [CHANGE] 링은 이름표가 없는 원양(NOAA) 격자 정점 선택 표시 전용으로만 씁니다.
+    // 해변 정점은 이제 마커 자체가 커지고 테두리 색이 바뀌는 방식으로 표시돼서
+    // 링이 필요 없어요. 색도 "다른 색"으로(기존 노란색 → 주황색) 바꿨습니다.
     function createSelectionRing() {
       const cvs = document.createElement('canvas');
       cvs.width = 64; cvs.height = 64;
       const c = cvs.getContext('2d');
       c.beginPath();
-      c.arc(32, 32, 23, 0, Math.PI * 2);
-      c.lineWidth = 6;
-      c.strokeStyle = '#ffd166';
-      c.shadowColor = '#ffd166';
-      c.shadowBlur = 8;
+      c.arc(32, 32, 22, 0, Math.PI * 2);
+      c.lineWidth = 7;
+      c.strokeStyle = '#f97316';
+      c.shadowColor = '#f97316';
+      c.shadowBlur = 10;
       c.stroke();
       const texture = new THREE.CanvasTexture(cvs);
       const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true });
@@ -159,14 +183,22 @@ function getCurrentCenterLatLng() {
     // [ADD] 지구본을 축소(줌아웃)해도 마커가 너무 작아져서 안 보이지 않도록,
     // 카메라 거리에 비례해서 마커의 월드 스케일을 키워 화면상 크기를 어느 정도
     // 일정하게 유지합니다 (거리가 멀어질수록 실제 크기를 키우는 방식).
+    // 선택된 해변 정점은 텍스처를 "선택됨" 버전으로 바꿔서 표시합니다.
     function updateBeachSpriteScale() {
       const factor = cameraDistance / 170; // 170 = 기본(리셋) 거리 기준
       beachSprites.forEach(s => {
         const [bw, bh] = s.userData.baseScale;
+        const isSelected = selectedStation && s.userData.stationId === selectedStation.id;
         s.scale.set(bw * factor, bh * factor, 1);
+        const wantMap = isSelected ? s.userData.selectedTexture : s.userData.normalTexture;
+        if (s.material.map !== wantMap) {
+          s.material.map = wantMap;
+          s.material.needsUpdate = true;
+        }
       });
       if (selectionRing) {
-        if (selectedStation) {
+        // 원양 격자(해변이 아닌) 정점을 선택했을 때만 링을 보여줍니다.
+        if (selectedStation && !selectedStation.isBeach) {
           const pos = latLonToSpherePos(selectedStation.coords[1], selectedStation.coords[0], GLOBE_RADIUS + 0.32);
           selectionRing.position.copy(pos);
           selectionRing.scale.set(13 * factor, 13 * factor, 1);
@@ -291,7 +323,7 @@ function getCurrentCenterLatLng() {
       refreshMaxTempStation();
       document.getElementById('point-counter').innerText = t.stationCount(stations.length);
 
-      const dotGeometry = new THREE.SphereGeometry(0.4, 6, 6);
+      const dotGeometry = new THREE.SphereGeometry(0.55, 6, 6);
       const dotMaterial = new THREE.MeshBasicMaterial();
       const instancedDots = new THREE.InstancedMesh(dotGeometry, dotMaterial, gridStations.length);
       const dummy = new THREE.Object3D();
@@ -307,6 +339,12 @@ function getCurrentCenterLatLng() {
       instancedDots.instanceMatrix.needsUpdate = true;
       instancedDots.instanceColor.needsUpdate = true;
       globeGroup.add(instancedDots);
+
+      // [ADD] "NOAA 정점도 확대 전에 선택 가능하게" - InstancedMesh는 정점 하나하나가
+      // 별도 오브젝트가 아니라서, 클릭 시 instanceId로 원래 정점을 찾을 수 있도록
+      // 참조를 저장해둡니다.
+      gridStationsRef = gridStations;
+      instancedDotsRef = instancedDots;
 
       // 해변 정점 (사람이 알아보는 지명 - 스프라이트로 표시)
       const beachStations = stations.filter(d => d.isBeach);
@@ -415,6 +453,12 @@ function getCurrentCenterLatLng() {
             if (hit.object.stationData) {
               selectStation(hit.object.stationData);
               break;
+            }
+            // [ADD] NOAA 격자 정점(InstancedMesh)은 개별 오브젝트가 아니라
+            // instanceId로 어떤 정점인지 찾아야 합니다.
+            if (hit.object === instancedDotsRef && typeof hit.instanceId === 'number') {
+              const st = gridStationsRef[hit.instanceId];
+              if (st) { selectStation(st); break; }
             }
           }
         }

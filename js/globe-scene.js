@@ -291,7 +291,7 @@ function getCurrentCenterLatLng() {
     // 표면에 거의 스치듯 얕아지는(테두리) 곳일수록 밝아지는 프레넬 효과를
     // 셰이더로 계산합니다.
     function buildAtmosphereGlow() {
-      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.05, 64, 64);
+      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.025, 64, 64); // [CHANGE] 두께 절반 (1.05 → 1.025)
       const material = new THREE.ShaderMaterial({
         uniforms: { glowColor: { value: new THREE.Color('#cfe8ff') } },
         vertexShader: `
@@ -309,8 +309,9 @@ function getCurrentCenterLatLng() {
           varying vec3 vViewDir;
           uniform vec3 glowColor;
           void main() {
-            float intensity = pow(0.75 - dot(vNormal, vViewDir), 3.0);
-            gl_FragColor = vec4(glowColor, clamp(intensity, 0.0, 1.0));
+            // [CHANGE] 지수를 3.0 → 5.0으로 올려서 얇고 또렷한 띠로, 최대 밝기는 95%로
+            float intensity = pow(0.75 - dot(vNormal, vViewDir), 5.0) * 1.6;
+            gl_FragColor = vec4(glowColor, clamp(intensity, 0.0, 0.95));
           }
         `,
         side: THREE.BackSide,
@@ -399,7 +400,12 @@ function getCurrentCenterLatLng() {
 
       globeGroup = new THREE.Group();
       scene.add(globeGroup);
-      globeGroup.add(buildSolarSystemDecor());
+      // [FIX] 아래에서 globeGroup.rotation을 (0.35, -2.1, 0)으로 설정할
+      // 예정이라, 장식을 먼저 그 회전의 "역방향"으로 보정해서 넣어야
+      // 최종적으로 의도한 화면 위치에 나타납니다.
+      const initialRotQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.35, -2.1, 0));
+      const initialRotQuatInv = initialRotQuat.clone().invert();
+      globeGroup.add(buildSolarSystemDecor(initialRotQuatInv));
 
       // 위성 지구본 본체
       const globeGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);

@@ -55,21 +55,23 @@
     // 참고 이미지처럼 하나의 몽글몽글한 띠 느낌을 살리기 위한 배경층입니다.
     function buildMilkyWayHaze(tiltX, tiltZ, cosX, sinX, cosZ, sinZ) {
       const group = new THREE.Group();
-      const patchCount = 10;
+      const patchCount = 12;
       for (let i = 0; i < patchCount; i++) {
-        const r = 1550 + Math.random() * 150;
+        // [CHANGE] "은하수가 안 보인다" - 배경(별)보다 훨씬 먼 거리(1500+)에
+        // 두다 보니 화면에서 거의 안 잡혔어요. 훨씬 가깝게 당기고 패치도 키웠습니다.
+        const r = 950 + Math.random() * 150;
         const along = (i / patchCount) * Math.PI * 2 + Math.random() * 0.3;
         const x0 = Math.cos(along) * r;
         const z0 = Math.sin(along) * r;
-        const y0 = (Math.random() - 0.5) * 60;
+        const y0 = (Math.random() - 0.5) * 45;
         const y1 = y0 * cosX - z0 * sinX;
         const z1 = y0 * sinX + z0 * cosX;
         const x1 = x0 * cosZ - y1 * sinZ;
         const y2 = x0 * sinZ + y1 * cosZ;
 
-        const sprite = createGlowSprite('rgba(255,235,205,0.5)', 380);
+        const sprite = createGlowSprite('rgba(255,235,205,0.6)', 480);
         sprite.material.blending = THREE.AdditiveBlending;
-        sprite.material.opacity = 0.35;
+        sprite.material.opacity = 0.5;
         sprite.position.set(x1, y2, z1);
         group.add(sprite);
       }
@@ -86,7 +88,8 @@
       const cosZ = Math.cos(tiltZ), sinZ = Math.sin(tiltZ);
 
       for (let i = 0; i < count; i++) {
-        const r = 1500 + Math.random() * 300;
+        // [CHANGE] 별(1400~1800)보다 훨씬 안쪽(900~1200)으로 당겨서 실제로 잘 보이게
+        const r = 900 + Math.random() * 300;
         const along = Math.random() * Math.PI * 2;
         // [CHANGE] 균일 분포 대신 가우시안에 가깝게(3개 랜덤값 평균) 흩어서
         // 띠 중심부가 더 밀도 있게 보이도록 했습니다 (참고 이미지의 몽글한 느낌).
@@ -117,8 +120,8 @@
       geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       const mat = new THREE.PointsMaterial({
-        size: 6, map: buildMilkyWayGlowTexture(), vertexColors: true,
-        transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending,
+        size: 10, map: buildMilkyWayGlowTexture(), vertexColors: true,
+        transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending,
         depthWrite: false, sizeAttenuation: true
       });
       group.add(new THREE.Points(geo, mat));
@@ -143,31 +146,38 @@
       return new THREE.Points(geo, mat);
     }
 
-    function buildSolarSystemDecor() {
+    function buildSolarSystemDecor(invQuaternion) {
       const group = new THREE.Group();
-      // [FIX] 수성·금성(지구보다 안쪽 궤도)은 실제로 지구에서 볼 때 태양과
-      // 항상 가까운 각도 안에서만 보여요(최대이각 - 수성 약 28°, 금성 약 47°).
-      // 그래서 태양 쪽에 모아뒀고, 화성·목성·토성·천왕성·해왕성(바깥 궤도 행성)은
-      // 하늘 어디에도 나타날 수 있어서 태양 반대편 쪽에 흩어지게 배치했어요.
+      // [FIX] "행성들이 한쪽에 몰려있다" - 실제 원인을 찾았어요. 이 장식들을
+      // globeGroup의 자식으로 넣으면서(지구랑 같이 회전하도록), globeGroup에
+      // 걸려있는 초기 회전값(0.35, -2.1, 0)이 여기 적어둔 좌표에도 그대로
+      // 적용돼서, 화면에 보이기 전에 이미 위치가 뒤섞여버렸어요(일부는 아예
+      // 카메라 뒤로 넘어가기도 했습니다). 아래 좌표를 "화면에 보이길 원하는
+      // 최종 위치"로 두고, globeGroup 회전의 역변환을 미리 적용해서 저장하는
+      // 방식으로 고쳤습니다 - 그래서 로드 시 실제로 이 좌표대로 보입니다.
+      // 수성·금성(태양과 가까운 궤도)은 태양 근처(오른쪽 위)에 모으고,
+      // 나머지 행성들은 여러 방향(왼쪽 위/아래, 오른쪽 아래 등)에 퍼뜨렸어요.
       const bodies = [
-        // 태양 + 안쪽 궤도(수성·금성) - 태양과 같은 방향(+x)에 모음
-        { color: '#fff4d6', size: 180, pos: [300, 150, -700] },  // 태양
-        { color: '#b5a897', size: 24, pos: [250, 90, -480] },    // 수성 (태양 근처)
-        { color: '#e8d9b5', size: 32, pos: [340, -40, -560] },   // 금성 (태양 근처)
+        // 태양 + 안쪽 궤도(수성·금성) - 한 방향(오른쪽 위)에 모음
+        { color: '#fff4d6', size: 180, pos: [360, 200, -750] },  // 태양
+        { color: '#b5a897', size: 24, pos: [290, 130, -560] },   // 수성 (태양 근처)
+        { color: '#e8d9b5', size: 32, pos: [430, 60, -600] },    // 금성 (태양 근처)
 
         // 달은 지구 궤도상 물체라 태양 방향과 무관
-        { color: '#c9c9c9', size: 52, pos: [-190, -95, -430] },  // 달
+        { color: '#c9c9c9', size: 52, pos: [-340, -160, -520] }, // 달 (왼쪽 아래)
 
-        // 바깥 궤도 행성 - 태양 반대편(-x) 쪽에 흩어서 배치
-        { color: '#c1440e', size: 28, pos: [-270, 150, -610] },  // 화성
-        { color: '#d8a774', size: 80, pos: [-190, -190, -880] }, // 목성
-        { color: '#e3c78a', size: 68, pos: [-330, 85, -930], ring: 'rgba(210,190,150,0.7)' }, // 토성
-        { color: '#a9d8e0', size: 40, pos: [-60, 230, -970] },   // 천왕성
-        { color: '#5b7fe0', size: 40, pos: [-100, -230, -1000] } // 해왕성
+        // 바깥 궤도 행성 - 여러 방향으로 흩어서 배치
+        { color: '#c1440e', size: 28, pos: [-440, 230, -650] },  // 화성 (왼쪽 위)
+        { color: '#d8a774', size: 80, pos: [-220, -300, -880] }, // 목성 (왼쪽 아래, 더 멀리)
+        { color: '#e3c78a', size: 68, pos: [270, -280, -920], ring: 'rgba(210,190,150,0.7)' }, // 토성 (오른쪽 아래)
+        { color: '#a9d8e0', size: 40, pos: [-470, -60, -970] },  // 천왕성 (왼쪽 멀리)
+        { color: '#5b7fe0', size: 40, pos: [110, 320, -1000] }   // 해왕성 (위쪽 멀리)
       ];
       bodies.forEach(b => {
         const sprite = createGlowSprite(b.color, b.size, b.ring);
-        sprite.position.set(b.pos[0], b.pos[1], b.pos[2]);
+        const pos = new THREE.Vector3(b.pos[0], b.pos[1], b.pos[2]);
+        if (invQuaternion) pos.applyQuaternion(invQuaternion);
+        sprite.position.copy(pos);
         group.add(sprite);
       });
       return group;

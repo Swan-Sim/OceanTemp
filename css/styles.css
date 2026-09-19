@@ -5,7 +5,7 @@
     /* 지구본/상세지도 뷰포트 자체는 핀치줌을 완전히 막고 앱이 직접 제스처를 처리 */
     #viewport-container { touch-action: none; }
 
-    header { height: 46px; background: #0b1329; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid #1e293b; font-size: 13px; font-weight: 700; z-index: 30; }
+    header { display: none; } /* [CHANGE] 웹에서도 항상 숨김 */
     .badge-count { font-size: 11px; background: #0369a1; color: #f0f9ff; padding: 2px 7px; border-radius: 10px; }
 
     main { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
@@ -32,9 +32,8 @@
     .legend-item { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
     .dot-beach { width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; border: 1.5px solid #fff; }
 
-    /* [ADD] 모바일에서는 헤더(타이틀)를 없애고, 지구본:그래프 비율을 60:40으로 */
+    /* [ADD] 모바일에서는 지구본:그래프 비율을 60:40으로 (헤더는 위에서 이미 항상 숨김) */
     @media (max-width: 600px) {
-      header { display: none; }
       #viewport-container { flex: 0 0 60%; }
       #bottom-sheet { flex: 0 0 40%; }
     }

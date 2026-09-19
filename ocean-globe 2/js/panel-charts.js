@@ -61,12 +61,20 @@
       const daysInCurMonth = new Date(todayObj.getFullYear(), curMonth + 1, 0).getDate();
       const todayX = curMonth + (curDate - 1) / daysInCurMonth;
 
-      // [FIX] 남반구는 계절이 반대(7월이 겨울, 1월이 여름)인데 모든 정점이
-      // 같은 사인파를 썼어요. 위도가 음수면 위상을 6개월 밀었습니다.
-      const phaseShift = lat < 0 ? 6 : 0;
-      function climAt(x) {
-        const annualCycle = Math.sin((x - 3 + phaseShift) * (Math.PI / 6)) * 6.5;
-        return Math.max(0, baseTemp + annualCycle);
+      // [CHANGE] "가장 가까운 정점 하나 말고 주변 정점들 평균 반영해줘" -
+      // 이 정점 자체는 실데이터를 못 가져왔어도, 근처 실데이터 정점 여러 개의
+      // 거리 가중 평균 곡선을 가져다가 이 정점의 실제 현재값에 맞춰
+      // 눈금만 평행이동해서 씁니다.
+      const nearbyAvg = getNearbyLiveClimAverage(station, 5);
+      let climAt;
+      if (nearbyAvg) {
+        const shift = baseTemp - climAtFromMonthly(nearbyAvg.climByMonth, todayX);
+        climAt = (x) => Math.max(0, climAtFromMonthly(nearbyAvg.climByMonth, x) + shift);
+      } else {
+        // [FIX] 남반구는 계절이 반대(7월이 겨울, 1월이 여름)인데 모든 정점이
+        // 같은 사인파를 썼어요. 위도가 음수면 위상을 6개월 밀었습니다.
+        const phaseShift = lat < 0 ? 6 : 0;
+        climAt = (x) => Math.max(0, baseTemp + Math.sin((x - 3 + phaseShift) * (Math.PI / 6)) * 6.5);
       }
 
       // [FIX] "정점마다 다 올해가 평년보다 낮게 나온다" - 실제 원인은 모든
@@ -77,7 +85,7 @@
       // 정해지는(정점마다 다르지만 매번 안 바뀌는) 편차를 더해서 정점별로
       // 따뜻한 쪽/차가운 쪽이 섞이도록 했습니다.
       const seed = ((station.id * 9301 + 49297) % 233280) / 233280; // 0~1, 정점 ID로 고정
-      const stationAnomalySeed = (seed - 0.5) * 3.2; // 약 -1.6 ~ +1.6°C
+      const stationAnomalySeed = nearbyAvg ? 0 : (seed - 0.5) * 3.2; // 주변 실데이터 평균이 있으면 이 임의 편차는 안 더함
       const baseAnomaly = (baseTemp - climAt(todayX)) * 0.3 + stationAnomalySeed;
 
       const STEPS = 48; // 0~11(1월~12월)을 모든 선이 공유하는 촘촘한 그리드

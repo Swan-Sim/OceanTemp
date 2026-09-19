@@ -35,7 +35,7 @@
         rotateMsg: "화면을 세로로 돌려주세요 — 가로모드에서는 화면이 너무 좁아 지구본과 그래프를 함께 보기 어려워요.",
         liveDataOn: "실시간 데이터 (Open-Meteo)",
         liveDataLoading: "실시간 데이터 불러오는 중...",
-        liveDataFallback: "예시 데이터로 표시 중"
+        liveDataFallback: "실제 데이터 연결이 안 되어 추정 알고리즘으로 만든 데이터입니다"
       },
       en: {
         appTitle: "Global Ocean Temp Monitor (3D Satellite Globe)",
@@ -65,7 +65,7 @@
         rotateMsg: "Please rotate your device to portrait — landscape mode is too narrow to show the globe and chart together.",
         liveDataOn: "Live data (Open-Meteo)",
         liveDataLoading: "Loading live data...",
-        liveDataFallback: "Showing example data"
+        liveDataFallback: "Live data unavailable — this is estimated"
       }
     };
     const t = i18n[lang] || i18n.en;

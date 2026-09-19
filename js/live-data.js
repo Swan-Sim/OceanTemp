@@ -26,16 +26,20 @@
       try {
         const data = await fetchJSON(url);
         const list = Array.isArray(data) ? data : [data];
+        // [CHANGE] "station 빼면 다 진짜야?" 질문 반영 - 검증할 때 이미 받아온
+        // 실제 현재 수온을 버리지 않고 그대로 돌려줘서, 마커 색/배경 히트맵/
+        // 클릭 직후 표시값까지 전부 이 실제값을 쓰도록 했습니다.
         return stationsChunk.map((st, i) => {
           const entry = list[i];
           const val = entry && entry.current && entry.current.sea_surface_temperature;
-          return typeof val === 'number' && !Number.isNaN(val);
+          const ok = typeof val === 'number' && !Number.isNaN(val);
+          return { ok, temp: ok ? val : null };
         });
       } catch (e) {
         // 네트워크 문제 등으로 검증 자체가 실패하면, 정점을 함부로 지우지 않고
         // 일단 살려둡니다 (오프라인이어도 앱이 완전히 비어버리진 않게).
         console.warn('[live-data] 배치 검증 실패 - 이 배치는 유지합니다:', e);
-        return stationsChunk.map(() => true);
+        return stationsChunk.map(() => ({ ok: true, temp: null }));
       }
     }
 
@@ -50,12 +54,52 @@
 
       let done = 0;
       const kept = await Promise.all(chunks.map(async (chunk) => {
-        const flags = await batchCheckHasData(chunk);
+        const results = await batchCheckHasData(chunk);
         done += chunk.length;
         if (onProgress) onProgress(Math.min(allStations.length, done), allStations.length);
-        return chunk.filter((st, idx) => flags[idx]);
+        const survivors = [];
+        chunk.forEach((st, idx) => {
+          if (!results[idx].ok) return;
+          // [ADD] 검증 때 받은 실제 현재값을 station.curTemp에 반영 -
+          // 이제 마커 색, 배경 히트맵, 클릭 직후 표시값까지 전부 이 실제값을 씁니다.
+          if (results[idx].temp != null) {
+            st.curTemp = +results[idx].temp.toFixed(1);
+            st._liveCurrentVerified = true;
+          }
+          survivors.push(st);
+        });
+        return survivors;
       }));
       return kept.flat();
+    }
+
+    // [CHANGE] "가장 가까운 정점 하나 말고 주변 정점들 평균을 반영해줘"
+    // 요청 반영 - 근처 실데이터(_liveCache) 정점 중 하나만 빌려쓰던 것을,
+    // 가까운 순서로 여러 개(최대 5개)를 모아 거리 가중 평균한 월별 곡선으로
+    // 바꿨습니다. 특정 정점 하나의 특이값에 휘둘리지 않고 더 안정적이에요.
+    function getNearbyLiveClimAverage(station, maxCount) {
+      const candidates = [];
+      stations.forEach(s => {
+        if (s === station || !s._liveCache) return;
+        const dLat = station.coords[1] - s.coords[1];
+        let dLon = station.coords[0] - s.coords[0];
+        if (dLon > 180) dLon -= 360;
+        if (dLon < -180) dLon += 360;
+        const d = Math.sqrt(dLat * dLat + dLon * dLon);
+        candidates.push({ s, d });
+      });
+      if (!candidates.length) return null;
+      candidates.sort((a, b) => a.d - b.d);
+      const top = candidates.slice(0, maxCount || 5);
+
+      const climByMonth = Array(12).fill(0);
+      let wSum = 0;
+      top.forEach(({ s, d }) => {
+        const w = 1 / (d + 1); // 가까울수록 더 큰 가중치
+        wSum += w;
+        s._liveCache.climByMonth.forEach((v, i) => { climByMonth[i] += v * w; });
+      });
+      return { climByMonth: climByMonth.map(v => v / wSum), usedCount: top.length };
     }
 
     function isoDate(d) { return d.toISOString().slice(0, 10); }

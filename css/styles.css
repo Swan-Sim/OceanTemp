@@ -28,7 +28,7 @@
       box-shadow: 0 4px 15px rgba(0,0,0,0.4);
     }
     .color-legend { display: flex; align-items: center; gap: 5px; }
-    .legend-bar { width: 120px; height: 7px; border-radius: 3px; background: linear-gradient(to right, #000000, #050b1a, #0a1730, #122a52, #1a2f6e, #1e3a8a, #1e40af, #1d4ed8, #2563eb, #3b82f6, #ec4899, #db2777, #be185d, #9d174d, #831843); }
+    .legend-bar { width: 120px; height: 7px; border-radius: 3px; background: linear-gradient(to right, #000000, #050b1a, #0a1730, #122a52, #1a2f6e, #1e3a8a, #1e40af, #1d4ed8, #2563eb, #7c3aed, #a21caf, #db2777, #be185d, #9d174d, #831843); }
     .legend-item { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
     .dot-beach { width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; border: 1.5px solid #fff; }
 

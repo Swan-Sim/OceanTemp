@@ -206,6 +206,10 @@
 
           let base = 31.0 - Math.abs(jLat) * 0.45 + (Math.random() * 2 - 1);
           if (jLat >= 22 && jLat <= 28 && jLon >= 48 && jLon <= 56) base += 6.5 + Math.random() * 1.5;
+          // [ADD] 니뇨 3.4 구역(적도 태평양 중동부, 5°S~5°N·170°W~120°W)에
+          // "올해 슈퍼 엘니뇨" 맥락을 반영한 예시 온난 편차를 더합니다.
+          // 실측 위성 데이터가 아니라 일러스트레이션용 보정치입니다.
+          if (Math.abs(jLat) <= 5 && jLon >= -170 && jLon <= -120) base += 1.8 + Math.random() * 0.8;
           const surfaceTemp = Math.max(0.1, +base.toFixed(1));
 
           list.push({

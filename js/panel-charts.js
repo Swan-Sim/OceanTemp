@@ -1,3 +1,56 @@
+    // [ADD] 실제로 가져온 데이터(station._liveCache)로 그래프용 시계열을
+    // 구성합니다. 아래 computeTimeSeriesData()와 같은 모양({climLine, actualLine,
+    // projectedLine, todayPoint})을 반환해서 updateChart()가 그대로 재사용해요.
+    // "미래"는 실측이 존재할 수 없으니, 실제 현재 편차를 평년으로 서서히
+    // 수렴시키는 추정 방식은 그대로 유지합니다 - 다만 이제 그 출발점(현재값,
+    // 평년값)이 진짜 데이터예요.
+    function computeTimeSeriesDataFromLive(station) {
+      const live = station._liveCache;
+      const baseTemp = live.currentTemp;
+      const daysInCurMonth = new Date(todayObj.getFullYear(), curMonth + 1, 0).getDate();
+      const todayX = curMonth + (curDate - 1) / daysInCurMonth;
+      const STEPS = 48;
+      const gridSpacing = 11 / STEPS;
+
+      function nearestActual(x) {
+        if (!live.actualLine.length) return null;
+        let best = null, bestDiff = Infinity;
+        for (const p of live.actualLine) {
+          const diff = Math.abs(p.x - x);
+          if (diff < bestDiff) { bestDiff = diff; best = p; }
+        }
+        return best && bestDiff < gridSpacing * 1.5 ? best.y : null;
+      }
+
+      const baseAnomaly = baseTemp - climAtFromMonthly(live.climByMonth, todayX);
+      const climLine = [], actualLine = [], projectedLine = [], todayLine = [];
+      const todayIdx = Math.round((todayX / 11) * STEPS);
+
+      for (let s = 0; s <= STEPS; s++) {
+        const x = (11 * s) / STEPS;
+        const clim = climAtFromMonthly(live.climByMonth, x);
+        climLine.push({ x, y: +clim.toFixed(1) });
+
+        if (x <= todayX) {
+          const av = nearestActual(x);
+          actualLine.push({ x, y: av != null ? +av.toFixed(1) : null });
+        } else {
+          actualLine.push({ x, y: null });
+        }
+
+        if (x >= todayX) {
+          const decay = Math.exp(-(x - todayX) / 3.2);
+          projectedLine.push({ x, y: +(clim + baseAnomaly * decay).toFixed(1) });
+        } else {
+          projectedLine.push({ x, y: null });
+        }
+
+        todayLine.push({ x, y: s === todayIdx ? +baseTemp.toFixed(1) : null });
+      }
+
+      return { climLine, actualLine, projectedLine, todayPoint: todayLine };
+    }
+
     function computeTimeSeriesData(station) {
       // [FIX] "오늘 데이터가 이상하다" - '오늘' 표시가 점 하나짜리 데이터셋이라
       // Chart.js의 index 매칭 모드에서 항상 "0번째 인덱스"로 잡혀서, 1월을
@@ -85,7 +138,8 @@
       const legendBox = document.getElementById('chart-legend');
 
       if (activeMode === 'forecast') {
-        const data = computeTimeSeriesData(selectedStation);
+        const usingLive = !!selectedStation._liveCache;
+        const data = usingLive ? computeTimeSeriesDataFromLive(selectedStation) : computeTimeSeriesData(selectedStation);
         chartInstance = new Chart(chartCanvas, {
           type: 'line',
           data: {
@@ -129,7 +183,12 @@
             }
           }
         });
-        legendBox.innerHTML = `
+        const statusLine = usingLive
+          ? `<div class="item" style="color:#4ade80;">🟢 ${t.liveDataOn}</div>`
+          : (selectedStation._liveState === 'loading'
+              ? `<div class="item" style="color:#facc15;">⏳ ${t.liveDataLoading}</div>`
+              : `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>`);
+        legendBox.innerHTML = statusLine + `
           <div class="item"><span class="swatch dashed" style="color:#64748b;background:#64748b;"></span>${t.chartPast}</div>
           <div class="item"><span class="swatch" style="background:#ef4444;"></span>${t.chartActual}</div>
           <div class="item"><span class="swatch dashed" style="color:#fca5a5;background:#fca5a5;"></span>${t.chartFuture}</div>
@@ -159,7 +218,7 @@
       }
     }
 
-    function selectStation(st) {
+    async function selectStation(st) {
       selectedStation = st;
       const isHotspot = maxTempStation && maxTempStation.id === st.id;
       document.getElementById('st-name').innerText = `${st.name} ${isHotspot ? `🔥 [${t.hotspot}]` : ''}`;
@@ -183,7 +242,22 @@
         depthBtn.style.pointerEvents = 'auto';
       }
 
-      updateChart();
+      updateChart(); // 실데이터가 아직 없으면 예시값으로 먼저 보여주고
+
+      // [ADD] "현재+과거 데이터를 실제로 가져와서 그래프 만들 수 있어?" 요청 반영.
+      // Open-Meteo에서 이 정점의 실제 현재값+과거 5년+올해 실측을 가져옵니다.
+      // 한 번 성공한 정점은 세션 내내 캐시돼서 재선택 시 다시 안 불러와요.
+      if (!st._liveCache) {
+        st._liveState = 'loading';
+        if (selectedStation === st) updateChart();
+        try {
+          await fetchStationRealData(st);
+        } catch (e) {
+          console.warn('[live-data] 정점 실데이터 가져오기 실패, 예시값 유지:', e);
+          st._liveState = 'failed';
+        }
+        if (selectedStation === st) updateChart(); // 그 사이 다른 정점을 안 골랐으면 실데이터로 다시 그림
+      }
     }
 
     function setMode(mode) {

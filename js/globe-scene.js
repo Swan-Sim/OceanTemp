@@ -333,7 +333,7 @@ function getCurrentCenterLatLng() {
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, W, H);
 
-      const pts = stations.map(s => ({ lat: s.coords[1], lon: s.coords[0], temp: s.curTemp }));
+      const pts = stations.filter(s => s.isBeach).map(s => ({ lat: s.coords[1], lon: s.coords[0], temp: s.curTemp }));
 
       for (let py = 0; py < H; py++) {
         const lat = 90 - (py + 0.5) / H * 180;
@@ -343,6 +343,8 @@ function getCurrentCenterLatLng() {
 
           let ambient = 31.0 - Math.abs(lat) * 0.45;
           if (lat >= 22 && lat <= 28 && lon >= 48 && lon <= 56) ambient += 6.5; // 페르시아만 예시 보정
+          // [ADD] 격자 정점 생성 공식과 동일한 니뇨 3.4 구역 엘니뇨 예시 보정 (동기화 유지)
+          if (Math.abs(lat) <= 5 && lon >= -170 && lon <= -120) ambient += 2.2;
 
           let wSum = 0, tSum = 0, nearest = Infinity;
           for (let i = 0; i < pts.length; i++) {
@@ -376,8 +378,10 @@ function getCurrentCenterLatLng() {
     }
 
     function initThreeGlobe() {
-      stations = generateBeachStations();
-      refreshMaxTempStation();
+      // [CHANGE] 정점 생성 + 실데이터 검증(비동기)은 main.js의 bootApp()에서
+      // 미리 끝내고 stations를 채워서 넘겨줍니다. 여기서는 이미 준비된
+      // stations를 가지고 3D 장면만 그립니다.
+      document.getElementById('point-counter').innerText = t.stationCount(stations.length);
 
       const container = document.getElementById('globe-canvas-container');
       const width = container.clientWidth;
@@ -426,15 +430,9 @@ function getCurrentCenterLatLng() {
       globeGroup.add(heatMesh);
       globeGroup.add(buildAtmosphereGlow());
 
-      // [ADD] "지구공 상태에서도 NOAA 정점들 보이게" 요청 반영 -
-      // 전세계 해양 격자 정점을 여기서 바로 생성해 지구본에도 표시합니다.
-      // (이전엔 상세지도 진입 시에만 지연 로드했는데, 육지 판정이 이미
-      //  가벼워졌으니 처음부터 만들어도 부담이 적어요.)
-      const gridStations = generateOceanGridStations();
-      stations = stations.concat(gridStations);
-      fullGridLoaded = true;
-      refreshMaxTempStation();
-      document.getElementById('point-counter').innerText = t.stationCount(stations.length);
+      // [CHANGE] 격자 정점도 이제 main.js의 bootApp()에서 미리 생성/검증해서
+      // stations에 다 들어있는 상태로 넘어옵니다. 여기서는 걸러내기만 합니다.
+      const gridStations = stations.filter(s => !s.isBeach);
 
       const dotGeometry = new THREE.SphereGeometry(0.55, 6, 6);
       const dotMaterial = new THREE.MeshBasicMaterial();

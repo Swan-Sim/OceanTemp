@@ -32,7 +32,10 @@
         depthAxisLabel: "수심 (m)",
         tempAxisLabel: "수온 (°C)",
         fsUnsupported: "이 브라우저는 전체화면 API를 지원하지 않아요.\niOS Safari라면 공유 버튼 → \"홈 화면에 추가\"로 실행하면 주소창 없이 열립니다.",
-        rotateMsg: "화면을 세로로 돌려주세요 — 가로모드에서는 화면이 너무 좁아 지구본과 그래프를 함께 보기 어려워요."
+        rotateMsg: "화면을 세로로 돌려주세요 — 가로모드에서는 화면이 너무 좁아 지구본과 그래프를 함께 보기 어려워요.",
+        liveDataOn: "실시간 데이터 (Open-Meteo)",
+        liveDataLoading: "실시간 데이터 불러오는 중...",
+        liveDataFallback: "예시 데이터로 표시 중"
       },
       en: {
         appTitle: "Global Ocean Temp Monitor (3D Satellite Globe)",
@@ -59,13 +62,15 @@
         depthAxisLabel: "Depth (m)",
         tempAxisLabel: "Temp (°C)",
         fsUnsupported: "This browser doesn't support the Fullscreen API.\nOn iOS Safari, use Share → \"Add to Home Screen\" to open it without an address bar.",
-        rotateMsg: "Please rotate your device to portrait — landscape mode is too narrow to show the globe and chart together."
+        rotateMsg: "Please rotate your device to portrait — landscape mode is too narrow to show the globe and chart together.",
+        liveDataOn: "Live data (Open-Meteo)",
+        liveDataLoading: "Loading live data...",
+        liveDataFallback: "Showing example data"
       }
     };
     const t = i18n[lang] || i18n.en;
 
     document.getElementById('txt-app-title').innerText = t.appTitle;
-    document.getElementById('txt-legend-beach').innerText = t.legendBeach;
     document.getElementById('st-name').innerText = t.selectPrompt;
     document.getElementById('btn-ts').innerText = t.tabForecast;
     document.getElementById('btn-dp').innerText = t.tabDepth;

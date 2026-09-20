@@ -131,7 +131,25 @@
       renderer.setSize(w, h);
     }
 
-    window.addEventListener('resize', syncRendererSize);
+    // [FIX] "핸드폰에서 가로세로로 여러 번 돌리니까 버그가 생김(비율이 이상해지고
+    // 버튼 뒤에 검은 레이어가 생김)" - 진짜 원인을 찾았어요. resize 이벤트와
+    // orientationchange(matchMedia) 핸들러가 각각 따로, 디바운스 없이
+    // syncRendererSize()를 호출하고 있었어요. 회전을 빠르게 여러 번 하면
+    // 이 호출들이 순서 없이 겹쳐서 실행되면서, 레이아웃이 아직 다 자리잡지
+    // 않은 "중간 상태"의 크기를 읽어다 렌더러에 적용해버리는 경우가
+    // 있었습니다(그게 비율이 어긋나고 캔버스가 컨테이너를 다 못 채워서
+    // 뒤에 검은 배경이 비치는 원인이었을 거예요). 디바운스로 겹치는 호출을
+    // 하나로 정리하고, 방향 전환 직후엔 한 번 더 안전하게 재확인합니다.
+    let resizeDebounceTimer = null;
+    function scheduleResize(delay) {
+      if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+      resizeDebounceTimer = setTimeout(() => {
+        resizeDebounceTimer = null;
+        syncRendererSize();
+      }, delay || 150);
+    }
+
+    window.addEventListener('resize', () => scheduleResize(150));
 
     // [ADD] "화면 비율 바뀌면 중앙 다시 정렬해줘, 줌은 유지" 요청 반영.
     // matchMedia로 세로↔가로 전환을 정확히 감지해서(작은 리사이즈마다 매번
@@ -141,10 +159,13 @@
     if (window.matchMedia) {
       const orientationQuery = window.matchMedia('(orientation: landscape)');
       const onOrientationFlip = () => {
+        scheduleResize(300);
+        // 안전망: 일부 기기는 방향 전환 직후 첫 측정이 아직 최종 크기가
+        // 아닐 수 있어서, 조금 더 지난 뒤 한 번 더 확실하게 재확인합니다.
         setTimeout(() => {
           syncRendererSize();
           recenterGlobeVertical();
-        }, 250);
+        }, 600);
       };
       if (orientationQuery.addEventListener) orientationQuery.addEventListener('change', onOrientationFlip);
       else if (orientationQuery.addListener) orientationQuery.addListener(onOrientationFlip); // 구형 Safari 폴백

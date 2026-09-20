@@ -41,118 +41,92 @@
     // 얼룩을 넣어서 "빛나는 것"이 아니라 "빛을 반사하는 돌덩이"처럼 보이게 합니다.
     // [ADD] 은하수(밀키웨이) 배경띠. 별과 마찬가지로 scene에 붙여서
     // 지구를 드래그해도 같이 돌지 않고 고정된 먼 배경으로 유지합니다.
-    function buildMilkyWayGlowTexture() {
+    // [CHANGE] "은하수가 여러 개의 렌즈 플레어처럼 보인다" 요청 반영 -
+    // 원인은 개별 발광 스프라이트를 여러 개(포인트 9000개 + 헤이즈 패치
+    // 12개) 흩뿌리는 방식이라, 하나하나가 따로 도드라져 보였던 거예요.
+    // 첨부하신 사진을 실제 텍스처로 그대로 쓸 수는 없지만(외부에 호스팅된
+    // 파일이 아니라 이 대화에만 업로드된 이미지라 배포된 웹페이지에서
+    // 불러올 수 없어요), 그 사진의 "부드럽게 이어진 하나의 띠 + 어두운
+    // 먼지대" 느낌을 캔버스에 직접 그려서 하나의 이음매 없는 그림으로
+    // 만들고, 그 그림을 구체 안쪽 면(스카이박스, side: BackSide)에
+    // 통째로 입혔습니다. "오목렌즈로 가운데를 민" 것과 비슷하게, 구체
+    // 표면에 입혀지면서 자연스럽게 안쪽으로 휘어 보이는 배경이 됩니다.
+    function buildMilkyWaySkyboxTexture() {
+      const W = 2048, H = 1024;
       const cvs = document.createElement('canvas');
-      cvs.width = 64; cvs.height = 64;
+      cvs.width = W; cvs.height = H;
       const c = cvs.getContext('2d');
-      const grad = c.createRadialGradient(32, 32, 0, 32, 32, 32);
-      grad.addColorStop(0, 'rgba(255,250,240,0.95)');
-      grad.addColorStop(0.4, 'rgba(235,210,175,0.4)');
-      grad.addColorStop(1, 'rgba(235,210,175,0)');
+      c.clearRect(0, 0, W, H);
+
+      // 카메라가 기본적으로 바라보는 방향(위경도 0, 90 지점)에 띠 중심을 맞춰서
+      // 지구를 돌리지 않아도 기본 화면에서 바로 보이게 합니다.
+      const centerX = W * 0.75;
+      const centerY = H * 0.5;
+      const bandAngle = -0.3;
+
+      // 1) 부드러운 타원형 헤이즈 - 겹겹이 쌓아서 하나의 이어진 안개 띠로
+      c.save();
+      c.translate(centerX, centerY);
+      c.rotate(bandAngle);
+      c.scale(3.4, 1);
+
+      let grad = c.createRadialGradient(0, 0, 0, 0, 0, 260);
+      grad.addColorStop(0, 'rgba(255,222,175,0.55)');
+      grad.addColorStop(0.45, 'rgba(255,185,120,0.3)');
+      grad.addColorStop(1, 'rgba(255,185,120,0)');
       c.fillStyle = grad;
-      c.fillRect(0, 0, 64, 64);
+      c.beginPath(); c.arc(0, 0, 260, 0, Math.PI * 2); c.fill();
+
+      grad = c.createRadialGradient(0, 0, 0, 0, 0, 130);
+      grad.addColorStop(0, 'rgba(255,250,235,0.75)');
+      grad.addColorStop(0.5, 'rgba(255,215,165,0.45)');
+      grad.addColorStop(1, 'rgba(255,200,140,0)');
+      c.fillStyle = grad;
+      c.beginPath(); c.arc(0, 0, 130, 0, Math.PI * 2); c.fill();
+      c.restore();
+
+      // 2) 성간먼지대 - 띠를 가로지르는 어두운 틈을 "지워서" 표현
+      c.save();
+      c.translate(centerX, centerY);
+      c.rotate(bandAngle);
+      c.scale(3.4, 1);
+      c.globalCompositeOperation = 'destination-out';
+      const laneGrad = c.createLinearGradient(0, -35, 0, 15);
+      laneGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      laneGrad.addColorStop(0.5, 'rgba(0,0,0,0.55)');
+      laneGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = laneGrad;
+      c.fillRect(-260, -45, 520, 55);
+      c.restore();
+      c.globalCompositeOperation = 'source-over';
+
+      // 3) 띠 주변에 밀도 있게 흩뿌린 별 - 가우시안식으로 중심에 몰리게
+      for (let i = 0; i < 3000; i++) {
+        const g = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+        const along = (Math.random() - 0.5) * 950;
+        const across = g * 75;
+        const cosA = Math.cos(bandAngle), sinA = Math.sin(bandAngle);
+        const x = centerX + along * cosA - across * sinA;
+        const y = centerY + along * sinA + across * cosA;
+        if (x < 0 || x > W || y < 0 || y > H) continue;
+        const r = 0.5 + Math.random() * 1.3;
+        const bright = 0.45 + Math.random() * 0.5;
+        c.beginPath();
+        c.arc(x, y, r, 0, Math.PI * 2);
+        c.fillStyle = `rgba(255,250,240,${bright})`;
+        c.fill();
+      }
+
       return new THREE.CanvasTexture(cvs);
     }
 
-    // [ADD] 은하수 띠 전체를 은은하게 덮는 큰 헤이즈(뿌연 발광) 패치 -
-    // 참고 이미지처럼 하나의 몽글몽글한 띠 느낌을 살리기 위한 배경층입니다.
-    function buildMilkyWayHaze(tiltX, tiltZ, cosX, sinX, cosZ, sinZ) {
-      const group = new THREE.Group();
-      const patchCount = 12;
-      for (let i = 0; i < patchCount; i++) {
-        // [CHANGE] "은하수가 안 보인다" - 배경(별)보다 훨씬 먼 거리(1500+)에
-        // 두다 보니 화면에서 거의 안 잡혔어요. 훨씬 가깝게 당기고 패치도 키웠습니다.
-        const r = 950 + Math.random() * 150;
-        const along = (i / patchCount) * Math.PI * 2 + Math.random() * 0.3;
-        const x0 = Math.cos(along) * r;
-        const z0 = Math.sin(along) * r;
-        const y0 = (Math.random() - 0.5) * 45;
-        const y1 = y0 * cosX - z0 * sinX;
-        const z1 = y0 * sinX + z0 * cosX;
-        const x1 = x0 * cosZ - y1 * sinZ;
-        const y2 = x0 * sinZ + y1 * cosZ;
-
-        const sprite = createGlowSprite('rgba(255,205,140,0.55)', 480);
-        sprite.material.blending = THREE.AdditiveBlending;
-        sprite.material.opacity = 0.5;
-        sprite.position.set(x1, y2, z1);
-        group.add(sprite);
-      }
-      return group;
-    }
-
     function buildMilkyWay() {
-      const group = new THREE.Group();
-      const count = 9000;
-      const positions = new Float32Array(count * 3);
-      const colors = new Float32Array(count * 3);
-      // [FIX] "우주배경 적용이 안 됐어" - 실제 원인을 찾았어요. 은하수는
-      // scene에 고정(드래그해도 안 움직임)인데, 카메라도 항상 -Z 고정
-      // 방향만 보고 있어요(지구본만 돌아가는 구조). 기존 기울기(0.75,
-      // 0.35)로는 띠의 가장 밀집한 부분이 화면 중심에서 43도나 떨어져
-      // 있었는데, 카메라 시야각은 45도(절반 22.5도)뿐이라 그 부분이
-      // 지구를 아무리 돌려도 "절대" 화면에 안 들어왔던 거예요(달/별과
-      // 달리 은하수만 고정이라 이 문제가 생겼습니다). 기울기를 줄여서
-      // 화면 중심에서 약 20도 이내(시야각 안)로 들어오도록 고쳤어요.
-      const tiltX = 0.35, tiltZ = 0.15;
-      const cosX = Math.cos(tiltX), sinX = Math.sin(tiltX);
-      const cosZ = Math.cos(tiltZ), sinZ = Math.sin(tiltZ);
-
-      for (let i = 0; i < count; i++) {
-        // [CHANGE] 별(1400~1800)보다 훨씬 안쪽(900~1200)으로 당겨서 실제로 잘 보이게
-        const r = 900 + Math.random() * 300;
-        const along = Math.random() * Math.PI * 2;
-        // [CHANGE] 균일 분포 대신 가우시안에 가깝게(3개 랜덤값 평균) 흩어서
-        // 띠 중심부가 더 밀도 있게 보이도록 했습니다 (참고 이미지의 몽글한 느낌).
-        const g = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
-        const spread = g * 0.22;
-        const x0 = Math.cos(along) * r;
-        const z0 = Math.sin(along) * r;
-        const y0 = spread * r;
-
-        const y1 = y0 * cosX - z0 * sinX;
-        const z1 = y0 * sinX + z0 * cosX;
-        const x1 = x0 * cosZ - y1 * sinZ;
-        const y2 = x0 * sinZ + y1 * cosZ;
-
-        positions[i * 3] = x1;
-        positions[i * 3 + 1] = y2;
-        positions[i * 3 + 2] = z1;
-
-        // [CHANGE] 첨부 이미지 참고 - 전체적으로 더 진한 금빛/주황 톤으로
-        // 옮기고, 띠 중간중간에 성간먼지대처럼 어두운 틈(다크 레인)을 넣어서
-        // 매끈한 헤이즈가 아니라 결이 있는 띠처럼 보이게 했습니다.
-        const core = 1 - Math.min(1, Math.abs(spread) / 0.22);
-        const warm = 0.35 + Math.random() * 0.25; // 더 주황 쪽으로
-        let r_ = 0.95 + core * 0.05;
-        let g_ = warm + core * (0.75 - warm);
-        let b_ = (warm - 0.2) + core * (0.55 - (warm - 0.2));
-
-        // 먼지대: 중심부 근처의 좁은 두 개 띠는 어둡게 눌러서 틈을 만듦
-        const laneA = Math.abs(spread - 0.015);
-        const laneB = Math.abs(spread + 0.07);
-        const laneDarken = Math.max(
-          laneA < 0.02 ? (1 - laneA / 0.02) * 0.8 : 0,
-          laneB < 0.015 ? (1 - laneB / 0.015) * 0.7 : 0
-        );
-        const dim = 1 - laneDarken;
-
-        colors[i * 3] = r_ * dim;
-        colors[i * 3 + 1] = g_ * dim;
-        colors[i * 3 + 2] = b_ * dim;
-      }
-
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      const mat = new THREE.PointsMaterial({
-        size: 10, map: buildMilkyWayGlowTexture(), vertexColors: true,
-        transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending,
-        depthWrite: false, sizeAttenuation: true
+      const geometry = new THREE.SphereGeometry(1300, 48, 48);
+      const material = new THREE.MeshBasicMaterial({
+        map: buildMilkyWaySkyboxTexture(),
+        side: THREE.BackSide, transparent: true, depthWrite: false
       });
-      group.add(new THREE.Points(geo, mat));
-      group.add(buildMilkyWayHaze(tiltX, tiltZ, cosX, sinX, cosZ, sinZ));
-      return group;
+      return new THREE.Mesh(geometry, material);
     }
 
     function buildStarfield() {
@@ -292,17 +266,21 @@
       // 각도로 봐도 절대 태양 구체 안으로 들어가지 않게 하면서, 반지름은
       // 정확히 요청하신 10배(95→950)로 키웠습니다 - 결과적으로 화면에
       // 보이는 크기는 이전보다 약 3.75배 커집니다.
-      const pos = latLonToSpherePos(sunLat, sunLon, 2000);
+      // [CHANGE] "태양이 너무 커졌어, 달 크기 기억하지?" - 10배로 키운 걸
+      // 실제로 화면에서 보니 배경 전체를 뒤덮을 정도로 과했어요. 달(반지름
+      // 33, 거리 400 → 겉보기 비율 0.0825)보다 살짝 더 크게만(겉보기 비율
+      // 약 0.156, 달의 약 1.9배) 보이도록 다시 줄였습니다.
+      const pos = latLonToSpherePos(sunLat, sunLon, 900);
 
       // [FIX] "태양이 달보다 훨씬 작아 보여" - 반지름은 같아도(33) 태양이
       // 달보다 훨씬 멀리(750 vs 400) 있어서, 실제 화면에 보이는 각크기는
       // 거리에 반비례해 작아 보였어요. 거리 비율만큼 반지름을 키워서
       // (33 × 750/400 ≈ 62) 겉보기 크기가 달과 비슷해지도록 맞췄습니다.
-      const halo = createGlowSprite('#ffb35c', 900);
+      const halo = createGlowSprite('#ffb35c', 220);
       halo.position.copy(pos);
       group.add(halo);
 
-      const geometry = new THREE.SphereGeometry(950, 32, 32);
+      const geometry = new THREE.SphereGeometry(140, 32, 32);
       const sunTexture = buildSunTexture();
       const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffb066' });
       const sunMesh = new THREE.Mesh(geometry, material);

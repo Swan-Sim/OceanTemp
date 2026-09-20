@@ -187,7 +187,7 @@
     // 씁니다. 구체 하나 + 셰이더 오버레이 하나 정도라 성능 부담은 거의 없어요.
     function buildRealMoon(moonLat, moonLon, sunDirLocal) {
       const group = new THREE.Group();
-      const radius = 46;
+      const radius = 33;
 
       const geometry = new THREE.SphereGeometry(radius, 32, 32);
       const textureLoader = new THREE.TextureLoader();
@@ -226,6 +226,30 @@
       return group;
     }
 
+    // [ADD] "태양에 약간 주황 + 특수촬영한 태양표면 오버레이" 요청 반영.
+    // 달과 같은 방식으로 실제 태양 표면 사진 텍스처를 입힌 구체를 만들고,
+    // MeshBasicMaterial의 color로 살짝 주황 틴트를 곱해줍니다. 다만 태양은
+    // 달과 달리 "빛나는 느낌"도 있어야 해서, 기존 발광 글로우 스프라이트를
+    // 후광으로 뒤에 같이 둡니다.
+    function buildRealSun(sunLat, sunLon) {
+      const group = new THREE.Group();
+      const pos = latLonToSpherePos(sunLat, sunLon, 750);
+
+      const halo = createGlowSprite('#ffb35c', 260);
+      halo.position.copy(pos);
+      group.add(halo);
+
+      const geometry = new THREE.SphereGeometry(85, 32, 32);
+      const textureLoader = new THREE.TextureLoader();
+      const sunTexture = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_sun.jpg');
+      const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffb066' });
+      const sunMesh = new THREE.Mesh(geometry, material);
+      sunMesh.position.copy(pos);
+      group.add(sunMesh);
+
+      return group;
+    }
+
     function buildRealSunAndMoon() {
       const now = new Date();
       const sun = computeSubsolarPoint(now);
@@ -233,9 +257,7 @@
 
       const group = new THREE.Group();
 
-      const sunSprite = createGlowSprite('#fff4d6', 180);
-      sunSprite.position.copy(latLonToSpherePos(sun.lat, sun.lon, 750));
-      group.add(sunSprite);
+      group.add(buildRealSun(sun.lat, sun.lon));
 
       const mercurySprite = createGlowSprite('#b5a897', 24);
       mercurySprite.position.copy(latLonToSpherePos(sun.lat + 9, sun.lon - 11, 560));

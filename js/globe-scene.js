@@ -80,7 +80,13 @@ function latLonToSpherePos(lat, lon, radius) {
       const rightVariant = drawMarkerTexture(station, { selected: false, labelOnLeft: false, label });
       const leftVariant = drawMarkerTexture(station, { selected: false, labelOnLeft: true, label });
 
-      const material = new THREE.SpriteMaterial({ map: rightVariant.texture, depthTest: true });
+      // [FIX] "정점 텍스트 뒤로 그림자가 벗겨진다" - 이 재질에 transparent를
+      // 안 켜뒀더니(불투명 취급) 라벨 텍스트의 투명한 배경 부분까지 포함해서
+      // 사각형 전체가 깊이버퍼에 그대로 찍혔어요. 그래서 나중에 그려지는
+      // 낮/밤 그림자가 그 사각형 영역에서는 깊이 테스트에 걸려 아예 안
+      // 그려졌던 거예요(그림자가 "벗겨진" 것처럼 보임). transparent:true +
+      // depthWrite:false로 고쳐서 실제로 보이는 부분만 영향을 주게 했습니다.
+      const material = new THREE.SpriteMaterial({ map: rightVariant.texture, transparent: true, depthTest: true, depthWrite: false });
       const sprite = new THREE.Sprite(material);
       sprite.userData.baseScale = [16, 3.01]; // [FIX] 캔버스 비율(340:64)에 맞춤 - 세로로 늘어져 보이던 버그
       sprite.userData.stationId = station.id;
@@ -207,7 +213,7 @@ function getCurrentCenterLatLng() {
     // 마커(크고 주황 테두리+이름표)를 올려서 보여줍니다. 별도의 링이나
     // 정점별 텍스처 스왑이 아니라 이 마커 하나만 관리하면 돼서 더 단순합니다.
     function createSelectionMarker() {
-      const material = new THREE.SpriteMaterial({ transparent: true, depthTest: true });
+      const material = new THREE.SpriteMaterial({ transparent: true, depthTest: true, depthWrite: false });
       const sprite = new THREE.Sprite(material);
       sprite.userData.baseScale = [16, 3.01]; // [FIX] 캔버스 비율(340:64)에 맞춤
       sprite.visible = false;

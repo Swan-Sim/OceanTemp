@@ -142,6 +142,29 @@
     // 위젯을 숨기는 시점을 여기(로딩 중간)가 아니라 main.js에서 실제로
     // 줌인 전환이 시작될 때로 옮겼습니다. 그러니 로딩이 아무리 오래
     // 걸려도 검색창은 그 내내 그대로 남아있어요.
+    // [FIX] "검색창에 입력하던 게 로딩 끝나면 사라져버려" - 로딩이 끝나는
+    // 시점에 하필 검색창에 뭔가 입력 중(아직 선택은 안 함)이었다면, 바로
+    // 위젯을 없애버리지 않고 잠깐 더 기다려줍니다. 사용자가 결과를 고르거나
+    // (그러면 바로 진행) 입력을 지우면(포기한 것으로 보고 진행) 끝나고,
+    // 그래도 아무 반응이 없으면 최대 대기시간 뒤엔 그냥 진행합니다
+    // (무한정 로딩이 안 끝나 보이는 걸 막기 위한 안전장치).
+    function waitForBootSearchIdle(maxWaitMs) {
+      const input = document.getElementById('boot-search-input');
+      return new Promise((resolve) => {
+        const deadline = Date.now() + (maxWaitMs || 6000);
+        function check() {
+          const hasText = input && input.value.trim().length > 0;
+          const chosen = !!__bootManualChoice;
+          if (!hasText || chosen || Date.now() > deadline) {
+            resolve();
+          } else {
+            setTimeout(check, 400);
+          }
+        }
+        check();
+      });
+    }
+
     function getFinalBootLocation() {
       return __bootManualChoice || __bootAutoChoice || computeRotationForLatLon(35, -175);
     }

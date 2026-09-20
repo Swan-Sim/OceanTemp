@@ -674,11 +674,21 @@ function getCurrentCenterLatLng() {
     // 즉시 그 방향으로 예비 회전시켜서 "눌렸다"는 걸 바로 보여줍니다.
     // 나중에 로딩이 끝나 animateBootZoomIn이 실행될 때는 이미 그 방향을
     // 보고 있으니 줌(확대)만 자연스럽게 이어집니다.
+    // [FIX] "대륙 버튼을 바꿔 눌러도 두번째부터는 적용이 안 돼" - 진짜
+    // 원인을 찾았어요. 이 함수를 연달아 여러 번 호출하면(대륙 A 클릭 후
+    // 애니메이션이 채 안 끝났는데 대륙 B를 또 클릭), 이전 호출의
+    // requestAnimationFrame 루프가 안 멈추고 계속 돌면서 새 애니메이션과
+    // 같은 rotation.x/y 값을 두고 매 프레임 서로 덮어쓰는 레이스
+    // 컨디션이었어요. 호출마다 고유 세대(generation) ID를 매겨서, 더
+    // 최신 호출이 생기면 이전 루프는 그 즉시 스스로 멈추도록 고쳤습니다.
+    let __globeRotAnimGen = 0;
     function animateGlobeRotationTo(targetX, targetY, duration) {
       if (!globeGroup) return;
+      const myGen = ++__globeRotAnimGen;
       const startX = globeGroup.rotation.x, startY = globeGroup.rotation.y;
       const t0 = performance.now();
       function step(now) {
+        if (myGen !== __globeRotAnimGen) return; // 더 최신 호출이 있으면 이 루프는 중단
         const t = Math.min(1, (now - t0) / (duration || 700));
         const ease = 1 - Math.pow(1 - t, 3);
         globeGroup.rotation.x = startX + (targetX - startX) * ease;

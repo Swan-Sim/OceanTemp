@@ -72,6 +72,7 @@
       finishBootTextSequence();
 
       // 3) 위치 선택 결과 대기 (이미 끝나있을 가능성이 높음) 후 그 방향으로 줌인 전환
+      await waitForBootSearchIdle(6000);
       const targetView = getFinalBootLocation();
       const locationWidget = document.getElementById('boot-location-widget');
       if (locationWidget) locationWidget.classList.add('hide');

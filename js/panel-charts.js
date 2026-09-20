@@ -282,6 +282,14 @@
       tempUnit = tempUnit === 'C' ? 'F' : 'C';
       const btn = document.getElementById('btn-reset');
       if (btn) btn.innerText = '°' + tempUnit;
+
+      // [FIX] "색상바에 도씨로만 표시되는 오류" - 범례(0°C/40°C+)가 단위
+      // 전환 버튼과 연결이 안 돼 있었어요. 같이 갱신합니다.
+      const legendMin = document.getElementById('legend-min');
+      const legendMax = document.getElementById('legend-max');
+      if (legendMin) legendMin.innerText = tempUnit === 'F' ? `${cToF(0)}°F` : '0°C';
+      if (legendMax) legendMax.innerText = tempUnit === 'F' ? `${cToF(40)}°F+` : '40°C+';
+
       if (selectedStation) {
         document.getElementById('st-temp').innerText = formatTemp(selectedStation.curTemp);
         updateChart();

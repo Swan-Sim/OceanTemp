@@ -132,3 +132,20 @@
     }
 
     window.addEventListener('resize', syncRendererSize);
+
+    // [ADD] "화면 비율 바뀌면 중앙 다시 정렬해줘, 줌은 유지" 요청 반영.
+    // matchMedia로 세로↔가로 전환을 정확히 감지해서(작은 리사이즈마다 매번
+    // 재정렬하면 산만하니, 방향이 실제로 뒤집힐 때만), 레이아웃이 완전히
+    // 자리잡을 시간을 살짝 준 뒤 렌더러 크기 동기화 + 세로 기울기 재정렬을
+    // 같이 실행합니다. cameraDistance(줌)는 건드리지 않습니다.
+    if (window.matchMedia) {
+      const orientationQuery = window.matchMedia('(orientation: landscape)');
+      const onOrientationFlip = () => {
+        setTimeout(() => {
+          syncRendererSize();
+          recenterGlobeVertical();
+        }, 250);
+      };
+      if (orientationQuery.addEventListener) orientationQuery.addEventListener('change', onOrientationFlip);
+      else if (orientationQuery.addListener) orientationQuery.addListener(onOrientationFlip); // 구형 Safari 폴백
+    }

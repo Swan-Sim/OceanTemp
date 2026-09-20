@@ -111,6 +111,17 @@
     .zoom-fill { position: absolute; bottom: 0; left: 0; width: 100%; background: #38bdf8; border-radius: 2px; }
     .zoom-handle { position: absolute; left: 50%; width: 13px; height: 13px; background: #fff; border: 2px solid #0284c7; border-radius: 50%; transform: translate(-50%, 50%); }
 
+    /* [FIX] "모바일 세로모드에서 °C/°F 버튼이 안 보임" - 원인을 찾았어요.
+       버튼 6개 전부 쌓으면 top:92px에서 시작해 약 382px까지 내려가는데,
+       짧은 화면(iPhone SE급 등)에서는 지구본 영역(#viewport-container) 자체
+       높이가 그보다 작아서 맨 아래(°C 버튼)가 overflow:hidden에 잘렸던
+       거예요. 짧은/좁은 화면에서는 버튼을 더 작고 촘촘하게 배치합니다. */
+    @media (max-width: 400px), (max-height: 700px) {
+      .map-controls { gap: 4px; top: 80px; }
+      .ctrl-btn { width: 29px; height: 29px; font-size: 13px; }
+      .zoom-slider-wrap { height: 56px; }
+    }
+
     .disclaimer-bar {
       position: absolute; bottom: 4px; left: 10px; right: 10px;
       font-size: 8.5px; color: #cbd5e1; pointer-events: none; z-index: 50;

@@ -235,11 +235,12 @@
       const group = new THREE.Group();
       const pos = latLonToSpherePos(sunLat, sunLon, 750);
 
-      const halo = createGlowSprite('#ffb35c', 340);
+      const halo = createGlowSprite('#ffb35c', 100);
       halo.position.copy(pos);
       group.add(halo);
 
-      const geometry = new THREE.SphereGeometry(130, 32, 32);
+      // [CHANGE] "태양 크기 달 크기랑 같게" - 달 구체 반지름(33)과 동일하게 맞춤
+      const geometry = new THREE.SphereGeometry(33, 32, 32);
       const textureLoader = new THREE.TextureLoader();
       const sunTexture = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_sun.jpg');
       const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffb066' });

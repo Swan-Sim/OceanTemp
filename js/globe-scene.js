@@ -127,6 +127,17 @@ function worldPointToLatLon(worldPoint) {
 // [ADD] "초기 화면을 내 위치 기반으로" 요청 - 임의의 위경도가 카메라를
 // 정면으로 바라보도록 하는 globeGroup 회전값(x, y / z는 항상 0)을 역산합니다.
 // getCurrentCenterLatLng()의 반대 방향 계산이에요.
+// [ADD] "화면 비율 바뀌면 중앙 다시 정렬, 줌은 유지" 요청 반영 - 세로/가로
+// 전환처럼 화면 비율이 크게 바뀌면, 드래그로 쌓인 세로 기울기(rotation.x)
+// 때문에 한쪽 반구가 화면 밖으로 밀려 답답해 보일 수 있어요. 좌우 방향
+// (rotation.y, "어느 지역을 보고 있었는지")과 줌(cameraDistance)은 그대로
+// 두고, 세로 기울기만 기본값으로 되돌립니다.
+function recenterGlobeVertical() {
+  if (!globeGroup) return;
+  globeGroup.rotation.x = 0.35;
+  if (typeof updateBeachSpriteScale === 'function') updateBeachSpriteScale();
+}
+
 function computeRotationForLatLon(lat, lon) {
   const L = latLonToSpherePos(lat, lon, 1);
   const candidates = [Math.atan2(L.x, -L.z), Math.atan2(-L.x, L.z)];
@@ -595,15 +606,23 @@ function getCurrentCenterLatLng() {
       instancedDotsRef = instancedDots;
 
       // 해변 정점 (사람이 알아보는 지명 - 스프라이트로 표시)
+      // [FIX] "정점 텍스트가 바다색 아래로 들어감 / 저녁에 어두워짐" - 둘 다
+      // 같은 원인이었어요. heatMesh(=1)/warmGlow(=2)/shadow(=3)/atmosphere(=4)는
+      // renderOrder를 지정했는데 정작 라벨 스프라이트엔 안 줬어서 기본값 0으로
+      // "가장 먼저" 그려졌고, 그 위에 바다색·그림자가 나중에 덧그려지면서
+      // 라벨을 가려버렸던 거예요(밤에는 그림자가 진하니 더 두드러졌고요).
+      // 라벨을 그 무엇보다도 나중에(맨 위에) 그리도록 renderOrder를 높게 줍니다.
       const beachStations = stations.filter(d => d.isBeach);
       beachStations.forEach(st => {
         const sprite = createBeachSprite(st);
+        sprite.renderOrder = 10;
         beachSprites.push(sprite);
         globeGroup.add(sprite);
       });
 
       // [ADD] 선택된 정점 표시용 링 (처음엔 숨김, selectStation 시 표시)
       selectionMarker = createSelectionMarker();
+      selectionMarker.renderOrder = 11;
       globeGroup.add(selectionMarker);
 
       const defaultSpot = stations.find(s => s.name.includes("Ocean Beach")) || stations[0];

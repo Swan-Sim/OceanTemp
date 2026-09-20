@@ -853,7 +853,14 @@ function getCurrentCenterLatLng() {
               const d = Math.sqrt(dLat * dLat + dLon * dLon);
               if (d < nearestDist) { nearestDist = d; nearest = st; }
             });
-            if (nearest && nearestDist < 4) selectStation(nearest);
+            // [FIX] "축소하면 정확히 클릭해야만 선택됨" - 고정 각도(4도)
+            // 반경이 문제였어요. 확대했을 때 화면 몇 픽셀은 아주 작은
+            // 각도 차이지만, 축소했을 때 같은 픽셀 차이는 훨씬 큰 각도
+            // 차이가 돼요. 그래서 고정 반경은 축소 시 너무 빡빡했습니다.
+            // 줌 정도(cameraDistance)에 비례해서 판정 반경을 늘려줍니다.
+            const zoomRatio = Math.max(0, Math.min(1, (cameraDistance - MIN_DIST) / (MAX_DIST - MIN_DIST)));
+            const clickThreshold = 1.5 + zoomRatio * 6.5; // 확대 시 1.5도 ~ 축소 시 8도
+            if (nearest && nearestDist < clickThreshold) selectStation(nearest);
           }
         }
       }

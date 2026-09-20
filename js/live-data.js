@@ -5,15 +5,28 @@
     // 방식이에요 - 그냥 브라우저에서 여는 보통 웹페이지처럼 동작합니다.
     const LIVE_DATA_BASE = 'https://marine-api.open-meteo.com/v1/marine';
 
-    async function fetchJSON(url, timeoutMs) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
-      try {
-        const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return await res.json();
-      } finally {
-        clearTimeout(timer);
+    // [FIX] "API 하나 안되면 전체가 멈추는 게 말이 안돼" 요청 반영 -
+    // 스크린샷으로 확인해보니 429(Too Many Requests, 요청 과다)였어요.
+    // 짧은 시간에 정점 검증 요청을 너무 많이 한꺼번에 보내서 걸린 거예요.
+    // 429를 받으면 잠깐 기다렸다가 자동으로 재시도하도록 여기(모든 API
+    // 호출이 거쳐가는 공통 지점)에 넣었습니다.
+    async function fetchJSON(url, timeoutMs, maxRetries) {
+      const retries = maxRetries != null ? maxRetries : 2;
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
+        try {
+          const res = await fetch(url, { signal: controller.signal });
+          if (res.status === 429 && attempt < retries) {
+            clearTimeout(timer);
+            await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
+            continue;
+          }
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return await res.json();
+        } finally {
+          clearTimeout(timer);
+        }
       }
     }
 
@@ -52,25 +65,35 @@
       const chunks = [];
       for (let i = 0; i < allStations.length; i += CHUNK) chunks.push(allStations.slice(i, i + CHUNK));
 
+      // [FIX] "429(요청 과다)로 정점 검증이 실패함" - 원인은 ~28개 배치
+      // 요청을 Promise.all로 전부 한꺼번에 쏘고 있었던 거예요. 동시에
+      // 나가는 요청 개수를 제한해서(4개씩 묶어 처리) 순간적으로 너무
+      // 많은 요청이 한꺼번에 나가지 않도록 했습니다.
+      const CONCURRENCY = 4;
       let done = 0;
-      const kept = await Promise.all(chunks.map(async (chunk) => {
-        const results = await batchCheckHasData(chunk);
-        done += chunk.length;
-        if (onProgress) onProgress(Math.min(allStations.length, done), allStations.length);
-        const survivors = [];
-        chunk.forEach((st, idx) => {
-          if (!results[idx].ok) return;
-          // [ADD] 검증 때 받은 실제 현재값을 station.curTemp에 반영 -
-          // 이제 마커 색, 배경 히트맵, 클릭 직후 표시값까지 전부 이 실제값을 씁니다.
-          if (results[idx].temp != null) {
-            st.curTemp = +results[idx].temp.toFixed(1);
-            st._liveCurrentVerified = true;
-          }
-          survivors.push(st);
-        });
-        return survivors;
-      }));
-      return kept.flat();
+      const allSurvivors = [];
+      for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+        const batch = chunks.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(batch.map(async (chunk) => {
+          const chunkResults = await batchCheckHasData(chunk);
+          done += chunk.length;
+          if (onProgress) onProgress(Math.min(allStations.length, done), allStations.length);
+          const survivors = [];
+          chunk.forEach((st, idx) => {
+            if (!chunkResults[idx].ok) return;
+            // [ADD] 검증 때 받은 실제 현재값을 station.curTemp에 반영 -
+            // 이제 마커 색, 배경 히트맵, 클릭 직후 표시값까지 전부 이 실제값을 씁니다.
+            if (chunkResults[idx].temp != null) {
+              st.curTemp = +chunkResults[idx].temp.toFixed(1);
+              st._liveCurrentVerified = true;
+            }
+            survivors.push(st);
+          });
+          return survivors;
+        }));
+        allSurvivors.push(...results.flat());
+      }
+      return allSurvivors;
     }
 
     // [CHANGE] "가장 가까운 정점 하나 말고 주변 정점들 평균을 반영해줘"
@@ -150,19 +173,28 @@
       const currentUrl = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&current=sea_surface_temperature&timezone=auto`;
       const actualUrl = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature&past_days=90&forecast_days=0&timezone=auto`;
 
-      const [currentRes, actualRes] = await Promise.all([
+      // [FIX] "API 하나 안되면 전체가 멈추는 건 말이 안돼, 병행 연결하면
+      // 하나가 안 나와도 괜찮을 것 같아" 요청 반영 - Promise.all은 묶은
+      // 요청 중 하나라도 실패하면 전체가 실패 처리되는데, Promise.allSettled로
+      // 바꿔서 각 요청의 성공/실패를 따로 확인합니다. 예를 들어 "최근 90일
+      // 실측" 쪽이 429로 실패해도, "현재값"만 성공했으면 그 현재값은
+      // 살려서 라이브 데이터로 씁니다(다만 실측 추이 구간만 비어 보여요).
+      const [currentSettled, actualSettled] = await Promise.allSettled([
         fetchJSON(currentUrl), fetchJSON(actualUrl)
       ]);
+      const currentRes = currentSettled.status === 'fulfilled' ? currentSettled.value : null;
+      const actualRes = actualSettled.status === 'fulfilled' ? actualSettled.value : null;
 
-      const currentTemp = currentRes.current && typeof currentRes.current.sea_surface_temperature === 'number'
+      const currentTemp = currentRes && currentRes.current && typeof currentRes.current.sea_surface_temperature === 'number'
         ? currentRes.current.sea_surface_temperature
         : null;
       if (currentTemp === null) throw new Error('no current SST for this station');
 
       // 시간별 값을 날짜별로 묶어서 일평균을 직접 계산합니다
-      // (x = 월 인덱스 + 그 달 안에서의 날짜 비율)
+      // (x = 월 인덱스 + 그 달 안에서의 날짜 비율). actualRes가 실패했으면
+      // (null) 그냥 빈 배열로 - 현재값/평년은 정상 표시되고 실측 구간만 비어요.
       const dailyMap = {};
-      if (actualRes.hourly && actualRes.hourly.time) {
+      if (actualRes && actualRes.hourly && actualRes.hourly.time) {
         actualRes.hourly.time.forEach((dtStr, i) => {
           const v = actualRes.hourly.sea_surface_temperature[i];
           if (typeof v !== 'number') return;

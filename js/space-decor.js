@@ -86,7 +86,15 @@
       const count = 9000;
       const positions = new Float32Array(count * 3);
       const colors = new Float32Array(count * 3);
-      const tiltX = 0.75, tiltZ = 0.35; // 은하수 띠의 기울기(순전히 장식용 값)
+      // [FIX] "우주배경 적용이 안 됐어" - 실제 원인을 찾았어요. 은하수는
+      // scene에 고정(드래그해도 안 움직임)인데, 카메라도 항상 -Z 고정
+      // 방향만 보고 있어요(지구본만 돌아가는 구조). 기존 기울기(0.75,
+      // 0.35)로는 띠의 가장 밀집한 부분이 화면 중심에서 43도나 떨어져
+      // 있었는데, 카메라 시야각은 45도(절반 22.5도)뿐이라 그 부분이
+      // 지구를 아무리 돌려도 "절대" 화면에 안 들어왔던 거예요(달/별과
+      // 달리 은하수만 고정이라 이 문제가 생겼습니다). 기울기를 줄여서
+      // 화면 중심에서 약 20도 이내(시야각 안)로 들어오도록 고쳤어요.
+      const tiltX = 0.35, tiltZ = 0.15;
       const cosX = Math.cos(tiltX), sinX = Math.sin(tiltX);
       const cosZ = Math.cos(tiltZ), sinZ = Math.sin(tiltZ);
 
@@ -241,6 +249,36 @@
       return group;
     }
 
+    // [FIX] "태양이 여전히 안 보여" - 스크린샷을 보니 달(캔버스 텍스처)은
+    // 크레이터까지 선명하게 잘 보이는데 태양만 안 보였어요. 둘의 차이는
+    // 딱 하나, 태양만 외부 이미지 URL(solarsystemscope.com)을 썼다는
+    // 거예요. 그 사이트의 CORS 설정을 확실히 보장할 수 없어서, 로딩이
+    // 조용히 실패했을 가능성이 커요. 달과 똑같이 캔버스로 직접 그리는
+    // 절차적 텍스처로 바꿔서 외부 네트워크 의존을 아예 없앴습니다.
+    function buildSunTexture() {
+      const cvs = document.createElement('canvas');
+      cvs.width = 256; cvs.height = 256;
+      const c = cvs.getContext('2d');
+      const grad = c.createRadialGradient(128, 128, 0, 128, 128, 182);
+      grad.addColorStop(0, '#fff4c9');
+      grad.addColorStop(0.45, '#ffc65c');
+      grad.addColorStop(0.8, '#ff9d2e');
+      grad.addColorStop(1, '#e8701a');
+      c.fillStyle = grad;
+      c.fillRect(0, 0, 256, 256);
+
+      // 쌀알무늬(태양 표면 그래뉼레이션) 느낌의 얼룩
+      for (let i = 0; i < 500; i++) {
+        const x = Math.random() * 256, y = Math.random() * 256;
+        const r = 2 + Math.random() * 5;
+        c.beginPath();
+        c.arc(x, y, r, 0, Math.PI * 2);
+        c.fillStyle = Math.random() > 0.5 ? 'rgba(255,225,160,0.28)' : 'rgba(200,90,20,0.22)';
+        c.fill();
+      }
+      return new THREE.CanvasTexture(cvs);
+    }
+
     // [ADD] "태양에 약간 주황 + 특수촬영한 태양표면 오버레이" 요청 반영.
     // 달과 같은 방식으로 실제 태양 표면 사진 텍스처를 입힌 구체를 만들고,
     // MeshBasicMaterial의 color로 살짝 주황 틴트를 곱해줍니다. 다만 태양은
@@ -265,8 +303,7 @@
       group.add(halo);
 
       const geometry = new THREE.SphereGeometry(950, 32, 32);
-      const textureLoader = new THREE.TextureLoader();
-      const sunTexture = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_sun.jpg');
+      const sunTexture = buildSunTexture();
       const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffb066' });
       const sunMesh = new THREE.Mesh(geometry, material);
       sunMesh.position.copy(pos);

@@ -278,7 +278,43 @@
         { name: "IMARPE Instituto del Mar del Perú (Callao)", shortName: "카야오 IMARPE", lat: -12.056, lon: -77.148, curTemp: 18.5, depth: true, net: "Institute/IMARPE" },
         { name: "Kenya Marine and Fisheries Research Institute (Mombasa)", shortName: "몸바사 KMFRI", lat: -4.043, lon: 39.658, curTemp: 27.0, depth: true, net: "Institute/KMFRI" },
         { name: "Nigerian Institute for Oceanography and Marine Research (Lagos)", shortName: "라고스 NIOMR", lat: 6.455, lon: 3.393, curTemp: 27.5, depth: true, net: "Institute/NIOMR" },
-        { name: "Institute of Marine Sciences (Erdemli, Turkey)", shortName: "에르데믈리", lat: 36.562, lon: 34.254, curTemp: 23.0, depth: true, net: "Institute/IMS-METU" }
+        { name: "Institute of Marine Sciences (Erdemli, Turkey)", shortName: "에르데믈리", lat: 36.562, lon: 34.254, curTemp: 23.0, depth: true, net: "Institute/IMS-METU" },
+
+        // 호주 추가
+        { name: "Great Barrier Reef (Cairns, Australia)", shortName: "그레이트배리어리프", lat: -16.925, lon: 145.771, curTemp: 27.0, depth: true, net: "Beach/BOM" },
+        { name: "Ningaloo Reef (Exmouth, Australia)", shortName: "닝갈루리프", lat: -21.93, lon: 114.13, curTemp: 25.0, depth: true, net: "Beach/BOM" },
+        { name: "Cottesloe Beach (Perth, Australia)", shortName: "코테슬로비치", lat: -31.996, lon: 115.755, curTemp: 20.5, depth: true, net: "Beach/BOM" },
+        { name: "Manly Beach (Sydney, Australia)", shortName: "맨리비치", lat: -33.797, lon: 151.288, curTemp: 20.0, depth: true, net: "Beach/BOM" },
+        { name: "AIMS Australian Institute of Marine Science (Townsville)", shortName: "타운즈빌 AIMS", lat: -19.318, lon: 146.817, curTemp: 26.5, depth: true, net: "Institute/AIMS" },
+        { name: "CSIRO Marine (Hobart, Tasmania)", shortName: "호바트 CSIRO", lat: -42.883, lon: 147.328, curTemp: 14.0, depth: true, net: "Institute/CSIRO" },
+
+        // 마이크로네시아·사이판 추가
+        { name: "Chuuk Lagoon (Micronesia)", shortName: "추크석호", lat: 7.412, lon: 151.79, curTemp: 29.0, depth: true, net: "Beach/local" },
+        { name: "Pohnpei (Micronesia)", shortName: "포나페", lat: 6.887, lon: 158.215, curTemp: 28.8, depth: true, net: "Beach/local" },
+        { name: "Micro Beach (Saipan)", shortName: "사이판 미크로비치", lat: 15.213, lon: 145.741, curTemp: 28.5, depth: true, net: "Beach/local" },
+        { name: "Banzai Cliff Diving Area (Saipan)", shortName: "반자이클리프", lat: 15.245, lon: 145.751, curTemp: 28.5, depth: true, net: "Beach/local" },
+
+        // 인도네시아 추가
+        { name: "Komodo National Park (Labuan Bajo, Indonesia)", shortName: "코모도", lat: -8.559, lon: 119.885, curTemp: 28.0, depth: true, net: "Beach/BMKG" },
+        { name: "Wakatobi (Indonesia)", shortName: "와카토비", lat: -5.478, lon: 123.749, curTemp: 28.5, depth: true, net: "Beach/BMKG" },
+        { name: "Bunaken (Manado, Indonesia)", shortName: "부나켄", lat: 1.622, lon: 124.759, curTemp: 28.7, depth: true, net: "Beach/BMKG" },
+
+        // 이집트 추가
+        { name: "Marsa Alam (Egypt)", shortName: "마르사알람", lat: 25.070, lon: 34.893, curTemp: 26.0, depth: true, net: "Beach/EMA" },
+        { name: "Ras Mohammed National Park (Egypt)", shortName: "라스모하메드", lat: 27.73, lon: 34.25, curTemp: 25.5, depth: true, net: "Beach/EMA" },
+
+        // 터키 추가
+        { name: "Bodrum (Turkey)", shortName: "보드룸", lat: 37.034, lon: 27.430, curTemp: 23.5, depth: true, net: "Beach/MGM" },
+        { name: "Ölüdeniz (Fethiye, Turkey)", shortName: "욀루데니즈", lat: 36.548, lon: 29.117, curTemp: 23.8, depth: true, net: "Beach/MGM" },
+
+        // 마리아나제도·괌
+        { name: "Tinian Island (Northern Mariana Islands)", shortName: "티니안섬", lat: 15.0, lon: 145.63, curTemp: 28.5, depth: true, net: "Beach/local" },
+        { name: "Challenger Deep (Mariana Trench)", shortName: "챌린저해연", lat: 11.35, lon: 142.2, curTemp: 27.5, depth: true, net: "Beach/NOAA" },
+        { name: "Tumon Bay (Guam)", shortName: "투몬베이", lat: 13.509, lon: 144.808, curTemp: 28.8, depth: true, net: "Beach/NOAA" },
+
+        // 북극·남극 (각 1곳)
+        { name: "Ny-Ålesund (Svalbard, Arctic)", shortName: "니올레순(북극)", lat: 78.923, lon: 11.923, curTemp: 2.0, depth: true, net: "Institute/Arctic" },
+        { name: "McMurdo Station (Antarctica)", shortName: "맥머도(남극)", lat: -77.846, lon: 166.668, curTemp: 0.2, depth: true, net: "Institute/Antarctic" }
       ];
 
       beachSpots.forEach(s => {

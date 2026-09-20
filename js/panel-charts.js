@@ -213,7 +213,7 @@
               // 축이 그만큼만 딱 맞춰져서 그래프가 요동치는 것처럼 보였어요.
               // 색상표와 같은 0~40도 절대 범위로 고정해서 실제 변화폭
               // 그대로 보이게 했습니다.
-              y: { min: 0, max: 40, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: '#1e293b' } }
+              y: { min: 0, max: 32, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: '#1e293b' } }
             }
           }
         });
@@ -314,7 +314,7 @@
       const legendMin = document.getElementById('legend-min');
       const legendMax = document.getElementById('legend-max');
       if (legendMin) legendMin.innerText = tempUnit === 'F' ? `${cToF(0)}°F` : '0°C';
-      if (legendMax) legendMax.innerText = tempUnit === 'F' ? `${cToF(40)}°F+` : '40°C+';
+      if (legendMax) legendMax.innerText = tempUnit === 'F' ? `${cToF(32)}°F+` : '32°C+';
 
       if (selectedStation) {
         document.getElementById('st-temp').innerText = formatTemp(selectedStation.curTemp);

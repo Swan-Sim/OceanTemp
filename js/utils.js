@@ -24,9 +24,9 @@
     // 있는 파랑→청록→노랑→주황→빨강 스케일로 교체했습니다. 가장 차가운
     // 극지방/결빙 근처는 흰색에 가깝게 처리했어요.
     const TEMP_BANDS = [
-      '#f1f5f9', '#bfdbfe', '#60a5fa', '#2563eb', '#1d4ed8', // 0~13.3°C 흰색(결빙) → 파랑
-      '#1e40af', '#0e7490', '#0d9488', '#10b981', '#84cc16', // 13.3~26.7°C 청록 → 연두
-      '#facc15', '#f59e0b', '#f97316', '#dc2626', '#991b1b'  // 26.7~40°C 노랑 → 짙은 빨강
+      '#f1f5f9', '#bfdbfe', '#60a5fa', '#2563eb', '#1d4ed8', // 0~10.7°C 흰색(결빙) → 파랑
+      '#1e40af', '#0e7490', '#0d9488', '#10b981', '#84cc16', // 10.7~21.3°C 청록 → 연두
+      '#facc15', '#f59e0b', '#f97316', '#dc2626', '#991b1b'  // 21.3~32°C 노랑 → 짙은 빨강
     ];
     function hexToRgbArr(hex) {
       const n = parseInt(hex.slice(1), 16);
@@ -36,9 +36,14 @@
     // [CHANGE] 딱딱 끊기는 15단계 밴딩 대신, 같은 색상 여정(검정→파랑→핫핑크)을
     // 유지하면서 인접 구간끼리 부드럽게 보간해서 참고 이미지처럼 매끄러운
     // 그라데이션으로 바꿨습니다.
+    // [CHANGE] "실제로 40도가 없어서 빨강/주황이 안 보임" 요청 반영 -
+    // 실제 해수온은 페르시아만 같은 극단적 예외를 빼면 거의 32~34도를
+    // 넘지 않아서, 0~40도 스케일에서는 가장 뜨거운 열대 바다조차 빨강
+    // 근처까지 못 갔어요. 최대치를 32도로 낮춰서 실제로 도달 가능한
+    // 온도에서 색상 스펙트럼 전체(노랑→주황→빨강)를 다 쓰도록 했습니다.
     function getTempColor(temp) {
-      const clamped = Math.max(0, Math.min(40, temp));
-      const pos = (clamped / 40) * (TEMP_BANDS_RGB.length - 1);
+      const clamped = Math.max(0, Math.min(32, temp));
+      const pos = (clamped / 32) * (TEMP_BANDS_RGB.length - 1);
       const i0 = Math.floor(pos);
       const i1 = Math.min(TEMP_BANDS_RGB.length - 1, i0 + 1);
       const frac = pos - i0;

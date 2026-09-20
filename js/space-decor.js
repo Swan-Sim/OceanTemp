@@ -41,105 +41,68 @@
     // 얼룩을 넣어서 "빛나는 것"이 아니라 "빛을 반사하는 돌덩이"처럼 보이게 합니다.
     // [ADD] 은하수(밀키웨이) 배경띠. 별과 마찬가지로 scene에 붙여서
     // 지구를 드래그해도 같이 돌지 않고 고정된 먼 배경으로 유지합니다.
-    // [CHANGE] "은하수가 여러 개의 렌즈 플레어처럼 보인다" 요청 반영 -
-    // 원인은 개별 발광 스프라이트를 여러 개(포인트 9000개 + 헤이즈 패치
-    // 12개) 흩뿌리는 방식이라, 하나하나가 따로 도드라져 보였던 거예요.
-    // 첨부하신 사진을 실제 텍스처로 그대로 쓸 수는 없지만(외부에 호스팅된
-    // 파일이 아니라 이 대화에만 업로드된 이미지라 배포된 웹페이지에서
-    // 불러올 수 없어요), 그 사진의 "부드럽게 이어진 하나의 띠 + 어두운
-    // 먼지대" 느낌을 캔버스에 직접 그려서 하나의 이음매 없는 그림으로
-    // 만들고, 그 그림을 구체 안쪽 면(스카이박스, side: BackSide)에
-    // 통째로 입혔습니다. "오목렌즈로 가운데를 민" 것과 비슷하게, 구체
-    // 표면에 입혀지면서 자연스럽게 안쪽으로 휘어 보이는 배경이 됩니다.
-    function buildMilkyWaySkyboxTexture() {
-      const W = 2048, H = 1024;
+    function buildMilkyWayGlowTexture() {
       const cvs = document.createElement('canvas');
-      cvs.width = W; cvs.height = H;
+      cvs.width = 64; cvs.height = 64;
       const c = cvs.getContext('2d');
-      c.clearRect(0, 0, W, H);
-
-      // 카메라가 기본적으로 바라보는 방향(위경도 0, 90 지점)에 띠 중심을 맞춰서
-      // 지구를 돌리지 않아도 기본 화면에서 바로 보이게 합니다.
-      const centerX = W * 0.75;
-      const centerY = H * 0.5;
-      const bandAngle = -0.3;
-
-      // 1) 부드러운 타원형 헤이즈 - 겹겹이 쌓아서 하나의 이어진 안개 띠로
-      c.save();
-      c.translate(centerX, centerY);
-      c.rotate(bandAngle);
-      c.scale(3.4, 1);
-
-      let grad = c.createRadialGradient(0, 0, 0, 0, 0, 260);
-      grad.addColorStop(0, 'rgba(255,222,175,0.22)');
-      grad.addColorStop(0.45, 'rgba(255,185,120,0.12)');
-      grad.addColorStop(1, 'rgba(255,185,120,0)');
+      const grad = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255,250,240,0.95)');
+      grad.addColorStop(0.4, 'rgba(235,210,175,0.4)');
+      grad.addColorStop(1, 'rgba(235,210,175,0)');
       c.fillStyle = grad;
-      c.beginPath(); c.arc(0, 0, 260, 0, Math.PI * 2); c.fill();
-
-      grad = c.createRadialGradient(0, 0, 0, 0, 0, 130);
-      grad.addColorStop(0, 'rgba(255,250,235,0.32)');
-      grad.addColorStop(0.5, 'rgba(255,215,165,0.18)');
-      grad.addColorStop(1, 'rgba(255,200,140,0)');
-      c.fillStyle = grad;
-      c.beginPath(); c.arc(0, 0, 130, 0, Math.PI * 2); c.fill();
-      c.restore();
-
-      // 2) 성간먼지대 - 띠를 가로지르는 어두운 틈을 "지워서" 표현
-      c.save();
-      c.translate(centerX, centerY);
-      c.rotate(bandAngle);
-      c.scale(3.4, 1);
-      c.globalCompositeOperation = 'destination-out';
-      const laneGrad = c.createLinearGradient(0, -35, 0, 15);
-      laneGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      laneGrad.addColorStop(0.5, 'rgba(0,0,0,0.55)');
-      laneGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = laneGrad;
-      c.fillRect(-260, -45, 520, 55);
-      c.restore();
-      c.globalCompositeOperation = 'source-over';
-
-      // 3) 띠 주변에 밀도 있게 흩뿌린 별 - 가우시안식으로 중심에 몰리게
-      for (let i = 0; i < 3000; i++) {
-        const g = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
-        const along = (Math.random() - 0.5) * 950;
-        const across = g * 75;
-        const cosA = Math.cos(bandAngle), sinA = Math.sin(bandAngle);
-        const x = centerX + along * cosA - across * sinA;
-        const y = centerY + along * sinA + across * cosA;
-        if (x < 0 || x > W || y < 0 || y > H) continue;
-        const r = 0.5 + Math.random() * 1.3;
-        const bright = 0.45 + Math.random() * 0.5;
-        c.beginPath();
-        c.arc(x, y, r, 0, Math.PI * 2);
-        c.fillStyle = `rgba(255,250,240,${bright})`;
-        c.fill();
-      }
-
+      c.fillRect(0, 0, 64, 64);
       return new THREE.CanvasTexture(cvs);
     }
 
     function buildMilkyWay() {
-      const geometry = new THREE.SphereGeometry(1300, 48, 48);
-      const material = new THREE.MeshBasicMaterial({
-        map: buildMilkyWaySkyboxTexture(),
-        side: THREE.BackSide, transparent: true, depthWrite: false
+      const group = new THREE.Group();
+      const count = 9000;
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const tiltX = 0.75, tiltZ = 0.35;
+      const cosX = Math.cos(tiltX), sinX = Math.sin(tiltX);
+      const cosZ = Math.cos(tiltZ), sinZ = Math.sin(tiltZ);
+
+      for (let i = 0; i < count; i++) {
+        const r = 900 + Math.random() * 300;
+        const along = Math.random() * Math.PI * 2;
+        const g = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+        const spread = g * 0.22;
+        const x0 = Math.cos(along) * r;
+        const z0 = Math.sin(along) * r;
+        const y0 = spread * r;
+
+        const y1 = y0 * cosX - z0 * sinX;
+        const z1 = y0 * sinX + z0 * cosX;
+        const x1 = x0 * cosZ - y1 * sinZ;
+        const y2 = x0 * sinZ + y1 * cosZ;
+
+        positions[i * 3] = x1;
+        positions[i * 3 + 1] = y2;
+        positions[i * 3 + 2] = z1;
+
+        const core = 1 - Math.min(1, Math.abs(spread) / 0.22);
+        const warm = 0.55 + Math.random() * 0.2;
+        colors[i * 3] = 0.9 + core * 0.1;
+        colors[i * 3 + 1] = warm + core * (0.95 - warm);
+        colors[i * 3 + 2] = (warm - 0.15) + core * (0.95 - (warm - 0.15));
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const mat = new THREE.PointsMaterial({
+        size: 10, map: buildMilkyWayGlowTexture(), vertexColors: true,
+        transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending,
+        depthWrite: false, sizeAttenuation: true
       });
-      return new THREE.Mesh(geometry, material);
+      group.add(new THREE.Points(geo, mat));
+      return group;
     }
 
-    // [CHANGE] "우주는 검은색 베이스에 반짝이는 별들이 있어야해" 요청 반영 -
-    // 그냥 고정된 밝기의 점이 아니라, 별마다 서로 다른 속도/위상으로
-    // 밝기가 은은하게 변하는 실제 "반짝임" 애니메이션을 셰이더로 넣었습니다.
-    // starfieldMaterial을 전역에 저장해두고, 매 프레임 animate()에서
-    // uniforms.time만 갱신하면 됩니다(위치는 안 바뀌니 훨씬 가벼워요).
     function buildStarfield() {
       const count = 3000;
       const positions = new Float32Array(count * 3);
-      const phases = new Float32Array(count);
-      const speeds = new Float32Array(count);
-      const baseSizes = new Float32Array(count);
       for (let i = 0; i < count; i++) {
         const r = 1400 + Math.random() * 400;
         const theta = Math.random() * Math.PI * 2;
@@ -147,47 +110,11 @@
         positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
         positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
         positions[i * 3 + 2] = r * Math.cos(phi);
-        phases[i] = Math.random() * Math.PI * 2;
-        speeds[i] = 0.6 + Math.random() * 1.8;
-        baseSizes[i] = 1.3 + Math.random() * 2.2;
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
-      geo.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1));
-      geo.setAttribute('aSize', new THREE.BufferAttribute(baseSizes, 1));
-
-      const material = new THREE.ShaderMaterial({
-        uniforms: { time: { value: 0 } },
-        vertexShader: `
-          attribute float aPhase;
-          attribute float aSpeed;
-          attribute float aSize;
-          varying float vTwinkle;
-          uniform float time;
-          void main() {
-            vTwinkle = 0.55 + 0.45 * sin(time * aSpeed + aPhase);
-            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = aSize * vTwinkle * (900.0 / -mvPosition.z);
-          }
-        `,
-        fragmentShader: `
-          varying float vTwinkle;
-          void main() {
-            vec2 uv = gl_PointCoord - vec2(0.5);
-            float d = length(uv);
-            if (d > 0.5) discard;
-            float alpha = vTwinkle * smoothstep(0.5, 0.0, d);
-            gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
-          }
-        `,
-        transparent: true,
-        depthWrite: false
-      });
-
-      starfieldMaterial = material;
-      return new THREE.Points(geo, material);
+      const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: true, transparent: true, opacity: 0.85 });
+      return new THREE.Points(geo, mat);
     }
 
     function buildSolarSystemDecor(invQuaternion) {
@@ -278,20 +205,23 @@
       cvs.width = 256; cvs.height = 256;
       const c = cvs.getContext('2d');
       const grad = c.createRadialGradient(128, 128, 0, 128, 128, 182);
-      grad.addColorStop(0, '#fff4c9');
-      grad.addColorStop(0.45, '#ffc65c');
-      grad.addColorStop(0.8, '#ff9d2e');
-      grad.addColorStop(1, '#e8701a');
+      grad.addColorStop(0, '#fffae8');
+      grad.addColorStop(0.5, '#ffdb8a');
+      grad.addColorStop(0.85, '#ffb75c');
+      grad.addColorStop(1, '#ff9d3d');
       c.fillStyle = grad;
       c.fillRect(0, 0, 256, 256);
 
-      // 쌀알무늬(태양 표면 그래뉼레이션) 느낌의 얼룩
-      for (let i = 0; i < 500; i++) {
+      // [FIX] "텍스처가 문제인지 광원 느낌이 없어" - 어둡게 눌러주던 얼룩이
+      // 표면을 얼룩덜룩한 "돌덩이"처럼 보이게 만든 원인이었어요. 어둡게
+      // 하는 쪽은 빼고, 아주 옅게 밝은 얼룩만 살짝 남겨서 고르게 밝은
+      // 원반이 되도록 했습니다.
+      for (let i = 0; i < 300; i++) {
         const x = Math.random() * 256, y = Math.random() * 256;
         const r = 2 + Math.random() * 5;
         c.beginPath();
         c.arc(x, y, r, 0, Math.PI * 2);
-        c.fillStyle = Math.random() > 0.5 ? 'rgba(255,225,160,0.28)' : 'rgba(200,90,20,0.22)';
+        c.fillStyle = 'rgba(255,250,230,0.12)';
         c.fill();
       }
       return new THREE.CanvasTexture(cvs);
@@ -335,7 +265,7 @@
 
       const geometry = new THREE.SphereGeometry(70, 32, 32);
       const sunTexture = buildSunTexture();
-      const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffd699' });
+      const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffffff' });
       const sunMesh = new THREE.Mesh(geometry, material);
       sunMesh.position.copy(pos);
       group.add(sunMesh);

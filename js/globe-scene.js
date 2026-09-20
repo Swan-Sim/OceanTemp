@@ -558,7 +558,6 @@ function getCurrentCenterLatLng() {
 
       function animate() {
         requestAnimationFrame(animate);
-        if (starfieldMaterial) starfieldMaterial.uniforms.time.value = performance.now() / 1000;
         renderer.render(scene, camera);
       }
       animate();

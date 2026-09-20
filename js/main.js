@@ -84,6 +84,15 @@
         // [FIX] 하단 차트 패널이 다시 나타나면서 지구본 영역 높이가 줄어드는데,
         // window resize 이벤트가 안 뜨는 CSS 레이아웃 변화라 명시적으로 동기화합니다.
         syncRendererSize();
+
+        // [FIX] "HUD 검색과 로딩 검색의 줌 정도가 달라" - 부팅 위젯에서
+        // 검색으로 정점을 골랐다면, HUD 검색과 똑같이 상세지도(평면도,
+        // 줌 8)로 바로 전환해서 두 검색의 결과가 일치하도록 맞췄습니다.
+        const searchedStation = getBootSearchSelectedStation();
+        if (searchedStation) {
+          selectStation(searchedStation);
+          showDetailMap(searchedStation.coords[1], searchedStation.coords[0], 8);
+        }
       });
     }
 

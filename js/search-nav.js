@@ -69,7 +69,7 @@
       // 부팅 위젯 검색 - 결과를 고르면 그 위치를 "수동 선택"으로 확정하고,
       // 검색창은 "명령이 실행됐다"는 걸 보여주기 위해 숨깁니다.
       wireSearchInput(document.getElementById('boot-search-input'), document.getElementById('boot-search-results'), (st) => {
-        chooseBootLocationManually(computeRotationForLatLon(st.coords[1], st.coords[0]));
+        chooseBootLocationManually(computeRotationForLatLon(st.coords[1], st.coords[0]), st);
         const wrap = document.querySelector('.boot-search-wrap');
         if (wrap) wrap.classList.add('applied');
       });
@@ -84,10 +84,16 @@
     // 명시적으로 고른 값(대륙/검색/내 위치 버튼)은 자동 감지보다 항상 우선.
     let __bootManualChoice = null; // 사용자가 명시적으로 고른 값 - 있으면 항상 최우선
     let __bootAutoChoice = null;   // 자동 위치 감지 결과 - 사용자가 아무 것도 안 고르면 씀
+    let __bootSearchSelectedStation = null; // [ADD] 검색으로 고른 거면 그 정점 자체도 기억 (HUD와 동일하게 상세지도로 전환하기 위해)
 
-    function chooseBootLocationManually(target) {
+    function chooseBootLocationManually(target, station) {
       __bootManualChoice = target;
+      __bootSearchSelectedStation = station || null; // 검색이 아닌 다른 방법(대륙/내위치)이면 초기화
       animateGlobeRotationTo(target.x, target.y, 900);
+    }
+
+    function getBootSearchSelectedStation() {
+      return __bootSearchSelectedStation;
     }
 
     // 부팅 로딩 내내(정점 검증이 끝날 때까지) 자동 감지/버튼/검색을 계속
@@ -96,6 +102,7 @@
     function setupBootLocationWidget() {
       __bootManualChoice = null;
       __bootAutoChoice = null;
+      __bootSearchSelectedStation = null;
       const wrap = document.querySelector('.boot-search-wrap');
       if (wrap) wrap.classList.remove('applied');
 

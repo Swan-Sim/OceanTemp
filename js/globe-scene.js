@@ -448,11 +448,15 @@ function getCurrentCenterLatLng() {
       return new THREE.Mesh(geometry, material);
     }
 
-    function buildHeatOverlayTexture() {
-      // [FIX] 해상도를 올려서(180x90 → 320x160) 확대했을 때 보이던 계단현상을
-      // 줄였습니다. 완전 불투명(1.0)으로 바꿔서 아래 위성 텍스처의 구름(흰색)이
-      // 비쳐 보이던 것도 없앴어요 - "여전히 하얀색이 있다"의 실제 원인이
-      // 색상표가 아니라 구름이 살짝 비쳐 보이던 거였습니다.
+    // [FIX] "여전히 94%에서 브라우저가 먹통이 됨" - 진짜 원인을 다시
+    // 찾았어요. 지난번엔 addStationLayers()의 다른 부분(해변 스프라이트
+    // 생성)만 청크로 나눴는데, 정작 이 함수가 훨씬 더 무거웠어요: 320×160
+    // 픽셀마다 해변 정점 340여 개까지의 거리를 전부 계산하는 IDW 보간이라
+    // 총 약 1700만 번의 거리 계산이 통째로 동기 실행되고 있었습니다.
+    // 20줄씩 처리하고 브라우저에게 제어권을 넘기는 방식으로 바꿨어요 -
+    // 결과물(픽셀 값)은 완전히 동일하고, 계산이 여러 프레임에 걸쳐
+    // 나뉘어 실행될 뿐입니다.
+    async function buildHeatOverlayTexture() {
       const W = 320, H = 160;
       const canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
@@ -495,6 +499,9 @@ function getCurrentCenterLatLng() {
           ctx.fillStyle = `rgba(${getTempColor(finalTemp)}, 1)`;
           ctx.fillRect(px, py, 1, 1);
         }
+        // [ADD] 20줄마다 한 번씩 브라우저에게 제어권을 넘겨서 그 사이
+        // 입력(클릭/타이핑)과 화면 갱신을 처리할 수 있게 합니다.
+        if (py % 20 === 19) await new Promise(resolve => setTimeout(resolve, 0));
       }
 
       const texture = new THREE.CanvasTexture(canvas);
@@ -604,7 +611,7 @@ function getCurrentCenterLatLng() {
       // 격자 정점까지 넣으면 IDW 보간 계산량이 커져서 무겁고, 의미도 크게
       // 달라지지 않아요. 바다 위에 덧씌우는 부드러운 수온 색상 필드
       // (windy.com/earth.nullschool 느낌)
-      const heatTexture = buildHeatOverlayTexture();
+      const heatTexture = await buildHeatOverlayTexture();
       const heatGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.15, 64, 64);
       const heatMaterial = new THREE.MeshBasicMaterial({ map: heatTexture, transparent: true, depthWrite: false });
       const heatMesh = new THREE.Mesh(heatGeometry, heatMaterial);

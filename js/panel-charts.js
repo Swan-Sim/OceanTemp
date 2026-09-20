@@ -8,27 +8,34 @@
       const live = station._liveCache;
       const baseTemp = live.currentTemp;
       const daysInCurMonth = new Date(todayObj.getFullYear(), curMonth + 1, 0).getDate();
-      const todayX = curMonth + (curDate - 1) / daysInCurMonth;
+      // [CHANGE] "오늘이 중앙에 오게" 요청 반영 - 달력 1월~12월 고정 대신
+      // windowStartMonth(오늘 달의 5달 전)부터 시작하는 이동 윈도우를 씁니다.
+      const todayX = 5 + (curDate - 1) / daysInCurMonth;
       const STEPS = 48;
-      const gridSpacing = 11 / STEPS;
+      const gridSpacing = 12 / STEPS;
 
-      function nearestActual(x) {
+      function calendarMonthOf(windowX) {
+        return ((windowStartMonth + windowX) % 12 + 12) % 12;
+      }
+
+      function nearestActual(windowX) {
         if (!live.actualLine.length) return null;
+        const calX = calendarMonthOf(windowX);
         let best = null, bestDiff = Infinity;
         for (const p of live.actualLine) {
-          const diff = Math.abs(p.x - x);
+          const diff = Math.abs(p.x - calX);
           if (diff < bestDiff) { bestDiff = diff; best = p; }
         }
         return best && bestDiff < gridSpacing * 1.5 ? best.y : null;
       }
 
-      const baseAnomaly = baseTemp - climAtFromMonthly(live.climByMonth, todayX);
+      const baseAnomaly = baseTemp - climAtFromMonthly(live.climByMonth, calendarMonthOf(todayX));
       const climLine = [], actualLine = [], projectedLine = [], todayLine = [];
-      const todayIdx = Math.round((todayX / 11) * STEPS);
+      const todayIdx = Math.round((todayX / 12) * STEPS);
 
       for (let s = 0; s <= STEPS; s++) {
-        const x = (11 * s) / STEPS;
-        const clim = climAtFromMonthly(live.climByMonth, x);
+        const x = (12 * s) / STEPS;
+        const clim = climAtFromMonthly(live.climByMonth, calendarMonthOf(x));
         climLine.push({ x, y: +clim.toFixed(1) });
 
         if (x <= todayX) {
@@ -59,7 +66,12 @@
       const baseTemp = station.curTemp;
       const lat = station.coords[1];
       const daysInCurMonth = new Date(todayObj.getFullYear(), curMonth + 1, 0).getDate();
-      const todayX = curMonth + (curDate - 1) / daysInCurMonth;
+      // [CHANGE] "오늘이 중앙에 오게" - 이동 윈도우 기준 오늘 위치
+      const todayX = 5 + (curDate - 1) / daysInCurMonth;
+
+      function calendarMonthOf(windowX) {
+        return ((windowStartMonth + windowX) % 12 + 12) % 12;
+      }
 
       // [CHANGE] "가장 가까운 정점 하나 말고 주변 정점들 평균 반영해줘" -
       // 이 정점 자체는 실데이터를 못 가져왔어도, 근처 실데이터 정점 여러 개의
@@ -68,13 +80,16 @@
       const nearbyAvg = getNearbyLiveClimAverage(station, 5);
       let climAt;
       if (nearbyAvg) {
-        const shift = baseTemp - climAtFromMonthly(nearbyAvg.climByMonth, todayX);
-        climAt = (x) => Math.max(0, climAtFromMonthly(nearbyAvg.climByMonth, x) + shift);
+        const shift = baseTemp - climAtFromMonthly(nearbyAvg.climByMonth, calendarMonthOf(todayX));
+        climAt = (x) => Math.max(0, climAtFromMonthly(nearbyAvg.climByMonth, calendarMonthOf(x)) + shift);
       } else {
         // [FIX] 남반구는 계절이 반대(7월이 겨울, 1월이 여름)인데 모든 정점이
         // 같은 사인파를 썼어요. 위도가 음수면 위상을 6개월 밀었습니다.
         const phaseShift = lat < 0 ? 6 : 0;
-        climAt = (x) => Math.max(0, baseTemp + Math.sin((x - 3 + phaseShift) * (Math.PI / 6)) * 6.5);
+        climAt = (x) => {
+          const calX = calendarMonthOf(x);
+          return Math.max(0, baseTemp + Math.sin((calX - 3 + phaseShift) * (Math.PI / 6)) * 6.5);
+        };
       }
 
       // [FIX] "정점마다 다 올해가 평년보다 낮게 나온다" - 실제 원인은 모든
@@ -88,14 +103,14 @@
       const stationAnomalySeed = nearbyAvg ? 0 : (seed - 0.5) * 3.2; // 주변 실데이터 평균이 있으면 이 임의 편차는 안 더함
       const baseAnomaly = (baseTemp - climAt(todayX)) * 0.3 + stationAnomalySeed;
 
-      const STEPS = 48; // 0~11(1월~12월)을 모든 선이 공유하는 촘촘한 그리드
+      const STEPS = 48; // 이동 윈도우(0~12, 12개월)를 모든 선이 공유하는 촘촘한 그리드
       const climLine = [], actualLine = [], projectedLine = [], todayLine = [];
-      const todayIdx = Math.round((todayX / 11) * STEPS);
+      const todayIdx = Math.round((todayX / 12) * STEPS);
       for (let s = 0; s <= STEPS; s++) {
-        const x = (11 * s) / STEPS;
+        const x = (12 * s) / STEPS;
         climLine.push({ x, y: +climAt(x).toFixed(1) });
 
-        // 실측값: 연초(1/1)부터 오늘까지 - 편차가 0에서 시작해 오늘 시점엔 실제 편차만큼
+        // 실측값: 윈도우 시작부터 오늘까지 - 편차가 0에서 시작해 오늘 시점엔 실제 편차만큼
         if (x <= todayX) {
           const frac = todayX > 0 ? x / todayX : 1;
           actualLine.push({ x, y: +(climAt(x) + baseAnomaly * frac).toFixed(1) });
@@ -103,7 +118,7 @@
           actualLine.push({ x, y: null });
         }
 
-        // 추정값: 오늘부터 12월까지 - 편차가 서서히 평년으로 수렴
+        // 추정값: 오늘부터 윈도우 끝까지 - 편차가 서서히 평년으로 수렴
         if (x >= todayX) {
           const decay = Math.exp(-(x - todayX) / 3.2);
           projectedLine.push({ x, y: +(climAt(x) + baseAnomaly * decay).toFixed(1) });
@@ -168,10 +183,13 @@
               legend: { display: false }, // [CHANGE] 기본 범례는 끄고, 차트 안 커스텀 범례로 대체
               tooltip: {
                 callbacks: {
+                  // [CHANGE] "오늘이 중앙에 오게" - x가 더 이상 달력 월(0=1월)이
+                  // 아니라 이동 윈도우 위치라서, 실제 달력 월/일로 환산해서 보여줍니다.
                   title: (items) => {
                     const xi = items[0].parsed.x;
-                    const mi = Math.max(0, Math.min(11, Math.floor(xi + 1e-6)));
-                    const frac = xi - mi;
+                    const wi = Math.max(0, Math.min(12, Math.floor(xi + 1e-6)));
+                    const mi = ((windowStartMonth + wi) % 12 + 12) % 12;
+                    const frac = xi - wi;
                     if (frac < 0.02) return t.months[mi];
                     const dim = new Date(todayObj.getFullYear(), mi + 1, 0).getDate();
                     const day = Math.min(dim, Math.round(frac * dim) + 1);
@@ -183,8 +201,11 @@
             },
             scales: {
               x: {
-                type: 'linear', min: -0.4, max: 11.4,
-                ticks: { stepSize: 1, color: '#64748b', font: { size: 9 }, callback: (v) => t.months[Math.round(v)] || '' },
+                type: 'linear', min: -0.4, max: 11.6,
+                ticks: {
+                  stepSize: 1, color: '#64748b', font: { size: 9 },
+                  callback: (v) => t.months[((windowStartMonth + Math.round(v)) % 12 + 12) % 12] || ''
+                },
                 grid: { color: '#1e293b' }
               },
               // [FIX] "상대온도라 날뛰어 보임" - Chart.js가 데이터 범위에

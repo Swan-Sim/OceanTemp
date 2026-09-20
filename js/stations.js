@@ -255,7 +255,8 @@
         { name: "Clifton Beach (Cape Town, South Africa)", shortName: "클리프턴비치", lat: -33.951, lon: 18.377, curTemp: 16.5, depth: true, net: "Beach/SAWS" },
         { name: "Seminyak Beach (Bali, Indonesia)", shortName: "스미냑", lat: -8.690, lon: 115.164, curTemp: 28.4, depth: true, net: "Beach/BMKG" },
         { name: "Playa del Carmen (Mexico)", shortName: "플라야델카르멘", lat: 20.629, lon: -87.073, curTemp: 28.0, depth: true, net: "Beach/SMN" },
-        { name: "Pink Sands Beach (Harbour Island, Bahamas)", shortName: "핑크샌즈비치", lat: 25.508, lon: -76.635, curTemp: 27.8, depth: true, net: "Beach/local" }
+        { name: "Pink Sands Beach (Harbour Island, Bahamas)", shortName: "핑크샌즈비치", lat: 25.508, lon: -76.635, curTemp: 27.8, depth: true, net: "Beach/local" },
+        { name: "Socorro Island (Revillagigedo, Mexico)", shortName: "소코로", lat: 18.79, lon: -110.97, curTemp: 25.5, depth: true, net: "Beach/SMN" }
       ];
 
       beachSpots.forEach(s => {

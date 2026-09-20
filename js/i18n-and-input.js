@@ -4,6 +4,10 @@
     const todayObj = new Date();
     const curMonth = todayObj.getMonth();
     const curDate = todayObj.getDate();
+    // [ADD] "온도 그래프에 오늘이 중앙에 오게" 요청 반영 - 달력상 1월~12월
+    // 고정 대신, 오늘 기준 이동 윈도우(오늘 달의 5달 전부터 6달 후까지,
+    // 총 12개월)를 씁니다. 9월이면 4월~내년 3월이 됩니다.
+    const windowStartMonth = ((curMonth - 5) % 12 + 12) % 12;
     const todayLabel = `${curMonth + 1}월 ${curDate}일`;
 
     const i18n = {

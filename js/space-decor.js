@@ -239,11 +239,11 @@
       // 달보다 훨씬 멀리(750 vs 400) 있어서, 실제 화면에 보이는 각크기는
       // 거리에 반비례해 작아 보였어요. 거리 비율만큼 반지름을 키워서
       // (33 × 750/400 ≈ 62) 겉보기 크기가 달과 비슷해지도록 맞췄습니다.
-      const halo = createGlowSprite('#ffb35c', 170);
+      const halo = createGlowSprite('#ffb35c', 260);
       halo.position.copy(pos);
       group.add(halo);
 
-      const geometry = new THREE.SphereGeometry(62, 32, 32);
+      const geometry = new THREE.SphereGeometry(95, 32, 32);
       const textureLoader = new THREE.TextureLoader();
       const sunTexture = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_sun.jpg');
       const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffb066' });

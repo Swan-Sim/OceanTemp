@@ -328,7 +328,8 @@
         { name: "Huntington Beach (California, USA)", shortName: "헌팅턴비치", lat: 33.655, lon: -118.00, curTemp: 19.0, depth: true, net: "NOAA/SCCOOS" },
         { name: "Morro Bay (California, USA)", shortName: "모로베이", lat: 35.366, lon: -120.85, curTemp: 14.5, depth: true, net: "NOAA/SCCOOS" },
         { name: "고성 화진포 관측지점", shortName: "고성", lat: 38.38, lon: 128.47, curTemp: 17.0, depth: true, net: "Beach/NIFS·badatime" },
-        { name: "Homer (Kachemak Bay, Alaska)", shortName: "호머(알래스카)", lat: 59.6425, lon: -151.5483, curTemp: 8.5, depth: true, net: "Beach/NOAA" }
+        { name: "Homer (Kachemak Bay, Alaska)", shortName: "호머(알래스카)", lat: 59.6425, lon: -151.5483, curTemp: 8.5, depth: true, net: "Beach/NOAA" },
+        { name: "Triton Bay (West Papua, Indonesia)", shortName: "트리톤베이", lat: -3.65, lon: 133.70, curTemp: 28.5, depth: true, net: "Beach/BMKG" }
       ];
 
       beachSpots.forEach(s => {

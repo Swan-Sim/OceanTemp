@@ -132,13 +132,23 @@
     // 이제 현재값과 최근 90일 추이는 진짜 실데이터입니다. 5~6년 평년
     // 곡선은 이 API로는 구할 수 없는 정보라 계절 공식으로 채우고,
     // 화면에도 그 부분만 별도로 추정치라고 표시합니다.
+    // [FIX] "여전히 라이브 데이터를 못 찾았어" - Open-Meteo 공식 문서를
+    // 직접 열어서 확인했어요. 해양 API의 "일별(daily) 변수" 목록에는
+    // 파도 관련 값들(wave_height_max 등)만 있고, sea_surface_temperature_mean
+    // 이라는 일별 변수는 아예 존재하지 않았습니다 - 수온은 시간별(hourly)
+    // 또는 현재값(current)으로만 제공돼요. 지난번 수정은 "5년 전 날짜"
+    // 문제만 고쳤을 뿐, 있지도 않은 파라미터를 계속 요청하고 있어서
+    // 여전히 항상 실패하고 있었던 거예요. 이제 hourly로 시간별 수온을
+    // 받아와서 같은 날짜끼리 직접 평균을 내는 방식으로 고쳤습니다 -
+    // 이 파라미터(hourly=sea_surface_temperature)는 문서에 실제로 있는
+    // 값이라 이번엔 확실합니다.
     async function fetchStationRealData(station) {
       if (station._liveCache) return station._liveCache;
 
       const lat = station.coords[1], lon = station.coords[0];
 
       const currentUrl = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&current=sea_surface_temperature&timezone=auto`;
-      const actualUrl = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&past_days=90&daily=sea_surface_temperature_mean&timezone=auto`;
+      const actualUrl = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature&past_days=90&forecast_days=0&timezone=auto`;
 
       const [currentRes, actualRes] = await Promise.all([
         fetchJSON(currentUrl), fetchJSON(actualUrl)
@@ -149,19 +159,26 @@
         : null;
       if (currentTemp === null) throw new Error('no current SST for this station');
 
-      // 최근 90일 실측값 (x = 월 인덱스 + 그 달 안에서의 날짜 비율)
-      const actualLine = [];
-      if (actualRes.daily && actualRes.daily.time) {
-        actualRes.daily.time.forEach((dateStr, i) => {
-          const v = actualRes.daily.sea_surface_temperature_mean[i];
-          if (typeof v === 'number') {
-            const d = new Date(dateStr + 'T00:00:00Z');
-            const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-            const x = d.getUTCMonth() + (d.getUTCDate() - 1) / dim;
-            actualLine.push({ x, y: +v.toFixed(2) });
-          }
+      // 시간별 값을 날짜별로 묶어서 일평균을 직접 계산합니다
+      // (x = 월 인덱스 + 그 달 안에서의 날짜 비율)
+      const dailyMap = {};
+      if (actualRes.hourly && actualRes.hourly.time) {
+        actualRes.hourly.time.forEach((dtStr, i) => {
+          const v = actualRes.hourly.sea_surface_temperature[i];
+          if (typeof v !== 'number') return;
+          const dateStr = dtStr.slice(0, 10);
+          if (!dailyMap[dateStr]) dailyMap[dateStr] = { sum: 0, count: 0 };
+          dailyMap[dateStr].sum += v;
+          dailyMap[dateStr].count++;
         });
       }
+      const actualLine = Object.keys(dailyMap).sort().map(dateStr => {
+        const avg = dailyMap[dateStr].sum / dailyMap[dateStr].count;
+        const d = new Date(dateStr + 'T00:00:00Z');
+        const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+        const x = d.getUTCMonth() + (d.getUTCDate() - 1) / dim;
+        return { x, y: +avg.toFixed(2) };
+      });
 
       // [CHANGE] 5~6년 평년 데이터는 이 API가 애초에 제공하지 않는
       // 범위라, 계절 사인파(위도로 위상 보정)로 채웁니다. climIsEstimated로

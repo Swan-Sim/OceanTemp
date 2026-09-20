@@ -85,6 +85,8 @@
           if (resolved) return;
           resolved = true;
           if (widget) widget.classList.add('choice-made');
+          // [ADD] 무엇으로 정해지든(대륙/내위치/검색/기본값) 바로 예비 회전
+          animateGlobeRotationTo(target.x, target.y, 900);
           resolve(target);
         };
         window.__resolveBootLocationChoice = settle;
@@ -116,7 +118,10 @@
         document.querySelectorAll('#boot-continent-chips .chip-btn').forEach(btn => {
           btn.addEventListener('click', () => {
             const c = CONTINENT_CENTERS[btn.dataset.continent];
-            if (c) settle(computeRotationForLatLon(c.lat, c.lon));
+            if (!c) return;
+            document.querySelectorAll('#boot-continent-chips .chip-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            settle(computeRotationForLatLon(c.lat, c.lon));
           });
         });
 

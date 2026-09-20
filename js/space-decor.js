@@ -148,25 +148,11 @@
 
     function buildSolarSystemDecor(invQuaternion) {
       const group = new THREE.Group();
-      // [FIX] "행성들이 한쪽에 몰려있다" - 실제 원인을 찾았어요. 이 장식들을
-      // globeGroup의 자식으로 넣으면서(지구랑 같이 회전하도록), globeGroup에
-      // 걸려있는 초기 회전값(0.35, -2.1, 0)이 여기 적어둔 좌표에도 그대로
-      // 적용돼서, 화면에 보이기 전에 이미 위치가 뒤섞여버렸어요(일부는 아예
-      // 카메라 뒤로 넘어가기도 했습니다). 아래 좌표를 "화면에 보이길 원하는
-      // 최종 위치"로 두고, globeGroup 회전의 역변환을 미리 적용해서 저장하는
-      // 방식으로 고쳤습니다 - 그래서 로드 시 실제로 이 좌표대로 보입니다.
-      // 수성·금성(태양과 가까운 궤도)은 태양 근처(오른쪽 위)에 모으고,
-      // 나머지 행성들은 여러 방향(왼쪽 위/아래, 오른쪽 아래 등)에 퍼뜨렸어요.
+      // [CHANGE] 태양/수성/금성은 이제 buildRealSunAndMoon()에서 실제 태양
+      // 직하점 기준으로 배치합니다. 여기 남은 바깥 행성들은 실제 궤도
+      // 계산까지는 하지 않는 순수 장식이라, 기존처럼 고정 화면 위치(초기
+      // 회전의 역변환 보정)로 흩어서 배치합니다.
       const bodies = [
-        // 태양 + 안쪽 궤도(수성·금성) - 한 방향(오른쪽 위)에 모음
-        { color: '#fff4d6', size: 180, pos: [360, 200, -750] },  // 태양
-        { color: '#b5a897', size: 24, pos: [290, 130, -560] },   // 수성 (태양 근처)
-        { color: '#e8d9b5', size: 32, pos: [430, 60, -600] },    // 금성 (태양 근처)
-
-        // 달은 지구 궤도상 물체라 태양 방향과 무관
-        { color: '#c9c9c9', size: 52, pos: [-340, -160, -520] }, // 달 (왼쪽 아래)
-
-        // 바깥 궤도 행성 - 여러 방향으로 흩어서 배치
         { color: '#c1440e', size: 28, pos: [-440, 230, -650] },  // 화성 (왼쪽 위)
         { color: '#d8a774', size: 80, pos: [-220, -300, -880] }, // 목성 (왼쪽 아래, 더 멀리)
         { color: '#e3c78a', size: 68, pos: [270, -280, -920], ring: 'rgba(210,190,150,0.7)' }, // 토성 (오른쪽 아래)
@@ -181,5 +167,39 @@
         group.add(sprite);
       });
       return group;
+    }
+
+    // [ADD] "태양 위치는 실시간 실제 위치로, 달도 실시간 위치로" 요청 반영.
+    // astronomy.js의 태양/달 직하점 계산을 이용해서, latLonToSpherePos로
+    // globeGroup 로컬 좌표계(지구 표면과 같은 기준)에 배치합니다. 이렇게
+    // 하면 지구를 드래그로 돌려도 태양/달이 실제로 비추는 지점과 항상
+    // 일치하게 따라다녀요. 수성·금성은 실제 궤도 계산까지는 안 하지만,
+    // "태양 근처"라는 사실만큼은 실제 태양 방향 근처에 배치해서 지킵니다.
+    function buildRealSunAndMoon() {
+      const now = new Date();
+      const sun = computeSubsolarPoint(now);
+      const moon = computeSublunarPoint(now);
+
+      const group = new THREE.Group();
+
+      const sunSprite = createGlowSprite('#fff4d6', 180);
+      sunSprite.position.copy(latLonToSpherePos(sun.lat, sun.lon, 750));
+      group.add(sunSprite);
+
+      const mercurySprite = createGlowSprite('#b5a897', 24);
+      mercurySprite.position.copy(latLonToSpherePos(sun.lat + 9, sun.lon - 11, 560));
+      group.add(mercurySprite);
+
+      const venusSprite = createGlowSprite('#e8d9b5', 32);
+      venusSprite.position.copy(latLonToSpherePos(sun.lat - 6, sun.lon + 13, 600));
+      group.add(venusSprite);
+
+      const moonSprite = createGlowSprite('#c9c9c9', 52);
+      moonSprite.position.copy(latLonToSpherePos(moon.lat, moon.lon, 400));
+      group.add(moonSprite);
+
+      // 낮/밤 그림자 셰이더에 넘길 "태양 방향(로컬 단위벡터)"도 같이 반환
+      const sunDirLocal = latLonToSpherePos(sun.lat, sun.lon, 1);
+      return { group, sunDirLocal };
     }
 

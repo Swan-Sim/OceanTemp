@@ -31,11 +31,21 @@
     window.addEventListener('load', () => setTimeout(tryHideAddressBar, 250));
     window.addEventListener('orientationchange', () => setTimeout(tryHideAddressBar, 450));
 
-    // [CHANGE] "데이터가 전혀 없는 정점은 지워" 요청 반영 - 지구본을 그리기
-    // 전에 먼저 정점 목록을 만들고, Open-Meteo에 실제로 데이터가 있는지
-    // 배치로 확인해서 없는 정점은 미리 걸러냅니다. 그 다음에야 3D 장면을 그려요.
+    // [CHANGE] "로딩 화면 만들어서 조바심 줄여주자" 요청 반영. 순서:
+    // 1) 정점 데이터 없이도 그릴 수 있는 장면(별/행성/실제 태양·달/작은 지구)을
+    //    즉시 그리고, 동시에 CRT 부팅 텍스트 + 지구 위 로딩바를 보여줍니다.
+    // 2) 그 사이 백그라운드에서 정점 생성 + 실데이터 검증을 진행합니다.
+    // 3) 검증이 끝나면 정점 레이어(히트필드/마커)를 추가하고,
+    //    카메라를 줌인하면서 최종 방향(가능하면 내 위치)으로 회전시킵니다.
     async function bootApp() {
       const counter = document.getElementById('point-counter');
+      document.body.classList.add('booting');
+      startBootTextSequence();
+
+      // 1) 즉시 그릴 수 있는 장면 먼저 (작은 지구 + 우주 배경)
+      initEarlyScene();
+
+      // 2) 정점 생성 + 실데이터 검증 (백그라운드)
       stations = generateBeachStations();
       const gridStations = generateOceanGridStations();
       stations = stations.concat(gridStations);
@@ -45,30 +55,36 @@
       try {
         stations = await removeStationsWithNoData(stations, (done, total) => {
           if (counter) counter.innerText = `해양 데이터 확인 중... (${done}/${total})`;
+          updateBootProgress(done, total);
         });
       } catch (e) {
         console.warn('[bootApp] 정점 검증 중 오류, 전체 목록 유지:', e);
       }
 
       refreshMaxTempStation();
-      initThreeGlobe();
+      addStationLayers();
+      finishBootTextSequence();
 
-      // [ADD] "초기 화면을 내 위치 기반으로, 줌인은 하지 말고" 요청 반영.
-      // 페이지 로딩을 막지 않도록 비동기로 위치를 물어보고, 응답이 오면
-      // 카메라 거리(줌)는 그대로 둔 채 방향(회전)만 사용자 위치 쪽으로 돌립니다.
-      // 허용 안 하거나 실패해도 조용히 기존 기본 방향을 유지합니다.
+      // 3) 가능하면 내 위치 방향을 목표로, 아니면 기본(태평양) 방향으로 줌인 전환.
+      // 위치 요청은 최대 3초만 기다리고 그 안에 응답이 없으면 기본 방향으로 진행합니다.
+      let targetX = 0.35, targetY = -2.1;
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            if (!globeGroup) return;
-            const { x, y } = computeRotationForLatLon(pos.coords.latitude, pos.coords.longitude);
-            globeGroup.rotation.set(x, y, 0);
-            if (typeof updateLabelOrientation === 'function') updateLabelOrientation();
-          },
-          (err) => { console.warn('[geo] 위치 기반 초기 방향 설정 실패 - 기본 방향 유지:', err.message); },
-          { timeout: 8000, maximumAge: 600000 }
-        );
+        try {
+          const pos = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000, maximumAge: 600000 });
+          });
+          const r = computeRotationForLatLon(pos.coords.latitude, pos.coords.longitude);
+          targetX = r.x; targetY = r.y;
+        } catch (e) {
+          console.warn('[geo] 위치 기반 초기 방향 설정 실패 - 기본 방향 사용:', e && e.message);
+        }
       }
+
+      animateBootZoomIn(targetX, targetY, () => {
+        const bootScreen = document.getElementById('boot-screen');
+        if (bootScreen) bootScreen.classList.add('boot-done');
+        document.body.classList.remove('booting');
+      });
     }
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -82,6 +98,9 @@
         // [FIX] 초기화 중 에러가 나면 "로딩 중..."에서 그대로 멈춰버렸던 문제.
         // 화면에 에러를 보여주고 콘솔에도 남겨서 원인을 바로 알 수 있게 합니다.
         console.error('[bootApp] 초기화 실패:', err);
+        document.body.classList.remove('booting');
+        const bootScreen = document.getElementById('boot-screen');
+        if (bootScreen) bootScreen.classList.add('boot-done');
         const counter = document.getElementById('point-counter');
         if (counter) { counter.innerText = '로딩 실패 (콘솔 확인)'; counter.style.background = '#dc2626'; }
       });

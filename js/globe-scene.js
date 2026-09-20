@@ -312,6 +312,36 @@ function getCurrentCenterLatLng() {
     // 추가합니다. 지구보다 살짝 큰 구를 안쪽 면만 렌더링하고, 시야각이
     // 표면에 거의 스치듯 얕아지는(테두리) 곳일수록 밝아지는 프레넬 효과를
     // 셰이더로 계산합니다.
+    // [ADD] "지구에 그림자 넣는 건 어때요?" 제안 반영 - 실제 태양 방향
+    // 기준으로 낮/밤 경계(터미네이터)를 표현하는 반투명 오버레이 구체입니다.
+    // globeGroup의 자식이라 지구/태양과 같은 로컬 좌표계를 쓰고, sunDir도
+    // 그 좌표계 기준이라 지구를 돌려도 실제 태양이 비추는 쪽이 항상 맞습니다.
+    function buildDayNightShadow(sunDirLocal) {
+      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.2, 64, 64);
+      const material = new THREE.ShaderMaterial({
+        uniforms: { sunDir: { value: sunDirLocal.clone().normalize() } },
+        vertexShader: `
+          varying vec3 vNormal;
+          void main() {
+            vNormal = normal; // 로컬(오브젝트) 공간 그대로 - sunDir도 같은 좌표계
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vNormal;
+          uniform vec3 sunDir;
+          void main() {
+            float facing = dot(normalize(vNormal), normalize(sunDir));
+            float night = smoothstep(0.15, -0.2, facing); // 0=낮, 1=밤, 경계는 부드럽게
+            gl_FragColor = vec4(0.0, 0.01, 0.05, night * 0.72);
+          }
+        `,
+        transparent: true,
+        depthWrite: false
+      });
+      return new THREE.Mesh(geometry, material);
+    }
+
     function buildAtmosphereGlow() {
       const geometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.025, 64, 64); // [CHANGE] 두께 절반 (1.05 → 1.025)
       const material = new THREE.ShaderMaterial({
@@ -399,18 +429,21 @@ function getCurrentCenterLatLng() {
       return texture;
     }
 
-    function initThreeGlobe() {
-      // [CHANGE] 정점 생성 + 실데이터 검증(비동기)은 main.js의 bootApp()에서
-      // 미리 끝내고 stations를 채워서 넘겨줍니다. 여기서는 이미 준비된
-      // stations를 가지고 3D 장면만 그립니다.
-      document.getElementById('point-counter').innerText = t.stationCount(stations.length);
-
+    // [CHANGE] "로딩 화면 만들어서 작은 지구만 먼저 보여주자" 요청 반영 -
+    // 기존 initThreeGlobe()를 둘로 쪼갰습니다.
+    // 1) initEarlyScene(): 정점 데이터 없이도 바로 그릴 수 있는 것들
+    //    (별/은하수/행성/실제 태양·달/지구본 본체/대기/낮밤그림자) - 페이지
+    //    로딩 즉시 실행, 카메라는 멀리(BOOT_DIST)서 시작해서 작게 보입니다.
+    // 2) addStationLayers(): 정점 데이터가 검증까지 끝난 뒤에만 그릴 수 있는 것
+    //    (히트필드, NOAA 격자, 해변 마커, 선택 마커, 기본 정점 선택)
+    function initEarlyScene() {
       const container = document.getElementById('globe-canvas-container');
       const width = container.clientWidth;
       const height = container.clientHeight;
 
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2500);
+      cameraDistance = BOOT_DIST; // 로딩 중엔 멀리서 시작해 작은 지구로 보이게
       camera.position.z = cameraDistance;
 
       // [FIX] 별(starfield)은 아주 먼 배경이라 scene에 그대로 두지만,
@@ -433,6 +466,11 @@ function getCurrentCenterLatLng() {
       const initialRotQuatInv = initialRotQuat.clone().invert();
       globeGroup.add(buildSolarSystemDecor(initialRotQuatInv));
 
+      // [ADD] "태양은 실시간 실제 위치로, 달도 가능하면" - astronomy.js로
+      // 계산한 실제 태양/달 직하점 기준으로 배치합니다.
+      const { group: sunMoonGroup, sunDirLocal } = buildRealSunAndMoon();
+      globeGroup.add(sunMoonGroup);
+
       // 위성 지구본 본체
       const globeGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
       const textureLoader = new THREE.TextureLoader();
@@ -440,6 +478,28 @@ function getCurrentCenterLatLng() {
       const globeMaterial = new THREE.MeshBasicMaterial({ map: earthTexture });
       globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
       globeGroup.add(globeMesh);
+
+      // [ADD] "지구에 그림자 넣는 건 어때요" - 실제 태양 방향 기준 낮/밤 그림자
+      globeGroup.add(buildDayNightShadow(sunDirLocal));
+      globeGroup.add(buildAtmosphereGlow());
+
+      // 태평양 방면 기본 회전
+      globeGroup.rotation.set(0.35, -2.1, 0);
+
+      setupGlobeInteraction(container, width, height);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      updateZoomGauge();
+    }
+
+    // 정점 데이터가 준비된 뒤에만 그릴 수 있는 레이어들
+    function addStationLayers() {
+      document.getElementById('point-counter').innerText = t.stationCount(stations.length);
 
       // [ADD] 히트필드는 해변(실제 지명) 정점만으로 계산합니다 -
       // 격자 정점까지 넣으면 IDW 보간 계산량이 커져서 무겁고, 의미도 크게
@@ -450,10 +510,7 @@ function getCurrentCenterLatLng() {
       const heatMaterial = new THREE.MeshBasicMaterial({ map: heatTexture, transparent: true, depthWrite: false });
       const heatMesh = new THREE.Mesh(heatGeometry, heatMaterial);
       globeGroup.add(heatMesh);
-      globeGroup.add(buildAtmosphereGlow());
 
-      // [CHANGE] 격자 정점도 이제 main.js의 bootApp()에서 미리 생성/검증해서
-      // stations에 다 들어있는 상태로 넘어옵니다. 여기서는 걸러내기만 합니다.
       const gridStations = stations.filter(s => !s.isBeach);
 
       const dotGeometry = new THREE.SphereGeometry(0.55, 6, 6);
@@ -491,10 +548,45 @@ function getCurrentCenterLatLng() {
       selectionMarker = createSelectionMarker();
       globeGroup.add(selectionMarker);
 
-      // 태평양 방면 기본 회전
-      globeGroup.rotation.set(0.35, -2.1, 0);
+      const defaultSpot = stations.find(s => s.name.includes("Ocean Beach")) || stations[0];
+      selectStation(defaultSpot);
+    }
 
-      // 드래그 회전 인터랙션
+    // [ADD] "로딩 끝나면 화면 회전하면서 지구로 줌인" 요청 반영 - 멀리서
+    // 시작한 카메라를 기본 거리까지 당기면서, 동시에 한 바퀴 더 돌아
+    // 최종 방향(targetRotX, targetRotY)에 착지하는 연출입니다.
+    function animateBootZoomIn(targetRotX, targetRotY, onComplete) {
+      const startDist = cameraDistance;
+      const endDist = 270;
+      const startRotY = globeGroup.rotation.y;
+      const startRotX = globeGroup.rotation.x;
+      const spinExtra = Math.PI * 2;
+      const t0 = performance.now();
+      const duration = 2200;
+      function step(now) {
+        const t = Math.min(1, (now - t0) / duration);
+        const ease = 1 - Math.pow(1 - t, 3);
+        cameraDistance = startDist + (endDist - startDist) * ease;
+        camera.position.z = cameraDistance;
+        globeGroup.rotation.y = startRotY + (targetRotY + spinExtra - startRotY) * ease;
+        globeGroup.rotation.x = startRotX + (targetRotX - startRotX) * ease;
+        updateBeachSpriteScale();
+        if (t < 1) {
+          requestAnimationFrame(step);
+        } else {
+          cameraDistance = endDist;
+          camera.position.z = endDist;
+          globeGroup.rotation.set(targetRotX, targetRotY, 0);
+          updateZoomGauge();
+          if (onComplete) onComplete();
+        }
+      }
+      requestAnimationFrame(step);
+    }
+
+    // 드래그 회전 + 핀치줌 + 클릭선택 인터랙션 설정 (정점 데이터 없이도 등록 가능 -
+    // 실제 클릭 판정은 나중에 호출될 때 그 시점의 stations를 참조합니다)
+    function setupGlobeInteraction(container, width, height) {
       let isDragging = false;
       let prevMousePos = { x: 0, y: 0 };
       const raycaster = new THREE.Raycaster();
@@ -631,16 +723,6 @@ function getCurrentCenterLatLng() {
         if (e.deltaY < 0) zoomIn();
         else zoomOut();
       }, { passive: false });
-
-      function animate() {
-        requestAnimationFrame(animate);
-        renderer.render(scene, camera);
-      }
-      animate();
-
-      updateZoomGauge();
-      const defaultSpot = stations.find(s => s.name.includes("Ocean Beach")) || stations[0];
-      selectStation(defaultSpot);
     }
 
     // [ADD] 전체화면 버튼. 안드로이드 Chrome 등에서는 Fullscreen API로 주소창까지

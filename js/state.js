@@ -24,5 +24,6 @@
     let cameraDistance = 270;
     const MIN_DIST = 135;
     const MAX_DIST = 380;
+    const BOOT_DIST = 620; // [ADD] 로딩 중 "작은 지구" 연출용 초기 카메라 거리
 
     // Natural Earth 공개 지리 데이터(1:110m, world-atlas 배포본, ISC 라이선스) - 육지 윤곽

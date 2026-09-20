@@ -41,6 +41,14 @@
 
   <main>
     <div id="viewport-container">
+      <div id="boot-screen">
+        <div id="boot-progress-wrap">
+          <div id="boot-progress-bar"><div id="boot-progress-fill"></div></div>
+          <div id="boot-progress-label">BOOTING...</div>
+        </div>
+        <div id="boot-terminal"></div>
+      </div>
+
       <div class="hud-overlay">
         <div class="color-legend">
           <span>0°C</span>
@@ -101,9 +109,11 @@
   <script src="js/i18n-and-input.js"></script>
   <script src="js/stations.js"></script>
   <script src="js/panel-charts.js"></script>
+  <script src="js/astronomy.js"></script>
   <script src="js/space-decor.js"></script>
   <script src="js/globe-scene.js"></script>
   <script src="js/detail-map.js"></script>
+  <script src="js/boot-sequence.js"></script>
   <script src="js/main.js"></script>
 
 </body>

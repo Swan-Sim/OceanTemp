@@ -1,45 +1,429 @@
-/*! oceantemp.vercel.app — © 2026 All rights reserved. Unauthorized copying or redistribution prohibited. See /LICENSE. */
-function latLonToSpherePos(a,o,e){const s=(90-a)*(Math.PI/180),c=(o+180)*(Math.PI/180);return new THREE.Vector3(-e*Math.sin(s)*Math.cos(c),e*Math.cos(s),e*Math.sin(s)*Math.sin(c))}function drawMarkerTexture(a,o){const e=!!o.selected,s=!!o.labelOnLeft,c=o.label,i=document.createElement("canvas");i.width=340,i.height=64;const n=i.getContext("2d"),l=getTempColor(a.curTemp),d=32,u=e?16:10,f=s?i.width-26:26,M=e?"#f97316":"#ffffff",m=e?4:2;if(n.save(),e&&(n.shadowColor="#f97316",n.shadowBlur=14),n.globalAlpha=e?.95:.85,n.fillStyle=`rgb(${l})`,n.beginPath(),n.arc(f,d,u,0,Math.PI*2),n.fill(),n.restore(),n.lineWidth=m,n.strokeStyle=M,n.beginPath(),n.arc(f,d,u,0,Math.PI*2),n.stroke(),c){n.font=`bold ${e?26:22}px -apple-system, BlinkMacSystemFont, sans-serif`;const r=Math.min(n.measureText(c).width,i.width-u*2-40),h=e?40:36,g=d-h/2,E=s?f-u-14-(r+18):f+u+14;n.fillStyle=e?"rgba(249, 115, 22, 0.55)":"rgba(15, 23, 42, 0.92)",n.strokeStyle=e?"#f97316":"rgba(255, 255, 255, 0.45)",n.lineWidth=e?2:1.5,n.beginPath(),n.roundRect(E,g,r+18,h,6),n.fill(),n.stroke(),n.fillStyle="#f8fafc",n.save(),n.beginPath(),n.rect(E,g,r+18,h),n.clip(),n.fillText(c,E+9,d+(e?9:7)),n.restore()}return{texture:new THREE.CanvasTexture(i),dotX:f,dotY:d,canvasW:i.width,canvasH:i.height}}function createBeachSprite(a){const o=a.label,e=drawMarkerTexture(a,{selected:!1,labelOnLeft:!1,label:o}),s=drawMarkerTexture(a,{selected:!1,labelOnLeft:!0,label:o}),c=new THREE.SpriteMaterial({map:e.texture,transparent:!0,depthTest:!0,depthWrite:!1}),i=new THREE.Sprite(c);i.userData.baseScale=[16,3.01],i.userData.stationId=a.id,i.userData.rightVariant=e,i.userData.leftVariant=s,i.userData.labelOnLeft=!1,i.scale.set(16,4,1),i.center.set(e.dotX/e.canvasW,1-e.dotY/e.canvasH);const n=latLonToSpherePos(a.coords[1],a.coords[0],GLOBE_RADIUS+.3);return i.position.copy(n),i.stationData=a,i}function worldPointToLatLon(a){const o=a.clone(),e=globeGroup.quaternion.clone().invert();o.applyQuaternion(e).normalize();const c=90-Math.acos(Math.max(-1,Math.min(1,o.y)))*180/Math.PI;let n=Math.atan2(o.z,-o.x)*180/Math.PI-180;return n=((n+180)%360+360)%360-180,{lat:c,lon:n}}function recenterGlobeVertical(){globeGroup&&(globeGroup.rotation.x=.35,typeof updateBeachSpriteScale=="function"&&updateBeachSpriteScale())}function computeRotationForLatLon(a,o){const e=latLonToSpherePos(a,o,1),c=[Math.atan2(e.x,-e.z),Math.atan2(-e.x,e.z)].map(n=>{const l=Math.cos(n),d=Math.sin(n),u=e.z*l-e.x*d;return{x:Math.atan2(e.y,u),y:n}}),i=c.find(n=>Math.cos(n.x)>0)||c[0];return{x:i.x,y:i.y}}function getCurrentCenterLatLng(){const a=new THREE.Vector3(0,0,1),o=globeGroup.quaternion.clone().invert();a.applyQuaternion(o).normalize();const s=90-Math.acos(Math.max(-1,Math.min(1,a.y)))*180/Math.PI;let i=Math.atan2(a.z,-a.x)*180/Math.PI-180;return i=((i+180)%360+360)%360-180,{lat:s,lon:i}}function zoomIn(){if(isDetailMode)leafletMap.zoomIn();else if(cameraDistance=Math.max(MIN_DIST,cameraDistance-25),camera.position.z=cameraDistance,updateZoomGauge(),cameraDistance<=MIN_DIST+15){const a=getCurrentCenterLatLng();showDetailMap(a.lat,a.lon,6)}}function zoomOut(){isDetailMode?leafletMap.zoomOut():(cameraDistance=Math.min(MAX_DIST,cameraDistance+25),camera.position.z=cameraDistance,updateZoomGauge())}function resetGlobeView(){isDetailMode&&switchToGlobe(),cameraDistance=270,camera.position.set(0,0,cameraDistance),globeGroup.rotation.set(.35,-2.1,0),updateZoomGauge()}function createSelectionMarker(){const a=new THREE.SpriteMaterial({transparent:!0,depthTest:!0,depthWrite:!1}),o=new THREE.Sprite(a);return o.userData.baseScale=[16,3.01],o.visible=!1,o}function refreshSelectionMarker(){if(!selectionMarker)return;if(!selectedStation){selectionMarker.visible=!1;return}if(selectionMarker.userData.forId!==selectedStation.id){selectionMarker.userData.forId=selectedStation.id;const o=selectedStation.label||selectedStation.name.split(" (")[0];selectionMarker.userData.rightVariant=drawMarkerTexture(selectedStation,{selected:!0,labelOnLeft:!1,label:o}),selectionMarker.userData.leftVariant=drawMarkerTexture(selectedStation,{selected:!0,labelOnLeft:!0,label:o}),selectionMarker.userData.labelOnLeft=null;const e=selectionMarker.userData.rightVariant;selectionMarker.material.map=e.texture,selectionMarker.material.needsUpdate=!0,selectionMarker.center.set(e.dotX/e.canvasW,1-e.dotY/e.canvasH)}const a=latLonToSpherePos(selectedStation.coords[1],selectedStation.coords[0],GLOBE_RADIUS+.33);selectionMarker.position.copy(a),selectionMarker.visible=!0}function updateLabelOrientation(){if(!camera)return;const a=new THREE.Vector3;if(beachSprites.forEach(o=>{o.getWorldPosition(a),a.project(camera);const e=a.x<0;if(o.userData.labelOnLeft!==e){o.userData.labelOnLeft=e;const s=e?o.userData.leftVariant:o.userData.rightVariant;o.material.map=s.texture,o.material.needsUpdate=!0,o.center.set(s.dotX/s.canvasW,1-s.dotY/s.canvasH)}}),selectionMarker&&selectionMarker.visible){selectionMarker.getWorldPosition(a),a.project(camera);const o=a.x<0;if(selectionMarker.userData.labelOnLeft!==o){selectionMarker.userData.labelOnLeft=o;const e=o?selectionMarker.userData.leftVariant:selectionMarker.userData.rightVariant;e&&(selectionMarker.material.map=e.texture,selectionMarker.material.needsUpdate=!0,selectionMarker.center.set(e.dotX/e.canvasW,1-e.dotY/e.canvasH))}}}function updateBeachSpriteScale(){const a=cameraDistance/170;if(beachSprites.forEach(o=>{const[e,s]=o.userData.baseScale;o.scale.set(e*a,s*a,1),o.visible=!(selectedStation&&o.userData.stationId===selectedStation.id)}),refreshSelectionMarker(),selectionMarker&&selectionMarker.visible){const[o,e]=selectionMarker.userData.baseScale;selectionMarker.scale.set(o*a,e*a,1)}updateLabelOrientation()}function updateZoomGauge(){const a=1-(cameraDistance-MIN_DIST)/(MAX_DIST-MIN_DIST);updateZoomGaugeByRatio(a),updateBeachSpriteScale()}function updateZoomGaugeByRatio(a){const o=(Math.max(0,Math.min(1,a))*100).toFixed(1);document.getElementById("zoom-fill").style.height=`${o}%`,document.getElementById("zoom-handle").style.bottom=`${o}%`}function buildDayWarmGlow(a){const o=new THREE.SphereGeometry(GLOBE_RADIUS+.18,64,64),e=new THREE.ShaderMaterial({uniforms:{sunDir:{value:a.clone().normalize()}},vertexShader:`
+function latLonToSpherePos(lat, lon, radius) {
+  const phi = (90 - lat) * (Math.PI / 180);
+  const theta = (lon + 180) * (Math.PI / 180);
+  return new THREE.Vector3(
+    -radius * Math.sin(phi) * Math.cos(theta),
+    radius * Math.cos(phi),
+    radius * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+    // [CHANGE] "정점 선택 방식을 통일" + "왼쪽 반구에서는 라벨이 정점 왼쪽으로
+    // 가야 함" 두 요청을 하나의 공용 함수로 처리합니다. selected=true면 해변이든
+    // NOAA 격자 정점이든 동일한 스타일(큰 원 + 두꺼운 주황 테두리 + 큰 라벨)로
+    // 그려지고, labelOnLeft로 라벨을 점의 왼쪽/오른쪽 중 어디에 그릴지 정합니다.
+    function drawMarkerTexture(station, opts) {
+      const selected = !!opts.selected;
+      const labelOnLeft = !!opts.labelOnLeft;
+      const label = opts.label;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 340;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+
+      const colorRGB = getTempColor(station.curTemp);
+      const dotY = 32;
+      const dotR = selected ? 16 : 10;
+      const dotX = labelOnLeft ? (canvas.width - 26) : 26;
+      const borderColor = selected ? '#f97316' : '#ffffff';
+      const borderWidth = selected ? 4 : 2;
+
+      ctx.save();
+      if (selected) {
+        ctx.shadowColor = '#f97316';
+        ctx.shadowBlur = 14;
+      }
+      ctx.globalAlpha = selected ? 0.95 : 0.85;
+      ctx.fillStyle = `rgb(${colorRGB})`;
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.lineWidth = borderWidth;
+      ctx.strokeStyle = borderColor;
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      if (label) {
+        ctx.font = `bold ${selected ? 26 : 22}px -apple-system, BlinkMacSystemFont, sans-serif`;
+        const textWidth = Math.min(ctx.measureText(label).width, canvas.width - dotR * 2 - 40);
+        const boxH = selected ? 40 : 36;
+        const boxY = dotY - boxH / 2;
+        const boxX = labelOnLeft ? (dotX - dotR - 14 - (textWidth + 18)) : (dotX + dotR + 14);
+
+        // [FIX] "텍스트가 너무 투명해서 안 보여" - 지난번에 라벨 재질에
+        // transparent:true를 제대로 켰더니, 원래 코드에 있던 낮은
+        // 배경 불투명도(0.72 / 0.28)가 이제야 의도대로 적용되면서
+        // 오히려 뒤 배경이 너무 비쳐 보여 글씨가 묻혔어요. 불투명도를 올렸습니다.
+        ctx.fillStyle = selected ? 'rgba(249, 115, 22, 0.55)' : 'rgba(15, 23, 42, 0.92)';
+        ctx.strokeStyle = selected ? '#f97316' : 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = selected ? 2 : 1.5;
+
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, textWidth + 18, boxH, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(boxX, boxY, textWidth + 18, boxH);
+        ctx.clip();
+        ctx.fillText(label, boxX + 9, dotY + (selected ? 9 : 7));
+        ctx.restore();
+      }
+
+      return { texture: new THREE.CanvasTexture(canvas), dotX, dotY, canvasW: canvas.width, canvasH: canvas.height };
+    }
+
+    function createBeachSprite(station) {
+      const label = station.label;
+      const rightVariant = drawMarkerTexture(station, { selected: false, labelOnLeft: false, label });
+      const leftVariant = drawMarkerTexture(station, { selected: false, labelOnLeft: true, label });
+
+      // [FIX] "정점 텍스트 뒤로 그림자가 벗겨진다" - 이 재질에 transparent를
+      // 안 켜뒀더니(불투명 취급) 라벨 텍스트의 투명한 배경 부분까지 포함해서
+      // 사각형 전체가 깊이버퍼에 그대로 찍혔어요. 그래서 나중에 그려지는
+      // 낮/밤 그림자가 그 사각형 영역에서는 깊이 테스트에 걸려 아예 안
+      // 그려졌던 거예요(그림자가 "벗겨진" 것처럼 보임). transparent:true +
+      // depthWrite:false로 고쳐서 실제로 보이는 부분만 영향을 주게 했습니다.
+      const material = new THREE.SpriteMaterial({ map: rightVariant.texture, transparent: true, depthTest: true, depthWrite: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.userData.baseScale = [16, 3.01]; // [FIX] 캔버스 비율(340:64)에 맞춤 - 세로로 늘어져 보이던 버그
+      sprite.userData.stationId = station.id;
+      sprite.userData.rightVariant = rightVariant;
+      sprite.userData.leftVariant = leftVariant;
+      sprite.userData.labelOnLeft = false;
+      sprite.scale.set(16, 4, 1);
+
+      // [FIX] 기준점을 캔버스 정중앙이 아니라 점(dot)의 실제 좌표로 이동
+      sprite.center.set(rightVariant.dotX / rightVariant.canvasW, 1 - rightVariant.dotY / rightVariant.canvasH);
+
+      const pos = latLonToSpherePos(station.coords[1], station.coords[0], GLOBE_RADIUS + 0.3);
+      sprite.position.copy(pos);
+      sprite.stationData = station;
+      return sprite;
+    }
+
+// [ADD] "정점 클릭이 잘 안 됨" 문제 대응 - 클릭한 지점(임의의 월드 좌표)을
+// 위경도로 역산합니다. getCurrentCenterLatLng과 같은 수학이지만, 화면
+// 정중앙이 아니라 실제로 클릭한 지점 좌표를 입력으로 받습니다.
+function worldPointToLatLon(worldPoint) {
+  const local = worldPoint.clone();
+  const invRotation = globeGroup.quaternion.clone().invert();
+  local.applyQuaternion(invRotation).normalize();
+  const phi = Math.acos(Math.max(-1, Math.min(1, local.y)));
+  const lat = 90 - (phi * 180 / Math.PI);
+  const theta = Math.atan2(local.z, -local.x);
+  let lon = (theta * 180 / Math.PI) - 180;
+  lon = ((lon + 180) % 360 + 360) % 360 - 180;
+  return { lat, lon };
+}
+
+// 현재 화면 정중앙이 가리키는 실제 위경도를 정밀 역산
+// [ADD] "초기 화면을 내 위치 기반으로" 요청 - 임의의 위경도가 카메라를
+// 정면으로 바라보도록 하는 globeGroup 회전값(x, y / z는 항상 0)을 역산합니다.
+// getCurrentCenterLatLng()의 반대 방향 계산이에요.
+// [ADD] "화면 비율 바뀌면 중앙 다시 정렬, 줌은 유지" 요청 반영 - 세로/가로
+// 전환처럼 화면 비율이 크게 바뀌면, 드래그로 쌓인 세로 기울기(rotation.x)
+// 때문에 한쪽 반구가 화면 밖으로 밀려 답답해 보일 수 있어요. 좌우 방향
+// (rotation.y, "어느 지역을 보고 있었는지")과 줌(cameraDistance)은 그대로
+// 두고, 세로 기울기만 기본값으로 되돌립니다.
+function recenterGlobeVertical() {
+  if (!globeGroup) return;
+  globeGroup.rotation.x = 0.35;
+  if (typeof updateBeachSpriteScale === 'function') updateBeachSpriteScale();
+}
+
+function computeRotationForLatLon(lat, lon) {
+  const L = latLonToSpherePos(lat, lon, 1);
+  const candidates = [Math.atan2(L.x, -L.z), Math.atan2(-L.x, L.z)];
+  const options = candidates.map(y => {
+    const c2 = Math.cos(y), s2 = Math.sin(y);
+    const A = L.z * c2 - L.x * s2;
+    const x = Math.atan2(L.y, A);
+    return { x, y };
+  });
+  // [FIX] "북극을 넘어서 이동, 북반구가 아래로 가버림" - 두 후보 다
+  // 대상 지점을 정면으로 향하게 하는 수학적으로 유효한 해였는데(둘 다
+  // 오차가 부동소수점 잡음 수준이라 오차 비교로는 구분이 안 됐어요),
+  // 북극이 위/아래 어느 쪽을 향하는지는 서로 정반대였습니다. 북극(로컬
+  // (0,1,0))이 이 회전 후 실제로 위쪽(+y)을 향하는 조건은 cos(x)>0과
+  // 같아서, 그 조건을 만족하는 해를 명시적으로 고릅니다.
+  const upright = options.find(o => Math.cos(o.x) > 0) || options[0];
+  return { x: upright.x, y: upright.y };
+}
+
+function getCurrentCenterLatLng() {
+  // [FIX] 카메라가 "바라보는" 방향(전방 벡터, -Z)이 아니라
+  // "카메라 쪽을 향한" 지구 표면 방향을 써야 합니다.
+  // 카메라는 (0,0,+D)에서 -Z를 바라보므로, 실제로 화면 정중앙에 보이는
+  // 구 표면의 점은 원점 기준 +Z 방향에 있습니다.
+  // 기존 코드가 -Z를 썼던 탓에 매번 "정확히 반대편(대척점)" 좌표가
+  // 계산됐고, 그래서 한국(약 37.5N,127E)의 대척점인 남미 파라과이 인근
+  // (약 37.5S,53W)으로 튀었던 것이 2번 버그의 원인입니다.
+  const viewDir = new THREE.Vector3(0, 0, 1);
+
+  // 현재 지구본의 회전값을 거꾸로 적용하여 지구본 로컬 좌표계 상의 방향 벡터 산출
+  const invRotation = globeGroup.quaternion.clone().invert();
+  viewDir.applyQuaternion(invRotation).normalize();
+
+  // latLonToSpherePos의 역연산:
+  // x = -sin(phi) * cos(theta)
+  // y = cos(phi)
+  // z = sin(phi) * sin(theta)
+  const phi = Math.acos(Math.max(-1, Math.min(1, viewDir.y)));
+  const lat = 90 - (phi * 180 / Math.PI);
+
+  const theta = Math.atan2(viewDir.z, -viewDir.x); // [-PI, PI]
+  let lon = (theta * 180 / Math.PI) - 180;
+
+  // 경도를 [-180, 180] 범위로 정규화
+  lon = ((lon + 180) % 360 + 360) % 360 - 180;
+
+  return { lat, lon };
+}
+
+    // 초고해상도 실사 위성 상세 지도 (Leaflet + Esri)
+    // 2. 보고 있던 위치 그대로 확대되도록 수정한 zoomIn 함수
+    function zoomIn() {
+      if (isDetailMode) {
+        leafletMap.zoomIn();
+      } else {
+        cameraDistance = Math.max(MIN_DIST, cameraDistance - 25);
+        camera.position.z = cameraDistance;
+        updateZoomGauge();
+
+        // 확대 임계치 도달 시 현재 화면 중심점으로 상세 지도 전환
+        if (cameraDistance <= MIN_DIST + 15) {
+          const center = getCurrentCenterLatLng();
+          showDetailMap(center.lat, center.lon, 6);
+        }
+      }
+    }
+
+    function zoomOut() {
+      if (isDetailMode) {
+        leafletMap.zoomOut();
+      } else {
+        cameraDistance = Math.min(MAX_DIST, cameraDistance + 25);
+        camera.position.z = cameraDistance;
+        updateZoomGauge();
+      }
+    }
+
+    function resetGlobeView() {
+      if (isDetailMode) switchToGlobe();
+      cameraDistance = 270;
+      camera.position.set(0, 0, cameraDistance);
+      globeGroup.rotation.set(0.35, -2.1, 0);
+      updateZoomGauge();
+    }
+
+    // [CHANGE] "선택 표시를 해변 정점 스타일로 통일" 요청 반영 - 해변이든
+    // NOAA 격자 정점이든 상관없이, 선택된 정점 자리에 딱 하나의 재사용
+    // 마커(크고 주황 테두리+이름표)를 올려서 보여줍니다. 별도의 링이나
+    // 정점별 텍스처 스왑이 아니라 이 마커 하나만 관리하면 돼서 더 단순합니다.
+    function createSelectionMarker() {
+      const material = new THREE.SpriteMaterial({ transparent: true, depthTest: true, depthWrite: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.userData.baseScale = [16, 3.01]; // [FIX] 캔버스 비율(340:64)에 맞춤
+      sprite.visible = false;
+      return sprite;
+    }
+
+    function refreshSelectionMarker() {
+      if (!selectionMarker) return;
+      if (!selectedStation) { selectionMarker.visible = false; return; }
+      if (selectionMarker.userData.forId !== selectedStation.id) {
+        selectionMarker.userData.forId = selectedStation.id;
+        const label = selectedStation.label || selectedStation.name.split(' (')[0];
+        selectionMarker.userData.rightVariant = drawMarkerTexture(selectedStation, { selected: true, labelOnLeft: false, label });
+        selectionMarker.userData.leftVariant = drawMarkerTexture(selectedStation, { selected: true, labelOnLeft: true, label });
+        selectionMarker.userData.labelOnLeft = null; // 강제로 다시 계산되게
+        const v = selectionMarker.userData.rightVariant;
+        selectionMarker.material.map = v.texture;
+        selectionMarker.material.needsUpdate = true;
+        selectionMarker.center.set(v.dotX / v.canvasW, 1 - v.dotY / v.canvasH);
+      }
+      const pos = latLonToSpherePos(selectedStation.coords[1], selectedStation.coords[0], GLOBE_RADIUS + 0.33);
+      selectionMarker.position.copy(pos);
+      selectionMarker.visible = true;
+    }
+
+    // [FIX] "정점명 텍스트 상자가 지구 왼쪽에서 아래로 숨어버림" - 스프라이트는
+    // 화면 전체가 하나의 평평한 판이라 하나의 깊이값을 쓰는데, 라벨이 지구
+    // 중심 쪽(안쪽)으로 뻗으면 그 자리의 실제 지구 표면(더 가까운 깊이)에
+    // 가려지는 문제였어요. 라벨이 지구 중심에서 "바깥쪽"으로(화면에서 정점이
+    // 왼쪽 반구에 있으면 라벨도 왼쪽으로) 뻗도록 매 프레임 방향을 다시 계산합니다.
+    function updateLabelOrientation() {
+      if (!camera) return;
+      const tmp = new THREE.Vector3();
+      beachSprites.forEach(s => {
+        s.getWorldPosition(tmp);
+        tmp.project(camera);
+        const wantLeft = tmp.x < 0;
+        if (s.userData.labelOnLeft !== wantLeft) {
+          s.userData.labelOnLeft = wantLeft;
+          const v = wantLeft ? s.userData.leftVariant : s.userData.rightVariant;
+          s.material.map = v.texture;
+          s.material.needsUpdate = true;
+          s.center.set(v.dotX / v.canvasW, 1 - v.dotY / v.canvasH);
+        }
+      });
+      if (selectionMarker && selectionMarker.visible) {
+        selectionMarker.getWorldPosition(tmp);
+        tmp.project(camera);
+        const wantLeft = tmp.x < 0;
+        if (selectionMarker.userData.labelOnLeft !== wantLeft) {
+          selectionMarker.userData.labelOnLeft = wantLeft;
+          const v = wantLeft ? selectionMarker.userData.leftVariant : selectionMarker.userData.rightVariant;
+          if (v) {
+            selectionMarker.material.map = v.texture;
+            selectionMarker.material.needsUpdate = true;
+            selectionMarker.center.set(v.dotX / v.canvasW, 1 - v.dotY / v.canvasH);
+          }
+        }
+      }
+    }
+
+    // [ADD] 지구본을 축소(줌아웃)해도 마커가 너무 작아져서 안 보이지 않도록,
+    // 카메라 거리에 비례해서 마커의 월드 스케일을 키워 화면상 크기를 어느 정도
+    // 일정하게 유지합니다 (거리가 멀어질수록 실제 크기를 키우는 방식).
+    function updateBeachSpriteScale() {
+      const factor = cameraDistance / 170; // 170 = 기본(리셋) 거리 기준
+      beachSprites.forEach(s => {
+        const [bw, bh] = s.userData.baseScale;
+        s.scale.set(bw * factor, bh * factor, 1);
+        // [FIX] "선택하면 원래 있던 글씨가 안 사라지고 겹쳐 보임" - 선택된
+        // 해변 정점은 원래(작은) 마커를 숨기고, 그 자리엔 확대된 선택 마커
+        // 하나만 보이도록 합니다.
+        s.visible = !(selectedStation && s.userData.stationId === selectedStation.id);
+      });
+      refreshSelectionMarker();
+      if (selectionMarker && selectionMarker.visible) {
+        const [bw, bh] = selectionMarker.userData.baseScale;
+        selectionMarker.scale.set(bw * factor, bh * factor, 1);
+      }
+      updateLabelOrientation();
+    }
+
+    function updateZoomGauge() {
+      const ratio = 1 - (cameraDistance - MIN_DIST) / (MAX_DIST - MIN_DIST);
+      updateZoomGaugeByRatio(ratio);
+      updateBeachSpriteScale();
+    }
+
+    function updateZoomGaugeByRatio(ratio) {
+      const percent = (Math.max(0, Math.min(1, ratio)) * 100).toFixed(1);
+      document.getElementById('zoom-fill').style.height = `${percent}%`;
+      document.getElementById('zoom-handle').style.bottom = `${percent}%`;
+    }
+
+    // [ADD] windy.com / earth.nullschool 스타일 아이디어 반영 - 정점 색상 사각형
+    // 하나하나만으론 "어디가 따뜻하고 어디가 차가운지"가 한눈에 안 들어온다는
+    // 지적에 대해, 바다 전체에 부드럽게 보간된 반투명 수온 색상 레이어를
+    // 지구본 표면 위에 한 겹 더 씌웁니다. 육지는 완전히 투명 처리합니다.
+    // 저해상도 캔버스를 구체에 입히면 GPU가 자동으로 부드럽게 보간해 줘서
+    // 계산량을 줄이면서도 매끄러운 그라데이션 느낌을 낼 수 있어요.
+    // [ADD] 참고 이미지처럼 지구 테두리에 대기권 느낌의 하얀 빛(림 라이트)을
+    // 추가합니다. 지구보다 살짝 큰 구를 안쪽 면만 렌더링하고, 시야각이
+    // 표면에 거의 스치듯 얕아지는(테두리) 곳일수록 밝아지는 프레넬 효과를
+    // 셰이더로 계산합니다.
+    // [ADD] "지구에 그림자 넣는 건 어때요?" 제안 반영 - 실제 태양 방향
+    // 기준으로 낮/밤 경계(터미네이터)를 표현하는 반투명 오버레이 구체입니다.
+    // globeGroup의 자식이라 지구/태양과 같은 로컬 좌표계를 쓰고, sunDir도
+    // 그 좌표계 기준이라 지구를 돌려도 실제 태양이 비추는 쪽이 항상 맞습니다.
+    // [ADD] "태양 빛을 더 받는 부분은 조금 더 밝고, 색온도 4000K 정도로"
+    // 요청 반영 - 낮 그림자와 반대 방향으로, 태양을 정면으로 받을수록(적도
+    // 근처 한낮) 살짝 밝고 따뜻한(약 4000K, 백열등에 가까운) 톤을 더합니다.
+    // 어둡게 하는 건 일반 알파 블렌딩이 맞지만 밝게 하는 건 더하기(additive)
+    // 블렌딩이 자연스러워서, 그림자와는 별도의 레이어로 분리했습니다.
+    function buildDayWarmGlow(sunDirLocal) {
+      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.18, 64, 64);
+      const material = new THREE.ShaderMaterial({
+        uniforms: { sunDir: { value: sunDirLocal.clone().normalize() } },
+        vertexShader: `
           varying vec3 vNormal;
           void main() {
             vNormal = normal;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }
-        `,fragmentShader:`
+        `,
+        fragmentShader: `
           varying vec3 vNormal;
           uniform vec3 sunDir;
           void main() {
             float facing = clamp(dot(normalize(vNormal), normalize(sunDir)), 0.0, 1.0);
-            float intensity = pow(facing, 1.4) * 0.22; // \uD0DC\uC591\uC744 \uC815\uBA74\uC73C\uB85C \uBC1B\uC744\uC218\uB85D \uAC15\uD558\uAC8C
-            vec3 warmTint = vec3(1.0, 0.78, 0.55); // \uC57D 4000K \uC0C9\uC628\uB3C4
+            float intensity = pow(facing, 1.4) * 0.22; // 태양을 정면으로 받을수록 강하게
+            vec3 warmTint = vec3(1.0, 0.78, 0.55); // 약 4000K 색온도
             gl_FragColor = vec4(warmTint * intensity, intensity);
           }
-        `,transparent:!0,blending:THREE.AdditiveBlending,depthWrite:!1});return new THREE.Mesh(o,e)}function buildDayNightShadow(a){const o=new THREE.SphereGeometry(GLOBE_RADIUS+.2,64,64),e=new THREE.ShaderMaterial({uniforms:{sunDir:{value:a.clone().normalize()}},vertexShader:`
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      return new THREE.Mesh(geometry, material);
+    }
+
+    function buildDayNightShadow(sunDirLocal) {
+      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.2, 64, 64);
+      const material = new THREE.ShaderMaterial({
+        uniforms: { sunDir: { value: sunDirLocal.clone().normalize() } },
+        vertexShader: `
           varying vec3 vNormal;
           void main() {
-            vNormal = normal; // \uB85C\uCEEC(\uC624\uBE0C\uC81D\uD2B8) \uACF5\uAC04 \uADF8\uB300\uB85C - sunDir\uB3C4 \uAC19\uC740 \uC88C\uD45C\uACC4
+            vNormal = normal; // 로컬(오브젝트) 공간 그대로 - sunDir도 같은 좌표계
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }
-        `,fragmentShader:`
+        `,
+        fragmentShader: `
           varying vec3 vNormal;
           uniform vec3 sunDir;
           void main() {
             float facing = dot(normalize(vNormal), normalize(sunDir));
-            float night = smoothstep(0.15, -0.2, facing); // 0=\uB0AE, 1=\uBC24, \uACBD\uACC4\uB294 \uBD80\uB4DC\uB7FD\uAC8C
+            float night = smoothstep(0.15, -0.2, facing); // 0=낮, 1=밤, 경계는 부드럽게
             gl_FragColor = vec4(0.0, 0.01, 0.05, night * 0.72);
           }
-        `,transparent:!0,depthWrite:!1});return new THREE.Mesh(o,e)}function buildAtmosphereGlow(a){const o=new THREE.SphereGeometry(GLOBE_RADIUS*1.025,64,64),e=new THREE.ShaderMaterial({uniforms:{glowColor:{value:new THREE.Color("#cfe8ff")},sunGlowColor:{value:new THREE.Color("#fff0c8")},sunDir:{value:(a||new THREE.Vector3(0,0,1)).clone().normalize()}},vertexShader:`
+        `,
+        transparent: true,
+        depthWrite: false
+      });
+      return new THREE.Mesh(geometry, material);
+    }
+
+    // [CHANGE] "지구에서 빛이 옆으로 튀어나가게, 렘브란트 조명 같은 효과"
+    // 요청 반영 - 기존의 단순한 프레넬 림라이트(시야각 기준, 태양과 무관하게
+    // 항상 같은 색/밝기)에 실제 태양 방향을 더했습니다. 태양을 향한 쪽
+    // 가장자리는 더 밝고 따뜻한 색으로, 반대쪽은 기존처럼 차분한 하늘색으로
+    // 갈라져서, 지구를 태양 반대편(밤쪽)에서 바라볼 때 태양 쪽 가장자리가
+    // 유독 환하게 "터져 나오는" 듯한 느낌을 줍니다. 화면에 항상 어느 정도
+    // 있다가, 딱 그 각도로 볼 때 극적으로 강해지는 자연스러운 효과예요.
+    function buildAtmosphereGlow(sunDirLocal) {
+      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.025, 64, 64); // [CHANGE] 두께 절반 (1.05 → 1.025)
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          glowColor: { value: new THREE.Color('#cfe8ff') },
+          sunGlowColor: { value: new THREE.Color('#fff0c8') },
+          sunDir: { value: (sunDirLocal || new THREE.Vector3(0, 0, 1)).clone().normalize() }
+        },
+        vertexShader: `
           varying vec3 vNormalView;
           varying vec3 vNormalLocal;
           varying vec3 vViewDir;
           void main() {
             vNormalView = normalize(normalMatrix * normal);
-            vNormalLocal = normalize(normal); // \uB85C\uCEEC \uACF5\uAC04 - sunDir\uC640 \uAC19\uC740 \uC88C\uD45C\uACC4
+            vNormalLocal = normalize(normal); // 로컬 공간 - sunDir와 같은 좌표계
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
             vViewDir = normalize(-mvPosition.xyz);
             gl_Position = projectionMatrix * mvPosition;
           }
-        `,fragmentShader:`
+        `,
+        fragmentShader: `
           varying vec3 vNormalView;
           varying vec3 vNormalLocal;
           varying vec3 vViewDir;
@@ -47,12 +431,433 @@ function latLonToSpherePos(a,o,e){const s=(90-a)*(Math.PI/180),c=(o+180)*(Math.P
           uniform vec3 sunGlowColor;
           uniform vec3 sunDir;
           void main() {
-            // [CHANGE] \uC9C0\uC218\uB97C 3.0 \u2192 5.0\uC73C\uB85C \uC62C\uB824\uC11C \uC587\uACE0 \uB610\uB837\uD55C \uB760\uB85C, \uCD5C\uB300 \uBC1D\uAE30\uB294 95%\uB85C
+            // [CHANGE] 지수를 3.0 → 5.0으로 올려서 얇고 또렷한 띠로, 최대 밝기는 95%로
             float rim = pow(0.75 - dot(vNormalView, vViewDir), 5.0) * 1.6;
-            float facing = dot(vNormalLocal, sunDir); // -1(\uBC18\uB300\uCABD)~1(\uD0DC\uC591\uCABD)
+            float facing = dot(vNormalLocal, sunDir); // -1(반대쪽)~1(태양쪽)
             float sunSide = smoothstep(-0.25, 0.55, facing);
             vec3 color = mix(glowColor, sunGlowColor, sunSide);
             float intensity = rim * mix(0.6, 1.9, sunSide);
             gl_FragColor = vec4(color, clamp(intensity, 0.0, 0.95));
           }
-        `,side:THREE.BackSide,blending:THREE.AdditiveBlending,transparent:!0,depthWrite:!1});return new THREE.Mesh(o,e)}function buildHeatOverlayTexture(){const e=document.createElement("canvas");e.width=320,e.height=160;const s=e.getContext("2d");s.clearRect(0,0,320,160);const c=stations.filter(n=>n.isBeach).map(n=>({lat:n.coords[1],lon:n.coords[0],temp:n.curTemp}));for(let n=0;n<160;n++){const l=90-(n+.5)/160*180;for(let d=0;d<320;d++){const u=(d+.5)/320*360-180;if(isOnLand(u,l))continue;let f=31-Math.abs(l)*.45;l>=22&&l<=28&&u>=48&&u<=56&&(f+=6.5),Math.abs(l)<=5&&u>=-170&&u<=-120&&(f+=2.2);let M=0,m=0,r=1/0;for(let b=0;b<c.length;b++){const w=l-c[b].lat;let p=u-c[b].lon;p>180&&(p-=360),p<-180&&(p+=360);const v=Math.sqrt(w*w+p*p);v<r&&(r=v);const D=1/Math.pow(v+1,2);M+=D,m+=D*c[b].temp}const h=M>0?m/M:f,g=Math.max(0,Math.min(1,1-r/35)),E=f*(1-g)+h*g;s.fillStyle=`rgba(${getTempColor(E)}, 1)`,s.fillRect(d,n,1,1)}}const i=new THREE.CanvasTexture(e);return i.minFilter=THREE.LinearFilter,i.magFilter=THREE.LinearFilter,i}function initEarlyScene(){const a=document.getElementById("globe-canvas-container"),o=a.clientWidth,e=a.clientHeight;scene=new THREE.Scene,camera=new THREE.PerspectiveCamera(45,o/e,.1,3200),cameraDistance=BOOT_DIST,camera.position.z=cameraDistance,scene.add(buildStarfield()),scene.add(buildMilkyWay()),renderer=new THREE.WebGLRenderer({antialias:!0,alpha:!0}),renderer.setSize(o,e),renderer.setPixelRatio(window.devicePixelRatio),a.appendChild(renderer.domElement),globeGroup=new THREE.Group,scene.add(globeGroup);const c=new THREE.Quaternion().setFromEuler(new THREE.Euler(.35,-2.1,0)).clone().invert();globeGroup.add(buildSolarSystemDecor(c));const{group:i,sunDirLocal:n}=buildRealSunAndMoon();globeGroup.add(i);const l=new THREE.SphereGeometry(GLOBE_RADIUS,64,64),u=new THREE.TextureLoader().load("https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg"),f=new THREE.MeshBasicMaterial({map:u});globeMesh=new THREE.Mesh(l,f),globeGroup.add(globeMesh);const M=buildDayWarmGlow(n);M.renderOrder=2,globeGroup.add(M);const m=buildDayNightShadow(n);m.renderOrder=3,globeGroup.add(m);const r=buildAtmosphereGlow(n);r.renderOrder=4,globeGroup.add(r),globeGroup.rotation.set(.35,-2.1,0),setupGlobeInteraction(a,o,e);function h(){requestAnimationFrame(h),renderer.render(scene,camera)}h(),updateZoomGauge()}function addStationLayers(){document.getElementById("point-counter").innerText=t.stationCount(stations.length);const a=buildHeatOverlayTexture(),o=new THREE.SphereGeometry(GLOBE_RADIUS+.15,64,64),e=new THREE.MeshBasicMaterial({map:a,transparent:!0,depthWrite:!1}),s=new THREE.Mesh(o,e);s.renderOrder=1,globeGroup.add(s);const c=stations.filter(m=>!m.isBeach),i=new THREE.SphereGeometry(.55,6,6),n=new THREE.MeshBasicMaterial,l=new THREE.InstancedMesh(i,n,c.length),d=new THREE.Object3D,u=new THREE.Color;c.forEach((m,r)=>{const h=latLonToSpherePos(m.coords[1],m.coords[0],GLOBE_RADIUS+.25);d.position.copy(h),d.updateMatrix(),l.setMatrixAt(r,d.matrix),u.setStyle(`rgb(${getTempColor(m.curTemp)})`),l.setColorAt(r,u)}),l.instanceMatrix.needsUpdate=!0,l.instanceColor.needsUpdate=!0,globeGroup.add(l),gridStationsRef=c,instancedDotsRef=l,stations.filter(m=>m.isBeach).forEach(m=>{const r=createBeachSprite(m);r.renderOrder=10,beachSprites.push(r),globeGroup.add(r)}),selectionMarker=createSelectionMarker(),selectionMarker.renderOrder=11,globeGroup.add(selectionMarker);const M=stations.find(m=>m.name.includes("Ocean Beach"))||stations[0];selectStation(M)}function animateGlobeRotationTo(a,o,e){if(!globeGroup)return;const s=globeGroup.rotation.x,c=globeGroup.rotation.y,i=performance.now();function n(l){const d=Math.min(1,(l-i)/(e||700)),u=1-Math.pow(1-d,3);globeGroup.rotation.x=s+(a-s)*u,globeGroup.rotation.y=c+(o-c)*u,d<1&&requestAnimationFrame(n)}requestAnimationFrame(n)}function animateBootZoomIn(a,o,e){const s=cameraDistance,c=270,i=globeGroup.rotation.y,n=globeGroup.rotation.x,l=Math.PI*2,d=performance.now(),u=2200;function f(M){const m=Math.min(1,(M-d)/u),r=1-Math.pow(1-m,3);cameraDistance=s+(c-s)*r,camera.position.z=cameraDistance,globeGroup.rotation.y=i+(o+l-i)*r,globeGroup.rotation.x=n+(a-n)*r,updateBeachSpriteScale(),m<1?requestAnimationFrame(f):(cameraDistance=c,camera.position.z=c,globeGroup.rotation.set(a,o,0),updateZoomGauge(),e&&e())}requestAnimationFrame(f)}function setupGlobeInteraction(a,o,e){let s=!1,c={x:0,y:0};const i=new THREE.Raycaster,n=new THREE.Vector2;let l=null,d=null;function u(r){const h=r[0].clientX-r[1].clientX,g=r[0].clientY-r[1].clientY;return Math.sqrt(h*h+g*g)}function f(r){if(r.touches&&r.touches.length===2){l=u(r.touches),d=cameraDistance,s=!1;return}s=!0;const h=r.touches?r.touches[0].clientX:r.clientX,g=r.touches?r.touches[0].clientY:r.clientY;c={x:h,y:g}}function M(r){if(r.touches&&r.touches.length===2&&l){r.cancelable&&r.preventDefault();const w=u(r.touches),p=l/Math.max(w,1);let v=d*p;v=Math.max(MIN_DIST,Math.min(MAX_DIST,v)),cameraDistance=v,camera.position.z=cameraDistance,updateZoomGauge();return}if(!s)return;const h=r.touches?r.touches[0].clientX:r.clientX,g=r.touches?r.touches[0].clientY:r.clientY,E=h-c.x,b=g-c.y;globeGroup.rotation.y+=E*.005,globeGroup.rotation.x+=b*.005,globeGroup.rotation.x=Math.max(-1.2,Math.min(1.2,globeGroup.rotation.x)),updateLabelOrientation(),c={x:h,y:g}}function m(r){if(l!==null){const h=l;if(l=null,h&&(!r.touches||r.touches.length<2)){if(cameraDistance<=MIN_DIST+15){const g=getCurrentCenterLatLng();showDetailMap(g.lat,g.lon,6)}return}}if(s){s=!1;const h=a.getBoundingClientRect(),g=r.changedTouches&&r.changedTouches[0]?r.changedTouches[0].clientX:r.clientX,E=r.changedTouches&&r.changedTouches[0]?r.changedTouches[0].clientY:r.clientY;n.x=(g-h.left)/o*2-1,n.y=-((E-h.top)/e)*2+1,i.setFromCamera(n,camera);const b=i.intersectObjects(globeGroup.children);let w=!1;for(let p of b){if(p.object===globeMesh&&p.uv&&console.log("[calibration] clicked texture UV =",p.uv.x.toFixed(4),p.uv.y.toFixed(4)),p.object.stationData){selectStation(p.object.stationData),w=!0;break}if(p.object===instancedDotsRef&&typeof p.instanceId=="number"){const v=gridStationsRef[p.instanceId];if(v){selectStation(v),w=!0;break}}}if(!w&&b.length>0){const{lat:p,lon:v}=worldPointToLatLon(b[0].point);let D=null,T=1/0;stations.forEach(x=>{const y=p-x.coords[1];let S=v-x.coords[0];S>180&&(S-=360),S<-180&&(S+=360);const R=Math.sqrt(y*y+S*S);R<T&&(T=R,D=x)}),D&&T<4&&selectStation(D)}}}a.addEventListener("mousedown",f),window.addEventListener("mousemove",M),window.addEventListener("mouseup",m),a.addEventListener("touchstart",f,{passive:!1}),window.addEventListener("touchmove",M,{passive:!1}),window.addEventListener("touchend",m,{passive:!1}),a.addEventListener("wheel",r=>{r.preventDefault(),r.deltaY<0?zoomIn():zoomOut()},{passive:!1})}
+        `,
+        side: THREE.BackSide,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false
+      });
+      return new THREE.Mesh(geometry, material);
+    }
+
+    function buildHeatOverlayTexture() {
+      // [FIX] 해상도를 올려서(180x90 → 320x160) 확대했을 때 보이던 계단현상을
+      // 줄였습니다. 완전 불투명(1.0)으로 바꿔서 아래 위성 텍스처의 구름(흰색)이
+      // 비쳐 보이던 것도 없앴어요 - "여전히 하얀색이 있다"의 실제 원인이
+      // 색상표가 아니라 구름이 살짝 비쳐 보이던 거였습니다.
+      const W = 320, H = 160;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+
+      const pts = stations.filter(s => s.isBeach).map(s => ({ lat: s.coords[1], lon: s.coords[0], temp: s.curTemp }));
+
+      for (let py = 0; py < H; py++) {
+        const lat = 90 - (py + 0.5) / H * 180;
+        for (let px = 0; px < W; px++) {
+          const lon = (px + 0.5) / W * 360 - 180;
+          if (isOnLand(lon, lat)) continue;
+
+          let ambient = 31.0 - Math.abs(lat) * 0.45;
+          if (lat >= 22 && lat <= 28 && lon >= 48 && lon <= 56) ambient += 6.5; // 페르시아만 예시 보정
+          // [ADD] 격자 정점 생성 공식과 동일한 니뇨 3.4 구역 엘니뇨 예시 보정 (동기화 유지)
+          if (Math.abs(lat) <= 5 && lon >= -170 && lon <= -120) ambient += 2.2;
+
+          let wSum = 0, tSum = 0, nearest = Infinity;
+          for (let i = 0; i < pts.length; i++) {
+            const dLat = lat - pts[i].lat;
+            // [FIX] "뉴질랜드 옆에 세로줄" - 경도차를 그냥 뺄셈으로 구하면
+            // 날짜변경선(180도) 근처에서 실제로는 몇 도 안 떨어진 두 지점이
+            // 350도 넘게 떨어진 것처럼 계산돼서, 그 지점 정점들의 영향력이
+            // 사실상 0이 되어버렸어요(뉴질랜드가 딱 그 경계에 걸쳐 있습니다).
+            // -180~180 범위로 정규화해서 "짧은 쪽" 거리를 쓰도록 고쳤습니다.
+            let dLon = lon - pts[i].lon;
+            if (dLon > 180) dLon -= 360;
+            if (dLon < -180) dLon += 360;
+            const d = Math.sqrt(dLat * dLat + dLon * dLon);
+            if (d < nearest) nearest = d;
+            const w = 1 / Math.pow(d + 1, 2);
+            wSum += w; tSum += w * pts[i].temp;
+          }
+          const idw = wSum > 0 ? tSum / wSum : ambient;
+          const influence = Math.max(0, Math.min(1, 1 - nearest / 35));
+          const finalTemp = ambient * (1 - influence) + idw * influence;
+
+          ctx.fillStyle = `rgba(${getTempColor(finalTemp)}, 1)`;
+          ctx.fillRect(px, py, 1, 1);
+        }
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      return texture;
+    }
+
+    // [CHANGE] "로딩 화면 만들어서 작은 지구만 먼저 보여주자" 요청 반영 -
+    // 기존 initThreeGlobe()를 둘로 쪼갰습니다.
+    // 1) initEarlyScene(): 정점 데이터 없이도 바로 그릴 수 있는 것들
+    //    (별/은하수/행성/실제 태양·달/지구본 본체/대기/낮밤그림자) - 페이지
+    //    로딩 즉시 실행, 카메라는 멀리(BOOT_DIST)서 시작해서 작게 보입니다.
+    // 2) addStationLayers(): 정점 데이터가 검증까지 끝난 뒤에만 그릴 수 있는 것
+    //    (히트필드, NOAA 격자, 해변 마커, 선택 마커, 기본 정점 선택)
+    function initEarlyScene() {
+      const container = document.getElementById('globe-canvas-container');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 3200);
+      cameraDistance = BOOT_DIST; // 로딩 중엔 멀리서 시작해 작은 지구로 보이게
+      camera.position.z = cameraDistance;
+
+      // [FIX] 별(starfield)은 아주 먼 배경이라 scene에 그대로 두지만,
+      // 태양/달/행성은 지구를 드래그해서 돌릴 때 같이 움직여야 한다는 요청 반영 -
+      // globeGroup의 자식으로 넣어서 지구 회전에 함께 딸려가게 합니다.
+      scene.add(buildStarfield());
+      scene.add(buildMilkyWay());
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      container.appendChild(renderer.domElement);
+
+      globeGroup = new THREE.Group();
+      scene.add(globeGroup);
+      // [FIX] 아래에서 globeGroup.rotation을 (0.35, -2.1, 0)으로 설정할
+      // 예정이라, 장식을 먼저 그 회전의 "역방향"으로 보정해서 넣어야
+      // 최종적으로 의도한 화면 위치에 나타납니다.
+      const initialRotQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.35, -2.1, 0));
+      const initialRotQuatInv = initialRotQuat.clone().invert();
+      globeGroup.add(buildSolarSystemDecor(initialRotQuatInv));
+
+      // [ADD] "태양은 실시간 실제 위치로, 달도 가능하면" - astronomy.js로
+      // 계산한 실제 태양/달 직하점 기준으로 배치합니다.
+      const { group: sunMoonGroup, sunDirLocal } = buildRealSunAndMoon();
+      globeGroup.add(sunMoonGroup);
+
+      // 위성 지구본 본체
+      const globeGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
+      const textureLoader = new THREE.TextureLoader();
+      const earthTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+      const globeMaterial = new THREE.MeshBasicMaterial({ map: earthTexture });
+      globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
+      globeGroup.add(globeMesh);
+
+      // [ADD] "지구에 그림자 넣는 건 어때요" - 실제 태양 방향 기준 낮/밤 그림자
+      // [FIX] "바다에는 그림자가 안 보인다" - 실제 원인은 heatMesh(바다 색상)가
+      // 정점 데이터 도착 후에야(addStationLayers에서) 나중에 추가되는데,
+      // 반투명 구체들이 전부 지구 중심이 같아서 three.js가 거리로 그리는
+      // 순서를 못 정하고 "추가된 순서"로 그렸던 거예요. 그래서 나중에
+      // 추가된 heatMesh가 먼저 그려둔 그림자를 그대로 덮어써버렸습니다.
+      // renderOrder를 명시해서 항상 "바다색 → 그림자 → 대기" 순서로
+      // 그려지도록 고정했습니다.
+      const warmGlowMesh = buildDayWarmGlow(sunDirLocal);
+      warmGlowMesh.renderOrder = 2;
+      globeGroup.add(warmGlowMesh);
+      const shadowMesh = buildDayNightShadow(sunDirLocal);
+      shadowMesh.renderOrder = 3;
+      globeGroup.add(shadowMesh);
+      const atmosphereMesh = buildAtmosphereGlow(sunDirLocal);
+      atmosphereMesh.renderOrder = 4;
+      globeGroup.add(atmosphereMesh);
+
+      // 태평양 방면 기본 회전
+      globeGroup.rotation.set(0.35, -2.1, 0);
+
+      setupGlobeInteraction(container, width, height);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      updateZoomGauge();
+    }
+
+    // 정점 데이터가 준비된 뒤에만 그릴 수 있는 레이어들
+    // [FIX] "로딩 97%에서 멈추고, 그 사이 대륙 버튼/검색창이 먹통이 됨" -
+    // 진짜 원인을 찾았어요. addStationLayers()가 완전히 동기(블로킹) 함수라,
+    // 히트필드 텍스처 계산 + 격자 정점 2500여 개 + 해변 스프라이트 340여 개
+    // (캔버스 텍스처 2장씩)를 만드는 동안 자바스크립트 메인 스레드가 통째로
+    // 막혀서, 그 몇 초 동안은 클릭이든 타이핑이든 브라우저가 아예 못
+    // 받았던 거예요. 무거운 단계마다 브라우저에게 잠깐씩 제어권을
+    // 넘겨주는(yield) 방식으로 바꿔서, 그 사이사이 입력을 처리할 틈을 줍니다.
+    function yieldToMain() {
+      return new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    async function addStationLayers() {
+      document.getElementById('point-counter').innerText = t.stationCount(stations.length);
+
+      // [ADD] 히트필드는 해변(실제 지명) 정점만으로 계산합니다 -
+      // 격자 정점까지 넣으면 IDW 보간 계산량이 커져서 무겁고, 의미도 크게
+      // 달라지지 않아요. 바다 위에 덧씌우는 부드러운 수온 색상 필드
+      // (windy.com/earth.nullschool 느낌)
+      const heatTexture = buildHeatOverlayTexture();
+      const heatGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.15, 64, 64);
+      const heatMaterial = new THREE.MeshBasicMaterial({ map: heatTexture, transparent: true, depthWrite: false });
+      const heatMesh = new THREE.Mesh(heatGeometry, heatMaterial);
+      heatMesh.renderOrder = 1;
+      globeGroup.add(heatMesh);
+      await yieldToMain();
+
+      const gridStations = stations.filter(s => !s.isBeach);
+
+      const dotGeometry = new THREE.SphereGeometry(0.55, 6, 6);
+      const dotMaterial = new THREE.MeshBasicMaterial();
+      const instancedDots = new THREE.InstancedMesh(dotGeometry, dotMaterial, gridStations.length);
+      const dummy = new THREE.Object3D();
+      const colorHelper = new THREE.Color();
+      gridStations.forEach((st, i) => {
+        const pos = latLonToSpherePos(st.coords[1], st.coords[0], GLOBE_RADIUS + 0.25);
+        dummy.position.copy(pos);
+        dummy.updateMatrix();
+        instancedDots.setMatrixAt(i, dummy.matrix);
+        colorHelper.setStyle(`rgb(${getTempColor(st.curTemp)})`);
+        instancedDots.setColorAt(i, colorHelper);
+      });
+      instancedDots.instanceMatrix.needsUpdate = true;
+      instancedDots.instanceColor.needsUpdate = true;
+      globeGroup.add(instancedDots);
+      await yieldToMain();
+
+      // [ADD] "NOAA 정점도 확대 전에 선택 가능하게" - InstancedMesh는 정점 하나하나가
+      // 별도 오브젝트가 아니라서, 클릭 시 instanceId로 원래 정점을 찾을 수 있도록
+      // 참조를 저장해둡니다.
+      gridStationsRef = gridStations;
+      instancedDotsRef = instancedDots;
+
+      // 해변 정점 (사람이 알아보는 지명 - 스프라이트로 표시)
+      // [FIX] "정점 텍스트가 바다색 아래로 들어감 / 저녁에 어두워짐" - 둘 다
+      // 같은 원인이었어요. heatMesh(=1)/warmGlow(=2)/shadow(=3)/atmosphere(=4)는
+      // renderOrder를 지정했는데 정작 라벨 스프라이트엔 안 줬어서 기본값 0으로
+      // "가장 먼저" 그려졌고, 그 위에 바다색·그림자가 나중에 덧그려지면서
+      // 라벨을 가려버렸던 거예요(밤에는 그림자가 진하니 더 두드러졌고요).
+      // 라벨을 그 무엇보다도 나중에(맨 위에) 그리도록 renderOrder를 높게 줍니다.
+      const beachStations = stations.filter(d => d.isBeach);
+      for (let i = 0; i < beachStations.length; i++) {
+        const st = beachStations[i];
+        const sprite = createBeachSprite(st);
+        sprite.renderOrder = 10;
+        beachSprites.push(sprite);
+        globeGroup.add(sprite);
+        // [ADD] 40개마다 한 번씩 브라우저에게 제어권을 넘겨서 그 사이
+        // 입력(클릭/타이핑)을 처리할 수 있게 합니다.
+        if (i % 40 === 39) await yieldToMain();
+      }
+
+      // [ADD] 선택된 정점 표시용 링 (처음엔 숨김, selectStation 시 표시)
+      selectionMarker = createSelectionMarker();
+      selectionMarker.renderOrder = 11;
+      globeGroup.add(selectionMarker);
+
+      const defaultSpot = stations.find(s => s.name.includes("Ocean Beach")) || stations[0];
+      selectStation(defaultSpot);
+    }
+
+    // [ADD] "로딩 끝나면 화면 회전하면서 지구로 줌인" 요청 반영 - 멀리서
+    // 시작한 카메라를 기본 거리까지 당기면서, 동시에 한 바퀴 더 돌아
+    // 최종 방향(targetRotX, targetRotY)에 착지하는 연출입니다.
+    // [ADD] "대륙 버튼 눌러도 반응이 없어" 요청 반영 - 부팅 위젯에서 뭔가
+    // 고르면(대륙/내 위치/검색), 정점 로딩이 끝나길 기다리지 않고 지구를
+    // 즉시 그 방향으로 예비 회전시켜서 "눌렸다"는 걸 바로 보여줍니다.
+    // 나중에 로딩이 끝나 animateBootZoomIn이 실행될 때는 이미 그 방향을
+    // 보고 있으니 줌(확대)만 자연스럽게 이어집니다.
+    function animateGlobeRotationTo(targetX, targetY, duration) {
+      if (!globeGroup) return;
+      const startX = globeGroup.rotation.x, startY = globeGroup.rotation.y;
+      const t0 = performance.now();
+      function step(now) {
+        const t = Math.min(1, (now - t0) / (duration || 700));
+        const ease = 1 - Math.pow(1 - t, 3);
+        globeGroup.rotation.x = startX + (targetX - startX) * ease;
+        globeGroup.rotation.y = startY + (targetY - startY) * ease;
+        if (t < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    function animateBootZoomIn(targetRotX, targetRotY, onComplete) {
+      const startDist = cameraDistance;
+      const endDist = 270;
+      const startRotY = globeGroup.rotation.y;
+      const startRotX = globeGroup.rotation.x;
+      const spinExtra = Math.PI * 2;
+      const t0 = performance.now();
+      const duration = 2200;
+      function step(now) {
+        const t = Math.min(1, (now - t0) / duration);
+        const ease = 1 - Math.pow(1 - t, 3);
+        cameraDistance = startDist + (endDist - startDist) * ease;
+        camera.position.z = cameraDistance;
+        globeGroup.rotation.y = startRotY + (targetRotY + spinExtra - startRotY) * ease;
+        globeGroup.rotation.x = startRotX + (targetRotX - startRotX) * ease;
+        updateBeachSpriteScale();
+        if (t < 1) {
+          requestAnimationFrame(step);
+        } else {
+          cameraDistance = endDist;
+          camera.position.z = endDist;
+          globeGroup.rotation.set(targetRotX, targetRotY, 0);
+          updateZoomGauge();
+          if (onComplete) onComplete();
+        }
+      }
+      requestAnimationFrame(step);
+    }
+
+    // 드래그 회전 + 핀치줌 + 클릭선택 인터랙션 설정 (정점 데이터 없이도 등록 가능 -
+    // 실제 클릭 판정은 나중에 호출될 때 그 시점의 stations를 참조합니다)
+    function setupGlobeInteraction(container, width, height) {
+      let isDragging = false;
+      let prevMousePos = { x: 0, y: 0 };
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+
+      // [ADD] 핀치 줌(두 손가락으로 오므리기/벌리기) 상태
+      let pinchStartDist = null;
+      let pinchStartCameraDist = null;
+      function getTouchDist(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+      }
+
+      function onPointerDown(e) {
+        // [ADD] 손가락 두 개면 핀치 줌 시작, 드래그 회전은 하지 않음
+        if (e.touches && e.touches.length === 2) {
+          pinchStartDist = getTouchDist(e.touches);
+          pinchStartCameraDist = cameraDistance;
+          isDragging = false;
+          return;
+        }
+        isDragging = true;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        prevMousePos = { x: clientX, y: clientY };
+      }
+
+      function onPointerMove(e) {
+        // [ADD] 손가락 두 개 - 핀치 줌 처리
+        if (e.touches && e.touches.length === 2 && pinchStartDist) {
+          if (e.cancelable) e.preventDefault();
+          const newDist = getTouchDist(e.touches);
+          const ratio = pinchStartDist / Math.max(newDist, 1);
+          let newCam = pinchStartCameraDist * ratio;
+          newCam = Math.max(MIN_DIST, Math.min(MAX_DIST, newCam));
+          cameraDistance = newCam;
+          camera.position.z = cameraDistance;
+          updateZoomGauge();
+          return;
+        }
+        if (!isDragging) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const deltaX = clientX - prevMousePos.x;
+        const deltaY = clientY - prevMousePos.y;
+
+        globeGroup.rotation.y += deltaX * 0.005;
+        globeGroup.rotation.x += deltaY * 0.005;
+        globeGroup.rotation.x = Math.max(-1.2, Math.min(1.2, globeGroup.rotation.x));
+        updateLabelOrientation();
+
+        prevMousePos = { x: clientX, y: clientY };
+      }
+
+      function onPointerUp(e) {
+        // [ADD] 핀치 줌이 끝나는 시점 - 충분히 확대됐으면 상세지도로 전환
+        if (pinchStartDist !== null) {
+          const wasPinching = pinchStartDist;
+          pinchStartDist = null;
+          if (wasPinching && (!e.touches || e.touches.length < 2)) {
+            if (cameraDistance <= MIN_DIST + 15) {
+              const center = getCurrentCenterLatLng();
+              showDetailMap(center.lat, center.lon, 6);
+            }
+            return;
+          }
+        }
+        if (isDragging) {
+          isDragging = false;
+          const rect = container.getBoundingClientRect();
+          const clientX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : e.clientX;
+          const clientY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : e.clientY;
+
+          mouse.x = ((clientX - rect.left) / width) * 2 - 1;
+          mouse.y = -((clientY - rect.top) / height) * 2 + 1;
+
+          raycaster.setFromCamera(mouse, camera);
+          const intersects = raycaster.intersectObjects(globeGroup.children);
+          let matched = false;
+          for (let hit of intersects) {
+            // 지구본 표면을 직접 클릭했을 때 실제 텍스처 UV를 찍어볼 수 있는 보정용 로그.
+            // (혹시 나중에 육지 텍스처와 정점 좌표가 다시 어긋나 보이면,
+            //  지도에서 잘 아는 지점을 클릭해 콘솔의 u값과
+            //  (lon+180)/360 계산값을 비교해서 오프셋을 역산할 수 있습니다.)
+            if (hit.object === globeMesh && hit.uv) {
+              console.log('[calibration] clicked texture UV =', hit.uv.x.toFixed(4), hit.uv.y.toFixed(4));
+            }
+            if (hit.object.stationData) {
+              selectStation(hit.object.stationData);
+              matched = true;
+              break;
+            }
+            // [ADD] NOAA 격자 정점(InstancedMesh)은 개별 오브젝트가 아니라
+            // instanceId로 어떤 정점인지 찾아야 합니다.
+            if (hit.object === instancedDotsRef && typeof hit.instanceId === 'number') {
+              const st = gridStationsRef[hit.instanceId];
+              if (st) { selectStation(st); matched = true; break; }
+            }
+          }
+          // [FIX] "정점 선택이 잘 안 됨" - 점 자체가 작아서(특히 NOAA 격자)
+          // 정확히 맞히기 어려웠어요. 정확히 안 맞았어도 지구 표면은 맞혔다면
+          // 그 위경도에서 가장 가까운 정점을 찾아 (일정 범위 안이면) 대신
+          // 선택해주는 "관대한 클릭 판정"을 추가했습니다.
+          if (!matched && intersects.length > 0) {
+            const { lat: cLat, lon: cLon } = worldPointToLatLon(intersects[0].point);
+            let nearest = null, nearestDist = Infinity;
+            stations.forEach(st => {
+              const dLat = cLat - st.coords[1];
+              let dLon = cLon - st.coords[0];
+              if (dLon > 180) dLon -= 360;
+              if (dLon < -180) dLon += 360;
+              const d = Math.sqrt(dLat * dLat + dLon * dLon);
+              if (d < nearestDist) { nearestDist = d; nearest = st; }
+            });
+            if (nearest && nearestDist < 4) selectStation(nearest);
+          }
+        }
+      }
+
+      container.addEventListener('mousedown', onPointerDown);
+      window.addEventListener('mousemove', onPointerMove);
+      window.addEventListener('mouseup', onPointerUp);
+
+      // [FIX] 핀치 줌에서 브라우저 기본 동작(페이지 확대)을 막으려면
+      // preventDefault를 호출할 수 있어야 해서 passive: false로 바꿨습니다.
+      container.addEventListener('touchstart', onPointerDown, { passive: false });
+      window.addEventListener('touchmove', onPointerMove, { passive: false });
+      window.addEventListener('touchend', onPointerUp, { passive: false });
+
+      container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (e.deltaY < 0) zoomIn();
+        else zoomOut();
+      }, { passive: false });
+    }
+
+    // [ADD] 전체화면 버튼. 안드로이드 Chrome 등에서는 Fullscreen API로 주소창까지
+    // 완전히 숨길 수 있습니다. iOS Safari는 이 API를 사실상 지원하지 않아서
+    // (일부 최신 버전만 제한적으로 지원) 그 경우엔 "홈 화면에 추가" 방법을 안내합니다.

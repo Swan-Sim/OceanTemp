@@ -73,7 +73,10 @@
            제공" 요청 반영 - 부팅 시작과 동시에 보이고, 자동 위치 감지가 성공하거나
            사용자가 여기서 뭔가 고르면 그쪽이 우선해서 화면이 그 방향으로 자리잡습니다. -->
       <div id="boot-location-widget">
-        <button id="boot-locate-btn" class="boot-widget-btn">📍 내 위치로 보기</button>
+        <button id="boot-locate-btn" class="boot-widget-btn">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+          내 위치로 보기
+        </button>
         <div class="boot-search-wrap">
           <input type="text" id="boot-search-input" class="search-input" placeholder="항구·해변 이름 검색 (한글/영문)" />
           <div id="boot-search-results" class="search-results"></div>
@@ -98,7 +101,9 @@
           </div>
         </div>
         <button class="ctrl-btn" onclick="zoomOut()">−</button>
-        <button class="ctrl-btn" onclick="locateUser()" title="내 위치" style="font-size: 13px;" id="btn-locate">🎯</button>
+        <button class="ctrl-btn" onclick="locateUser()" title="내 위치로" id="btn-locate">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+        </button>
         <button class="ctrl-btn" onclick="toggleFullscreen()" title="전체화면" style="font-size: 13px;" id="btn-fullscreen">⛶</button>
         <button class="ctrl-btn" onclick="toggleTempUnit()" style="font-size: 12px; font-weight:700;" id="btn-reset">°C</button>
       </div>

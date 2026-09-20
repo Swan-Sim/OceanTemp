@@ -194,7 +194,7 @@
       venusSprite.position.copy(latLonToSpherePos(sun.lat - 6, sun.lon + 13, 600));
       group.add(venusSprite);
 
-      const moonSprite = createGlowSprite('#c9c9c9', 52);
+      const moonSprite = createGlowSprite('#e0e0e0', 95);
       moonSprite.position.copy(latLonToSpherePos(moon.lat, moon.lon, 400));
       group.add(moonSprite);
 

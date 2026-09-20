@@ -84,6 +84,9 @@
         const bootScreen = document.getElementById('boot-screen');
         if (bootScreen) bootScreen.classList.add('boot-done');
         document.body.classList.remove('booting');
+        // [FIX] 하단 차트 패널이 다시 나타나면서 지구본 영역 높이가 줄어드는데,
+        // window resize 이벤트가 안 뜨는 CSS 레이아웃 변화라 명시적으로 동기화합니다.
+        syncRendererSize();
       });
     }
 
@@ -101,17 +104,26 @@
         document.body.classList.remove('booting');
         const bootScreen = document.getElementById('boot-screen');
         if (bootScreen) bootScreen.classList.add('boot-done');
+        syncRendererSize();
         const counter = document.getElementById('point-counter');
         if (counter) { counter.innerText = '로딩 실패 (콘솔 확인)'; counter.style.background = '#dc2626'; }
       });
     });
-    window.addEventListener('resize', () => {
-      if (renderer && camera) {
-        const container = document.getElementById('viewport-container');
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
-      }
-    });
+    // [FIX] "그래프창이 다시 생기면서 지구 남반구가 아래로 잘려 들어갔다" -
+    // 원인은 로딩 중 하단 차트 패널을 CSS로 숨겼다가 다시 보이면 지구본
+    // 영역의 실제 크기가 바뀌는데, 이건 브라우저의 window resize 이벤트가
+    // 아니라서(창 크기 자체는 안 바뀜) 기존 resize 핸들러가 전혀 발동하지
+    // 않았던 거예요. 렌더러/카메라 크기 동기화를 함수로 빼서, 레이아웃이
+    // 바뀌는 모든 경우(윈도우 리사이즈 + 로딩 완료로 패널이 다시 나타날 때)
+    // 둘 다에서 호출합니다.
+    function syncRendererSize() {
+      if (!renderer || !camera) return;
+      const container = document.getElementById('viewport-container');
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    window.addEventListener('resize', syncRendererSize);

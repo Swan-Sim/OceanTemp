@@ -316,6 +316,39 @@ function getCurrentCenterLatLng() {
     // 기준으로 낮/밤 경계(터미네이터)를 표현하는 반투명 오버레이 구체입니다.
     // globeGroup의 자식이라 지구/태양과 같은 로컬 좌표계를 쓰고, sunDir도
     // 그 좌표계 기준이라 지구를 돌려도 실제 태양이 비추는 쪽이 항상 맞습니다.
+    // [ADD] "태양 빛을 더 받는 부분은 조금 더 밝고, 색온도 4000K 정도로"
+    // 요청 반영 - 낮 그림자와 반대 방향으로, 태양을 정면으로 받을수록(적도
+    // 근처 한낮) 살짝 밝고 따뜻한(약 4000K, 백열등에 가까운) 톤을 더합니다.
+    // 어둡게 하는 건 일반 알파 블렌딩이 맞지만 밝게 하는 건 더하기(additive)
+    // 블렌딩이 자연스러워서, 그림자와는 별도의 레이어로 분리했습니다.
+    function buildDayWarmGlow(sunDirLocal) {
+      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.18, 64, 64);
+      const material = new THREE.ShaderMaterial({
+        uniforms: { sunDir: { value: sunDirLocal.clone().normalize() } },
+        vertexShader: `
+          varying vec3 vNormal;
+          void main() {
+            vNormal = normal;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vNormal;
+          uniform vec3 sunDir;
+          void main() {
+            float facing = clamp(dot(normalize(vNormal), normalize(sunDir)), 0.0, 1.0);
+            float intensity = pow(facing, 1.4) * 0.22; // 태양을 정면으로 받을수록 강하게
+            vec3 warmTint = vec3(1.0, 0.78, 0.55); // 약 4000K 색온도
+            gl_FragColor = vec4(warmTint * intensity, intensity);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      return new THREE.Mesh(geometry, material);
+    }
+
     function buildDayNightShadow(sunDirLocal) {
       const geometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.2, 64, 64);
       const material = new THREE.ShaderMaterial({
@@ -480,8 +513,22 @@ function getCurrentCenterLatLng() {
       globeGroup.add(globeMesh);
 
       // [ADD] "지구에 그림자 넣는 건 어때요" - 실제 태양 방향 기준 낮/밤 그림자
-      globeGroup.add(buildDayNightShadow(sunDirLocal));
-      globeGroup.add(buildAtmosphereGlow());
+      // [FIX] "바다에는 그림자가 안 보인다" - 실제 원인은 heatMesh(바다 색상)가
+      // 정점 데이터 도착 후에야(addStationLayers에서) 나중에 추가되는데,
+      // 반투명 구체들이 전부 지구 중심이 같아서 three.js가 거리로 그리는
+      // 순서를 못 정하고 "추가된 순서"로 그렸던 거예요. 그래서 나중에
+      // 추가된 heatMesh가 먼저 그려둔 그림자를 그대로 덮어써버렸습니다.
+      // renderOrder를 명시해서 항상 "바다색 → 그림자 → 대기" 순서로
+      // 그려지도록 고정했습니다.
+      const warmGlowMesh = buildDayWarmGlow(sunDirLocal);
+      warmGlowMesh.renderOrder = 2;
+      globeGroup.add(warmGlowMesh);
+      const shadowMesh = buildDayNightShadow(sunDirLocal);
+      shadowMesh.renderOrder = 3;
+      globeGroup.add(shadowMesh);
+      const atmosphereMesh = buildAtmosphereGlow();
+      atmosphereMesh.renderOrder = 4;
+      globeGroup.add(atmosphereMesh);
 
       // 태평양 방면 기본 회전
       globeGroup.rotation.set(0.35, -2.1, 0);
@@ -509,6 +556,7 @@ function getCurrentCenterLatLng() {
       const heatGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.15, 64, 64);
       const heatMaterial = new THREE.MeshBasicMaterial({ map: heatTexture, transparent: true, depthWrite: false });
       const heatMesh = new THREE.Mesh(heatGeometry, heatMaterial);
+      heatMesh.renderOrder = 1;
       globeGroup.add(heatMesh);
 
       const gridStations = stations.filter(s => !s.isBeach);

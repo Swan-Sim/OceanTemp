@@ -61,7 +61,35 @@
         </div>
       </div>
 
+      <!-- [ADD] "검색창에서 항구명 입력하면 확대된 화면으로 전환" 요청 반영 -
+           돋보기 버튼을 누르면 펼쳐지는 검색 패널. 영문/한글 이름 둘 다 검색되고,
+           결과를 고르면 상세지도(평면도)로 바로 전환됩니다. -->
+      <div id="search-panel" class="search-panel">
+        <input type="text" id="search-input" class="search-input" placeholder="항구·해변 이름 검색 (한글/영문)" />
+        <div id="search-results" class="search-results"></div>
+      </div>
+
+      <!-- [ADD] "로딩 화면에서 위치 공유 안 한 사용자에게 대륙 선택/현재 위치/검색
+           제공" 요청 반영 - 부팅 시작과 동시에 보이고, 자동 위치 감지가 성공하거나
+           사용자가 여기서 뭔가 고르면 그쪽이 우선해서 화면이 그 방향으로 자리잡습니다. -->
+      <div id="boot-location-widget">
+        <button id="boot-locate-btn" class="boot-widget-btn">📍 내 위치로 보기</button>
+        <div class="boot-search-wrap">
+          <input type="text" id="boot-search-input" class="search-input" placeholder="항구·해변 이름 검색 (한글/영문)" />
+          <div id="boot-search-results" class="search-results"></div>
+        </div>
+        <div id="boot-continent-chips" class="continent-chips">
+          <button class="chip-btn" data-continent="asia">아시아</button>
+          <button class="chip-btn" data-continent="europe">유럽</button>
+          <button class="chip-btn" data-continent="africa">아프리카</button>
+          <button class="chip-btn" data-continent="namerica">북미</button>
+          <button class="chip-btn" data-continent="samerica">남미</button>
+          <button class="chip-btn" data-continent="oceania">오세아니아</button>
+        </div>
+      </div>
+
       <div class="map-controls">
+        <button class="ctrl-btn" id="btn-search-toggle" onclick="toggleSearchPanel()" title="검색">🔍</button>
         <button class="ctrl-btn" onclick="zoomIn()">+</button>
         <div class="zoom-slider-wrap" id="zoom-gauge-wrap">
           <div class="zoom-track">
@@ -119,6 +147,7 @@
   <script src="js/globe-scene.js"></script>
   <script src="js/detail-map.js"></script>
   <script src="js/boot-sequence.js"></script>
+  <script src="js/search-nav.js"></script>
   <script src="js/main.js"></script>
 
 </body>

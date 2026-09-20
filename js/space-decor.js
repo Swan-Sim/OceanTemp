@@ -235,11 +235,11 @@
       const group = new THREE.Group();
       const pos = latLonToSpherePos(sunLat, sunLon, 750);
 
-      const halo = createGlowSprite('#ffb35c', 260);
+      const halo = createGlowSprite('#ffb35c', 340);
       halo.position.copy(pos);
       group.add(halo);
 
-      const geometry = new THREE.SphereGeometry(85, 32, 32);
+      const geometry = new THREE.SphereGeometry(130, 32, 32);
       const textureLoader = new THREE.TextureLoader();
       const sunTexture = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_sun.jpg');
       const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffb066' });

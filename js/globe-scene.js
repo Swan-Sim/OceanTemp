@@ -54,7 +54,11 @@ function latLonToSpherePos(lat, lon, radius) {
         const boxY = dotY - boxH / 2;
         const boxX = labelOnLeft ? (dotX - dotR - 14 - (textWidth + 18)) : (dotX + dotR + 14);
 
-        ctx.fillStyle = selected ? 'rgba(249, 115, 22, 0.28)' : 'rgba(15, 23, 42, 0.72)';
+        // [FIX] "텍스트가 너무 투명해서 안 보여" - 지난번에 라벨 재질에
+        // transparent:true를 제대로 켰더니, 원래 코드에 있던 낮은
+        // 배경 불투명도(0.72 / 0.28)가 이제야 의도대로 적용되면서
+        // 오히려 뒤 배경이 너무 비쳐 보여 글씨가 묻혔어요. 불투명도를 올렸습니다.
+        ctx.fillStyle = selected ? 'rgba(249, 115, 22, 0.55)' : 'rgba(15, 23, 42, 0.92)';
         ctx.strokeStyle = selected ? '#f97316' : 'rgba(255, 255, 255, 0.45)';
         ctx.lineWidth = selected ? 2 : 1.5;
 

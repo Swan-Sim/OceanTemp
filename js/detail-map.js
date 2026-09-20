@@ -26,7 +26,10 @@
         leafletMap.on('zoom', () => {
           const z = leafletMap.getZoom();
           updateZoomGaugeByRatio((z - 4) / 14);
-          if (z < 5) switchToGlobe();
+          if (z < 5) {
+            const center = leafletMap.getCenter();
+            switchToGlobe(center.lat, center.lng);
+          }
         });
 
         // [ADD-지연로딩] 실제로 확대해서 상세지도로 들어온 이 시점에만 전세계
@@ -72,7 +75,7 @@
       });
     }
 
-    function switchToGlobe() {
+    function switchToGlobe(lat, lon) {
       isDetailMode = false;
       document.getElementById('leafletMap').classList.remove('active');
       const g = document.getElementById('globe-canvas-container');
@@ -80,6 +83,15 @@
       g.style.pointerEvents = 'auto';
       cameraDistance = 170;
       camera.position.z = cameraDistance;
+      // [FIX] "아프리카에서 들어가서 아시아로 이동했다가 나오면 아시아가
+      // 아니라 아프리카로 나옴" - 여기서 지구본 회전을 전혀 안 바꿔서,
+      // 처음 확대해 들어갔던 위치(아프리카)의 회전값이 그대로 남아있었던
+      // 게 원인이었어요. 실제로 지도에서 보고 있던(팬으로 이동한 뒤의)
+      // 위치를 기준으로 회전을 다시 맞춥니다.
+      if (typeof lat === 'number' && typeof lon === 'number') {
+        const r = computeRotationForLatLon(lat, lon);
+        globeGroup.rotation.set(r.x, r.y, 0);
+      }
       updateZoomGauge();
     }
 

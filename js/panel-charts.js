@@ -187,7 +187,12 @@
                 ticks: { stepSize: 1, color: '#64748b', font: { size: 9 }, callback: (v) => t.months[Math.round(v)] || '' },
                 grid: { color: '#1e293b' }
               },
-              y: { ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: '#1e293b' } }
+              // [FIX] "상대온도라 날뛰어 보임" - Chart.js가 데이터 범위에
+              // 맞춰 Y축을 자동으로 좁게 잡다 보니, 실제로는 1~2도 차이인데
+              // 축이 그만큼만 딱 맞춰져서 그래프가 요동치는 것처럼 보였어요.
+              // 색상표와 같은 0~40도 절대 범위로 고정해서 실제 변화폭
+              // 그대로 보이게 했습니다.
+              y: { min: 0, max: 40, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: '#1e293b' } }
             }
           }
         });

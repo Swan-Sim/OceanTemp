@@ -194,38 +194,9 @@
       return group;
     }
 
-    // [FIX] "태양이 여전히 안 보여" - 스크린샷을 보니 달(캔버스 텍스처)은
-    // 크레이터까지 선명하게 잘 보이는데 태양만 안 보였어요. 둘의 차이는
-    // 딱 하나, 태양만 외부 이미지 URL(solarsystemscope.com)을 썼다는
-    // 거예요. 그 사이트의 CORS 설정을 확실히 보장할 수 없어서, 로딩이
-    // 조용히 실패했을 가능성이 커요. 달과 똑같이 캔버스로 직접 그리는
-    // 절차적 텍스처로 바꿔서 외부 네트워크 의존을 아예 없앴습니다.
-    function buildSunTexture() {
-      const cvs = document.createElement('canvas');
-      cvs.width = 256; cvs.height = 256;
-      const c = cvs.getContext('2d');
-      const grad = c.createRadialGradient(128, 128, 0, 128, 128, 182);
-      grad.addColorStop(0, '#fffae8');
-      grad.addColorStop(0.5, '#ffdb8a');
-      grad.addColorStop(0.85, '#ffb75c');
-      grad.addColorStop(1, '#ff9d3d');
-      c.fillStyle = grad;
-      c.fillRect(0, 0, 256, 256);
-
-      // [FIX] "텍스처가 문제인지 광원 느낌이 없어" - 어둡게 눌러주던 얼룩이
-      // 표면을 얼룩덜룩한 "돌덩이"처럼 보이게 만든 원인이었어요. 어둡게
-      // 하는 쪽은 빼고, 아주 옅게 밝은 얼룩만 살짝 남겨서 고르게 밝은
-      // 원반이 되도록 했습니다.
-      for (let i = 0; i < 300; i++) {
-        const x = Math.random() * 256, y = Math.random() * 256;
-        const r = 2 + Math.random() * 5;
-        c.beginPath();
-        c.arc(x, y, r, 0, Math.PI * 2);
-        c.fillStyle = 'rgba(255,250,230,0.12)';
-        c.fill();
-      }
-      return new THREE.CanvasTexture(cvs);
-    }
+    // [CHANGE] "태양 표면을 텍스처가 아니라 흰색 글로우로" 요청 반영 -
+    // 아래 buildRealSun()이 이제 텍스처 구체 대신 순수 가산 글로우만
+    // 씁니다.
 
     // [ADD] "태양에 약간 주황 + 특수촬영한 태양표면 오버레이" 요청 반영.
     // 달과 같은 방식으로 실제 태양 표면 사진 텍스처를 입힌 구체를 만들고,
@@ -245,30 +216,27 @@
       // 33, 거리 400 → 겉보기 비율 0.0825)보다 살짝 더 크게만(겉보기 비율
       // 약 0.156, 달의 약 1.9배) 보이도록 다시 줄였습니다.
       // [CHANGE] "태양 지름 반으로" 요청 반영 - 반지름 140→70으로 축소.
+      // [CHANGE] "오른쪽 이미지 형태로, 흰색으로, 크기도 절반으로" 요청
+      // 반영 - 텍스처를 입힌 구체 방식을 완전히 버리고, 참고 이미지처럼
+      // 부드럽게 번진 흰색 가산 글로우 여러 겹으로 다시 만들었습니다.
+      // 표면 질감(텍스처)이 오히려 "돌덩이" 느낌을 줬던 거라, 아예 질감
+      // 없는 순수한 빛 번짐으로 바꾸니 훨씬 눈부신 광원처럼 보여요.
       const pos = latLonToSpherePos(sunLat, sunLon, 900);
 
-      // [FIX] "광원 느낌이 없어졌어, 그냥 오렌지 덩어리 같아" - 원인은
-      // createGlowSprite의 기본 블렌딩이 일반 알파블렌딩이라, 후광이
-      // 빛을 "더하는" 게 아니라 그냥 반투명 스티커처럼 겹쳐 보였던
-      // 거예요. 가산(Additive) 블렌딩으로 바꾸고, 바깥의 은은한 주황
-      // 후광 + 안쪽의 밝은 백색-노랑 코어 글로우 두 겹으로 쌓아서
-      // "빛나는 광원" 느낌을 살렸습니다.
-      const outerHalo = createGlowSprite('#ffb35c', 150);
+      const outerHalo = createGlowSprite('#fff8ec', 75);
       outerHalo.position.copy(pos);
       outerHalo.material.blending = THREE.AdditiveBlending;
       group.add(outerHalo);
 
-      const innerGlow = createGlowSprite('#fff3cf', 80);
-      innerGlow.position.copy(pos);
-      innerGlow.material.blending = THREE.AdditiveBlending;
-      group.add(innerGlow);
+      const midGlow = createGlowSprite('#ffffff', 42);
+      midGlow.position.copy(pos);
+      midGlow.material.blending = THREE.AdditiveBlending;
+      group.add(midGlow);
 
-      const geometry = new THREE.SphereGeometry(70, 32, 32);
-      const sunTexture = buildSunTexture();
-      const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffffff' });
-      const sunMesh = new THREE.Mesh(geometry, material);
-      sunMesh.position.copy(pos);
-      group.add(sunMesh);
+      const coreGlow = createGlowSprite('#ffffff', 20);
+      coreGlow.position.copy(pos);
+      coreGlow.material.blending = THREE.AdditiveBlending;
+      group.add(coreGlow);
 
       return group;
     }

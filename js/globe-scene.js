@@ -396,28 +396,48 @@ function getCurrentCenterLatLng() {
       return new THREE.Mesh(geometry, material);
     }
 
-    function buildAtmosphereGlow() {
+    // [CHANGE] "지구에서 빛이 옆으로 튀어나가게, 렘브란트 조명 같은 효과"
+    // 요청 반영 - 기존의 단순한 프레넬 림라이트(시야각 기준, 태양과 무관하게
+    // 항상 같은 색/밝기)에 실제 태양 방향을 더했습니다. 태양을 향한 쪽
+    // 가장자리는 더 밝고 따뜻한 색으로, 반대쪽은 기존처럼 차분한 하늘색으로
+    // 갈라져서, 지구를 태양 반대편(밤쪽)에서 바라볼 때 태양 쪽 가장자리가
+    // 유독 환하게 "터져 나오는" 듯한 느낌을 줍니다. 화면에 항상 어느 정도
+    // 있다가, 딱 그 각도로 볼 때 극적으로 강해지는 자연스러운 효과예요.
+    function buildAtmosphereGlow(sunDirLocal) {
       const geometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.025, 64, 64); // [CHANGE] 두께 절반 (1.05 → 1.025)
       const material = new THREE.ShaderMaterial({
-        uniforms: { glowColor: { value: new THREE.Color('#cfe8ff') } },
+        uniforms: {
+          glowColor: { value: new THREE.Color('#cfe8ff') },
+          sunGlowColor: { value: new THREE.Color('#fff0c8') },
+          sunDir: { value: (sunDirLocal || new THREE.Vector3(0, 0, 1)).clone().normalize() }
+        },
         vertexShader: `
-          varying vec3 vNormal;
+          varying vec3 vNormalView;
+          varying vec3 vNormalLocal;
           varying vec3 vViewDir;
           void main() {
-            vNormal = normalize(normalMatrix * normal);
+            vNormalView = normalize(normalMatrix * normal);
+            vNormalLocal = normalize(normal); // 로컬 공간 - sunDir와 같은 좌표계
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
             vViewDir = normalize(-mvPosition.xyz);
             gl_Position = projectionMatrix * mvPosition;
           }
         `,
         fragmentShader: `
-          varying vec3 vNormal;
+          varying vec3 vNormalView;
+          varying vec3 vNormalLocal;
           varying vec3 vViewDir;
           uniform vec3 glowColor;
+          uniform vec3 sunGlowColor;
+          uniform vec3 sunDir;
           void main() {
             // [CHANGE] 지수를 3.0 → 5.0으로 올려서 얇고 또렷한 띠로, 최대 밝기는 95%로
-            float intensity = pow(0.75 - dot(vNormal, vViewDir), 5.0) * 1.6;
-            gl_FragColor = vec4(glowColor, clamp(intensity, 0.0, 0.95));
+            float rim = pow(0.75 - dot(vNormalView, vViewDir), 5.0) * 1.6;
+            float facing = dot(vNormalLocal, sunDir); // -1(반대쪽)~1(태양쪽)
+            float sunSide = smoothstep(-0.25, 0.55, facing);
+            vec3 color = mix(glowColor, sunGlowColor, sunSide);
+            float intensity = rim * mix(0.6, 1.9, sunSide);
+            gl_FragColor = vec4(color, clamp(intensity, 0.0, 0.95));
           }
         `,
         side: THREE.BackSide,
@@ -547,7 +567,7 @@ function getCurrentCenterLatLng() {
       const shadowMesh = buildDayNightShadow(sunDirLocal);
       shadowMesh.renderOrder = 3;
       globeGroup.add(shadowMesh);
-      const atmosphereMesh = buildAtmosphereGlow();
+      const atmosphereMesh = buildAtmosphereGlow(sunDirLocal);
       atmosphereMesh.renderOrder = 4;
       globeGroup.add(atmosphereMesh);
 

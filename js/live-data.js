@@ -1,2 +1,185 @@
-/*! oceantemp.vercel.app — © 2026 All rights reserved. Unauthorized copying or redistribution prohibited. See /LICENSE. */
-const LIVE_DATA_BASE="https://marine-api.open-meteo.com/v1/marine";async function fetchJSON(e,r){const n=new AbortController,a=setTimeout(()=>n.abort(),r||12e3);try{const t=await fetch(e,{signal:n.signal});if(!t.ok)throw new Error("HTTP "+t.status);return await t.json()}finally{clearTimeout(a)}}async function batchCheckHasData(e){const r=e.map(t=>t.coords[1]).join(","),n=e.map(t=>t.coords[0]).join(","),a=`${LIVE_DATA_BASE}?latitude=${r}&longitude=${n}&current=sea_surface_temperature&timezone=auto`;try{const t=await fetchJSON(a),l=Array.isArray(t)?t:[t];return e.map((o,s)=>{const c=l[s],u=c&&c.current&&c.current.sea_surface_temperature,i=typeof u=="number"&&!Number.isNaN(u);return{ok:i,temp:i?u:null}})}catch(t){return console.warn("[live-data] \uBC30\uCE58 \uAC80\uC99D \uC2E4\uD328 - \uC774 \uBC30\uCE58\uB294 \uC720\uC9C0\uD569\uB2C8\uB2E4:",t),e.map(()=>({ok:!0,temp:null}))}}async function removeStationsWithNoData(e,r){const a=[];for(let o=0;o<e.length;o+=90)a.push(e.slice(o,o+90));let t=0;return(await Promise.all(a.map(async o=>{const s=await batchCheckHasData(o);t+=o.length,r&&r(Math.min(e.length,t),e.length);const c=[];return o.forEach((u,i)=>{s[i].ok&&(s[i].temp!=null&&(u.curTemp=+s[i].temp.toFixed(1),u._liveCurrentVerified=!0),c.push(u))}),c}))).flat()}function getNearbyLiveClimAverage(e,r){const n=[];if(stations.forEach(o=>{if(o===e||!o._liveCache)return;const s=e.coords[1]-o.coords[1];let c=e.coords[0]-o.coords[0];c>180&&(c-=360),c<-180&&(c+=360);const u=Math.sqrt(s*s+c*c);n.push({s:o,d:u})}),!n.length)return null;n.sort((o,s)=>o.d-s.d);const a=n.slice(0,r||5),t=Array(12).fill(0);let l=0;return a.forEach(({s:o,d:s})=>{const c=1/(s+1);l+=c,o._liveCache.climByMonth.forEach((u,i)=>{t[i]+=u*c})}),{climByMonth:t.map(o=>o/l),usedCount:a.length}}function isoDate(e){return e.toISOString().slice(0,10)}function fillMonthlyGaps(e){const r=e.slice();for(let n=0;n<12;n++){if(r[n]!=null)continue;let a=null,t=null;for(let l=1;l<=12;l++)if(r[(n-l+12)%12]!=null){a=r[(n-l+12)%12];break}for(let l=1;l<=12;l++)if(r[(n+l)%12]!=null){t=r[(n+l)%12];break}r[n]=a!=null&&t!=null?(a+t)/2:a??t??15}return r}async function fetchStationRealData(e){if(e._liveCache)return e._liveCache;const r=e.coords[1],n=e.coords[0],a=new Date,t=a.getFullYear(),l=isoDate(a),o=`${t}-01-01`,s=`${t-5}-01-01`,c=`${t-1}-12-31`,u=`${LIVE_DATA_BASE}?latitude=${r}&longitude=${n}&current=sea_surface_temperature&timezone=auto`,i=`${LIVE_DATA_BASE}?latitude=${r}&longitude=${n}&start_date=${s}&end_date=${c}&daily=sea_surface_temperature_mean&timezone=auto`,T=`${LIVE_DATA_BASE}?latitude=${r}&longitude=${n}&start_date=${o}&end_date=${l}&daily=sea_surface_temperature_mean&timezone=auto`,[_,p,y]=await Promise.all([fetchJSON(u),fetchJSON(i),fetchJSON(T)]),w=_.current&&typeof _.current.sea_surface_temperature=="number"?_.current.sea_surface_temperature:null;if(w===null)throw new Error("no current SST for this station");const v=Array(12).fill(0),g=Array(12).fill(0);p.daily&&p.daily.time&&p.daily.time.forEach((d,m)=>{const h=p.daily.sea_surface_temperature_mean[m];if(typeof h=="number"){const f=new Date(d+"T00:00:00Z").getUTCMonth();v[f]+=h,g[f]++}});const U=v.map((d,m)=>g[m]>0?d/g[m]:null),A=fillMonthlyGaps(U),$=[];y.daily&&y.daily.time&&y.daily.time.forEach((d,m)=>{const h=y.daily.sea_surface_temperature_mean[m];if(typeof h=="number"){const f=new Date(d+"T00:00:00Z"),D=new Date(Date.UTC(f.getUTCFullYear(),f.getUTCMonth()+1,0)).getUTCDate(),M=f.getUTCMonth()+(f.getUTCDate()-1)/D;$.push({x:M,y:+h.toFixed(2)})}});const C={currentTemp:w,climByMonth:A,actualLine:$,isLive:!0};return e._liveCache=C,C}function climAtFromMonthly(e,r){const n=(Math.floor(r)%12+12)%12,a=(n+1)%12,t=r-Math.floor(r);return e[n]+(e[a]-e[n])*t}
+    // [ADD] "현재+과거 데이터를 실제로 가져와서 그래프 만들 수 있어?" 요청 반영.
+    // Open-Meteo Marine API(무료, API 키 불필요, CORS 허용, ERA5-Ocean 기반이라
+    // 1940년부터의 실측 해수면온도를 제공)를 브라우저에서 직접 호출합니다.
+    // 이 앱이 Claude가 호스팅하는 페이지가 아니라 로컬 HTML 파일이라 가능한
+    // 방식이에요 - 그냥 브라우저에서 여는 보통 웹페이지처럼 동작합니다.
+    const LIVE_DATA_BASE = 'https://marine-api.open-meteo.com/v1/marine';
+
+    async function fetchJSON(url, timeoutMs) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    // 정점 묶음(최대 ~90개)을 한 번의 요청으로 검증합니다 - Open-Meteo는
+    // 위도/경도를 콤마로 여러 개 넘기면 한 번에 여러 지점을 조회할 수 있어요.
+    async function batchCheckHasData(stationsChunk) {
+      const lats = stationsChunk.map(s => s.coords[1]).join(',');
+      const lons = stationsChunk.map(s => s.coords[0]).join(',');
+      const url = `${LIVE_DATA_BASE}?latitude=${lats}&longitude=${lons}&current=sea_surface_temperature&timezone=auto`;
+      try {
+        const data = await fetchJSON(url);
+        const list = Array.isArray(data) ? data : [data];
+        // [CHANGE] "station 빼면 다 진짜야?" 질문 반영 - 검증할 때 이미 받아온
+        // 실제 현재 수온을 버리지 않고 그대로 돌려줘서, 마커 색/배경 히트맵/
+        // 클릭 직후 표시값까지 전부 이 실제값을 쓰도록 했습니다.
+        return stationsChunk.map((st, i) => {
+          const entry = list[i];
+          const val = entry && entry.current && entry.current.sea_surface_temperature;
+          const ok = typeof val === 'number' && !Number.isNaN(val);
+          return { ok, temp: ok ? val : null };
+        });
+      } catch (e) {
+        // 네트워크 문제 등으로 검증 자체가 실패하면, 정점을 함부로 지우지 않고
+        // 일단 살려둡니다 (오프라인이어도 앱이 완전히 비어버리진 않게).
+        console.warn('[live-data] 배치 검증 실패 - 이 배치는 유지합니다:', e);
+        return stationsChunk.map(() => ({ ok: true, temp: null }));
+      }
+    }
+
+    // [ADD] "데이터가 전혀 없는 정점은 지워" 요청 - 전체 정점을 배치로 실제
+    // 조회해서, 실시간 해수면온도가 아예 안 잡히는(육지에 너무 가깝거나
+    // 모델 격자가 없는) 정점을 목록에서 제거합니다. 배치들을 병렬로 보내서
+    // (브라우저가 알아서 동시 연결 수만큼 파이프라인) 순차 대기보다 훨씬 빠릅니다.
+    async function removeStationsWithNoData(allStations, onProgress) {
+      const CHUNK = 90;
+      const chunks = [];
+      for (let i = 0; i < allStations.length; i += CHUNK) chunks.push(allStations.slice(i, i + CHUNK));
+
+      let done = 0;
+      const kept = await Promise.all(chunks.map(async (chunk) => {
+        const results = await batchCheckHasData(chunk);
+        done += chunk.length;
+        if (onProgress) onProgress(Math.min(allStations.length, done), allStations.length);
+        const survivors = [];
+        chunk.forEach((st, idx) => {
+          if (!results[idx].ok) return;
+          // [ADD] 검증 때 받은 실제 현재값을 station.curTemp에 반영 -
+          // 이제 마커 색, 배경 히트맵, 클릭 직후 표시값까지 전부 이 실제값을 씁니다.
+          if (results[idx].temp != null) {
+            st.curTemp = +results[idx].temp.toFixed(1);
+            st._liveCurrentVerified = true;
+          }
+          survivors.push(st);
+        });
+        return survivors;
+      }));
+      return kept.flat();
+    }
+
+    // [CHANGE] "가장 가까운 정점 하나 말고 주변 정점들 평균을 반영해줘"
+    // 요청 반영 - 근처 실데이터(_liveCache) 정점 중 하나만 빌려쓰던 것을,
+    // 가까운 순서로 여러 개(최대 5개)를 모아 거리 가중 평균한 월별 곡선으로
+    // 바꿨습니다. 특정 정점 하나의 특이값에 휘둘리지 않고 더 안정적이에요.
+    function getNearbyLiveClimAverage(station, maxCount) {
+      const candidates = [];
+      stations.forEach(s => {
+        if (s === station || !s._liveCache) return;
+        const dLat = station.coords[1] - s.coords[1];
+        let dLon = station.coords[0] - s.coords[0];
+        if (dLon > 180) dLon -= 360;
+        if (dLon < -180) dLon += 360;
+        const d = Math.sqrt(dLat * dLat + dLon * dLon);
+        candidates.push({ s, d });
+      });
+      if (!candidates.length) return null;
+      candidates.sort((a, b) => a.d - b.d);
+      const top = candidates.slice(0, maxCount || 5);
+
+      const climByMonth = Array(12).fill(0);
+      let wSum = 0;
+      top.forEach(({ s, d }) => {
+        const w = 1 / (d + 1); // 가까울수록 더 큰 가중치
+        wSum += w;
+        s._liveCache.climByMonth.forEach((v, i) => { climByMonth[i] += v * w; });
+      });
+      return { climByMonth: climByMonth.map(v => v / wSum), usedCount: top.length };
+    }
+
+    function isoDate(d) { return d.toISOString().slice(0, 10); }
+
+    // 결측이 있는 월은 앞/뒤 값으로 채워서 보간이 끊기지 않게 합니다.
+    function fillMonthlyGaps(monthly) {
+      const out = monthly.slice();
+      for (let i = 0; i < 12; i++) {
+        if (out[i] != null) continue;
+        let prev = null, next = null;
+        for (let k = 1; k <= 12; k++) { if (out[(i - k + 12) % 12] != null) { prev = out[(i - k + 12) % 12]; break; } }
+        for (let k = 1; k <= 12; k++) { if (out[(i + k) % 12] != null) { next = out[(i + k) % 12]; break; } }
+        out[i] = (prev != null && next != null) ? (prev + next) / 2 : (prev != null ? prev : (next != null ? next : 15));
+      }
+      return out;
+    }
+
+    // 정점 하나의 실데이터(현재값 + 최근 5년 월별 평균 + 올해 연초~오늘 실측)를
+    // 가져옵니다. 한 번 가져온 정점은 세션 동안 캐시해서 재선택 시 다시 안 부릅니다.
+    // [FIX] "정점 어디에도 라이브 데이터가 안 떠, 이게 제일 중요한 문제야"
+    // 진짜 원인을 찾았어요. Open-Meteo 해양(Marine) API는 예보용
+    // 엔드포인트라 과거 데이터를 최대 약 92일까지만 지원하는데(5년치
+    // "평년" 데이터 같은 장기 아카이브는 이 API에 아예 없어요), 저희가
+    // 5년 전부터의 데이터를 요청하고 있었어요. 그 요청은 API가 거부해서
+    // 항상 실패하는데, Promise.all은 묶은 요청 중 하나라도 실패하면
+    // 전체가 실패 처리되기 때문에, current(현재값)는 멀쩡히 성공했어도
+    // 5년 요청 하나 때문에 매번 전체가 실패로 끝나서 모든 정점이 항상
+    // "추정값"으로만 표시됐던 거예요. 5년 평년 요청은 아예 빼고, 실제로
+    // 이 API가 지원하는 "최근 90일 실측"만 가져오도록 고쳤습니다 -
+    // 이제 현재값과 최근 90일 추이는 진짜 실데이터입니다. 5~6년 평년
+    // 곡선은 이 API로는 구할 수 없는 정보라 계절 공식으로 채우고,
+    // 화면에도 그 부분만 별도로 추정치라고 표시합니다.
+    async function fetchStationRealData(station) {
+      if (station._liveCache) return station._liveCache;
+
+      const lat = station.coords[1], lon = station.coords[0];
+
+      const currentUrl = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&current=sea_surface_temperature&timezone=auto`;
+      const actualUrl = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&past_days=90&daily=sea_surface_temperature_mean&timezone=auto`;
+
+      const [currentRes, actualRes] = await Promise.all([
+        fetchJSON(currentUrl), fetchJSON(actualUrl)
+      ]);
+
+      const currentTemp = currentRes.current && typeof currentRes.current.sea_surface_temperature === 'number'
+        ? currentRes.current.sea_surface_temperature
+        : null;
+      if (currentTemp === null) throw new Error('no current SST for this station');
+
+      // 최근 90일 실측값 (x = 월 인덱스 + 그 달 안에서의 날짜 비율)
+      const actualLine = [];
+      if (actualRes.daily && actualRes.daily.time) {
+        actualRes.daily.time.forEach((dateStr, i) => {
+          const v = actualRes.daily.sea_surface_temperature_mean[i];
+          if (typeof v === 'number') {
+            const d = new Date(dateStr + 'T00:00:00Z');
+            const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+            const x = d.getUTCMonth() + (d.getUTCDate() - 1) / dim;
+            actualLine.push({ x, y: +v.toFixed(2) });
+          }
+        });
+      }
+
+      // [CHANGE] 5~6년 평년 데이터는 이 API가 애초에 제공하지 않는
+      // 범위라, 계절 사인파(위도로 위상 보정)로 채웁니다. climIsEstimated로
+      // 표시해서 화면에 "이 곡선은 추정"이라고 구분해 보여줄 수 있게 했습니다.
+      const phaseShift = lat < 0 ? 6 : 0;
+      const climByMonth = Array.from({ length: 12 }, (_, m) =>
+        Math.max(0, currentTemp + Math.sin((m - 3 + phaseShift) * (Math.PI / 6)) * 4)
+      );
+
+      const result = { currentTemp, climByMonth, actualLine, isLive: true, climIsEstimated: true };
+      station._liveCache = result;
+      return result;
+    }
+
+    // climByMonth(12개 월별 평균)에서 임의의 소수 x(0~11) 지점 값을 부드럽게 보간
+    function climAtFromMonthly(climByMonth, x) {
+      const i0 = ((Math.floor(x) % 12) + 12) % 12;
+      const i1 = (i0 + 1) % 12;
+      const frac = x - Math.floor(x);
+      return climByMonth[i0] + (climByMonth[i1] - climByMonth[i0]) * frac;
+    }

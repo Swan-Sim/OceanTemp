@@ -1,4 +1,104 @@
-/*! oceantemp.vercel.app — © 2026 All rights reserved. Unauthorized copying or redistribution prohibited. See /LICENSE. */
-const userLocale=(navigator.language||"en").toLowerCase(),lang=userLocale.startsWith("ko")?"ko":userLocale.startsWith("ja")?"ja":"en",todayObj=new Date,curMonth=todayObj.getMonth(),curDate=todayObj.getDate(),windowStartMonth=((curMonth-5)%12+12)%12,todayLabel=`${curMonth+1}\uC6D4 ${curDate}\uC77C`,i18n={ko:{appTitle:"\uC804 \uC138\uACC4 \uD574\uC591 \uC218\uC628 \uBAA8\uB2C8\uD130\uB9C1 (3D \uC704\uC131 \uC9C0\uAD6C\uACF5)",legendBeach:"\uC6D0\uD558\uB294 \uACF3\uC744 \uD074\uB9AD\uD558\uC138\uC694",reset:"\uC9C0\uAD6C\uACF5",stationCount:e=>`\uCD1D ${e.toLocaleString()}\uAC1C \uC815\uC810`,selectPrompt:"\uC815\uC810\uC744 \uC120\uD0DD\uD558\uC138\uC694",infoCoord:(e,a,o)=>`${e} | \uC704\uB3C4: ${a.toFixed(3)}\xB0, \uACBD\uB3C4: ${o.toFixed(3)}\xB0`,tabForecast:"\uACFC\uAC70 5~6\uB144 \uD3C9\uADE0 vs 1\uB144 \uCD94\uC815",tabDepth:"\uC218\uC2EC\uBCC4 \uC218\uC628 (CTD/Argo)",chartPast:"\uD3C9\uB144(5~6\uB144 \uD3C9\uADE0)",chartActual:"\uC2E4\uCE21\uAC12(\uC5F0\uCD08~\uC624\uB298)",chartFuture:"\uCD94\uC815\uAC12(\uC624\uB298~\uC5F0\uB9D0)",chartDepthLabel:"\uC218\uC2EC\uBCC4 \uC218\uC628",todayBadge:`\uC624\uB298 (${todayLabel})`,months:["1\uC6D4","2\uC6D4","3\uC6D4","4\uC6D4","5\uC6D4","6\uC6D4","7\uC6D4","8\uC6D4","9\uC6D4","10\uC6D4","11\uC6D4","12\uC6D4"],hotspot:"\uCD5C\uACE0 \uC218\uC628 Hotspot",beachTag:"\uBE44\uCE58 \uC5D4\uD2B8\uB9AC/\uBB3C\uB180\uC774 \uD3EC\uC778\uD2B8",disclaimer:"\uBCF8 \uC11C\uBE44\uC2A4\uC758 \uC218\uC628 \uAD00\uCE21\uCE58, \uACFC\uAC70 \uD1B5\uACC4 \uBC0F \uCD94\uC815 \uBAA8\uB378\uC740 \uCC38\uACE0\uC6A9 \uC815\uBCF4\uC774\uBA70 \uC2DC\uCC28\uB098 \uAD00\uCE21 \uC624\uCC28\uAC00 \uBC1C\uC0DD\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uD56D\uD574, \uC870\uB09C \uAD6C\uC870 \uBC0F \uADF9\uD55C \uD574\uC591 \uB808\uC800 \uD65C\uB3D9\uC758 \uC548\uC804 \uD310\uB2E8\uC5D0 \uB300\uD55C \uBC95\uC801 \uCC45\uC784\uC744 \uC9C0\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.",disclaimerLabel:"Disclaimer",locateTitle:"\uB0B4 \uC704\uCE58",fullscreenTitle:"\uC804\uCCB4\uD654\uBA74",expandNote:"\uD655\uB300\uC2DC \uC804\uCCB4",depthAxisLabel:"\uC218\uC2EC (m)",tempAxisLabel:"\uC218\uC628 (\xB0C)",fsUnsupported:`\uC774 \uBE0C\uB77C\uC6B0\uC800\uB294 \uC804\uCCB4\uD654\uBA74 API\uB97C \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uC544\uC694.
-iOS Safari\uB77C\uBA74 \uACF5\uC720 \uBC84\uD2BC \u2192 "\uD648 \uD654\uBA74\uC5D0 \uCD94\uAC00"\uB85C \uC2E4\uD589\uD558\uBA74 \uC8FC\uC18C\uCC3D \uC5C6\uC774 \uC5F4\uB9BD\uB2C8\uB2E4.`,rotateMsg:"\uD654\uBA74\uC744 \uC138\uB85C\uB85C \uB3CC\uB824\uC8FC\uC138\uC694 \u2014 \uAC00\uB85C\uBAA8\uB4DC\uC5D0\uC11C\uB294 \uD654\uBA74\uC774 \uB108\uBB34 \uC881\uC544 \uC9C0\uAD6C\uBCF8\uACFC \uADF8\uB798\uD504\uB97C \uD568\uAED8 \uBCF4\uAE30 \uC5B4\uB824\uC6CC\uC694.",liveDataOn:"\uC2E4\uC2DC\uAC04 \uB370\uC774\uD130 (Open-Meteo)",liveDataLoading:"\uC2E4\uC2DC\uAC04 \uB370\uC774\uD130 \uBD88\uB7EC\uC624\uB294 \uC911...",liveDataFallback:"\uC2E4\uC81C \uB370\uC774\uD130 \uC5F0\uACB0\uC774 \uC548 \uB418\uC5B4 \uCD94\uC815 \uC54C\uACE0\uB9AC\uC998\uC73C\uB85C \uB9CC\uB4E0 \uB370\uC774\uD130\uC785\uB2C8\uB2E4"},en:{appTitle:"Global Ocean Temp Monitor (3D Satellite Globe)",legendBeach:"Tap anywhere to explore",reset:"Globe",stationCount:e=>`${e.toLocaleString()} Stations`,selectPrompt:"Select a station",infoCoord:(e,a,o)=>`${e} | Lat: ${a.toFixed(3)}\xB0, Lon: ${o.toFixed(3)}\xB0`,tabForecast:"Past 5-6Y Avg vs 1Y Forecast",tabDepth:"Depth Profile (CTD/Argo)",chartPast:"5-6Y Average",chartActual:"Actual (Jan\u2013Today)",chartFuture:"Projected (Today\u2013Dec)",chartDepthLabel:"Depth Water Temp",todayBadge:`Today (${todayObj.toLocaleString("en-US",{month:"short",day:"numeric"})})`,months:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],hotspot:"Max Temp Hotspot",beachTag:"Beach Entry / Shore Dive",disclaimer:"SST readings, historical stats, and forecast models in this app are illustrative only and may not reflect real-time conditions or measurement error. Not to be relied on for navigation, distress response, or extreme ocean sports safety decisions.",disclaimerLabel:"Disclaimer",locateTitle:"My location",fullscreenTitle:"Fullscreen",expandNote:"full list on zoom-in",depthAxisLabel:"Depth (m)",tempAxisLabel:"Temp (\xB0C)",fsUnsupported:`This browser doesn't support the Fullscreen API.
-On iOS Safari, use Share \u2192 "Add to Home Screen" to open it without an address bar.`,rotateMsg:"Please rotate your device to portrait \u2014 landscape mode is too narrow to show the globe and chart together.",liveDataOn:"Live data (Open-Meteo)",liveDataLoading:"Loading live data...",liveDataFallback:"Live data unavailable \u2014 this is estimated"}},t=i18n[lang]||i18n.en;document.getElementById("txt-app-title").innerText=t.appTitle,document.getElementById("st-name").innerText=t.selectPrompt,document.getElementById("btn-ts").innerText=t.tabForecast,document.getElementById("btn-dp").innerText=t.tabDepth,document.getElementById("btn-locate").title=t.locateTitle,document.getElementById("btn-fullscreen").title=t.fullscreenTitle,document.getElementById("txt-disclaimer-label").innerText=t.disclaimerLabel+":",document.getElementById("txt-disclaimer-body").innerText=t.disclaimer,document.getElementById("txt-rotate-msg").innerText=t.rotateMsg,["gesturestart","gesturechange","gestureend"].forEach(e=>{document.addEventListener(e,a=>a.preventDefault())}),document.addEventListener("touchmove",e=>{e.touches.length>1&&e.preventDefault()},{passive:!1});let __lastTapTime=0;document.addEventListener("touchend",e=>{if(e.target.closest("#leafletMap"))return;const a=Date.now();a-__lastTapTime<=300&&e.preventDefault(),__lastTapTime=a},{passive:!1});
+    const userLocale = (navigator.language || 'en').toLowerCase();
+    const lang = userLocale.startsWith('ko') ? 'ko' : (userLocale.startsWith('ja') ? 'ja' : 'en');
+
+    const todayObj = new Date();
+    const curMonth = todayObj.getMonth();
+    const curDate = todayObj.getDate();
+    // [ADD] "온도 그래프에 오늘이 중앙에 오게" 요청 반영 - 달력상 1월~12월
+    // 고정 대신, 오늘 기준 이동 윈도우(오늘 달의 5달 전부터 6달 후까지,
+    // 총 12개월)를 씁니다. 9월이면 4월~내년 3월이 됩니다.
+    const windowStartMonth = ((curMonth - 5) % 12 + 12) % 12;
+    const todayLabel = `${curMonth + 1}월 ${curDate}일`;
+
+    const i18n = {
+      ko: {
+        appTitle: "전 세계 해양 수온 모니터링 (3D 위성 지구공)",
+        legendBeach: "원하는 곳을 클릭하세요",
+        reset: "지구공",
+        stationCount: (n) => `총 ${n.toLocaleString()}개 정점`,
+        selectPrompt: "정점을 선택하세요",
+        infoCoord: (net, lat, lon) => `${net} | 위도: ${lat.toFixed(3)}°, 경도: ${lon.toFixed(3)}°`,
+        tabForecast: "계절 추정 vs 최근 90일 실측",
+        tabDepth: "수심별 수온 (CTD/Argo)",
+        chartPast: "평년(계절 추정)",
+        chartActual: "실측값(최근 90일)",
+        chartFuture: "추정값(오늘~연말)",
+        chartDepthLabel: "수심별 수온",
+        todayBadge: `오늘 (${todayLabel})`,
+        months: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+        hotspot: "최고 수온 Hotspot",
+        beachTag: "비치 엔트리/물놀이 포인트",
+        disclaimer: "본 서비스의 수온 관측치, 과거 통계 및 추정 모델은 참고용 정보이며 시차나 관측 오차가 발생할 수 있습니다. 항해, 조난 구조 및 극한 해양 레저 활동의 안전 판단에 대한 법적 책임을 지지 않습니다.",
+        disclaimerLabel: "Disclaimer",
+        locateTitle: "내 위치",
+        fullscreenTitle: "전체화면",
+        expandNote: "확대시 전체",
+        depthAxisLabel: "수심 (m)",
+        tempAxisLabel: "수온 (°C)",
+        fsUnsupported: "이 브라우저는 전체화면 API를 지원하지 않아요.\niOS Safari라면 공유 버튼 → \"홈 화면에 추가\"로 실행하면 주소창 없이 열립니다.",
+        rotateMsg: "화면을 세로로 돌려주세요 — 가로모드에서는 화면이 너무 좁아 지구본과 그래프를 함께 보기 어려워요.",
+        liveDataOn: "실시간 데이터 (Open-Meteo)",
+        liveDataLoading: "실시간 데이터 불러오는 중...",
+        liveDataFallback: "실제 데이터 연결이 안 되어 추정 알고리즘으로 만든 데이터입니다"
+      },
+      en: {
+        appTitle: "Global Ocean Temp Monitor (3D Satellite Globe)",
+        legendBeach: "Tap anywhere to explore",
+        reset: "Globe",
+        stationCount: (n) => `${n.toLocaleString()} Stations`,
+        selectPrompt: "Select a station",
+        infoCoord: (net, lat, lon) => `${net} | Lat: ${lat.toFixed(3)}°, Lon: ${lon.toFixed(3)}°`,
+        tabForecast: "Seasonal Est. vs Last 90 Days",
+        tabDepth: "Depth Profile (CTD/Argo)",
+        chartPast: "Seasonal Estimate",
+        chartActual: "Actual (Last 90 Days)",
+        chartFuture: "Projected (Today–Dec)",
+        chartDepthLabel: "Depth Water Temp",
+        todayBadge: `Today (${todayObj.toLocaleString('en-US', { month: 'short', day: 'numeric' })})`,
+        months: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+        hotspot: "Max Temp Hotspot",
+        beachTag: "Beach Entry / Shore Dive",
+        disclaimer: "SST readings, historical stats, and forecast models in this app are illustrative only and may not reflect real-time conditions or measurement error. Not to be relied on for navigation, distress response, or extreme ocean sports safety decisions.",
+        disclaimerLabel: "Disclaimer",
+        locateTitle: "My location",
+        fullscreenTitle: "Fullscreen",
+        expandNote: "full list on zoom-in",
+        depthAxisLabel: "Depth (m)",
+        tempAxisLabel: "Temp (°C)",
+        fsUnsupported: "This browser doesn't support the Fullscreen API.\nOn iOS Safari, use Share → \"Add to Home Screen\" to open it without an address bar.",
+        rotateMsg: "Please rotate your device to portrait — landscape mode is too narrow to show the globe and chart together.",
+        liveDataOn: "Live data (Open-Meteo)",
+        liveDataLoading: "Loading live data...",
+        liveDataFallback: "Live data unavailable — this is estimated"
+      }
+    };
+    const t = i18n[lang] || i18n.en;
+
+    document.getElementById('txt-app-title').innerText = t.appTitle;
+    document.getElementById('st-name').innerText = t.selectPrompt;
+    document.getElementById('btn-ts').innerText = t.tabForecast;
+    document.getElementById('btn-dp').innerText = t.tabDepth;
+    document.getElementById('btn-locate').title = t.locateTitle;
+    document.getElementById('btn-fullscreen').title = t.fullscreenTitle;
+    document.getElementById('txt-disclaimer-label').innerText = t.disclaimerLabel + ':';
+    document.getElementById('txt-disclaimer-body').innerText = t.disclaimer;
+    document.getElementById('txt-rotate-msg').innerText = t.rotateMsg;
+
+    // [FIX] 모바일 핀치줌으로 브라우저 자체가 확대되면서 레이아웃 비율이 틀어지는 문제 방지.
+    // viewport 메타(user-scalable=no)만으로는 iOS Safari 등에서 완전히 막히지 않아서
+    // 제스처 이벤트와 멀티터치 이동을 직접 막아줍니다. Leaflet 지도 자체의 확대/축소
+    // 기능(핀치/더블탭)은 Leaflet이 내부적으로 처리하는 별도 로직이라 영향 없습니다.
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(evt => {
+      document.addEventListener(evt, e => e.preventDefault());
+    });
+    document.addEventListener('touchmove', (e) => {
+      if (e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
+    let __lastTapTime = 0;
+    document.addEventListener('touchend', (e) => {
+      if (e.target.closest('#leafletMap')) return; // Leaflet 자체 더블탭 줌은 유지
+      const now = Date.now();
+      if (now - __lastTapTime <= 300) e.preventDefault();
+      __lastTapTime = now;
+    }, { passive: false });
+

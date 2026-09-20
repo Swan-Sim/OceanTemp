@@ -321,7 +321,14 @@
         { name: "Moalboal (Cebu, Philippines)", shortName: "모알보알", lat: 9.947, lon: 123.397, curTemp: 28.5, depth: true, net: "Beach/PAGASA" },
         { name: "Coron (Palawan, Philippines)", shortName: "코론", lat: 12.0, lon: 120.2, curTemp: 28.3, depth: true, net: "Beach/PAGASA" },
         { name: "Siargao Island (Philippines)", shortName: "시아르가오", lat: 9.858, lon: 126.05, curTemp: 28.6, depth: true, net: "Beach/PAGASA" },
-        { name: "Anilao (Batangas, Philippines)", shortName: "아닐라오", lat: 13.75, lon: 120.9, curTemp: 28.0, depth: true, net: "Beach/PAGASA" }
+        { name: "Anilao (Batangas, Philippines)", shortName: "아닐라오", lat: 13.75, lon: 120.9, curTemp: 28.0, depth: true, net: "Beach/PAGASA" },
+
+        // 추가 요청 정점
+        { name: "Long Beach (California, USA)", shortName: "롱비치", lat: 33.767, lon: -118.19, curTemp: 18.5, depth: true, net: "NOAA/SCCOOS" },
+        { name: "Huntington Beach (California, USA)", shortName: "헌팅턴비치", lat: 33.655, lon: -118.00, curTemp: 19.0, depth: true, net: "NOAA/SCCOOS" },
+        { name: "Morro Bay (California, USA)", shortName: "모로베이", lat: 35.366, lon: -120.85, curTemp: 14.5, depth: true, net: "NOAA/SCCOOS" },
+        { name: "고성 화진포 관측지점", shortName: "고성", lat: 38.38, lon: 128.47, curTemp: 17.0, depth: true, net: "Beach/NIFS·badatime" },
+        { name: "Homer (Kachemak Bay, Alaska)", shortName: "호머(알래스카)", lat: 59.6425, lon: -151.5483, curTemp: 8.5, depth: true, net: "Beach/NOAA" }
       ];
 
       beachSpots.forEach(s => {

@@ -72,7 +72,7 @@
         const x1 = x0 * cosZ - y1 * sinZ;
         const y2 = x0 * sinZ + y1 * cosZ;
 
-        const sprite = createGlowSprite('rgba(255,235,205,0.6)', 480);
+        const sprite = createGlowSprite('rgba(255,205,140,0.55)', 480);
         sprite.material.blending = THREE.AdditiveBlending;
         sprite.material.opacity = 0.5;
         sprite.position.set(x1, y2, z1);
@@ -111,12 +111,27 @@
         positions[i * 3 + 1] = y2;
         positions[i * 3 + 2] = z1;
 
-        // 중심부는 밝은 흰색, 가장자리로 갈수록 따뜻한 황갈색(성간먼지 느낌)
+        // [CHANGE] 첨부 이미지 참고 - 전체적으로 더 진한 금빛/주황 톤으로
+        // 옮기고, 띠 중간중간에 성간먼지대처럼 어두운 틈(다크 레인)을 넣어서
+        // 매끈한 헤이즈가 아니라 결이 있는 띠처럼 보이게 했습니다.
         const core = 1 - Math.min(1, Math.abs(spread) / 0.22);
-        const warm = 0.55 + Math.random() * 0.2;
-        colors[i * 3] = 0.9 + core * 0.1;
-        colors[i * 3 + 1] = warm + core * (0.95 - warm);
-        colors[i * 3 + 2] = (warm - 0.15) + core * (0.95 - (warm - 0.15));
+        const warm = 0.35 + Math.random() * 0.25; // 더 주황 쪽으로
+        let r_ = 0.95 + core * 0.05;
+        let g_ = warm + core * (0.75 - warm);
+        let b_ = (warm - 0.2) + core * (0.55 - (warm - 0.2));
+
+        // 먼지대: 중심부 근처의 좁은 두 개 띠는 어둡게 눌러서 틈을 만듦
+        const laneA = Math.abs(spread - 0.015);
+        const laneB = Math.abs(spread + 0.07);
+        const laneDarken = Math.max(
+          laneA < 0.02 ? (1 - laneA / 0.02) * 0.8 : 0,
+          laneB < 0.015 ? (1 - laneB / 0.015) * 0.7 : 0
+        );
+        const dim = 1 - laneDarken;
+
+        colors[i * 3] = r_ * dim;
+        colors[i * 3 + 1] = g_ * dim;
+        colors[i * 3 + 2] = b_ * dim;
       }
 
       const geo = new THREE.BufferGeometry();
@@ -233,17 +248,23 @@
     // 후광으로 뒤에 같이 둡니다.
     function buildRealSun(sunLat, sunLon) {
       const group = new THREE.Group();
-      const pos = latLonToSpherePos(sunLat, sunLon, 750);
+      // [CHANGE] "태양 지름 10배" - 그냥 반지름만 10배로 하면 태양이 카메라
+      // 최대 줌아웃 거리(380)보다도 커져서 화면이 "태양 안쪽"처럼 깨져 보일
+      // 수 있어요. 그래서 거리도 함께 늘려서(750→2000) 카메라가 어떤
+      // 각도로 봐도 절대 태양 구체 안으로 들어가지 않게 하면서, 반지름은
+      // 정확히 요청하신 10배(95→950)로 키웠습니다 - 결과적으로 화면에
+      // 보이는 크기는 이전보다 약 3.75배 커집니다.
+      const pos = latLonToSpherePos(sunLat, sunLon, 2000);
 
       // [FIX] "태양이 달보다 훨씬 작아 보여" - 반지름은 같아도(33) 태양이
       // 달보다 훨씬 멀리(750 vs 400) 있어서, 실제 화면에 보이는 각크기는
       // 거리에 반비례해 작아 보였어요. 거리 비율만큼 반지름을 키워서
       // (33 × 750/400 ≈ 62) 겉보기 크기가 달과 비슷해지도록 맞췄습니다.
-      const halo = createGlowSprite('#ffb35c', 260);
+      const halo = createGlowSprite('#ffb35c', 900);
       halo.position.copy(pos);
       group.add(halo);
 
-      const geometry = new THREE.SphereGeometry(95, 32, 32);
+      const geometry = new THREE.SphereGeometry(950, 32, 32);
       const textureLoader = new THREE.TextureLoader();
       const sunTexture = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_sun.jpg');
       const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffb066' });

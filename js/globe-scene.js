@@ -496,7 +496,7 @@ function getCurrentCenterLatLng() {
       const height = container.clientHeight;
 
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2500);
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 3200);
       cameraDistance = BOOT_DIST; // 로딩 중엔 멀리서 시작해 작은 지구로 보이게
       camera.position.z = cameraDistance;
 

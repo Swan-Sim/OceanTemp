@@ -256,7 +256,29 @@
         { name: "Seminyak Beach (Bali, Indonesia)", shortName: "스미냑", lat: -8.690, lon: 115.164, curTemp: 28.4, depth: true, net: "Beach/BMKG" },
         { name: "Playa del Carmen (Mexico)", shortName: "플라야델카르멘", lat: 20.629, lon: -87.073, curTemp: 28.0, depth: true, net: "Beach/SMN" },
         { name: "Pink Sands Beach (Harbour Island, Bahamas)", shortName: "핑크샌즈비치", lat: 25.508, lon: -76.635, curTemp: 27.8, depth: true, net: "Beach/local" },
-        { name: "Socorro Island (Revillagigedo, Mexico)", shortName: "소코로", lat: 18.79, lon: -110.97, curTemp: 25.5, depth: true, net: "Beach/SMN" }
+        { name: "Socorro Island (Revillagigedo, Mexico)", shortName: "소코로", lat: 18.79, lon: -110.97, curTemp: 25.5, depth: true, net: "Beach/SMN" },
+
+        // 해양(연구)기관 소재 정점 - 1차 배치 (193개국 전체는 규모상 여러 턴에 나눠 계속 추가할게요)
+        { name: "National Oceanography Centre (Southampton, UK)", shortName: "사우샘프턴 NOC", lat: 50.891, lon: -1.400, curTemp: 16.5, depth: true, net: "Institute/NOC" },
+        { name: "Plymouth Marine Laboratory (UK)", shortName: "플리머스", lat: 50.365, lon: -4.142, curTemp: 15.8, depth: true, net: "Institute/PML" },
+        { name: "Institute of Marine Research (Bergen, Norway)", shortName: "베르겐 IMR", lat: 60.397, lon: 5.324, curTemp: 12.0, depth: true, net: "Institute/Havforskningsinstituttet" },
+        { name: "Alfred Wegener Institute (Bremerhaven, Germany)", shortName: "브레머하펜 AWI", lat: 53.539, lon: 8.581, curTemp: 14.5, depth: true, net: "Institute/AWI" },
+        { name: "IFREMER (Brest, France)", shortName: "브레스트 IFREMER", lat: 48.383, lon: -4.489, curTemp: 15.2, depth: true, net: "Institute/IFREMER" },
+        { name: "NIOZ Royal Netherlands Institute for Sea Research (Texel)", shortName: "텍셀 NIOZ", lat: 53.002, lon: 4.789, curTemp: 15.0, depth: true, net: "Institute/NIOZ" },
+        { name: "IEO Instituto Español de Oceanografía (Vigo, Spain)", shortName: "비고 IEO", lat: 42.238, lon: -8.723, curTemp: 17.0, depth: true, net: "Institute/IEO" },
+        { name: "IPMA Instituto Português do Mar e da Atmosfera (Lisbon)", shortName: "리스본 IPMA", lat: 38.706, lon: -9.135, curTemp: 18.5, depth: true, net: "Institute/IPMA" },
+        { name: "National Institute of Oceanography (Goa, India)", shortName: "고아 NIO", lat: 15.452, lon: 73.805, curTemp: 28.5, depth: true, net: "Institute/NIO" },
+        { name: "Institute of Oceanology, CAS (Qingdao, China)", shortName: "칭다오 IOCAS", lat: 36.067, lon: 120.383, curTemp: 21.5, depth: true, net: "Institute/IOCAS" },
+        { name: "Pacific Oceanological Institute (Vladivostok, Russia)", shortName: "블라디보스토크 POI", lat: 43.115, lon: 131.885, curTemp: 17.0, depth: true, net: "Institute/POI RAS" },
+        { name: "Bedford Institute of Oceanography (Dartmouth, Canada)", shortName: "베드퍼드", lat: 44.674, lon: -63.640, curTemp: 14.0, depth: true, net: "Institute/BIO" },
+        { name: "Instituto Oceanográfico (Santos, Brazil)", shortName: "산투스 해양연구소", lat: -23.960, lon: -46.333, curTemp: 23.5, depth: true, net: "Institute/IO-USP" },
+        { name: "Oceanographic Research Institute (Durban, South Africa)", shortName: "더반 ORI", lat: -29.868, lon: 31.043, curTemp: 22.0, depth: true, net: "Institute/ORI" },
+        { name: "NIWA (Wellington, New Zealand)", shortName: "웰링턴 NIWA", lat: -41.286, lon: 174.777, curTemp: 14.5, depth: true, net: "Institute/NIWA" },
+        { name: "SHOA Servicio Hidrográfico y Oceanográfico (Valparaíso, Chile)", shortName: "발파라이소 SHOA", lat: -33.036, lon: -71.627, curTemp: 14.8, depth: true, net: "Institute/SHOA" },
+        { name: "IMARPE Instituto del Mar del Perú (Callao)", shortName: "카야오 IMARPE", lat: -12.056, lon: -77.148, curTemp: 18.5, depth: true, net: "Institute/IMARPE" },
+        { name: "Kenya Marine and Fisheries Research Institute (Mombasa)", shortName: "몸바사 KMFRI", lat: -4.043, lon: 39.658, curTemp: 27.0, depth: true, net: "Institute/KMFRI" },
+        { name: "Nigerian Institute for Oceanography and Marine Research (Lagos)", shortName: "라고스 NIOMR", lat: 6.455, lon: 3.393, curTemp: 27.5, depth: true, net: "Institute/NIOMR" },
+        { name: "Institute of Marine Sciences (Erdemli, Turkey)", shortName: "에르데믈리", lat: 36.562, lon: 34.254, curTemp: 23.0, depth: true, net: "Institute/IMS-METU" }
       ];
 
       beachSpots.forEach(s => {

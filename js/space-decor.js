@@ -71,15 +71,15 @@
       c.scale(3.4, 1);
 
       let grad = c.createRadialGradient(0, 0, 0, 0, 0, 260);
-      grad.addColorStop(0, 'rgba(255,222,175,0.55)');
-      grad.addColorStop(0.45, 'rgba(255,185,120,0.3)');
+      grad.addColorStop(0, 'rgba(255,222,175,0.22)');
+      grad.addColorStop(0.45, 'rgba(255,185,120,0.12)');
       grad.addColorStop(1, 'rgba(255,185,120,0)');
       c.fillStyle = grad;
       c.beginPath(); c.arc(0, 0, 260, 0, Math.PI * 2); c.fill();
 
       grad = c.createRadialGradient(0, 0, 0, 0, 0, 130);
-      grad.addColorStop(0, 'rgba(255,250,235,0.75)');
-      grad.addColorStop(0.5, 'rgba(255,215,165,0.45)');
+      grad.addColorStop(0, 'rgba(255,250,235,0.32)');
+      grad.addColorStop(0.5, 'rgba(255,215,165,0.18)');
       grad.addColorStop(1, 'rgba(255,200,140,0)');
       c.fillStyle = grad;
       c.beginPath(); c.arc(0, 0, 130, 0, Math.PI * 2); c.fill();
@@ -129,9 +129,17 @@
       return new THREE.Mesh(geometry, material);
     }
 
+    // [CHANGE] "우주는 검은색 베이스에 반짝이는 별들이 있어야해" 요청 반영 -
+    // 그냥 고정된 밝기의 점이 아니라, 별마다 서로 다른 속도/위상으로
+    // 밝기가 은은하게 변하는 실제 "반짝임" 애니메이션을 셰이더로 넣었습니다.
+    // starfieldMaterial을 전역에 저장해두고, 매 프레임 animate()에서
+    // uniforms.time만 갱신하면 됩니다(위치는 안 바뀌니 훨씬 가벼워요).
     function buildStarfield() {
       const count = 3000;
       const positions = new Float32Array(count * 3);
+      const phases = new Float32Array(count);
+      const speeds = new Float32Array(count);
+      const baseSizes = new Float32Array(count);
       for (let i = 0; i < count; i++) {
         const r = 1400 + Math.random() * 400;
         const theta = Math.random() * Math.PI * 2;
@@ -139,11 +147,47 @@
         positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
         positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
         positions[i * 3 + 2] = r * Math.cos(phi);
+        phases[i] = Math.random() * Math.PI * 2;
+        speeds[i] = 0.6 + Math.random() * 1.8;
+        baseSizes[i] = 1.3 + Math.random() * 2.2;
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: true, transparent: true, opacity: 0.85 });
-      return new THREE.Points(geo, mat);
+      geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+      geo.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1));
+      geo.setAttribute('aSize', new THREE.BufferAttribute(baseSizes, 1));
+
+      const material = new THREE.ShaderMaterial({
+        uniforms: { time: { value: 0 } },
+        vertexShader: `
+          attribute float aPhase;
+          attribute float aSpeed;
+          attribute float aSize;
+          varying float vTwinkle;
+          uniform float time;
+          void main() {
+            vTwinkle = 0.55 + 0.45 * sin(time * aSpeed + aPhase);
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            gl_PointSize = aSize * vTwinkle * (900.0 / -mvPosition.z);
+          }
+        `,
+        fragmentShader: `
+          varying float vTwinkle;
+          void main() {
+            vec2 uv = gl_PointCoord - vec2(0.5);
+            float d = length(uv);
+            if (d > 0.5) discard;
+            float alpha = vTwinkle * smoothstep(0.5, 0.0, d);
+            gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
+          }
+        `,
+        transparent: true,
+        depthWrite: false
+      });
+
+      starfieldMaterial = material;
+      return new THREE.Points(geo, material);
     }
 
     function buildSolarSystemDecor(invQuaternion) {
@@ -270,19 +314,28 @@
       // 실제로 화면에서 보니 배경 전체를 뒤덮을 정도로 과했어요. 달(반지름
       // 33, 거리 400 → 겉보기 비율 0.0825)보다 살짝 더 크게만(겉보기 비율
       // 약 0.156, 달의 약 1.9배) 보이도록 다시 줄였습니다.
+      // [CHANGE] "태양 지름 반으로" 요청 반영 - 반지름 140→70으로 축소.
       const pos = latLonToSpherePos(sunLat, sunLon, 900);
 
-      // [FIX] "태양이 달보다 훨씬 작아 보여" - 반지름은 같아도(33) 태양이
-      // 달보다 훨씬 멀리(750 vs 400) 있어서, 실제 화면에 보이는 각크기는
-      // 거리에 반비례해 작아 보였어요. 거리 비율만큼 반지름을 키워서
-      // (33 × 750/400 ≈ 62) 겉보기 크기가 달과 비슷해지도록 맞췄습니다.
-      const halo = createGlowSprite('#ffb35c', 220);
-      halo.position.copy(pos);
-      group.add(halo);
+      // [FIX] "광원 느낌이 없어졌어, 그냥 오렌지 덩어리 같아" - 원인은
+      // createGlowSprite의 기본 블렌딩이 일반 알파블렌딩이라, 후광이
+      // 빛을 "더하는" 게 아니라 그냥 반투명 스티커처럼 겹쳐 보였던
+      // 거예요. 가산(Additive) 블렌딩으로 바꾸고, 바깥의 은은한 주황
+      // 후광 + 안쪽의 밝은 백색-노랑 코어 글로우 두 겹으로 쌓아서
+      // "빛나는 광원" 느낌을 살렸습니다.
+      const outerHalo = createGlowSprite('#ffb35c', 150);
+      outerHalo.position.copy(pos);
+      outerHalo.material.blending = THREE.AdditiveBlending;
+      group.add(outerHalo);
 
-      const geometry = new THREE.SphereGeometry(140, 32, 32);
+      const innerGlow = createGlowSprite('#fff3cf', 80);
+      innerGlow.position.copy(pos);
+      innerGlow.material.blending = THREE.AdditiveBlending;
+      group.add(innerGlow);
+
+      const geometry = new THREE.SphereGeometry(70, 32, 32);
       const sunTexture = buildSunTexture();
-      const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffb066' });
+      const material = new THREE.MeshBasicMaterial({ map: sunTexture, color: '#ffd699' });
       const sunMesh = new THREE.Mesh(geometry, material);
       sunMesh.position.copy(pos);
       group.add(sunMesh);

@@ -12,6 +12,7 @@
     }
 
     let scene, camera, renderer, globeGroup, globeMesh;
+    let starfieldMaterial = null; // [ADD] 별 반짝임 애니메이션 갱신용 참조
     let beachSprites = []; // [ADD] 줌 반응형 마커 크기 조절을 위해 참조 보관
     let selectionMarker = null; // [ADD] 선택된 정점 표시용 통합 마커 (해변/NOAA 공통)
     let gridStationsRef = []; // [ADD] NOAA 격자 정점 클릭 선택용

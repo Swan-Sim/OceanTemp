@@ -314,7 +314,14 @@
 
         // 북극·남극 (각 1곳)
         { name: "Ny-Ålesund (Svalbard, Arctic)", shortName: "니올레순(북극)", lat: 78.923, lon: 11.923, curTemp: 2.0, depth: true, net: "Institute/Arctic" },
-        { name: "McMurdo Station (Antarctica)", shortName: "맥머도(남극)", lat: -77.846, lon: 166.668, curTemp: 0.2, depth: true, net: "Institute/Antarctic" }
+        { name: "McMurdo Station (Antarctica)", shortName: "맥머도(남극)", lat: -77.846, lon: 166.668, curTemp: 0.2, depth: true, net: "Institute/Antarctic" },
+
+        // 필리핀 추가
+        { name: "Panglao Island (Bohol, Philippines)", shortName: "보홀 팡라오", lat: 9.583, lon: 123.75, curTemp: 28.7, depth: true, net: "Beach/PAGASA" },
+        { name: "Moalboal (Cebu, Philippines)", shortName: "모알보알", lat: 9.947, lon: 123.397, curTemp: 28.5, depth: true, net: "Beach/PAGASA" },
+        { name: "Coron (Palawan, Philippines)", shortName: "코론", lat: 12.0, lon: 120.2, curTemp: 28.3, depth: true, net: "Beach/PAGASA" },
+        { name: "Siargao Island (Philippines)", shortName: "시아르가오", lat: 9.858, lon: 126.05, curTemp: 28.6, depth: true, net: "Beach/PAGASA" },
+        { name: "Anilao (Batangas, Philippines)", shortName: "아닐라오", lat: 13.75, lon: 120.9, curTemp: 28.0, depth: true, net: "Beach/PAGASA" }
       ];
 
       beachSpots.forEach(s => {

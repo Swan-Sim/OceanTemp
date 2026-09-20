@@ -120,20 +120,20 @@ function worldPointToLatLon(worldPoint) {
 function computeRotationForLatLon(lat, lon) {
   const L = latLonToSpherePos(lat, lon, 1);
   const candidates = [Math.atan2(L.x, -L.z), Math.atan2(-L.x, L.z)];
-  let best = null;
-  for (const y of candidates) {
+  const options = candidates.map(y => {
     const c2 = Math.cos(y), s2 = Math.sin(y);
     const A = L.z * c2 - L.x * s2;
     const x = Math.atan2(L.y, A);
-    // 검증: 이 (x,y)로 회전했을 때 L이 실제로 (0,0,1) 쪽을 보는지 오차 확인
-    const c1 = Math.cos(x), s1 = Math.sin(x);
-    const rx = L.x * c2 + L.z * s2;
-    const ry = L.x * (s1 * s2) + L.y * c1 + L.z * (-s1 * c2);
-    const rz = L.x * (-c1 * s2) + L.y * s1 + L.z * (c1 * c2);
-    const err = Math.abs(rx) + Math.abs(ry) + Math.abs(rz - 1);
-    if (best === null || err < best.err) best = { x, y, err };
-  }
-  return { x: best.x, y: best.y };
+    return { x, y };
+  });
+  // [FIX] "북극을 넘어서 이동, 북반구가 아래로 가버림" - 두 후보 다
+  // 대상 지점을 정면으로 향하게 하는 수학적으로 유효한 해였는데(둘 다
+  // 오차가 부동소수점 잡음 수준이라 오차 비교로는 구분이 안 됐어요),
+  // 북극이 위/아래 어느 쪽을 향하는지는 서로 정반대였습니다. 북극(로컬
+  // (0,1,0))이 이 회전 후 실제로 위쪽(+y)을 향하는 조건은 cos(x)>0과
+  // 같아서, 그 조건을 만족하는 해를 명시적으로 고릅니다.
+  const upright = options.find(o => Math.cos(o.x) > 0) || options[0];
+  return { x: upright.x, y: upright.y };
 }
 
 function getCurrentCenterLatLng() {

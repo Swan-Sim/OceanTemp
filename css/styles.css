@@ -147,18 +147,21 @@
       text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
   
-    /* [ADD] 가로 모드에서는 상단(지구본)+하단(그래프) 2단 레이아웃이
-       세로 폭 부족으로 거의 쓸 수 없어서, 모바일 가로모드일 때
-       전체를 가리고 세로로 돌려달라는 안내만 보여줍니다. */
-    .rotate-overlay { display: none; }
-    @media (orientation: landscape) and (max-height: 500px) {
-      body > header, body > main { display: none; }
-      .rotate-overlay {
-        display: flex; position: fixed; inset: 0; z-index: 9999;
-        background: #010409; color: #e2e8f0;
-        flex-direction: column; align-items: center; justify-content: center;
-        text-align: center; padding: 24px; gap: 14px;
+    /* [CHANGE] "가로모드도 지원하자" 요청 반영 - 예전엔 가로모드(세로 폭이
+       좁은 모바일 화면)를 아예 막고 세로로 돌려달라고만 안내했는데, 이제는
+       지구본을 전체화면으로 보여주고 그래프 패널을 우측 하단에 화면의
+       40%×40% 크기 플로팅 창으로 띄웁니다. 세로 비율이 긴 화면(일반적인
+       세로 모드, 그리고 창이 충분히 큰 데스크톱)은 지금처럼 위/아래로
+       쌓인 레이아웃을 그대로 씁니다.
+       max-height 기준은 일반 폰/작은 태블릿 가로모드를 겨냥한 것으로,
+       데스크톱 창처럼 충분히 큰 화면에는 적용되지 않습니다. */
+    .rotate-overlay { display: none !important; }
+    @media (orientation: landscape) and (max-height: 700px) {
+      #viewport-container { flex: 1 1 100% !important; }
+      #bottom-sheet {
+        position: absolute; right: 10px; bottom: 10px;
+        width: 40vw; height: 40vh; min-width: 220px; min-height: 160px;
+        border-radius: 12px !important; z-index: 90;
+        box-shadow: 0 6px 28px rgba(0,0,0,0.65);
       }
-      .rotate-overlay .icon { font-size: 42px; }
-      .rotate-overlay .msg { font-size: 15px; max-width: 28ch; line-height: 1.5; color: #cbd5e1; }
     }

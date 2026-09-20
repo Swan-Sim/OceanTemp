@@ -36,6 +36,35 @@
       return sprite;
     }
 
+    // [ADD] "달이 발광하고 있어서 태양이랑 헷갈려" - 다른 행성들과 같은
+    // 발광 글로우 텍스처 대신, 달만 매트한 회색 표면 + 크레이터 느낌의
+    // 얼룩을 넣어서 "빛나는 것"이 아니라 "빛을 반사하는 돌덩이"처럼 보이게 합니다.
+    function createMoonSprite(sizePx) {
+      const cvs = document.createElement('canvas');
+      cvs.width = 128; cvs.height = 128;
+      const c = cvs.getContext('2d');
+      const cx = 64, cy = 64, r = 54;
+
+      const grad = c.createRadialGradient(cx - 16, cy - 16, 6, cx, cy, r);
+      grad.addColorStop(0, '#ececeb');
+      grad.addColorStop(0.55, '#c4c4c2');
+      grad.addColorStop(1, '#8d8d8b');
+      c.beginPath();
+      c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.fillStyle = grad;
+      c.fill();
+
+      c.fillStyle = 'rgba(110,110,108,0.4)';
+      [[cx - 14, cy + 12, 11], [cx + 16, cy - 8, 8], [cx + 2, cy + 22, 6], [cx - 24, cy - 14, 5], [cx + 20, cy + 16, 5]]
+        .forEach(([x, y, rr]) => { c.beginPath(); c.arc(x, y, rr, 0, Math.PI * 2); c.fill(); });
+
+      const moonTexture = new THREE.CanvasTexture(cvs);
+      const moonMaterial = new THREE.SpriteMaterial({ map: moonTexture, transparent: true, depthWrite: false });
+      const moonSprite2 = new THREE.Sprite(moonMaterial);
+      moonSprite2.scale.set(sizePx, sizePx, 1);
+      return moonSprite2;
+    }
+
     // [ADD] 은하수(밀키웨이) 배경띠. 별과 마찬가지로 scene에 붙여서
     // 지구를 드래그해도 같이 돌지 않고 고정된 먼 배경으로 유지합니다.
     function buildMilkyWayGlowTexture() {
@@ -194,7 +223,7 @@
       venusSprite.position.copy(latLonToSpherePos(sun.lat - 6, sun.lon + 13, 600));
       group.add(venusSprite);
 
-      const moonSprite = createGlowSprite('#e0e0e0', 95);
+      const moonSprite = createMoonSprite(95);
       moonSprite.position.copy(latLonToSpherePos(moon.lat, moon.lon, 400));
       group.add(moonSprite);
 

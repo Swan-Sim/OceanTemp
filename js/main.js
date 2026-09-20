@@ -67,7 +67,12 @@
 
       // 3) 가능하면 내 위치 방향을 목표로, 아니면 기본(태평양) 방향으로 줌인 전환.
       // 위치 요청은 최대 3초만 기다리고 그 안에 응답이 없으면 기본 방향으로 진행합니다.
-      let targetX = 0.35, targetY = -2.1;
+      // [CHANGE] "초기 화면이 아프리카" - 기본(위치 정보 없을 때) 방향을
+      // 한국과 캘리포니아가 함께 보이는 북태평양 중심(위도 35, 경도 -175
+      // 부근)으로 바꿨습니다. computeRotationForLatLon으로 실제 계산해서
+      // 구하기 때문에 항상 북반구가 위로 오는 게 보장됩니다.
+      const defaultView = computeRotationForLatLon(35, -175);
+      let targetX = defaultView.x, targetY = defaultView.y;
       if (navigator.geolocation) {
         try {
           const pos = await new Promise((resolve, reject) => {

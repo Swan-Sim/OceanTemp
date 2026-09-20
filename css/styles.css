@@ -156,12 +156,16 @@
        max-height 기준은 일반 폰/작은 태블릿 가로모드를 겨냥한 것으로,
        데스크톱 창처럼 충분히 큰 화면에는 적용되지 않습니다. */
     .rotate-overlay { display: none !important; }
-    @media (orientation: landscape) and (max-height: 700px) {
-      #viewport-container { flex: 1 1 100% !important; }
+    /* [CHANGE] "그래프 창이 너무 작고 버튼을 덮는다 - 그냥 우측 40% 쓰게 해.
+       웹페이지에서도 똑같이" 요청 반영. 떠 있는 작은 박스 대신, 가로 비율이
+       긴 화면(모바일 가로모드든 데스크톱 창이든 상관없이)에서는 지구본
+       60% + 그래프 40%를 좌우로 나란히, 각각 화면 전체 높이로 씁니다. */
+    @media (orientation: landscape) {
+      main { flex-direction: row; }
+      #viewport-container { flex: 0 0 60%; height: 100%; }
       #bottom-sheet {
-        position: absolute; right: 10px; bottom: 10px;
-        width: 40vw; height: 40vh; min-width: 220px; min-height: 160px;
-        border-radius: 12px !important; z-index: 90;
-        box-shadow: 0 6px 28px rgba(0,0,0,0.65);
+        flex: 0 0 40%; height: 100%;
+        border-radius: 0; box-shadow: none;
+        border-top: none; border-left: 1px solid #1e293b;
       }
     }

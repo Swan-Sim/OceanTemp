@@ -39,32 +39,6 @@
     // [ADD] "달이 발광하고 있어서 태양이랑 헷갈려" - 다른 행성들과 같은
     // 발광 글로우 텍스처 대신, 달만 매트한 회색 표면 + 크레이터 느낌의
     // 얼룩을 넣어서 "빛나는 것"이 아니라 "빛을 반사하는 돌덩이"처럼 보이게 합니다.
-    function createMoonSprite(sizePx) {
-      const cvs = document.createElement('canvas');
-      cvs.width = 128; cvs.height = 128;
-      const c = cvs.getContext('2d');
-      const cx = 64, cy = 64, r = 54;
-
-      const grad = c.createRadialGradient(cx - 16, cy - 16, 6, cx, cy, r);
-      grad.addColorStop(0, '#ececeb');
-      grad.addColorStop(0.55, '#c4c4c2');
-      grad.addColorStop(1, '#8d8d8b');
-      c.beginPath();
-      c.arc(cx, cy, r, 0, Math.PI * 2);
-      c.fillStyle = grad;
-      c.fill();
-
-      c.fillStyle = 'rgba(110,110,108,0.4)';
-      [[cx - 14, cy + 12, 11], [cx + 16, cy - 8, 8], [cx + 2, cy + 22, 6], [cx - 24, cy - 14, 5], [cx + 20, cy + 16, 5]]
-        .forEach(([x, y, rr]) => { c.beginPath(); c.arc(x, y, rr, 0, Math.PI * 2); c.fill(); });
-
-      const moonTexture = new THREE.CanvasTexture(cvs);
-      const moonMaterial = new THREE.SpriteMaterial({ map: moonTexture, transparent: true, depthWrite: false });
-      const moonSprite2 = new THREE.Sprite(moonMaterial);
-      moonSprite2.scale.set(sizePx, sizePx, 1);
-      return moonSprite2;
-    }
-
     // [ADD] 은하수(밀키웨이) 배경띠. 별과 마찬가지로 scene에 붙여서
     // 지구를 드래그해도 같이 돌지 않고 고정된 먼 배경으로 유지합니다.
     function buildMilkyWayGlowTexture() {
@@ -204,6 +178,54 @@
     // 하면 지구를 드래그로 돌려도 태양/달이 실제로 비추는 지점과 항상
     // 일치하게 따라다녀요. 수성·금성은 실제 궤도 계산까지는 안 하지만,
     // "태양 근처"라는 사실만큼은 실제 태양 방향 근처에 배치해서 지킵니다.
+    // [ADD] "달 표면이 너무 인위적이야 - 실제 보름달 이미지를 입혀" 요청
+    // 반영. 손으로 그린 캔버스 대신 실제 달 사진 텍스처를 입힌 3D 구체로
+    // 바꿨습니다. 지구 그림자와 똑같은 태양 방향(sunDirLocal)을 재사용해서
+    // 위상(빛 받는 면/그림자 진 면)도 표현했어요 - 태양이 지구·달보다
+    // 훨씬 멀리 있어서 "지구에서 본 태양 방향"과 "달에서 본 태양 방향"은
+    // 거의 같다고 봐도 되기 때문에, 별도 계산 없이 같은 방향을 그대로
+    // 씁니다. 구체 하나 + 셰이더 오버레이 하나 정도라 성능 부담은 거의 없어요.
+    function buildRealMoon(moonLat, moonLon, sunDirLocal) {
+      const group = new THREE.Group();
+      const radius = 46;
+
+      const geometry = new THREE.SphereGeometry(radius, 32, 32);
+      const textureLoader = new THREE.TextureLoader();
+      const moonTexture = textureLoader.load('https://threejs.org/examples/textures/planets/moon_1024.jpg');
+      const material = new THREE.MeshBasicMaterial({ map: moonTexture });
+      const moonMesh = new THREE.Mesh(geometry, material);
+      group.add(moonMesh);
+
+      // 달의 위상(그림자 진 면) - 지구 낮/밤 그림자와 같은 기법, 같은 태양 방향
+      const shadowGeometry = new THREE.SphereGeometry(radius * 1.02, 32, 32);
+      const shadowMaterial = new THREE.ShaderMaterial({
+        uniforms: { sunDir: { value: sunDirLocal.clone().normalize() } },
+        vertexShader: `
+          varying vec3 vNormal;
+          void main() {
+            vNormal = normal;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vNormal;
+          uniform vec3 sunDir;
+          void main() {
+            float facing = dot(normalize(vNormal), normalize(sunDir));
+            float night = smoothstep(0.12, -0.12, facing);
+            gl_FragColor = vec4(0.0, 0.0, 0.01, night * 0.88);
+          }
+        `,
+        transparent: true,
+        depthWrite: false
+      });
+      const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
+      group.add(shadowMesh);
+
+      group.position.copy(latLonToSpherePos(moonLat, moonLon, 400));
+      return group;
+    }
+
     function buildRealSunAndMoon() {
       const now = new Date();
       const sun = computeSubsolarPoint(now);
@@ -223,12 +245,11 @@
       venusSprite.position.copy(latLonToSpherePos(sun.lat - 6, sun.lon + 13, 600));
       group.add(venusSprite);
 
-      const moonSprite = createMoonSprite(95);
-      moonSprite.position.copy(latLonToSpherePos(moon.lat, moon.lon, 400));
-      group.add(moonSprite);
-
-      // 낮/밤 그림자 셰이더에 넘길 "태양 방향(로컬 단위벡터)"도 같이 반환
+      // 낮/밤 그림자 셰이더에 넘길 "태양 방향(로컬 단위벡터)" - 달 위상에도 재사용
       const sunDirLocal = latLonToSpherePos(sun.lat, sun.lon, 1);
+
+      group.add(buildRealMoon(moon.lat, moon.lon, sunDirLocal));
+
       return { group, sunDirLocal };
     }
 

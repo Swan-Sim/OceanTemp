@@ -51,24 +51,27 @@
       // 결과가 나와 있어서 따로 기다릴 필요가 거의 없어요.
       setupBootLocationWidget();
 
-      // 2) 정점 생성 + 실데이터 검증 (백그라운드)
+      // 2) 정점 생성 (동기, 빠름) - 이제 실데이터 검증을 기다리지 않고
+      // 바로 그립니다. curTemp는 생성 시 이미 계산돼 있던 추정값(위도
+      // 기반 계절 공식)을 그대로 씁니다.
       stations = generateBeachStations();
       const gridStations = generateOceanGridStations();
       stations = stations.concat(gridStations);
       fullGridLoaded = true;
+      refreshMaxTempStation(); // 추정값 기준으로 일단 계산 - 백그라운드 검증 끝나면 다시 갱신됨
 
-      if (counter) counter.innerText = '해양 데이터 확인 중...';
-      try {
-        stations = await removeStationsWithNoData(stations, (done, total) => {
-          if (counter) counter.innerText = `해양 데이터 확인 중... (${done}/${total})`;
-          updateBootProgress(done, total);
-        });
-      } catch (e) {
-        console.warn('[bootApp] 정점 검증 중 오류, 전체 목록 유지:', e);
-      }
-
-      refreshMaxTempStation();
-      await addStationLayers();
+      // [CHANGE] "네트워크 검증 기다리지 말고 추정값으로 바로 그리자"
+      // 요청 반영 - 예전엔 여기서 removeStationsWithNoData()로 전체
+      // 정점(~28배치)의 실데이터를 다 받아올 때까지 기다렸다가 그렸는데,
+      // 그 대기 시간이 체감 로딩의 대부분이었어요. 이제 그 기다림 자체를
+      // 없애고, 추정값으로 즉시 그린 뒤 실데이터는 화면이 이미 다 보이는
+      // 상태에서 백그라운드로 천천히 채웁니다(validateStationsInBackground,
+      // 아래 참고).
+      if (counter) counter.innerText = '정점 배치 중...';
+      await addStationLayers((done, total) => {
+        if (counter) counter.innerText = `정점 배치 중... (${done}/${total})`;
+        updateBootProgress(done, total);
+      });
       finishBootTextSequence();
 
       // 3) 위치 선택 결과 대기 (이미 끝나있을 가능성이 높음) 후 그 방향으로 줌인 전환
@@ -93,6 +96,11 @@
           selectStation(searchedStation);
           showDetailMap(searchedStation.coords[1], searchedStation.coords[0], 8);
         }
+
+        // [ADD] "실데이터는 백그라운드로 천천히" - 화면이 이미 다 보이는
+        // 상태에서 조용히 시작합니다. 절대 화면을 막지 않고, 완료돼도
+        // 아무 알림 없이 색만 조용히 갱신됩니다.
+        validateStationsInBackground().catch(e => console.warn('[bootApp] 백그라운드 검증 중 오류:', e));
       });
     }
 

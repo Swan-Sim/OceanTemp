@@ -448,66 +448,41 @@ function getCurrentCenterLatLng() {
       return new THREE.Mesh(geometry, material);
     }
 
-    // [FIX] "여전히 94%에서 브라우저가 먹통이 됨" - 진짜 원인을 다시
-    // 찾았어요. 지난번엔 addStationLayers()의 다른 부분(해변 스프라이트
-    // 생성)만 청크로 나눴는데, 정작 이 함수가 훨씬 더 무거웠어요: 320×160
-    // 픽셀마다 해변 정점 340여 개까지의 거리를 전부 계산하는 IDW 보간이라
-    // 총 약 1700만 번의 거리 계산이 통째로 동기 실행되고 있었습니다.
-    // 20줄씩 처리하고 브라우저에게 제어권을 넘기는 방식으로 바꿨어요 -
-    // 결과물(픽셀 값)은 완전히 동일하고, 계산이 여러 프레임에 걸쳐
-    // 나뉘어 실행될 뿐입니다.
-    async function buildHeatOverlayTexture() {
-      const W = 320, H = 160;
-      const canvas = document.createElement('canvas');
-      canvas.width = W; canvas.height = H;
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, W, H);
-
-      const pts = stations.filter(s => s.isBeach).map(s => ({ lat: s.coords[1], lon: s.coords[0], temp: s.curTemp }));
-
-      for (let py = 0; py < H; py++) {
-        const lat = 90 - (py + 0.5) / H * 180;
-        for (let px = 0; px < W; px++) {
-          const lon = (px + 0.5) / W * 360 - 180;
-          if (isOnLand(lon, lat)) continue;
-
-          let ambient = 31.0 - Math.abs(lat) * 0.45;
-          if (lat >= 22 && lat <= 28 && lon >= 48 && lon <= 56) ambient += 6.5; // 페르시아만 예시 보정
-          // [ADD] 격자 정점 생성 공식과 동일한 니뇨 3.4 구역 엘니뇨 예시 보정 (동기화 유지)
-          if (Math.abs(lat) <= 5 && lon >= -170 && lon <= -120) ambient += 2.2;
-
-          let wSum = 0, tSum = 0, nearest = Infinity;
-          for (let i = 0; i < pts.length; i++) {
-            const dLat = lat - pts[i].lat;
-            // [FIX] "뉴질랜드 옆에 세로줄" - 경도차를 그냥 뺄셈으로 구하면
-            // 날짜변경선(180도) 근처에서 실제로는 몇 도 안 떨어진 두 지점이
-            // 350도 넘게 떨어진 것처럼 계산돼서, 그 지점 정점들의 영향력이
-            // 사실상 0이 되어버렸어요(뉴질랜드가 딱 그 경계에 걸쳐 있습니다).
-            // -180~180 범위로 정규화해서 "짧은 쪽" 거리를 쓰도록 고쳤습니다.
-            let dLon = lon - pts[i].lon;
-            if (dLon > 180) dLon -= 360;
-            if (dLon < -180) dLon += 360;
-            const d = Math.sqrt(dLat * dLat + dLon * dLon);
-            if (d < nearest) nearest = d;
-            const w = 1 / Math.pow(d + 1, 2);
-            wSum += w; tSum += w * pts[i].temp;
-          }
-          const idw = wSum > 0 ? tSum / wSum : ambient;
-          const influence = Math.max(0, Math.min(1, 1 - nearest / 35));
-          const finalTemp = ambient * (1 - influence) + idw * influence;
-
-          ctx.fillStyle = `rgba(${getTempColor(finalTemp)}, 1)`;
-          ctx.fillRect(px, py, 1, 1);
-        }
-        // [ADD] 20줄마다 한 번씩 브라우저에게 제어권을 넘겨서 그 사이
-        // 입력(클릭/타이핑)과 화면 갱신을 처리할 수 있게 합니다.
-        if (py % 20 === 19) await new Promise(resolve => setTimeout(resolve, 0));
+    // [CHANGE] "지구 표면 색상(매끈한 히트 오버레이) 빼고 구름 넣자" 요청
+    // 반영 - 1700만 번 거리 계산을 하던 무거운 buildHeatOverlayTexture를
+    // 완전히 없앴습니다. 대신 정점 데이터와 전혀 무관한(그래서 API 상태와
+    // 상관없이 즉시 뜨는) 가벼운 절차적 구름 레이어를 추가했어요 - 실시간
+    // 위성사진 느낌을 주면서도 데이터를 기다릴 필요가 없습니다.
+    function buildCloudTexture() {
+      const W = 512, H = 256;
+      const cvs = document.createElement('canvas');
+      cvs.width = W; cvs.height = H;
+      const c = cvs.getContext('2d');
+      c.clearRect(0, 0, W, H);
+      for (let i = 0; i < 220; i++) {
+        const x = Math.random() * W;
+        const y = Math.random() * H;
+        const r = 8 + Math.random() * 22;
+        const alpha = 0.12 + Math.random() * 0.18;
+        const grad = c.createRadialGradient(x, y, 0, x, y, r);
+        grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = grad;
+        c.beginPath();
+        c.arc(x, y, r, 0, Math.PI * 2);
+        c.fill();
       }
+      return new THREE.CanvasTexture(cvs);
+    }
 
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      return texture;
+    function buildCloudLayer() {
+      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.012, 64, 64);
+      const material = new THREE.MeshBasicMaterial({
+        map: buildCloudTexture(), transparent: true, depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.renderOrder = 1; // 낮/밤 그림자·라벨보다는 아래, 지구 표면보다는 위
+      return mesh;
     }
 
     // [CHANGE] "로딩 화면 만들어서 작은 지구만 먼저 보여주자" 요청 반영 -
@@ -578,6 +553,13 @@ function getCurrentCenterLatLng() {
       atmosphereMesh.renderOrder = 4;
       globeGroup.add(atmosphereMesh);
 
+      // [ADD] "색상 빼고 구름 넣자" - 정점 데이터와 무관해서 API 상태와
+      // 상관없이 바로 뜨는 구름 레이어. 지구 자체(사용자 드래그)와는
+      // 별개로 아주 천천히 자체적으로도 흘러가게 해서 "살아있는 행성"
+      // 느낌을 더합니다.
+      cloudMesh = buildCloudLayer();
+      globeGroup.add(cloudMesh);
+
       // 태평양 방면 기본 회전
       globeGroup.rotation.set(0.35, -2.1, 0);
 
@@ -585,6 +567,7 @@ function getCurrentCenterLatLng() {
 
       function animate() {
         requestAnimationFrame(animate);
+        if (cloudMesh) cloudMesh.rotation.y += 0.0003;
         renderer.render(scene, camera);
       }
       animate();
@@ -604,20 +587,13 @@ function getCurrentCenterLatLng() {
       return new Promise(resolve => setTimeout(resolve, 0));
     }
 
-    async function addStationLayers() {
+    // [CHANGE] "색상은 추정값으로 먼저 칠하고 실데이터는 클릭 시/백그라운드로"
+    // 요청 반영 - 이제 네트워크 검증을 전혀 기다리지 않고, 정점 생성 시
+    // 이미 계산돼 있던 추정 온도(curTemp)로 바로 그립니다. 실데이터는
+    // 부팅이 끝난 뒤 백그라운드에서 validateStationsInBackground()가
+    // 따라오면서 이 자리에 이미 그려진 색만 조용히 고쳐줍니다.
+    async function addStationLayers(onProgress) {
       document.getElementById('point-counter').innerText = t.stationCount(stations.length);
-
-      // [ADD] 히트필드는 해변(실제 지명) 정점만으로 계산합니다 -
-      // 격자 정점까지 넣으면 IDW 보간 계산량이 커져서 무겁고, 의미도 크게
-      // 달라지지 않아요. 바다 위에 덧씌우는 부드러운 수온 색상 필드
-      // (windy.com/earth.nullschool 느낌)
-      const heatTexture = await buildHeatOverlayTexture();
-      const heatGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.15, 64, 64);
-      const heatMaterial = new THREE.MeshBasicMaterial({ map: heatTexture, transparent: true, depthWrite: false });
-      const heatMesh = new THREE.Mesh(heatGeometry, heatMaterial);
-      heatMesh.renderOrder = 1;
-      globeGroup.add(heatMesh);
-      await yieldToMain();
 
       const gridStations = stations.filter(s => !s.isBeach);
 
@@ -627,8 +603,11 @@ function getCurrentCenterLatLng() {
       const dummy = new THREE.Object3D();
       const colorHelper = new THREE.Color();
       gridStations.forEach((st, i) => {
+        st.__gridIndex = i; // [ADD] 백그라운드 검증에서 이 정점의 InstancedMesh
+        // 자리를 O(1)로 바로 찾기 위해 저장해둡니다 (매번 배열을 뒤지지 않도록)
         const pos = latLonToSpherePos(st.coords[1], st.coords[0], GLOBE_RADIUS + 0.25);
         dummy.position.copy(pos);
+        dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
         instancedDots.setMatrixAt(i, dummy.matrix);
         colorHelper.setStyle(`rgb(${getTempColor(st.curTemp)})`);
@@ -647,9 +626,9 @@ function getCurrentCenterLatLng() {
 
       // 해변 정점 (사람이 알아보는 지명 - 스프라이트로 표시)
       // [FIX] "정점 텍스트가 바다색 아래로 들어감 / 저녁에 어두워짐" - 둘 다
-      // 같은 원인이었어요. heatMesh(=1)/warmGlow(=2)/shadow(=3)/atmosphere(=4)는
+      // 같은 원인이었어요. warmGlow(=2)/shadow(=3)/atmosphere(=4)는
       // renderOrder를 지정했는데 정작 라벨 스프라이트엔 안 줬어서 기본값 0으로
-      // "가장 먼저" 그려졌고, 그 위에 바다색·그림자가 나중에 덧그려지면서
+      // "가장 먼저" 그려졌고, 그 위에 그림자가 나중에 덧그려지면서
       // 라벨을 가려버렸던 거예요(밤에는 그림자가 진하니 더 두드러졌고요).
       // 라벨을 그 무엇보다도 나중에(맨 위에) 그리도록 renderOrder를 높게 줍니다.
       const beachStations = stations.filter(d => d.isBeach);
@@ -659,6 +638,7 @@ function getCurrentCenterLatLng() {
         sprite.renderOrder = 10;
         beachSprites.push(sprite);
         globeGroup.add(sprite);
+        if (onProgress) onProgress(i + 1, beachStations.length);
         // [ADD] 40개마다 한 번씩 브라우저에게 제어권을 넘겨서 그 사이
         // 입력(클릭/타이핑)을 처리할 수 있게 합니다.
         if (i % 40 === 39) await yieldToMain();
@@ -671,6 +651,65 @@ function getCurrentCenterLatLng() {
 
       const defaultSpot = stations.find(s => s.name.includes("Ocean Beach")) || stations[0];
       selectStation(defaultSpot);
+    }
+
+    // [ADD] "추정값으로 먼저 칠하고 실데이터는 백그라운드로 천천히" 요청
+    // 반영 - 부팅이 끝난 뒤(화면이 이미 다 보이는 상태에서) 호출됩니다.
+    // 이미 그려진 격자 점 색깔을 실데이터가 도착하는 대로 그 자리에서
+    // 고쳐주기만 해서, 사용자는 로딩을 기다리지 않아도 됩니다. 격자
+    // 정점 중 실제로 데이터가 없는 곳(육지 근처 등)은 조용히 숨기고,
+    // 해변 정점은 실제 지명이라 검증에 실패해도 계속 보여줍니다(그
+    // 정점을 클릭하면 그때 다시 한번 개별적으로 시도해요).
+    async function validateStationsInBackground() {
+      const CHUNK = 90;
+      const chunks = [];
+      for (let i = 0; i < stations.length; i += CHUNK) chunks.push(stations.slice(i, i + CHUNK));
+
+      const dummy = new THREE.Object3D();
+      const colorHelper = new THREE.Color();
+      let colorDirty = false, matrixDirty = false;
+
+      function flush() {
+        if (!instancedDotsRef) return;
+        if (colorDirty) { instancedDotsRef.instanceColor.needsUpdate = true; colorDirty = false; }
+        if (matrixDirty) { instancedDotsRef.instanceMatrix.needsUpdate = true; matrixDirty = false; }
+      }
+
+      const CONCURRENCY = 4;
+      for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+        const batch = chunks.slice(i, i + CONCURRENCY);
+        await Promise.all(batch.map(async (chunk) => {
+          let results;
+          try {
+            results = await batchCheckHasData(chunk);
+          } catch (e) {
+            return; // 이 묶음은 실패 - 남은 정점은 추정값 그대로 둠(다음 클릭 시 개별 재시도됨)
+          }
+          chunk.forEach((st, idx) => {
+            const r = results[idx];
+            if (r.ok && r.temp != null) {
+              st.curTemp = +r.temp.toFixed(1);
+              st._liveCurrentVerified = true;
+              if (typeof st.__gridIndex === 'number' && instancedDotsRef) {
+                colorHelper.setStyle(`rgb(${getTempColor(st.curTemp)})`);
+                instancedDotsRef.setColorAt(st.__gridIndex, colorHelper);
+                colorDirty = true;
+              }
+            } else if (!r.ok && typeof st.__gridIndex === 'number' && instancedDotsRef) {
+              // 격자 정점인데 실제로 이 지점엔 데이터가 없음 - 크기를 0으로 줄여서 숨김
+              dummy.position.set(0, 0, 0);
+              dummy.scale.set(0, 0, 0);
+              dummy.updateMatrix();
+              instancedDotsRef.setMatrixAt(st.__gridIndex, dummy.matrix);
+              matrixDirty = true;
+            }
+          });
+        }));
+        flush();
+        await yieldToMain();
+      }
+      flush();
+      refreshMaxTempStation();
     }
 
     // [ADD] "로딩 끝나면 화면 회전하면서 지구로 줌인" 요청 반영 - 멀리서

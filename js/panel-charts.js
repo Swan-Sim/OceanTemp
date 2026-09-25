@@ -176,6 +176,7 @@
       } catch (e) {
         console.warn('[hourly] 수온·조석 데이터 가져오기 실패:', e);
         st._hourlyState = 'failed';
+        st._hourlyError = e && e.code;
       }
       if (selectedStation === st && activeMode === 'now') updateChart();
     }
@@ -201,9 +202,14 @@
       const st = selectedStation;
       const d = st._hourlyCache;
       if (!d) {
+        if (!st._userRequested) {
+          legendBox.innerHTML = `<div class="item" style="color:#94a3b8;">👆 ${t.tapToLoad}</div>`;
+          chartInstance = null;
+          return;
+        }
         if (!st._hourlyState) ensureHourlyData(st);
         legendBox.innerHTML = st._hourlyState === 'failed'
-          ? `<div class="item" style="color:#94a3b8;">⚠ ${t.nowFailed}</div>`
+          ? `<div class="item" style="color:#94a3b8;">⚠ ${st._hourlyError === 'DAILY_LIMIT' ? t.nowDailyLimit : t.nowFailed}</div>`
           : `<div class="item" style="color:#facc15;">⏳ ${t.nowLoading}</div>`;
         chartInstance = null;
         return;
@@ -400,8 +406,13 @@
       }
     }
 
-    async function selectStation(st) {
+    // [CHANGE] "값을 미리 불러오지 마, 사람들이 클릭했을 때만" - opts.auto가
+    // true면(앱이 처음 켜질 때 기본 정점을 자동으로 고른 경우) Open-Meteo를
+    // 부르지 않고 "클릭하면 불러와요" 안내만 보여줍니다. 사람이 정점을
+    // 누르거나, 검색하거나, 탭을 누른 순간부터 그 정점의 값을 불러와요.
+    async function selectStation(st, opts) {
       selectedStation = st;
+      if (!(opts && opts.auto)) st._userRequested = true;
       const isHotspot = maxTempStation && maxTempStation.id === st.id;
       document.getElementById('st-name').innerText = `${st.name} ${isHotspot ? `🔥 [${t.hotspot}]` : ''}`;
       document.getElementById('st-temp').innerText = formatTemp(st.curTemp);
@@ -431,7 +442,7 @@
       // 한 번 성공한 정점은 세션 내내 캐시돼서 재선택 시 다시 안 불러와요.
       // [CHANGE] 90일 실데이터(요청 2건)는 그 탭을 볼 때만 불러옵니다 -
       // Open-Meteo 요청 한도를 아끼려고요. 첫 탭(±2일)은 renderNowChart가 따로 불러요.
-      if (activeMode === 'forecast') ensureLiveData(st);
+      if (activeMode === 'forecast' && st._userRequested) ensureLiveData(st);
     }
 
     async function ensureLiveData(st) {
@@ -450,6 +461,7 @@
 
     function setMode(mode) {
       activeMode = mode;
+      if (selectedStation) selectedStation._userRequested = true; // 탭을 누른 것도 사용자 요청
       // 수온·조석 실패 상태에서 탭을 다시 누르면 재시도
       if (mode === 'now' && selectedStation && selectedStation._hourlyState === 'failed') selectedStation._hourlyState = undefined;
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));

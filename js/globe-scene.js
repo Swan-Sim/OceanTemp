@@ -903,7 +903,9 @@ function getCurrentCenterLatLng() {
       globeGroup.add(selectionMarker);
 
       const defaultSpot = stations.find(s => s.name.includes("Ocean Beach")) || stations[0];
-      selectStation(defaultSpot);
+      // [CHANGE] "값을 미리 불러오지 마, 클릭했을 때만" - 처음 화면에 보여주는
+      // 기본 정점은 자동 선택이라 Open-Meteo를 부르지 않습니다(auto: true).
+      selectStation(defaultSpot, { auto: true });
     }
 
     // [ADD] "추정값으로 먼저 칠하고 실데이터는 백그라운드로 천천히" 요청
@@ -916,63 +918,17 @@ function getCurrentCenterLatLng() {
     async function validateStationsInBackground() {
       // [FIX] "조석이 계속 로딩" 근본 원인 수정 - 정점 1,500개를 Open-Meteo로
       // 확인하던 걸(요청 한도 초과의 원인) 위성 수온 격자 한 번으로 대체합니다.
-      // 격자를 못 받았을 때만 예전 방식(Open-Meteo 배치 확인)으로 돌아가요.
+      // (Open-Meteo는 앱을 켤 때 전혀 부르지 않아요 - 정점을 클릭했을 때만)
       try {
         const grid = await getSstGrid();
         applySstGridToStations(grid);
         return;
       } catch (e) {
-        console.warn('[validate] 위성 수온 격자 실패 → Open-Meteo 배치 확인으로 대체:', e.message);
+        // [CHANGE] "값을 미리 불러오지 마" - 격자를 못 받아도 예전처럼 정점
+        // 1,500개를 Open-Meteo로 한꺼번에 확인하지 않고, 추정값 그대로 둡니다.
+        // 실제 값은 사용자가 정점을 클릭했을 때만 불러와요.
+        console.warn('[validate] 위성 수온 격자 실패 - 정점은 추정값으로 둡니다:', e.message);
       }
-      const CHUNK = 90;
-      const chunks = [];
-      for (let i = 0; i < stations.length; i += CHUNK) chunks.push(stations.slice(i, i + CHUNK));
-
-      const dummy = new THREE.Object3D();
-      const colorHelper = new THREE.Color();
-      let colorDirty = false, matrixDirty = false;
-
-      function flush() {
-        if (!instancedDotsRef) return;
-        if (colorDirty) { instancedDotsRef.instanceColor.needsUpdate = true; colorDirty = false; }
-        if (matrixDirty) { instancedDotsRef.instanceMatrix.needsUpdate = true; matrixDirty = false; }
-      }
-
-      const CONCURRENCY = 4;
-      for (let i = 0; i < chunks.length; i += CONCURRENCY) {
-        const batch = chunks.slice(i, i + CONCURRENCY);
-        await Promise.all(batch.map(async (chunk) => {
-          let results;
-          try {
-            results = await batchCheckHasData(chunk);
-          } catch (e) {
-            return; // 이 묶음은 실패 - 남은 정점은 추정값 그대로 둠(다음 클릭 시 개별 재시도됨)
-          }
-          chunk.forEach((st, idx) => {
-            const r = results[idx];
-            if (r.ok && r.temp != null) {
-              st.curTemp = +r.temp.toFixed(1);
-              st._liveCurrentVerified = true;
-              if (typeof st.__gridIndex === 'number' && instancedDotsRef) {
-                colorHelper.setStyle(`rgb(${getTempColor(st.curTemp)})`);
-                instancedDotsRef.setColorAt(st.__gridIndex, colorHelper);
-                colorDirty = true;
-              }
-            } else if (!r.ok && typeof st.__gridIndex === 'number' && instancedDotsRef) {
-              // 격자 정점인데 실제로 이 지점엔 데이터가 없음 - 크기를 0으로 줄여서 숨김
-              dummy.position.set(0, 0, 0);
-              dummy.scale.set(0, 0, 0);
-              dummy.updateMatrix();
-              instancedDotsRef.setMatrixAt(st.__gridIndex, dummy.matrix);
-              matrixDirty = true;
-            }
-          });
-        }));
-        flush();
-        await yieldToMain();
-      }
-      flush();
-      refreshMaxTempStation();
     }
 
     // [ADD] "로딩 끝나면 화면 회전하면서 지구로 줌인" 요청 반영 - 멀리서

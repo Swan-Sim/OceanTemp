@@ -17,6 +17,14 @@
         const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
         try {
           const res = await fetch(url, { signal: controller.signal });
+          // [FIX] "Couldn't load data" - Open-Meteo 무료 한도는 방문자 IP마다
+          // 분당 600건 / 하루 1만 건이에요. "하루 한도 초과"는 몇 초 기다려도
+          // 풀리지 않아서 재시도하면 요청만 낭비됩니다 - 바로 구분해서 알립니다.
+          if (res.status === 429) {
+            let reason = '';
+            try { reason = (await res.clone().json()).reason || ''; } catch (_) {}
+            if (/daily/i.test(reason)) { clearTimeout(timer); const err = new Error('DAILY_LIMIT'); err.code = 'DAILY_LIMIT'; throw err; }
+          }
           if (res.status === 429 && attempt < retries) {
             clearTimeout(timer);
             await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));

@@ -265,11 +265,13 @@
       const highs = d.extremes.filter(e => e.type === 'high');
       const lows = d.extremes.filter(e => e.type === 'low');
 
-      // 20°C ↔ 0m 정렬: 두 축 모두 "기준점 아래 1 : 위 HEAD" 비율로 잡으면
-      // 기준점(20°C, 0m)이 항상 같은 높이에 옵니다. 위쪽은 범례 자리로 여유.
-      const T0 = 20, HEAD = 1.7;
-      const tDev = Math.max(2, ...d.temp.map(p => Math.abs(p.y - T0))) * 1.1;
-      const hDev = Math.max(0.3, ...d.tide.map(p => Math.abs(p.y))) * 1.1;
+      // [CHANGE] "절대값으로 - 옆 정점과 비교해서 조석이 강한지 약한지 한눈에"
+      // 요청 반영. 정점마다 축을 자동으로 늘렸다 줄였다 하지 않고 모든 정점에서
+      // 같은 고정 눈금을 씁니다. 수온 0~40°C(2번 탭과 같음), 조석 −8~+8m.
+      // 세계 최대 조차(캐나다 펀디만 약 16m)가 평균해수면 기준 약 ±8m라서
+      // 이 범위면 지구상 어떤 곳도 잘리지 않아요. 두 축 모두 가운데가
+      // 20°C / 0m라 기준선이 정확히 같은 높이에 옵니다.
+      const T_MIN = 0, T_MAX = 40, H_MIN = -8, H_MAX = 8;
       const tickXs = [];
       for (let x = Math.ceil(d.from / (12 * HOUR)) * 12 * HOUR; x <= d.to; x += 12 * HOUR) tickXs.push(x);
 
@@ -310,30 +312,17 @@
               afterBuildTicks: (axis) => { axis.ticks = tickXs.map(v => ({ value: v })); }
             },
             y: {
-              position: 'left', min: T0 - tDev, max: T0 + tDev * HEAD,
+              position: 'left', min: T_MIN, max: T_MAX,
               ticks: { color: '#fca5a5', font: { size: 9 }, callback: formatAxisTemp },
-              grid: { color: (c) => Math.abs(c.tick.value - T0) < 1e-6 ? '#475569' : '#1e293b' },
-              afterBuildTicks: (axis) => {
-                // 20°C 눈금이 꼭 들어가도록 기준점부터 위/아래로 눈금 생성
-                const step = tDev > 6 ? 4 : 2;
-                const ticks = [];
-                for (let v = T0; v >= axis.min - 1e-6; v -= step) ticks.unshift({ value: v });
-                for (let v = T0 + step; v <= axis.max + 1e-6; v += step) ticks.push({ value: v });
-                axis.ticks = ticks;
-              }
+              grid: { color: (c) => c.tick.value === 20 ? '#475569' : '#1e293b' }, // 20°C = 0m 기준선 강조
+              afterBuildTicks: (axis) => { axis.ticks = [0, 5, 10, 15, 20, 25, 30, 35, 40].map(v => ({ value: v })); }
             },
             y2: {
-              position: 'right', min: -hDev, max: hDev * HEAD,
-              ticks: { color: '#7dd3fc', font: { size: 9 }, callback: (v) => `${(+v).toFixed(1)}m` },
+              position: 'right', min: H_MIN, max: H_MAX,
+              ticks: { color: '#7dd3fc', font: { size: 9 }, callback: (v) => `${v > 0 ? '+' : ''}${v}m` },
               grid: { drawOnChartArea: false },
-              afterBuildTicks: (axis) => {
-                // 0m 눈금이 꼭 들어가도록 (왼쪽 20°C 눈금과 같은 높이)
-                const step = hDev > 1.5 ? 1 : 0.5;
-                const ticks = [];
-                for (let v = 0; v >= axis.min - 1e-6; v -= step) ticks.unshift({ value: v });
-                for (let v = step; v <= axis.max + 1e-6; v += step) ticks.push({ value: v });
-                axis.ticks = ticks;
-              }
+              // 왼쪽 5°C 눈금과 오른쪽 2m 눈금이 같은 높이 (0m = 20°C)
+              afterBuildTicks: (axis) => { axis.ticks = [-8, -6, -4, -2, 0, 2, 4, 6, 8].map(v => ({ value: v })); }
             }
           }
         }

@@ -163,7 +163,8 @@
     // 씁니다. 구체 하나 + 셰이더 오버레이 하나 정도라 성능 부담은 거의 없어요.
     function buildRealMoon(moonLat, moonLon, sunDirLocal) {
       const group = new THREE.Group();
-      const radius = 33;
+      // [CHANGE] "달도 지금의 60% 사이즈로 줄여줘" 요청 반영 - 반지름 33 → 19.8
+      const radius = 33 * 0.6;
 
       const geometry = new THREE.SphereGeometry(radius, 32, 32);
       const textureLoader = new THREE.TextureLoader();

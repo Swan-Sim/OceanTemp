@@ -524,8 +524,17 @@ function getCurrentCenterLatLng() {
 
       // [ADD] "태양은 실시간 실제 위치로, 달도 가능하면" - astronomy.js로
       // 계산한 실제 태양/달 직하점 기준으로 배치합니다.
-      const { group: sunMoonGroup, sunDirLocal } = buildRealSunAndMoon();
-      globeGroup.add(sunMoonGroup);
+      // [CHANGE] "태양/달을 실시간으로 움직이게" 요청 반영 - 위치/그림자
+      // 참조를 전역에 저장해둬서, 나중에 주기적으로 다시 계산할 때
+      // 장면을 새로 만들지 않고 이 객체들의 위치·유니폼만 갱신합니다.
+      const celestial = buildRealSunAndMoon();
+      globeGroup.add(celestial.group);
+      sunSpriteRef = celestial.sunSprite;
+      mercurySpriteRef = celestial.mercurySprite;
+      venusSpriteRef = celestial.venusSprite;
+      moonGroupRef = celestial.moonGroup;
+      moonShadowMaterialRef = celestial.moonShadowMaterial;
+      const sunDirLocal = celestial.sunDirLocal;
 
       // 위성 지구본 본체
       const globeGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
@@ -546,12 +555,15 @@ function getCurrentCenterLatLng() {
       const warmGlowMesh = buildDayWarmGlow(sunDirLocal);
       warmGlowMesh.renderOrder = 2;
       globeGroup.add(warmGlowMesh);
+      warmGlowMaterialRef = warmGlowMesh.material;
       const shadowMesh = buildDayNightShadow(sunDirLocal);
       shadowMesh.renderOrder = 3;
       globeGroup.add(shadowMesh);
+      shadowMaterialRef = shadowMesh.material;
       const atmosphereMesh = buildAtmosphereGlow(sunDirLocal);
       atmosphereMesh.renderOrder = 4;
       globeGroup.add(atmosphereMesh);
+      atmosphereMaterialRef = atmosphereMesh.material;
 
       // [ADD] "색상 빼고 구름 넣자" - 정점 데이터와 무관해서 API 상태와
       // 상관없이 바로 뜨는 구름 레이어. 지구 자체(사용자 드래그)와는
@@ -562,6 +574,16 @@ function getCurrentCenterLatLng() {
 
       // 태평양 방면 기본 회전
       globeGroup.rotation.set(0.35, -2.1, 0);
+
+      // [ADD] "태양/달을 실시간으로 움직이게" 요청 반영 - 처음 만들 때
+      // 딱 한 번만 계산해서 이후엔 화면을 몇 시간 켜둬도 그대로 멈춰
+      //있었어요. 5분마다 실제 태양/달 직하점을 다시 계산해서, 이미
+      // 만들어둔 객체들의 위치와 그림자 방향만 조용히 갱신합니다(장면을
+      // 다시 만들지 않아서 가볍습니다). 5분 간격인 이유는 태양의 겉보기
+      // 이동이 시간당 15도 정도라, 5분이면 약 1.25도라 눈에 띄는 끊김
+      // 없이 충분히 부드러워요.
+      updateCelestialPositions();
+      setInterval(updateCelestialPositions, 5 * 60 * 1000);
 
       setupGlobeInteraction(container, width, height);
 
@@ -728,6 +750,26 @@ function getCurrentCenterLatLng() {
     // 컨디션이었어요. 호출마다 고유 세대(generation) ID를 매겨서, 더
     // 최신 호출이 생기면 이전 루프는 그 즉시 스스로 멈추도록 고쳤습니다.
     let __globeRotAnimGen = 0;
+    // [ADD] "태양/달을 실시간으로 움직이게" 요청 반영 - 실제 태양/달
+    // 직하점을 다시 계산해서, 이미 장면에 있는 객체들의 위치와 그림자
+    // 방향(sunDir 유니폼)만 갱신합니다. 새로 만들지 않아서 가볍고, 화면
+    // 깜빡임도 없습니다.
+    function updateCelestialPositions() {
+      const now = new Date();
+      const sun = computeSubsolarPoint(now);
+      const moon = computeSublunarPoint(now);
+      const sunDirLocal = latLonToSpherePos(sun.lat, sun.lon, 1).normalize();
+
+      if (sunSpriteRef) sunSpriteRef.position.copy(latLonToSpherePos(sun.lat, sun.lon, 900));
+      if (mercurySpriteRef) mercurySpriteRef.position.copy(latLonToSpherePos(sun.lat + 9, sun.lon - 11, 560));
+      if (venusSpriteRef) venusSpriteRef.position.copy(latLonToSpherePos(sun.lat - 6, sun.lon + 13, 600));
+      if (moonGroupRef) moonGroupRef.position.copy(latLonToSpherePos(moon.lat, moon.lon, 400));
+      if (moonShadowMaterialRef) moonShadowMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
+      if (shadowMaterialRef) shadowMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
+      if (warmGlowMaterialRef) warmGlowMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
+      if (atmosphereMaterialRef) atmosphereMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
+    }
+
     function animateGlobeRotationTo(targetX, targetY, duration) {
       if (!globeGroup) return;
       const myGen = ++__globeRotAnimGen;

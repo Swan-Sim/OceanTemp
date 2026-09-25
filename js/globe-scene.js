@@ -495,9 +495,7 @@ function getCurrentCenterLatLng() {
     const SST_LAYER_OPACITY = 0.55; // 위성사진 지형이 비쳐 보이도록 반투명
     async function loadSstLayer() {
       try {
-        const res = await fetch('/api/sst');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
+        const data = await getSstGrid(); // live-data.js - /api/sst 또는 원본에서 직접
         const W = data.w, H = data.h;
         const cvs = document.createElement('canvas');
         cvs.width = W; cvs.height = H;
@@ -536,7 +534,7 @@ function getCurrentCenterLatLng() {
           if (k < 1) requestAnimationFrame(fade);
         })(t0);
       } catch (e) {
-        console.info('[sst-layer] 위성 수온 레이어를 건너뜁니다 (로컬 실행이거나 NOAA 응답 없음):', e.message);
+        console.info('[sst-layer] 위성 수온 레이어를 건너뜁니다 (위성 수온 서버 응답 없음):', e.message);
       }
     }
 
@@ -545,24 +543,32 @@ function getCurrentCenterLatLng() {
     // 바다에 비치는 딱 그 지점에만 반짝임이 생깁니다. 지구를 돌리면 반사
     // 지점도 실제 물리처럼 따라 움직여요. 육지에는 반사가 안 생기도록
     // 위성사진(blue marble)의 "짙은 파란색 = 바다" 여부로 가려냅니다.
-    function buildSunGlint(sunDirLocal, earthTexture) {
+    // [ADD] "달도 반사시킬 수 있어?" 요청 반영 - 같은 원리로 달빛 반사도
+    // 넣었어요. 실제 밤바다처럼 해가 진 쪽(밤)에서만, 달이 떠 있는 쪽에만
+    // 은빛으로 보이고, 달의 위상(보름에 가까울수록 밝고 그믐이면 거의 없음)에
+    // 따라 밝기가 달라집니다. 위상은 지구에서 본 태양-달 사이 각도로 계산해요.
+    function buildSunGlint(sunDirLocal, earthTexture, moonDirLocal) {
       const geometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.15, 96, 96);
       const material = new THREE.ShaderMaterial({
         uniforms: {
           sunDir: { value: sunDirLocal.clone().normalize() },
+          moonDir: { value: (moonDirLocal || sunDirLocal.clone().negate()).clone().normalize() },
           earthMap: { value: earthTexture }
         },
         vertexShader: `
           uniform vec3 sunDir;       // globeGroup 로컬 좌표
+          uniform vec3 moonDir;      // globeGroup 로컬 좌표
           varying vec3 vNormalW;
           varying vec3 vViewDirW;
           varying vec3 vSunDirW;
+          varying vec3 vMoonDirW;
           varying vec2 vUv;
           void main() {
             vUv = uv;
             vec4 worldPos = modelMatrix * vec4(position, 1.0);
             vNormalW = normalize(mat3(modelMatrix) * normal);
             vSunDirW = normalize(mat3(modelMatrix) * sunDir); // modelMatrix는 버텍스 셰이더에서만 쓸 수 있어요
+            vMoonDirW = normalize(mat3(modelMatrix) * moonDir);
             vViewDirW = normalize(cameraPosition - worldPos.xyz);
             gl_Position = projectionMatrix * viewMatrix * worldPos;
           }
@@ -572,6 +578,7 @@ function getCurrentCenterLatLng() {
           varying vec3 vNormalW;
           varying vec3 vViewDirW;
           varying vec3 vSunDirW;
+          varying vec3 vMoonDirW;
           varying vec2 vUv;
           void main() {
             vec3 base = texture2D(earthMap, vUv).rgb;
@@ -586,7 +593,20 @@ function getCurrentCenterLatLng() {
             float core = pow(nh, 400.0) * 1.1;  // 작고 강한 반짝임
             float halo = pow(nh, 40.0) * 0.18;  // 넓게 퍼지는 은은한 반사
             float glint = (core + halo) * oceanMask * lit;
-            gl_FragColor = vec4(vec3(1.0, 0.93, 0.8) * glint, glint);
+            vec3 color = vec3(1.0, 0.93, 0.8) * glint;
+
+            // 달빛 반사 - 밤쪽(해가 진 곳) + 달이 떠 있는 곳에서만, 위상만큼 밝게
+            vec3 m = normalize(vMoonDirW);
+            float night = smoothstep(0.05, -0.15, dot(n, l));
+            float moonUp = smoothstep(0.0, 0.1, dot(n, m));
+            float phase = 0.5 * (1.0 - dot(l, m)); // 0 = 그믐(태양과 같은 방향), 1 = 보름
+            vec3 hm = normalize(m + v);
+            float nhm = max(dot(n, hm), 0.0);
+            float moonGlint = (pow(nhm, 300.0) * 0.9 + pow(nhm, 30.0) * 0.12) * oceanMask * night * moonUp * phase;
+            color += vec3(0.75, 0.84, 1.0) * moonGlint;
+
+            float a = clamp(max(color.r, color.b), 0.0, 1.0);
+            gl_FragColor = vec4(color, a);
           }
         `,
         transparent: true,
@@ -686,7 +706,8 @@ function getCurrentCenterLatLng() {
       globeGroup.add(cloudMesh);
 
       // [ADD] 바다 햇빛 반사 + 위성 실측 수온 레이어 (수온은 비동기로 도착하는 대로)
-      const glintMesh = buildSunGlint(sunDirLocal, earthTexture);
+      const moonNow = computeSublunarPoint(new Date());
+      const glintMesh = buildSunGlint(sunDirLocal, earthTexture, latLonToSpherePos(moonNow.lat, moonNow.lon, 1).normalize());
       globeGroup.add(glintMesh);
       glintMaterialRef = glintMesh.material;
       loadSstLayer();
@@ -802,6 +823,16 @@ function getCurrentCenterLatLng() {
     // 해변 정점은 실제 지명이라 검증에 실패해도 계속 보여줍니다(그
     // 정점을 클릭하면 그때 다시 한번 개별적으로 시도해요).
     async function validateStationsInBackground() {
+      // [FIX] "조석이 계속 로딩" 근본 원인 수정 - 정점 1,500개를 Open-Meteo로
+      // 확인하던 걸(요청 한도 초과의 원인) 위성 수온 격자 한 번으로 대체합니다.
+      // 격자를 못 받았을 때만 예전 방식(Open-Meteo 배치 확인)으로 돌아가요.
+      try {
+        const grid = await getSstGrid();
+        applySstGridToStations(grid);
+        return;
+      } catch (e) {
+        console.warn('[validate] 위성 수온 격자 실패 → Open-Meteo 배치 확인으로 대체:', e.message);
+      }
       const CHUNK = 90;
       const chunks = [];
       for (let i = 0; i < stations.length; i += CHUNK) chunks.push(stations.slice(i, i + CHUNK));
@@ -873,6 +904,43 @@ function getCurrentCenterLatLng() {
     // 직하점을 다시 계산해서, 이미 장면에 있는 객체들의 위치와 그림자
     // 방향(sunDir 유니폼)만 갱신합니다. 새로 만들지 않아서 가볍고, 화면
     // 깜빡임도 없습니다.
+    // 위성 수온 격자로 모든 정점의 현재 수온·색을 한 번에 갱신합니다.
+    // 격자 정점인데 주변 1칸까지 데이터가 없으면(육지 등) 예전처럼 숨기고,
+    // 해변 정점은 실제 지명이라 값이 없어도 추정값 그대로 계속 보여줍니다.
+    function applySstGridToStations(grid) {
+      const dummy = new THREE.Object3D();
+      const colorHelper = new THREE.Color();
+      let colorDirty = false, matrixDirty = false;
+      stations.forEach(st => {
+        const val = sstAt(grid, st.coords[1], st.coords[0]);
+        if (val != null) {
+          st.curTemp = +val.toFixed(1);
+          st._liveCurrentVerified = true;
+          if (typeof st.__gridIndex === 'number' && instancedDotsRef) {
+            colorHelper.setStyle(`rgb(${getTempColor(st.curTemp)})`);
+            instancedDotsRef.setColorAt(st.__gridIndex, colorHelper);
+            colorDirty = true;
+          }
+        } else if (typeof st.__gridIndex === 'number' && instancedDotsRef) {
+          dummy.position.set(0, 0, 0);
+          dummy.scale.set(0, 0, 0);
+          dummy.updateMatrix();
+          instancedDotsRef.setMatrixAt(st.__gridIndex, dummy.matrix);
+          matrixDirty = true;
+        }
+      });
+      if (instancedDotsRef) {
+        if (colorDirty) instancedDotsRef.instanceColor.needsUpdate = true;
+        if (matrixDirty) instancedDotsRef.instanceMatrix.needsUpdate = true;
+      }
+      refreshMaxTempStation();
+      // 이미 선택된 정점이 있으면 새 값으로 다시 표시
+      if (selectedStation) {
+        const el = document.getElementById('st-temp');
+        if (el && !selectedStation._liveCache) el.innerText = formatTemp(selectedStation.curTemp);
+      }
+    }
+
     function updateCelestialPositions() {
       const now = new Date();
       const sun = computeSubsolarPoint(now);
@@ -887,7 +955,10 @@ function getCurrentCenterLatLng() {
       if (shadowMaterialRef) shadowMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
       if (warmGlowMaterialRef) warmGlowMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
       if (atmosphereMaterialRef) atmosphereMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
-      if (glintMaterialRef) glintMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
+      if (glintMaterialRef) {
+        glintMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
+        glintMaterialRef.uniforms.moonDir.value.copy(latLonToSpherePos(moon.lat, moon.lon, 1).normalize());
+      }
     }
 
     function animateGlobeRotationTo(targetX, targetY, duration) {

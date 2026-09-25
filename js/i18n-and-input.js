@@ -50,7 +50,7 @@
         tideNextLow: "다음 간조",
         tideSource: "조석 모델 (Open-Meteo, 현지 시각)",
         tideLoading: "조석 데이터 불러오는 중...",
-        tideFailed: "조석 데이터를 불러오지 못했어요 (잠시 후 다시 시도)",
+        tideFailed: "조석 데이터를 불러오지 못했어요 - 1분쯤 뒤 조석 탭을 다시 눌러주세요",
         tideNote: "모델 추정값이라 항구 조위표와 다를 수 있어요 - 항해·안전 판단에 쓰지 마세요"
       },
       en: {
@@ -92,7 +92,7 @@
         tideNextLow: "Next low",
         tideSource: "Tide model (Open-Meteo, local time)",
         tideLoading: "Loading tide data...",
-        tideFailed: "Couldn't load tide data (try again shortly)",
+        tideFailed: "Couldn't load tide data - tap the Tide tab again in about a minute",
         tideNote: "Model estimate; may differ from harbor tide tables. Not for navigation or safety decisions."
       }
     };

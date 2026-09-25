@@ -274,3 +274,81 @@
       station._tideCache = result;
       return result;
     }
+
+    // [ADD] 위성 수온 격자(1°, 360×180)를 한 번만 받아서 앱 전체가 같이 씁니다
+    // - 지구본 바다 색상 레이어와 정점 색상(검증)이 모두 이 격자를 사용해요.
+    // 1순위: 우리 Vercel 서버(/api/sst, 캐시되어 빠르고 가벼움)
+    // 2순위: 원본 PacIOOS ERDDAP에서 직접(CORS 허용이라 로컬 파일로 열어도 됨)
+    // [FIX] "조석이 계속 로딩" - 진짜 원인은 앱을 켤 때마다 정점 약 1,500개의
+    // 현재 수온을 Open-Meteo에 확인하느라, Open-Meteo 무료 한도(분당 600건,
+    // 하루 1만 건 - 지점 하나가 1건)를 부팅 몇 초 만에 다 써버린 거였어요.
+    // 그래서 뒤이어 요청한 조석 데이터가 429(요청 과다)로 계속 막혔습니다.
+    // 이제 정점 색상은 이 위성 격자 한 번(요청 1건)으로 채우고, Open-Meteo는
+    // 사용자가 정점을 클릭했을 때만 부릅니다.
+    const SST_GRID_DIRECT_URL = 'https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.csv?CRW_SST%5B(last)%5D%5B0:20:3599%5D%5B0:20:7199%5D';
+    let sstGridPromise = null;
+
+    function parseSstCsv(text) {
+      const W = 360, H = 180, LAT0 = 89.975, LON0 = -179.975;
+      const v = new Array(W * H).fill(null);
+      let date = null;
+      const lines = text.split('\n');
+      for (let i = 2; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        if (cols.length < 4) continue;
+        const lat = parseFloat(cols[1]), lon = parseFloat(cols[2]), sst = parseFloat(cols[3]);
+        if (!date) date = cols[0].slice(0, 10);
+        if (Number.isNaN(lat) || Number.isNaN(lon) || Number.isNaN(sst)) continue;
+        const row = Math.round(LAT0 - lat), col = Math.round(lon - LON0);
+        if (col < 0 || col >= W || row < 0 || row >= H) continue;
+        v[row * W + col] = Math.round(sst * 10);
+      }
+      return { date, w: W, h: H, lat0: LAT0, lon0: LON0, scale: 0.1, v };
+    }
+
+    function getSstGrid() {
+      if (sstGridPromise) return sstGridPromise;
+      sstGridPromise = (async () => {
+        try {
+          const res = await fetch('/api/sst');
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          if (!data || !Array.isArray(data.v)) throw new Error('bad payload');
+          return data;
+        } catch (e) {
+          console.info('[sst-grid] /api/sst 실패 → 원본 서버에서 직접 받습니다:', e.message);
+        }
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 30000);
+        try {
+          const res = await fetch(SST_GRID_DIRECT_URL, { signal: controller.signal });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return parseSstCsv(await res.text());
+        } finally {
+          clearTimeout(timer);
+        }
+      })();
+      sstGridPromise.catch(() => { sstGridPromise = null; }); // 실패하면 다음에 다시 시도 가능
+      return sstGridPromise;
+    }
+
+    // 격자에서 (lat, lon)의 수온(°C). 해안 정점은 1° 칸이 육지로 잡힐 수 있어서
+    // 바로 옆 칸(최대 1칸 거리)까지 찾아봅니다. 없으면 null.
+    function sstAt(grid, lat, lon) {
+      const row0 = Math.round(grid.lat0 - lat);
+      const col0 = Math.round(lon - grid.lon0);
+      const read = (r, c) => {
+        if (r < 0 || r >= grid.h) return null;
+        c = ((c % grid.w) + grid.w) % grid.w; // 날짜변경선 넘어가면 반대편으로
+        const raw = grid.v[r * grid.w + c];
+        return raw == null ? null : raw * grid.scale;
+      };
+      const center = read(row0, col0);
+      if (center != null) return center;
+      let sum = 0, n = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const val = read(row0 + dr, col0 + dc);
+        if (val != null) { sum += val; n++; }
+      }
+      return n ? sum / n : null;
+    }

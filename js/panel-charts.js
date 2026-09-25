@@ -181,7 +181,10 @@
       const st = selectedStation;
       const tide = st._tideCache;
       if (!tide) {
-        ensureTideData(st);
+        // [FIX] "조석이 계속 로딩" - 실패하면 곧바로 다시 요청하는 무한 반복이
+        // 있었어요(실패 → 다시 그림 → 다시 요청 → "로딩 중"). 이제 처음
+        // 한 번만 자동으로 부르고, 실패하면 조석 탭을 다시 눌렀을 때 재시도합니다.
+        if (!st._tideState) ensureTideData(st);
         legendBox.innerHTML = st._tideState === 'failed'
           ? `<div class="item" style="color:#94a3b8;">⚠ ${t.tideFailed}</div>`
           : `<div class="item" style="color:#facc15;">⏳ ${t.tideLoading}</div>`;
@@ -398,6 +401,8 @@
 
     function setMode(mode) {
       activeMode = mode;
+      // 조석 실패 상태에서 탭을 다시 누르면 재시도
+      if (mode === 'tide' && selectedStation && selectedStation._tideState === 'failed') selectedStation._tideState = undefined;
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       if (mode === 'forecast') document.getElementById('btn-ts').classList.add('active');
       else if (mode === 'tide') document.getElementById('btn-tide').classList.add('active');

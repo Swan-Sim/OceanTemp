@@ -198,22 +198,66 @@
       return withDate ? `${t.months[d.getUTCMonth()]} ${d.getUTCDate()} ${hh}:${mm}` : `${hh}:${mm}`;
     }
 
+    // [ADD] "Temp & Tide도 가상 값이라도 넣어줘 - 기본 화면이 비어 있으면 사이트가
+    // 먹통 같아" 요청 반영. 실데이터가 없을 때(클릭 전 / 불러오는 중 / 실패)
+    // 네트워크 요청 없이 바로 그릴 수 있는 추정 그래프를 만듭니다.
+    // - 수온: 이 정점의 현재 위성 수온(curTemp)에 오후 3시쯤 살짝 올라가는
+    //   하루 변화(±0.2°C)만 얹었어요.
+    // - 조석: 지구본 조석 격자와 같은 원리(실제 달·태양 위치로 계산한 평형 조석)로
+    //   만조·간조 "리듬"(하루 두 번, 사리/조금)은 실제와 맞지만, 해안 지형 때문에
+    //   생기는 시간차·높이는 반영하지 못해서 진폭은 ±0.5m로 가정했습니다.
+    // 화면에는 "추정값"이라고 분명히 표시하고, 실데이터가 오면 바로 바꿔 그립니다.
+    function getEstimatedHourly(st) {
+      const HOUR = 3600 * 1000;
+      const lat = st.coords[1], lon = st.coords[0];
+      const offsetMs = Math.round(lon / 15) * HOUR; // 시간대 근사 (경도 15°당 1시간)
+      const nowUtc = Date.now();
+      const startUtc = Math.floor((nowUtc - 49 * HOUR) / HOUR) * HOUR;
+      const here = latLonToSpherePos(lat, lon, 1).normalize();
+      const p2 = (c) => 0.5 * (3 * c * c - 1);
+      const raw = [];
+      for (let u = startUtc; u <= nowUtc + 49 * HOUR; u += HOUR) {
+        const date = new Date(u);
+        const m = computeSublunarPoint(date), s = computeSubsolarPoint(date);
+        const cm = here.dot(latLonToSpherePos(m.lat, m.lon, 1).normalize());
+        const cs = here.dot(latLonToSpherePos(s.lat, s.lon, 1).normalize());
+        raw.push({ x: u + offsetMs, h: p2(cm) + 0.46 * p2(cs) });
+      }
+      const mean = raw.reduce((a, r) => a + r.h, 0) / raw.length;
+      const maxDev = Math.max(...raw.map(r => Math.abs(r.h - mean))) || 1;
+      const base = typeof st.curTemp === 'number' ? st.curTemp : 20;
+      const tide = raw.map(r => ({ x: r.x, y: +(0.5 * (r.h - mean) / maxDev).toFixed(2) }));
+      const temp = raw.map(r => {
+        const localHour = new Date(r.x).getUTCHours();
+        return { x: r.x, y: +(base + 0.2 * Math.sin(2 * Math.PI * (localHour - 9) / 24)).toFixed(2) };
+      });
+      const extremes = [];
+      for (let i = 1; i < tide.length - 1; i++) {
+        const a = tide[i - 1].y, b = tide[i].y, c = tide[i + 1].y;
+        if (b > a && b >= c) extremes.push({ ...tide[i], type: 'high' });
+        else if (b < a && b <= c) extremes.push({ ...tide[i], type: 'low' });
+      }
+      const nowLocalMs = nowUtc + offsetMs;
+      return { temp, tide, extremes, nowLocalMs, from: nowLocalMs - 48 * HOUR, to: nowLocalMs + 48 * HOUR, isEstimate: true };
+    }
+
     function renderNowChart(chartCanvas, legendBox) {
       const st = selectedStation;
-      const d = st._hourlyCache;
+      let d = st._hourlyCache;
+      let statusHtml = `<div class="item" style="color:#4ade80;">🟢 ${t.nowSource}</div>`;
       if (!d) {
-        if (!st._userRequested) {
-          legendBox.innerHTML = `<div class="item" style="color:#94a3b8;">👆 ${t.tapToLoad}</div>`;
-          chartInstance = null;
-          return;
-        }
-        if (!st._hourlyState) ensureHourlyData(st);
-        legendBox.innerHTML = st._hourlyState === 'failed'
-          ? `<div class="item" style="color:#94a3b8;">⚠ ${st._hourlyError === 'DAILY_LIMIT' ? t.nowDailyLimit : t.nowFailed}</div>`
-          : `<div class="item" style="color:#facc15;">⏳ ${t.nowLoading}</div>`;
-        chartInstance = null;
-        return;
+        // 실데이터가 없으면 추정 그래프를 먼저 그리고, 상태 안내를 같이 보여줍니다
+        if (st._userRequested && !st._hourlyState) ensureHourlyData(st);
+        d = getEstimatedHourly(st);
+        const why = !st._userRequested
+          ? `👆 ${t.tapToLoad}`
+          : st._hourlyState === 'failed'
+            ? (st._hourlyError === 'DAILY_LIMIT' ? t.nowDailyLimit : t.nowFailed)
+            : `⏳ ${t.nowLoading}`;
+        statusHtml = `<div class="item" style="color:#facc15;">⚠ ${t.nowEstimated}</div>` +
+          `<div class="item" style="color:#94a3b8;">${why}</div>`;
       }
+      const est = !!d.isEstimate;
 
       const HOUR = 3600 * 1000;
       const nowT = interpAt(d.temp, d.nowLocalMs);
@@ -233,8 +277,8 @@
         type: 'line',
         data: {
           datasets: [
-            { label: t.nowTemp, data: d.temp, yAxisID: 'y', borderColor: '#ef4444', tension: 0.3, pointRadius: 0, pointHitRadius: 10, borderWidth: 2.2 },
-            { label: t.tideLevel, data: d.tide, yAxisID: 'y2', borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.10)', fill: 'origin', tension: 0.35, pointRadius: 0, pointHitRadius: 10, borderWidth: 2 },
+            { label: t.nowTemp, data: d.temp, yAxisID: 'y', borderColor: '#ef4444', borderDash: est ? [5, 4] : [], tension: 0.3, pointRadius: 0, pointHitRadius: 10, borderWidth: 2.2 },
+            { label: t.tideLevel, data: d.tide, yAxisID: 'y2', borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.10)', fill: 'origin', borderDash: est ? [5, 4] : [], tension: 0.35, pointRadius: 0, pointHitRadius: 10, borderWidth: 2 },
             { label: t.tideHigh, data: highs, yAxisID: 'y2', borderColor: '#f97316', backgroundColor: '#f97316', pointRadius: 3, showLine: false },
             { label: t.tideLow, data: lows, yAxisID: 'y2', borderColor: '#a78bfa', backgroundColor: '#a78bfa', pointRadius: 3, showLine: false },
             { label: t.tideNow, data: nowT != null ? [{ x: d.nowLocalMs, y: nowT }] : [], yAxisID: 'y', borderColor: '#ef4444', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, showLine: false },
@@ -298,7 +342,7 @@
       const nextHigh = highs.find(e => e.x > d.nowLocalMs);
       const nextLow = lows.find(e => e.x > d.nowLocalMs);
       legendBox.innerHTML =
-        `<div class="item" style="color:#4ade80;">🟢 ${t.nowSource}</div>` +
+        statusHtml +
         `<div class="item"><span class="swatch" style="background:#ef4444;"></span>${t.nowTemp}</div>` +
         `<div class="item"><span class="swatch" style="background:#38bdf8;"></span>${t.tideLevel} (m, ${t.tideRef})</div>` +
         (nextHigh ? `<div class="item"><span class="swatch" style="background:#f97316;"></span>${t.tideNextHigh} ${fmtLocalTime(nextHigh.x, false)} (${nextHigh.y.toFixed(2)} m)</div>` : '') +

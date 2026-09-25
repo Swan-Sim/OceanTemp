@@ -15,6 +15,7 @@
     // [ADD] "태양/달을 실시간으로 움직이게" 요청 반영 - 주기적 갱신에 쓸 참조들
     let sunSpriteRef, mercurySpriteRef, venusSpriteRef, moonGroupRef, moonShadowMaterialRef;
     let shadowMaterialRef, warmGlowMaterialRef, atmosphereMaterialRef;
+    let glintMaterialRef = null, sstMeshRef = null, sstDataDate = null; // [ADD] 햇빛 반사 / 위성 수온 레이어
     let beachSprites = []; // [ADD] 줌 반응형 마커 크기 조절을 위해 참조 보관
     let selectionMarker = null; // [ADD] 선택된 정점 표시용 통합 마커 (해변/NOAA 공통)
     let gridStationsRef = []; // [ADD] NOAA 격자 정점 클릭 선택용

@@ -155,10 +155,111 @@
       return { depths, profile };
     }
 
+    // [ADD] "조석 데이터도 추가" - 조석 탭 차트. 데이터가 아직 없으면 먼저
+    // "불러오는 중"을 보여주고 백그라운드로 받아온 뒤 다시 그립니다.
+    async function ensureTideData(st) {
+      if (st._tideCache || st._tideState === 'loading') return;
+      st._tideState = 'loading';
+      try {
+        await fetchStationTide(st);
+        st._tideState = 'ok';
+      } catch (e) {
+        console.warn('[tide] 조석 데이터 가져오기 실패:', e);
+        st._tideState = 'failed';
+      }
+      if (selectedStation === st && activeMode === 'tide') updateChart();
+    }
+
+    function fmtTideTime(ms, withDate) {
+      const d = new Date(ms);
+      const hh = String(d.getUTCHours()).padStart(2, '0');
+      const mm = String(d.getUTCMinutes()).padStart(2, '0');
+      return withDate ? `${t.months[d.getUTCMonth()]} ${d.getUTCDate()} ${hh}:${mm}` : `${hh}:${mm}`;
+    }
+
+    function renderTideChart(chartCanvas, legendBox) {
+      const st = selectedStation;
+      const tide = st._tideCache;
+      if (!tide) {
+        ensureTideData(st);
+        legendBox.innerHTML = st._tideState === 'failed'
+          ? `<div class="item" style="color:#94a3b8;">⚠ ${t.tideFailed}</div>`
+          : `<div class="item" style="color:#facc15;">⏳ ${t.tideLoading}</div>`;
+        chartInstance = null;
+        return;
+      }
+
+      // 지금 시각의 해수면 높이(앞뒤 시간 값 사이 선형 보간)
+      const pts = tide.points;
+      let nowY = null;
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (pts[i].x <= tide.nowLocalMs && tide.nowLocalMs <= pts[i + 1].x) {
+          const k = (tide.nowLocalMs - pts[i].x) / (pts[i + 1].x - pts[i].x);
+          nowY = +(pts[i].y + (pts[i + 1].y - pts[i].y) * k).toFixed(2);
+          break;
+        }
+      }
+      const highs = tide.extremes.filter(e => e.type === 'high');
+      const lows = tide.extremes.filter(e => e.type === 'low');
+      const HOUR = 3600 * 1000;
+      // 눈금은 0시/12시에 딱 맞춰서, 위쪽엔 범례가 곡선을 가리지 않게 여유 공간
+      const ys = pts.map(p => p.y);
+      const yMin = Math.min(...ys), yMax = Math.max(...ys), yRange = Math.max(0.2, yMax - yMin);
+      const tickXs = [];
+      for (let x = Math.ceil(pts[0].x / (12 * HOUR)) * 12 * HOUR; x <= pts[pts.length - 1].x; x += 12 * HOUR) tickXs.push(x);
+
+      chartInstance = new Chart(chartCanvas, {
+        type: 'line',
+        data: {
+          datasets: [
+            { label: t.tideLevel, data: pts, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)', fill: 'start', tension: 0.35, pointRadius: 0, pointHitRadius: 12, borderWidth: 2 },
+            { label: t.tideHigh, data: highs, borderColor: '#f97316', backgroundColor: '#f97316', pointRadius: 3, showLine: false },
+            { label: t.tideLow, data: lows, borderColor: '#a78bfa', backgroundColor: '#a78bfa', pointRadius: 3, showLine: false },
+            { label: t.tideNow, data: nowY != null ? [{ x: tide.nowLocalMs, y: nowY }] : [], borderColor: '#38bdf8', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHoverRadius: 7, showLine: false }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'nearest', axis: 'x', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (items) => fmtTideTime(items[0].parsed.x, true),
+                label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} m`
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: 'linear', min: pts[0].x, max: pts[pts.length - 1].x,
+              ticks: {
+                color: '#64748b', font: { size: 9 }, maxRotation: 0,
+                callback: (v) => { const d = new Date(v); return d.getUTCHours() === 0 ? `${t.months[d.getUTCMonth()]} ${d.getUTCDate()}` : fmtTideTime(v, false); }
+              },
+              grid: { color: '#1e293b' },
+              afterBuildTicks: (axis) => { axis.ticks = tickXs.map(v => ({ value: v })); }
+            },
+            y: { min: yMin - yRange * 0.1, max: yMax + yRange * 0.75, title: { display: true, text: t.tideAxis, color: '#94a3b8', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 9 }, callback: (v) => `${(+v).toFixed(1)}` }, grid: { color: '#1e293b' } }
+          }
+        }
+      });
+
+      const nextHigh = highs.find(e => e.x > tide.nowLocalMs);
+      const nextLow = lows.find(e => e.x > tide.nowLocalMs);
+      legendBox.innerHTML =
+        `<div class="item" style="color:#4ade80;">🟢 ${t.tideSource}</div>` +
+        (nextHigh ? `<div class="item"><span class="swatch" style="background:#f97316;"></span>${t.tideNextHigh} ${fmtTideTime(nextHigh.x, false)} (${nextHigh.y.toFixed(2)} m)</div>` : '') +
+        (nextLow ? `<div class="item"><span class="swatch" style="background:#a78bfa;"></span>${t.tideNextLow} ${fmtTideTime(nextLow.x, false)} (${nextLow.y.toFixed(2)} m)</div>` : '') +
+        `<div class="item" style="color:#94a3b8;">⚠ ${t.tideNote}</div>`;
+    }
+
     function updateChart() {
       const chartCanvas = document.getElementById('detailChart').getContext('2d');
       if (chartInstance) chartInstance.destroy();
       const legendBox = document.getElementById('chart-legend');
+
+      if (activeMode === 'tide') { renderTideChart(chartCanvas, legendBox); return; }
 
       if (activeMode === 'forecast') {
         const usingLive = !!selectedStation._liveCache;
@@ -299,6 +400,7 @@
       activeMode = mode;
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       if (mode === 'forecast') document.getElementById('btn-ts').classList.add('active');
+      else if (mode === 'tide') document.getElementById('btn-tide').classList.add('active');
       else document.getElementById('btn-dp').classList.add('active');
       updateChart();
     }

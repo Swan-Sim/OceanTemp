@@ -485,6 +485,119 @@ function getCurrentCenterLatLng() {
       return mesh;
     }
 
+    // [ADD] "바다에 실제 수온 색상 다시 넣자 (1번)" 요청 반영 - 예전 방식은
+    // 브라우저에서 1700만 번 거리 계산(IDW)을 해서 로딩이 멈췄었는데, 이번엔
+    // 계산이 전혀 없습니다. NOAA 위성 수온(OISST, 1° 격자)을 /api/sst에서
+    // 받아서 360×180 캔버스에 정점 마커와 "똑같은 색상표(getTempColor)"로
+    // 칠하기만 해요. 진짜 관측 데이터라 마커 색·범례와도 일치합니다.
+    // /api/sst는 Vercel에서만 동작해서, 로컬 파일로 열면 조용히 건너뜁니다
+    // (나머지 앱은 그대로 동작).
+    const SST_LAYER_OPACITY = 0.55; // 위성사진 지형이 비쳐 보이도록 반투명
+    async function loadSstLayer() {
+      try {
+        const res = await fetch('/api/sst');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const W = data.w, H = data.h;
+        const cvs = document.createElement('canvas');
+        cvs.width = W; cvs.height = H;
+        const c = cvs.getContext('2d');
+        const img = c.createImageData(W, H);
+        for (let i = 0; i < W * H; i++) {
+          const raw = data.v[i];
+          if (raw == null) continue; // 육지/해빙 → 투명
+          const rgb = String(getTempColor(raw * data.scale)).split(',').map(Number);
+          img.data[i * 4] = rgb[0];
+          img.data[i * 4 + 1] = rgb[1];
+          img.data[i * 4 + 2] = rgb[2];
+          img.data[i * 4 + 3] = 255;
+        }
+        c.putImageData(img, 0, 0);
+
+        const texture = new THREE.CanvasTexture(cvs);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter; // 1° 격자를 부드럽게 보간
+        const geometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.1, 96, 96);
+        const material = new THREE.MeshBasicMaterial({
+          map: texture, transparent: true, opacity: 0, depthWrite: false
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.renderOrder = 0.5; // 지구 표면 위, 구름(1)·햇빛(2)·그림자(3) 아래
+        globeGroup.add(mesh);
+        sstMeshRef = mesh;
+        sstDataDate = data.date;
+
+        // 갑자기 "팍" 나타나지 않게 1.2초 동안 서서히 페이드인
+        const t0 = performance.now();
+        (function fade(now) {
+          const k = Math.min(1, (now - t0) / 1200);
+          material.opacity = SST_LAYER_OPACITY * k;
+          if (k < 1) requestAnimationFrame(fade);
+        })(t0);
+      } catch (e) {
+        console.info('[sst-layer] 위성 수온 레이어를 건너뜁니다 (로컬 실행이거나 NOAA 응답 없음):', e.message);
+      }
+    }
+
+    // [ADD] "바다에 햇빛 반사(sun glint) 넣자 (2번)" 요청 반영 - 실제 태양
+    // 방향(sunDir)과 카메라 방향의 중간 벡터로 반사광을 계산해서, 태양이
+    // 바다에 비치는 딱 그 지점에만 반짝임이 생깁니다. 지구를 돌리면 반사
+    // 지점도 실제 물리처럼 따라 움직여요. 육지에는 반사가 안 생기도록
+    // 위성사진(blue marble)의 "짙은 파란색 = 바다" 여부로 가려냅니다.
+    function buildSunGlint(sunDirLocal, earthTexture) {
+      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.15, 96, 96);
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          sunDir: { value: sunDirLocal.clone().normalize() },
+          earthMap: { value: earthTexture }
+        },
+        vertexShader: `
+          uniform vec3 sunDir;       // globeGroup 로컬 좌표
+          varying vec3 vNormalW;
+          varying vec3 vViewDirW;
+          varying vec3 vSunDirW;
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            vec4 worldPos = modelMatrix * vec4(position, 1.0);
+            vNormalW = normalize(mat3(modelMatrix) * normal);
+            vSunDirW = normalize(mat3(modelMatrix) * sunDir); // modelMatrix는 버텍스 셰이더에서만 쓸 수 있어요
+            vViewDirW = normalize(cameraPosition - worldPos.xyz);
+            gl_Position = projectionMatrix * viewMatrix * worldPos;
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D earthMap;
+          varying vec3 vNormalW;
+          varying vec3 vViewDirW;
+          varying vec3 vSunDirW;
+          varying vec2 vUv;
+          void main() {
+            vec3 base = texture2D(earthMap, vUv).rgb;
+            // 바다 판별: 파랑이 빨강보다 확실히 강하고, 얼음/구름처럼 밝지 않은 곳
+            float oceanMask = smoothstep(0.02, 0.10, base.b - base.r) * (1.0 - smoothstep(0.45, 0.65, dot(base, vec3(0.333))));
+            vec3 n = normalize(vNormalW);
+            vec3 l = normalize(vSunDirW);
+            vec3 v = normalize(vViewDirW);
+            float lit = step(0.0, dot(n, l)); // 밤쪽엔 반사 없음
+            vec3 h = normalize(l + v);
+            float nh = max(dot(n, h), 0.0);
+            float core = pow(nh, 400.0) * 1.1;  // 작고 강한 반짝임
+            float halo = pow(nh, 40.0) * 0.18;  // 넓게 퍼지는 은은한 반사
+            float glint = (core + halo) * oceanMask * lit;
+            gl_FragColor = vec4(vec3(1.0, 0.93, 0.8) * glint, glint);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.renderOrder = 2.5; // 햇빛 온기(2) 위, 밤 그림자(3) 아래
+      return mesh;
+    }
+
     // [CHANGE] "로딩 화면 만들어서 작은 지구만 먼저 보여주자" 요청 반영 -
     // 기존 initThreeGlobe()를 둘로 쪼갰습니다.
     // 1) initEarlyScene(): 정점 데이터 없이도 바로 그릴 수 있는 것들
@@ -571,6 +684,12 @@ function getCurrentCenterLatLng() {
       // 느낌을 더합니다.
       cloudMesh = buildCloudLayer();
       globeGroup.add(cloudMesh);
+
+      // [ADD] 바다 햇빛 반사 + 위성 실측 수온 레이어 (수온은 비동기로 도착하는 대로)
+      const glintMesh = buildSunGlint(sunDirLocal, earthTexture);
+      globeGroup.add(glintMesh);
+      glintMaterialRef = glintMesh.material;
+      loadSstLayer();
 
       // 태평양 방면 기본 회전
       globeGroup.rotation.set(0.35, -2.1, 0);
@@ -768,6 +887,7 @@ function getCurrentCenterLatLng() {
       if (shadowMaterialRef) shadowMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
       if (warmGlowMaterialRef) warmGlowMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
       if (atmosphereMaterialRef) atmosphereMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
+      if (glintMaterialRef) glintMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
     }
 
     function animateGlobeRotationTo(targetX, targetY, duration) {

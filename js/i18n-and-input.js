@@ -39,7 +39,19 @@
         rotateMsg: "화면을 세로로 돌려주세요 — 가로모드에서는 화면이 너무 좁아 지구본과 그래프를 함께 보기 어려워요.",
         liveDataOn: "실시간 데이터 (Open-Meteo)",
         liveDataLoading: "실시간 데이터 불러오는 중...",
-        liveDataFallback: "실제 데이터 연결이 안 되어 추정 알고리즘으로 만든 데이터입니다"
+        liveDataFallback: "실제 데이터 연결이 안 되어 추정 알고리즘으로 만든 데이터입니다",
+        tabTide: "조석 (해수면 높이)",
+        tideLevel: "해수면 높이",
+        tideHigh: "만조",
+        tideLow: "간조",
+        tideNow: "지금",
+        tideAxis: "해수면 높이 (m, 평균해수면 기준)",
+        tideNextHigh: "다음 만조",
+        tideNextLow: "다음 간조",
+        tideSource: "조석 모델 (Open-Meteo, 현지 시각)",
+        tideLoading: "조석 데이터 불러오는 중...",
+        tideFailed: "조석 데이터를 불러오지 못했어요 (잠시 후 다시 시도)",
+        tideNote: "모델 추정값이라 항구 조위표와 다를 수 있어요 - 항해·안전 판단에 쓰지 마세요"
       },
       en: {
         appTitle: "Global Ocean Temp Monitor (3D Satellite Globe)",
@@ -69,7 +81,19 @@
         rotateMsg: "Please rotate your device to portrait — landscape mode is too narrow to show the globe and chart together.",
         liveDataOn: "Live data (Open-Meteo)",
         liveDataLoading: "Loading live data...",
-        liveDataFallback: "Live data unavailable — this is estimated"
+        liveDataFallback: "Live data unavailable — this is estimated",
+        tabTide: "Tide (Sea Level)",
+        tideLevel: "Sea level",
+        tideHigh: "High tide",
+        tideLow: "Low tide",
+        tideNow: "Now",
+        tideAxis: "Sea level (m, above MSL)",
+        tideNextHigh: "Next high",
+        tideNextLow: "Next low",
+        tideSource: "Tide model (Open-Meteo, local time)",
+        tideLoading: "Loading tide data...",
+        tideFailed: "Couldn't load tide data (try again shortly)",
+        tideNote: "Model estimate; may differ from harbor tide tables. Not for navigation or safety decisions."
       }
     };
     const t = i18n[lang] || i18n.en;
@@ -78,6 +102,7 @@
     document.getElementById('st-name').innerText = t.selectPrompt;
     document.getElementById('btn-ts').innerText = t.tabForecast;
     document.getElementById('btn-dp').innerText = t.tabDepth;
+    document.getElementById('btn-tide').innerText = t.tabTide;
     document.getElementById('btn-locate').title = t.locateTitle;
     document.getElementById('btn-fullscreen').title = t.fullscreenTitle;
     document.getElementById('txt-disclaimer-label').innerText = t.disclaimerLabel + ':';

@@ -3,7 +3,7 @@
     let fullGridLoaded = false;
     let selectedStation = null;
     let maxTempStation = null;
-    let activeMode = 'forecast';
+    let activeMode = 'now'; // [CHANGE] 첫 탭 = 수온·조석 ±2일
     let chartInstance = null;
     let tempUnit = 'C'; // [ADD] 섭씨 기본값, 버튼으로 화씨와 전환
 
@@ -16,6 +16,7 @@
     let sunSpriteRef, mercurySpriteRef, venusSpriteRef, moonGroupRef, moonShadowMaterialRef;
     let shadowMaterialRef, warmGlowMaterialRef, atmosphereMaterialRef;
     let glintMaterialRef = null, sstMeshRef = null, sstDataDate = null; // [ADD] 햇빛 반사 / 위성 수온 레이어
+    let tideGridRef = null; // [ADD] 조석 격자
     let beachSprites = []; // [ADD] 줌 반응형 마커 크기 조절을 위해 참조 보관
     let selectionMarker = null; // [ADD] 선택된 정점 표시용 통합 마커 (해변/NOAA 공통)
     let gridStationsRef = []; // [ADD] NOAA 격자 정점 클릭 선택용

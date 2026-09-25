@@ -104,6 +104,9 @@
         <button class="ctrl-btn" onclick="locateUser()" title="내 위치로" id="btn-locate">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
         </button>
+        <button class="ctrl-btn" onclick="toggleMoonTide()" title="달·조석 격자 켜기/끄기" id="btn-moon">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M14.5 2.5a9.5 9.5 0 1 0 7 15.9A8 8 0 0 1 14.5 2.5z"/></svg>
+        </button>
         <button class="ctrl-btn" onclick="toggleFullscreen()" title="전체화면" style="font-size: 13px;" id="btn-fullscreen">⛶</button>
         <button class="ctrl-btn" onclick="toggleTempUnit()" style="font-size: 12px; font-weight:700;" id="btn-reset">°C</button>
       </div>
@@ -128,9 +131,9 @@
       <div class="station-sub" id="st-info">위도 / 경도 / 관측망</div>
 
       <div class="tab-bar">
-        <button class="tab-btn active" id="btn-ts" onclick="setMode('forecast')">과거 5~6년 평균 vs 1년 추정</button>
+        <button class="tab-btn active" id="btn-now" onclick="setMode('now')">수온·조석 (±2일)</button>
+        <button class="tab-btn" id="btn-ts" onclick="setMode('forecast')">과거 5~6년 평균 vs 1년 추정</button>
         <button class="tab-btn" id="btn-dp" onclick="setMode('depth')">수심별 수온 (CTD/Argo)</button>
-        <button class="tab-btn" id="btn-tide" onclick="setMode('tide')">조석 (해수면 높이)</button>
       </div>
 
       <div class="chart-box">

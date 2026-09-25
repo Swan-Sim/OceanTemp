@@ -40,17 +40,20 @@
         liveDataOn: "실시간 데이터 (Open-Meteo)",
         liveDataLoading: "실시간 데이터 불러오는 중...",
         liveDataFallback: "실제 데이터 연결이 안 되어 추정 알고리즘으로 만든 데이터입니다",
-        tabTide: "조석 (해수면 높이)",
+        tabNow: "수온·조석 (±2일)",
+        nowTemp: "수온",
+        tideRef: "평균해수면 0m = 20°C 선",
+        nowSource: "실시간 모델 (Open-Meteo, 현지 시각)",
+        nowLoading: "수온·조석 데이터 불러오는 중...",
+        nowFailed: "데이터를 불러오지 못했어요 - 1분쯤 뒤 이 탭을 다시 눌러주세요",
+        moonTideOn: "달·조석 격자 끄기",
+        moonTideOff: "달·조석 격자 켜기",
         tideLevel: "해수면 높이",
         tideHigh: "만조",
         tideLow: "간조",
         tideNow: "지금",
-        tideAxis: "해수면 높이 (m, 평균해수면 기준)",
         tideNextHigh: "다음 만조",
         tideNextLow: "다음 간조",
-        tideSource: "조석 모델 (Open-Meteo, 현지 시각)",
-        tideLoading: "조석 데이터 불러오는 중...",
-        tideFailed: "조석 데이터를 불러오지 못했어요 - 1분쯤 뒤 조석 탭을 다시 눌러주세요",
         tideNote: "모델 추정값이라 항구 조위표와 다를 수 있어요 - 항해·안전 판단에 쓰지 마세요"
       },
       en: {
@@ -82,17 +85,20 @@
         liveDataOn: "Live data (Open-Meteo)",
         liveDataLoading: "Loading live data...",
         liveDataFallback: "Live data unavailable — this is estimated",
-        tabTide: "Tide (Sea Level)",
+        tabNow: "Temp & Tide (±2 days)",
+        nowTemp: "Water temp",
+        tideRef: "MSL 0 m aligned with 20°C",
+        nowSource: "Live model (Open-Meteo, local time)",
+        nowLoading: "Loading temp & tide data...",
+        nowFailed: "Couldn't load data - tap this tab again in about a minute",
+        moonTideOn: "Hide moon & tide grid",
+        moonTideOff: "Show moon & tide grid",
         tideLevel: "Sea level",
         tideHigh: "High tide",
         tideLow: "Low tide",
         tideNow: "Now",
-        tideAxis: "Sea level (m, above MSL)",
         tideNextHigh: "Next high",
         tideNextLow: "Next low",
-        tideSource: "Tide model (Open-Meteo, local time)",
-        tideLoading: "Loading tide data...",
-        tideFailed: "Couldn't load tide data - tap the Tide tab again in about a minute",
         tideNote: "Model estimate; may differ from harbor tide tables. Not for navigation or safety decisions."
       }
     };
@@ -102,7 +108,7 @@
     document.getElementById('st-name').innerText = t.selectPrompt;
     document.getElementById('btn-ts').innerText = t.tabForecast;
     document.getElementById('btn-dp').innerText = t.tabDepth;
-    document.getElementById('btn-tide').innerText = t.tabTide;
+    document.getElementById('btn-now').innerText = t.tabNow;
     document.getElementById('btn-locate').title = t.locateTitle;
     document.getElementById('btn-fullscreen').title = t.fullscreenTitle;
     document.getElementById('txt-disclaimer-label').innerText = t.disclaimerLabel + ':';

@@ -553,6 +553,7 @@ function getCurrentCenterLatLng() {
         uniforms: {
           sunDir: { value: sunDirLocal.clone().normalize() },
           moonDir: { value: (moonDirLocal || sunDirLocal.clone().negate()).clone().normalize() },
+          moonOn: { value: 1.0 }, // 달 켜기/끄기 버튼과 연동
           earthMap: { value: earthTexture }
         },
         vertexShader: `
@@ -575,6 +576,7 @@ function getCurrentCenterLatLng() {
         `,
         fragmentShader: `
           uniform sampler2D earthMap;
+          uniform float moonOn;
           varying vec3 vNormalW;
           varying vec3 vViewDirW;
           varying vec3 vSunDirW;
@@ -602,7 +604,7 @@ function getCurrentCenterLatLng() {
             float phase = 0.5 * (1.0 - dot(l, m)); // 0 = 그믐(태양과 같은 방향), 1 = 보름
             vec3 hm = normalize(m + v);
             float nhm = max(dot(n, hm), 0.0);
-            float moonGlint = (pow(nhm, 300.0) * 0.9 + pow(nhm, 30.0) * 0.12) * oceanMask * night * moonUp * phase;
+            float moonGlint = (pow(nhm, 300.0) * 0.9 + pow(nhm, 30.0) * 0.12) * oceanMask * night * moonUp * phase * moonOn;
             color += vec3(0.75, 0.84, 1.0) * moonGlint;
 
             float a = clamp(max(color.r, color.b), 0.0, 1.0);
@@ -616,6 +618,91 @@ function getCurrentCenterLatLng() {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.renderOrder = 2.5; // 햇빛 온기(2) 위, 밤 그림자(3) 아래
       return mesh;
+    }
+
+    // [ADD] "조석을 위도·경도 같은 격자로 만들고 선을 구부러지게 해서 보여주자"
+    // 요청 반영 - 10° 간격 격자선을, 실제 달·태양 위치로 계산한 "평형 조석"
+    // 높이만큼 바깥으로 밀어냅니다. 달 쪽과 그 반대쪽 두 군데가 불룩해지고(하루
+    // 두 번 만조의 원리), 태양이 달과 일직선이면(사리) 더 크게, 직각이면(조금)
+    // 작게 휩니다. 태양의 조석 힘은 달의 약 46%라 그 비율로 더했어요.
+    // 실제 높이(1m 안팎)는 지구에 비해 너무 작아서 지구 반지름의 약 6%로
+    // 크게 과장했고, 대륙·해저지형 효과가 없는 "원리 설명용" 그림입니다.
+    // 계산은 전부 그래픽카드(셰이더)에서 해서 데이터 요청이 전혀 없어요.
+    // 육지 위 선은 흐리게 해서 바다에서만 휘어져 보이게 했습니다.
+    function buildTideGrid(sunDirLocal, moonDirLocal, earthTexture) {
+      const pos = [], ll = [];
+      const push = (a, b) => {
+        const p1 = latLonToSpherePos(a[0], a[1], 1), p2 = latLonToSpherePos(b[0], b[1], 1);
+        pos.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+        ll.push(a[0], a[1], b[0], b[1]);
+      };
+      const STEP = 10, SUB = 1; // 선 간격 10°, 휘어짐이 부드럽도록 1°씩 잘게 나눔
+      for (let lat = -80; lat <= 80; lat += STEP) for (let lon = -180; lon < 180; lon += SUB) push([lat, lon], [lat, lon + SUB]);
+      for (let lon = -180; lon < 180; lon += STEP) for (let lat = -80; lat < 80; lat += SUB) push([lat, lon], [lat + SUB, lon]);
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geometry.setAttribute('latlon', new THREE.Float32BufferAttribute(ll, 2));
+      const amp = GLOBE_RADIUS * 0.06;
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          sunDir: { value: sunDirLocal.clone().normalize() },
+          moonDir: { value: moonDirLocal.clone().normalize() },
+          earthMap: { value: earthTexture },
+          amp: { value: amp },
+          radius: { value: GLOBE_RADIUS * 1.006 + amp * 0.35 } // 가장 낮은 곳도 지표 위에 오도록
+        },
+        vertexShader: `
+          uniform vec3 sunDir; uniform vec3 moonDir; uniform float radius; uniform float amp;
+          attribute vec2 latlon;
+          varying float vH;
+          varying vec2 vUv;
+          void main() {
+            vec3 n = normalize(position);
+            float cm = dot(n, normalize(moonDir));
+            float cs = dot(n, normalize(sunDir));
+            // 평형 조석: P2(cosθ) = (3cos²θ - 1)/2 - 달 + 태양(0.46배)
+            float h = 0.5 * (3.0 * cm * cm - 1.0) + 0.46 * 0.5 * (3.0 * cs * cs - 1.0);
+            vH = h / 1.46;
+            vUv = vec2((latlon.y + 180.0) / 360.0, (latlon.x + 90.0) / 180.0);
+            vec3 p = n * (radius + amp * vH);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D earthMap;
+          varying float vH;
+          varying vec2 vUv;
+          void main() {
+            vec3 base = texture2D(earthMap, vUv).rgb;
+            float ocean = smoothstep(0.02, 0.10, base.b - base.r) * (1.0 - smoothstep(0.45, 0.65, dot(base, vec3(0.333))));
+            float hi = clamp(vH, 0.0, 1.0);
+            vec3 col = mix(vec3(0.55, 0.75, 1.0), vec3(0.85, 0.97, 1.0), hi); // 부푼 곳일수록 밝게
+            float a = (0.30 + 0.60 * hi) * mix(0.08, 1.0, ocean);
+            gl_FragColor = vec4(col, a);
+          }
+        `,
+        transparent: true,
+        depthWrite: false
+      });
+      const lines = new THREE.LineSegments(geometry, material);
+      lines.renderOrder = 3.5; // 밤 그림자(3) 위 - 밤쪽에서도 격자가 보이게
+      return lines;
+    }
+
+    // [ADD] "기본으로 보이게, 끄는 버튼에 달을 넣고 끄면 달도 사라지게" 요청 반영
+    // - 조석 격자 + 달(구체) + 달빛 반사를 한 번에 켜고 끕니다.
+    let moonTideVisible = true;
+    function toggleMoonTide() {
+      moonTideVisible = !moonTideVisible;
+      if (tideGridRef) tideGridRef.visible = moonTideVisible;
+      if (moonGroupRef) moonGroupRef.visible = moonTideVisible;
+      if (glintMaterialRef) glintMaterialRef.uniforms.moonOn.value = moonTideVisible ? 1.0 : 0.0;
+      const btn = document.getElementById('btn-moon');
+      if (btn) {
+        btn.style.opacity = moonTideVisible ? '1' : '0.4';
+        btn.title = moonTideVisible ? t.moonTideOn : t.moonTideOff;
+      }
     }
 
     // [CHANGE] "로딩 화면 만들어서 작은 지구만 먼저 보여주자" 요청 반영 -
@@ -710,6 +797,10 @@ function getCurrentCenterLatLng() {
       const glintMesh = buildSunGlint(sunDirLocal, earthTexture, latLonToSpherePos(moonNow.lat, moonNow.lon, 1).normalize());
       globeGroup.add(glintMesh);
       glintMaterialRef = glintMesh.material;
+
+      // [ADD] 조석 격자 (기본 표시, 달 버튼으로 끄기)
+      tideGridRef = buildTideGrid(sunDirLocal, latLonToSpherePos(moonNow.lat, moonNow.lon, 1).normalize(), earthTexture);
+      globeGroup.add(tideGridRef);
       loadSstLayer();
 
       // 태평양 방면 기본 회전
@@ -958,6 +1049,10 @@ function getCurrentCenterLatLng() {
       if (glintMaterialRef) {
         glintMaterialRef.uniforms.sunDir.value.copy(sunDirLocal);
         glintMaterialRef.uniforms.moonDir.value.copy(latLonToSpherePos(moon.lat, moon.lon, 1).normalize());
+      }
+      if (tideGridRef) {
+        tideGridRef.material.uniforms.sunDir.value.copy(sunDirLocal);
+        tideGridRef.material.uniforms.moonDir.value.copy(latLonToSpherePos(moon.lat, moon.lon, 1).normalize());
       }
     }
 

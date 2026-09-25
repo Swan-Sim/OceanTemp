@@ -233,45 +233,47 @@
       return climByMonth[i0] + (climByMonth[i1] - climByMonth[i0]) * frac;
     }
 
-    // [ADD] "조석 데이터도 추가할 수 있어?" 요청 반영 - Open-Meteo 해양 API의
-    // 시간별 해수면 높이(sea_level_height_msl, 평균해수면 기준 m)를 가져옵니다.
-    // 조석(밀물·썰물)에 기압·바람에 의한 변화까지 포함된 전 세계 모델값이라
-    // 바다 한가운데 격자 정점에서도 나와요. 어제~모레(총 4일) 범위를 받아서
-    // 오늘이 가운데쯤 오도록 했고, 만조/간조는 곡선의 봉우리·골짜기로 찾습니다.
+    // [CHANGE] "수온 옆에 조석을 같이, 둘 다 ±2일(4일치)로" 요청 반영 - 첫 번째
+    // 탭용 데이터. Open-Meteo 해양 API에서 시간별 수온(sea_surface_temperature)과
+    // 해수면 높이(sea_level_height_msl, 조석+기압·바람 영향 포함, 평균해수면 기준 m)를
+    // "한 번의 요청"으로 같이 받아서 오늘 기준 앞뒤 2일만 씁니다.
     // 해안 가까이에선 모델 해상도(수 km) 한계로 실제 항구 조위표와 차이가
     // 날 수 있어서, 화면에도 "참고용"으로 표시합니다.
-    async function fetchStationTide(station) {
-      if (station._tideCache) return station._tideCache;
+    async function fetchStationHourly(station) {
+      if (station._hourlyCache) return station._hourlyCache;
       const lat = station.coords[1], lon = station.coords[0];
-      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_level_height_msl&past_days=1&forecast_days=3&timezone=auto`;
+      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl&past_days=2&forecast_days=3&timezone=auto`;
       const res = await fetchJSON(url);
-      const times = res && res.hourly && res.hourly.time;
-      const vals = res && res.hourly && res.hourly.sea_level_height_msl;
-      if (!times || !vals) throw new Error('no sea level data');
+      const h = res && res.hourly;
+      if (!h || !h.time) throw new Error('no hourly data');
 
       // API가 돌려준 현지 시각 문자열("2026-09-25T14:00")을 그대로 ms로 바꿔서
-      // (UTC로 취급) 차트 x축에 씁니다 - 표시할 때도 UTC로 읽어서 현지 시각 유지.
-      const points = [];
-      times.forEach((ts, i) => {
-        if (typeof vals[i] !== 'number') return;
-        points.push({ x: Date.parse(ts + ':00Z'), y: +vals[i].toFixed(2) });
+      // (UTC로 취급) x축에 씁니다 - 표시할 때도 UTC로 읽어서 현지 시각 유지.
+      const offsetSec = res.utc_offset_seconds || 0;
+      const nowLocalMs = Date.now() + offsetSec * 1000;
+      const from = nowLocalMs - 48 * 3600 * 1000, to = nowLocalMs + 48 * 3600 * 1000;
+
+      const temp = [], tide = [];
+      h.time.forEach((ts, i) => {
+        const x = Date.parse(ts + ':00Z');
+        if (x < from - 3600 * 1000 || x > to + 3600 * 1000) return;
+        const tv = h.sea_surface_temperature && h.sea_surface_temperature[i];
+        const sv = h.sea_level_height_msl && h.sea_level_height_msl[i];
+        if (typeof tv === 'number') temp.push({ x, y: +tv.toFixed(2) });
+        if (typeof sv === 'number') tide.push({ x, y: +sv.toFixed(2) });
       });
-      if (points.length < 6) throw new Error('no sea level data');
+      if (temp.length < 6 && tide.length < 6) throw new Error('no hourly data');
 
       // 만조/간조: 앞뒤 값보다 크거나(만조) 작은(간조) 지점
       const extremes = [];
-      for (let i = 1; i < points.length - 1; i++) {
-        const a = points[i - 1].y, b = points[i].y, c = points[i + 1].y;
-        if (b > a && b >= c) extremes.push({ ...points[i], type: 'high' });
-        else if (b < a && b <= c) extremes.push({ ...points[i], type: 'low' });
+      for (let i = 1; i < tide.length - 1; i++) {
+        const a = tide[i - 1].y, b = tide[i].y, c = tide[i + 1].y;
+        if (b > a && b >= c) extremes.push({ ...tide[i], type: 'high' });
+        else if (b < a && b <= c) extremes.push({ ...tide[i], type: 'low' });
       }
 
-      // 이 정점의 "지금" (현지 시각 기준, 위와 같은 UTC 취급)
-      const offsetSec = res.utc_offset_seconds || 0;
-      const nowLocalMs = Date.now() + offsetSec * 1000;
-
-      const result = { points, extremes, nowLocalMs, tz: res.timezone_abbreviation || res.timezone || '' };
-      station._tideCache = result;
+      const result = { temp, tide, extremes, nowLocalMs, from, to };
+      station._hourlyCache = result;
       return result;
     }
 

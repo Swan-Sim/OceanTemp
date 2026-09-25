@@ -155,70 +155,84 @@
       return { depths, profile };
     }
 
-    // [ADD] "조석 데이터도 추가" - 조석 탭 차트. 데이터가 아직 없으면 먼저
-    // "불러오는 중"을 보여주고 백그라운드로 받아온 뒤 다시 그립니다.
-    async function ensureTideData(st) {
-      if (st._tideCache || st._tideState === 'loading') return;
-      st._tideState = 'loading';
+    // [CHANGE] "수온과 조석 두 그래프를 같이, 20°C = 조석 0m로 맞춰서 오른쪽
+    // 끝에 m로 표시" 요청 반영 - 첫 번째 탭(±2일) 차트. 왼쪽 축은 수온(절대값),
+    // 오른쪽 축은 해수면 높이(m)이고, 두 축을 같은 비율로 잡아서 왼쪽 20°C
+    // 눈금과 오른쪽 0m 눈금이 항상 같은 높이에 오도록 했습니다.
+    // 데이터가 없으면 "불러오는 중"을 먼저 보여주고, 실패하면 무한 재시도
+    // 대신 탭을 다시 눌렀을 때만 재시도합니다.
+    async function ensureHourlyData(st) {
+      if (st._hourlyCache || st._hourlyState === 'loading') return;
+      st._hourlyState = 'loading';
       try {
-        await fetchStationTide(st);
-        st._tideState = 'ok';
+        const d = await fetchStationHourly(st);
+        st._hourlyState = 'ok';
+        // 헤더 수온도 이 지점의 "지금" 시간별 값으로 맞춰서 그래프와 일치시킵니다
+        const nowT = interpAt(d.temp, d.nowLocalMs);
+        if (nowT != null) {
+          st.curTemp = +nowT.toFixed(1);
+          if (selectedStation === st) document.getElementById('st-temp').innerText = formatTemp(st.curTemp);
+        }
       } catch (e) {
-        console.warn('[tide] 조석 데이터 가져오기 실패:', e);
-        st._tideState = 'failed';
+        console.warn('[hourly] 수온·조석 데이터 가져오기 실패:', e);
+        st._hourlyState = 'failed';
       }
-      if (selectedStation === st && activeMode === 'tide') updateChart();
+      if (selectedStation === st && activeMode === 'now') updateChart();
     }
 
-    function fmtTideTime(ms, withDate) {
+    function interpAt(pts, x) {
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (pts[i].x <= x && x <= pts[i + 1].x) {
+          const k = (x - pts[i].x) / (pts[i + 1].x - pts[i].x);
+          return pts[i].y + (pts[i + 1].y - pts[i].y) * k;
+        }
+      }
+      return null;
+    }
+
+    function fmtLocalTime(ms, withDate) {
       const d = new Date(ms);
       const hh = String(d.getUTCHours()).padStart(2, '0');
       const mm = String(d.getUTCMinutes()).padStart(2, '0');
       return withDate ? `${t.months[d.getUTCMonth()]} ${d.getUTCDate()} ${hh}:${mm}` : `${hh}:${mm}`;
     }
 
-    function renderTideChart(chartCanvas, legendBox) {
+    function renderNowChart(chartCanvas, legendBox) {
       const st = selectedStation;
-      const tide = st._tideCache;
-      if (!tide) {
-        // [FIX] "조석이 계속 로딩" - 실패하면 곧바로 다시 요청하는 무한 반복이
-        // 있었어요(실패 → 다시 그림 → 다시 요청 → "로딩 중"). 이제 처음
-        // 한 번만 자동으로 부르고, 실패하면 조석 탭을 다시 눌렀을 때 재시도합니다.
-        if (!st._tideState) ensureTideData(st);
-        legendBox.innerHTML = st._tideState === 'failed'
-          ? `<div class="item" style="color:#94a3b8;">⚠ ${t.tideFailed}</div>`
-          : `<div class="item" style="color:#facc15;">⏳ ${t.tideLoading}</div>`;
+      const d = st._hourlyCache;
+      if (!d) {
+        if (!st._hourlyState) ensureHourlyData(st);
+        legendBox.innerHTML = st._hourlyState === 'failed'
+          ? `<div class="item" style="color:#94a3b8;">⚠ ${t.nowFailed}</div>`
+          : `<div class="item" style="color:#facc15;">⏳ ${t.nowLoading}</div>`;
         chartInstance = null;
         return;
       }
 
-      // 지금 시각의 해수면 높이(앞뒤 시간 값 사이 선형 보간)
-      const pts = tide.points;
-      let nowY = null;
-      for (let i = 0; i < pts.length - 1; i++) {
-        if (pts[i].x <= tide.nowLocalMs && tide.nowLocalMs <= pts[i + 1].x) {
-          const k = (tide.nowLocalMs - pts[i].x) / (pts[i + 1].x - pts[i].x);
-          nowY = +(pts[i].y + (pts[i + 1].y - pts[i].y) * k).toFixed(2);
-          break;
-        }
-      }
-      const highs = tide.extremes.filter(e => e.type === 'high');
-      const lows = tide.extremes.filter(e => e.type === 'low');
       const HOUR = 3600 * 1000;
-      // 눈금은 0시/12시에 딱 맞춰서, 위쪽엔 범례가 곡선을 가리지 않게 여유 공간
-      const ys = pts.map(p => p.y);
-      const yMin = Math.min(...ys), yMax = Math.max(...ys), yRange = Math.max(0.2, yMax - yMin);
+      const nowT = interpAt(d.temp, d.nowLocalMs);
+      const nowH = interpAt(d.tide, d.nowLocalMs);
+      const highs = d.extremes.filter(e => e.type === 'high');
+      const lows = d.extremes.filter(e => e.type === 'low');
+
+      // 20°C ↔ 0m 정렬: 두 축 모두 "기준점 아래 1 : 위 HEAD" 비율로 잡으면
+      // 기준점(20°C, 0m)이 항상 같은 높이에 옵니다. 위쪽은 범례 자리로 여유.
+      const T0 = 20, HEAD = 1.7;
+      const tDev = Math.max(2, ...d.temp.map(p => Math.abs(p.y - T0))) * 1.1;
+      const hDev = Math.max(0.3, ...d.tide.map(p => Math.abs(p.y))) * 1.1;
       const tickXs = [];
-      for (let x = Math.ceil(pts[0].x / (12 * HOUR)) * 12 * HOUR; x <= pts[pts.length - 1].x; x += 12 * HOUR) tickXs.push(x);
+      for (let x = Math.ceil(d.from / (12 * HOUR)) * 12 * HOUR; x <= d.to; x += 12 * HOUR) tickXs.push(x);
 
       chartInstance = new Chart(chartCanvas, {
         type: 'line',
         data: {
           datasets: [
-            { label: t.tideLevel, data: pts, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.12)', fill: 'start', tension: 0.35, pointRadius: 0, pointHitRadius: 12, borderWidth: 2 },
-            { label: t.tideHigh, data: highs, borderColor: '#f97316', backgroundColor: '#f97316', pointRadius: 3, showLine: false },
-            { label: t.tideLow, data: lows, borderColor: '#a78bfa', backgroundColor: '#a78bfa', pointRadius: 3, showLine: false },
-            { label: t.tideNow, data: nowY != null ? [{ x: tide.nowLocalMs, y: nowY }] : [], borderColor: '#38bdf8', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHoverRadius: 7, showLine: false }
+            { label: t.nowTemp, data: d.temp, yAxisID: 'y', borderColor: '#ef4444', tension: 0.3, pointRadius: 0, pointHitRadius: 10, borderWidth: 2.2 },
+            { label: t.tideLevel, data: d.tide, yAxisID: 'y2', borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.10)', fill: 'origin', tension: 0.35, pointRadius: 0, pointHitRadius: 10, borderWidth: 2 },
+            { label: t.tideHigh, data: highs, yAxisID: 'y2', borderColor: '#f97316', backgroundColor: '#f97316', pointRadius: 3, showLine: false },
+            { label: t.tideLow, data: lows, yAxisID: 'y2', borderColor: '#a78bfa', backgroundColor: '#a78bfa', pointRadius: 3, showLine: false },
+            { label: t.tideNow, data: nowT != null ? [{ x: d.nowLocalMs, y: nowT }] : [], yAxisID: 'y', borderColor: '#ef4444', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, showLine: false },
+            { label: t.tideNow, data: nowH != null ? [{ x: d.nowLocalMs, y: nowH }] : [], yAxisID: 'y2', borderColor: '#38bdf8', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, showLine: false }
           ]
         },
         options: {
@@ -228,32 +242,61 @@
             legend: { display: false },
             tooltip: {
               callbacks: {
-                title: (items) => fmtTideTime(items[0].parsed.x, true),
-                label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} m`
+                title: (items) => fmtLocalTime(items[0].parsed.x, true),
+                label: (ctx) => ctx.dataset.yAxisID === 'y'
+                  ? `${ctx.dataset.label}: ${formatTemp(ctx.parsed.y)}`
+                  : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} m`
               }
             }
           },
           scales: {
             x: {
-              type: 'linear', min: pts[0].x, max: pts[pts.length - 1].x,
+              type: 'linear', min: d.from, max: d.to,
               ticks: {
                 color: '#64748b', font: { size: 9 }, maxRotation: 0,
-                callback: (v) => { const d = new Date(v); return d.getUTCHours() === 0 ? `${t.months[d.getUTCMonth()]} ${d.getUTCDate()}` : fmtTideTime(v, false); }
+                callback: (v) => { const dd = new Date(v); return dd.getUTCHours() === 0 ? `${t.months[dd.getUTCMonth()]} ${dd.getUTCDate()}` : fmtLocalTime(v, false); }
               },
               grid: { color: '#1e293b' },
               afterBuildTicks: (axis) => { axis.ticks = tickXs.map(v => ({ value: v })); }
             },
-            y: { min: yMin - yRange * 0.1, max: yMax + yRange * 0.75, title: { display: true, text: t.tideAxis, color: '#94a3b8', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 9 }, callback: (v) => `${(+v).toFixed(1)}` }, grid: { color: '#1e293b' } }
+            y: {
+              position: 'left', min: T0 - tDev, max: T0 + tDev * HEAD,
+              ticks: { color: '#fca5a5', font: { size: 9 }, callback: formatAxisTemp },
+              grid: { color: (c) => Math.abs(c.tick.value - T0) < 1e-6 ? '#475569' : '#1e293b' },
+              afterBuildTicks: (axis) => {
+                // 20°C 눈금이 꼭 들어가도록 기준점부터 위/아래로 눈금 생성
+                const step = tDev > 6 ? 4 : 2;
+                const ticks = [];
+                for (let v = T0; v >= axis.min - 1e-6; v -= step) ticks.unshift({ value: v });
+                for (let v = T0 + step; v <= axis.max + 1e-6; v += step) ticks.push({ value: v });
+                axis.ticks = ticks;
+              }
+            },
+            y2: {
+              position: 'right', min: -hDev, max: hDev * HEAD,
+              ticks: { color: '#7dd3fc', font: { size: 9 }, callback: (v) => `${(+v).toFixed(1)}m` },
+              grid: { drawOnChartArea: false },
+              afterBuildTicks: (axis) => {
+                // 0m 눈금이 꼭 들어가도록 (왼쪽 20°C 눈금과 같은 높이)
+                const step = hDev > 1.5 ? 1 : 0.5;
+                const ticks = [];
+                for (let v = 0; v >= axis.min - 1e-6; v -= step) ticks.unshift({ value: v });
+                for (let v = step; v <= axis.max + 1e-6; v += step) ticks.push({ value: v });
+                axis.ticks = ticks;
+              }
+            }
           }
         }
       });
 
-      const nextHigh = highs.find(e => e.x > tide.nowLocalMs);
-      const nextLow = lows.find(e => e.x > tide.nowLocalMs);
+      const nextHigh = highs.find(e => e.x > d.nowLocalMs);
+      const nextLow = lows.find(e => e.x > d.nowLocalMs);
       legendBox.innerHTML =
-        `<div class="item" style="color:#4ade80;">🟢 ${t.tideSource}</div>` +
-        (nextHigh ? `<div class="item"><span class="swatch" style="background:#f97316;"></span>${t.tideNextHigh} ${fmtTideTime(nextHigh.x, false)} (${nextHigh.y.toFixed(2)} m)</div>` : '') +
-        (nextLow ? `<div class="item"><span class="swatch" style="background:#a78bfa;"></span>${t.tideNextLow} ${fmtTideTime(nextLow.x, false)} (${nextLow.y.toFixed(2)} m)</div>` : '') +
+        `<div class="item" style="color:#4ade80;">🟢 ${t.nowSource}</div>` +
+        `<div class="item"><span class="swatch" style="background:#ef4444;"></span>${t.nowTemp}</div>` +
+        `<div class="item"><span class="swatch" style="background:#38bdf8;"></span>${t.tideLevel} (m, ${t.tideRef})</div>` +
+        (nextHigh ? `<div class="item"><span class="swatch" style="background:#f97316;"></span>${t.tideNextHigh} ${fmtLocalTime(nextHigh.x, false)} (${nextHigh.y.toFixed(2)} m)</div>` : '') +
+        (nextLow ? `<div class="item"><span class="swatch" style="background:#a78bfa;"></span>${t.tideNextLow} ${fmtLocalTime(nextLow.x, false)} (${nextLow.y.toFixed(2)} m)</div>` : '') +
         `<div class="item" style="color:#94a3b8;">⚠ ${t.tideNote}</div>`;
     }
 
@@ -262,7 +305,7 @@
       if (chartInstance) chartInstance.destroy();
       const legendBox = document.getElementById('chart-legend');
 
-      if (activeMode === 'tide') { renderTideChart(chartCanvas, legendBox); return; }
+      if (activeMode === 'now') { renderNowChart(chartCanvas, legendBox); return; }
 
       if (activeMode === 'forecast') {
         const usingLive = !!selectedStation._liveCache;
@@ -375,7 +418,7 @@
       if (!st.hasDepth) {
         depthBtn.style.opacity = '0.35';
         depthBtn.style.pointerEvents = 'none';
-        if (activeMode === 'depth') activeMode = 'forecast';
+        if (activeMode === 'depth') setMode('now');
       } else {
         depthBtn.style.opacity = '1';
         depthBtn.style.pointerEvents = 'auto';
@@ -386,28 +429,35 @@
       // [ADD] "현재+과거 데이터를 실제로 가져와서 그래프 만들 수 있어?" 요청 반영.
       // Open-Meteo에서 이 정점의 실제 현재값+과거 5년+올해 실측을 가져옵니다.
       // 한 번 성공한 정점은 세션 내내 캐시돼서 재선택 시 다시 안 불러와요.
-      if (!st._liveCache) {
-        st._liveState = 'loading';
-        if (selectedStation === st) updateChart();
-        try {
-          await fetchStationRealData(st);
-        } catch (e) {
-          console.warn('[live-data] 정점 실데이터 가져오기 실패, 예시값 유지:', e);
-          st._liveState = 'failed';
-        }
-        if (selectedStation === st) updateChart(); // 그 사이 다른 정점을 안 골랐으면 실데이터로 다시 그림
+      // [CHANGE] 90일 실데이터(요청 2건)는 그 탭을 볼 때만 불러옵니다 -
+      // Open-Meteo 요청 한도를 아끼려고요. 첫 탭(±2일)은 renderNowChart가 따로 불러요.
+      if (activeMode === 'forecast') ensureLiveData(st);
+    }
+
+    async function ensureLiveData(st) {
+      if (st._liveCache || st._liveState === 'loading') return;
+      st._liveState = 'loading';
+      if (selectedStation === st) updateChart();
+      try {
+        await fetchStationRealData(st);
+        st._liveState = 'ok';
+      } catch (e) {
+        console.warn('[live-data] 정점 실데이터 가져오기 실패, 예시값 유지:', e);
+        st._liveState = 'failed';
       }
+      if (selectedStation === st && activeMode === 'forecast') updateChart(); // 그 사이 다른 정점을 안 골랐으면 실데이터로 다시 그림
     }
 
     function setMode(mode) {
       activeMode = mode;
-      // 조석 실패 상태에서 탭을 다시 누르면 재시도
-      if (mode === 'tide' && selectedStation && selectedStation._tideState === 'failed') selectedStation._tideState = undefined;
+      // 수온·조석 실패 상태에서 탭을 다시 누르면 재시도
+      if (mode === 'now' && selectedStation && selectedStation._hourlyState === 'failed') selectedStation._hourlyState = undefined;
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       if (mode === 'forecast') document.getElementById('btn-ts').classList.add('active');
-      else if (mode === 'tide') document.getElementById('btn-tide').classList.add('active');
+      else if (mode === 'now') document.getElementById('btn-now').classList.add('active');
       else document.getElementById('btn-dp').classList.add('active');
       updateChart();
+      if (mode === 'forecast' && selectedStation) ensureLiveData(selectedStation);
     }
 
     // [ADD] "지구공" 리셋 버튼을 섭씨/화씨 전환 버튼으로 바꿔달라는 요청 반영.

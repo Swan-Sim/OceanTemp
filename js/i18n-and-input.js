@@ -18,8 +18,10 @@
         stationCount: (n) => `총 ${n.toLocaleString()}개 정점`,
         selectPrompt: "정점을 선택하세요",
         infoCoord: (net, lat, lon) => `${net} | 위도: ${lat.toFixed(3)}°, 경도: ${lon.toFixed(3)}°`,
-        tabForecast: "계절 추정 vs 최근 90일 실측",
-        tabDepth: "수심별 수온 (CTD/Argo)",
+        tabForecast: "📈 90일 추이",
+        modalForecast: "계절 추정 vs 최근 90일 실측",
+        tabDepth: "🌡 수심 프로파일",
+        modalDepth: "수심별 수온 (CTD/Argo)",
         chartPast: "평년(계절 추정)",
         chartActual: "실측값(최근 90일)",
         chartFuture: "추정값(오늘~연말)",
@@ -46,7 +48,8 @@
         nowSource: "실시간 모델 (Open-Meteo, 현지 시각)",
         nowLoading: "수온·조석 데이터 불러오는 중...",
         nowFailed: "데이터를 불러오지 못했어요 - 1분쯤 뒤 이 탭을 다시 눌러주세요",
-        tapToLoad: "정점을 누르거나 이 탭을 누르면 실시간 수온·조석을 불러와요",
+        tapToLoad: "정점을 누르면 실시간 수온·조석·바람·파도를 불러와요",
+        prevDay: "전날", nextDay: "다음날", retry: "다시 시도",
         compass: ['북', '북동', '동', '남동', '남', '남서', '서', '북서'],
         rowTemp: "수온", rowWind: "바람 m/s", rowDir: "방향", rowWave: "파고 m", rowSwell: "너울 주기", rowTide: "조석",
         gust: "돌풍",
@@ -72,8 +75,10 @@
         stationCount: (n) => `${n.toLocaleString()} Stations`,
         selectPrompt: "Select a station",
         infoCoord: (net, lat, lon) => `${net} | Lat: ${lat.toFixed(3)}°, Lon: ${lon.toFixed(3)}°`,
-        tabForecast: "Seasonal Est. vs Last 90 Days",
-        tabDepth: "Depth Profile (CTD/Argo)",
+        tabForecast: "📈 90-day trend",
+        modalForecast: "Seasonal Est. vs Last 90 Days",
+        tabDepth: "🌡 Depth profile",
+        modalDepth: "Depth Profile (CTD/Argo)",
         chartPast: "Seasonal Estimate",
         chartActual: "Actual (Last 90 Days)",
         chartFuture: "Projected (Today–Dec)",
@@ -100,7 +105,8 @@
         nowSource: "Live model (Open-Meteo, local time)",
         nowLoading: "Loading temp & tide data...",
         nowFailed: "Couldn't load data - tap this tab again in about a minute",
-        tapToLoad: "Tap a station (or this tab) to load live temp & tide",
+        tapToLoad: "Tap a station to load live temp, tide, wind & waves",
+        prevDay: "Prev", nextDay: "Next", retry: "Retry",
         compass: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'],
         rowTemp: "Water", rowWind: "Wind m/s", rowDir: "Dir", rowWave: "Waves m", rowSwell: "Swell per.", rowTide: "Tide",
         gust: "gust",
@@ -126,7 +132,6 @@
     document.getElementById('st-name').innerText = t.selectPrompt;
     document.getElementById('btn-ts').innerText = t.tabForecast;
     document.getElementById('btn-dp').innerText = t.tabDepth;
-    document.getElementById('btn-now').innerText = t.tabNow;
     document.getElementById('btn-locate').title = t.locateTitle;
     document.getElementById('btn-fullscreen').title = t.fullscreenTitle;
     document.getElementById('txt-disclaimer-label').innerText = t.disclaimerLabel + ':';

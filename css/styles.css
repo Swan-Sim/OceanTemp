@@ -209,6 +209,12 @@
     .tab-btn { flex: 1; padding: 4px; font-size: 10px; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; cursor: pointer; }
     .tab-btn.active { background: #0284c7; color: #fff; border-color: #38bdf8; }
     .chart-box { flex: 1; position: relative; min-height: 110px; }
+    /* [ADD] 90일 추이 / 수심 프로파일 팝업 - 지도 영역 위에 뜹니다 */
+    .chart-modal { position: absolute; inset: 0; z-index: 80; background: rgba(1,4,9,0.55); display: flex; align-items: center; justify-content: center; padding: 12px; }
+    .chart-modal-card { width: 100%; max-width: 760px; height: 100%; max-height: 420px; background: #0b1329; border: 1px solid #334155; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.7); display: flex; flex-direction: column; padding: 8px 10px 10px; }
+    .chart-modal-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: #f8fafc; margin-bottom: 6px; }
+    .chart-modal-close { background: #111d3d; border: 1px solid #334155; color: #f8fafc; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 13px; }
+    .chart-modal-body { flex: 1; position: relative; min-height: 0; }
     .chart-legend-overlay {
       position: absolute; top: 2px; right: 2px; z-index: 5;
       display: flex; flex-direction: column; gap: 2px;
@@ -218,7 +224,9 @@
     .chart-legend-overlay .item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
     /* [ADD] 실시간 현황 표 (Windy 스타일, 3시간 간격) */
     .now-table { position: absolute; inset: 0; display: flex; flex-direction: column; font-size: 10px; }
-    .nt-status { font-size: 9px; padding: 2px 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nt-top { display: flex; align-items: center; gap: 6px; padding: 2px 0 4px; }
+    .nt-status { flex: 1; min-width: 0; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nt-nav { flex: 0 0 auto; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; font-size: 10px; padding: 2px 7px; cursor: pointer; }
     .nt-scroll { flex: 1; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
     .nt-inner { display: flex; min-width: max-content; }
     .nt-labels { position: sticky; left: 0; z-index: 3; background: #0f172a; flex: 0 0 58px; border-right: 1px solid #1e293b; }

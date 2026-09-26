@@ -5,6 +5,10 @@
     // 방식이에요 - 그냥 브라우저에서 여는 보통 웹페이지처럼 동작합니다.
     const LIVE_DATA_BASE = 'https://marine-api.open-meteo.com/v1/marine';
     const WEATHER_API_BASE = 'https://api.open-meteo.com/v1/forecast'; // [ADD] 바람(풍속·풍향·돌풍)
+    // [CHANGE] "스크롤로 전날·다음 날로 넘어가게" - 실시간 현황 표 범위.
+    // Open-Meteo 해양 예보는 최대 8일(오늘 포함)까지라 앞으로 약 7일, 뒤로 6일을
+    // 받아요(총 14일). 2주를 넘기면 Open-Meteo가 요청을 여러 건으로 세서 이 안에 맞췄어요.
+    const NOW_PAST_DAYS = 6, NOW_FORECAST_DAYS = 8;
 
     // [FIX] "API 하나 안되면 전체가 멈추는 게 말이 안돼" 요청 반영 -
     // 스크린샷으로 확인해보니 429(Too Many Requests, 요청 과다)였어요.
@@ -254,8 +258,8 @@
       // [ADD] "바람·파도도 같이" 요청 반영 - 파고/풍랑/너울은 같은 해양 API
       // 요청에 항목만 더해서(요청 수 그대로), 바람은 Open-Meteo 날씨 API에서
       // 1건 더 받아옵니다. 바람 요청이 실패해도 수온·조석·파도는 그대로 보여요.
-      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl,wave_height,wind_wave_height,swell_wave_height,swell_wave_period,swell_wave_direction&past_days=2&forecast_days=3&timezone=auto`;
-      const windUrl = `${WEATHER_API_BASE}?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&past_days=2&forecast_days=3&timezone=auto`;
+      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl,wave_height,wind_wave_height,swell_wave_height,swell_wave_period,swell_wave_direction&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
+      const windUrl = `${WEATHER_API_BASE}?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
       const [marineSettled, windSettled] = await Promise.allSettled([fetchJSON(url), fetchJSON(windUrl)]);
       if (marineSettled.status !== 'fulfilled') throw marineSettled.reason;
       const res = marineSettled.value;
@@ -268,7 +272,9 @@
       // (UTC로 취급) x축에 씁니다 - 표시할 때도 UTC로 읽어서 현지 시각 유지.
       const offsetSec = res.utc_offset_seconds || 0;
       const nowLocalMs = Date.now() + offsetSec * 1000;
-      const from = nowLocalMs - 48 * 3600 * 1000, to = nowLocalMs + 48 * 3600 * 1000;
+      // 오늘 0시 기준으로 과거 NOW_PAST_DAYS일 ~ 예보 끝(오늘 포함 NOW_FORECAST_DAYS일)
+      const todayStart = Math.floor(nowLocalMs / 86400000) * 86400000;
+      const from = todayStart - NOW_PAST_DAYS * 86400000, to = todayStart + NOW_FORECAST_DAYS * 86400000 - 3600 * 1000;
 
       const temp = [], tide = [], waves = [], wind = [];
       const num = (arr, i) => (arr && typeof arr[i] === 'number') ? arr[i] : null;

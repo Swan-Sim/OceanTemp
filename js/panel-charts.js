@@ -179,7 +179,7 @@
         st._hourlyState = 'failed';
         st._hourlyError = e && e.code;
       }
-      if (selectedStation === st && activeMode === 'now') updateChart();
+      if (selectedStation === st) updateChart();
     }
 
     function interpAt(pts, x) {
@@ -213,11 +213,16 @@
       const lat = st.coords[1], lon = st.coords[0];
       const offsetMs = Math.round(lon / 15) * HOUR; // 시간대 근사 (경도 15°당 1시간)
       const nowUtc = Date.now();
-      const startUtc = Math.floor((nowUtc - 49 * HOUR) / HOUR) * HOUR;
+      // 실데이터와 같은 범위(과거 NOW_PAST_DAYS일 ~ 앞으로 약 7일)로 계산
+      const nowLocal = nowUtc + offsetMs;
+      const todayStart = Math.floor(nowLocal / 86400000) * 86400000;
+      const fromLocal = todayStart - NOW_PAST_DAYS * 86400000;
+      const toLocal = todayStart + NOW_FORECAST_DAYS * 86400000 - HOUR;
+      const startUtc = Math.floor((fromLocal - offsetMs - HOUR) / HOUR) * HOUR;
       const here = latLonToSpherePos(lat, lon, 1).normalize();
       const p2 = (c) => 0.5 * (3 * c * c - 1);
       const raw = [];
-      for (let u = startUtc; u <= nowUtc + 49 * HOUR; u += HOUR) {
+      for (let u = startUtc; u <= toLocal - offsetMs + HOUR; u += HOUR) {
         const date = new Date(u);
         const m = computeSublunarPoint(date), s = computeSubsolarPoint(date);
         const cm = here.dot(latLonToSpherePos(m.lat, m.lon, 1).normalize());
@@ -238,8 +243,7 @@
         if (b > a && b >= c) extremes.push({ ...tide[i], type: 'high' });
         else if (b < a && b <= c) extremes.push({ ...tide[i], type: 'low' });
       }
-      const nowLocalMs = nowUtc + offsetMs;
-      return { temp, tide, extremes, nowLocalMs, from: nowLocalMs - 48 * HOUR, to: nowLocalMs + 48 * HOUR, isEstimate: true };
+      return { temp, tide, extremes, nowLocalMs: nowLocal, from: fromLocal, to: toLocal, isEstimate: true };
     }
 
     // [ADD] "바람·파도" - 풍속(m/s) 색: 약함 초록 → 강함 빨강.
@@ -309,6 +313,7 @@
             : `⏳ ${t.nowLoading}`;
         status = `<span style="color:#facc15;">⚠ ${t.nowEstimated}</span> <span style="color:#94a3b8;">${why}</span>`;
       }
+      const canRetry = !st._hourlyCache && st._hourlyState === 'failed' && st._hourlyError !== 'DAILY_LIMIT';
 
       const HOUR = 3600 * 1000, STEP = NOW_STEP_H * HOUR, COLW = NOW_COL_W;
       const cols = [];
@@ -372,11 +377,39 @@
         ROWS.map(([k, , h]) => `<div class="nt-row" style="height:${h}px">${rows[k]}</div>`).join('') +
         tideSvg + `</div>`;
 
-      box.innerHTML = `<div class="nt-status">${status}</div>` +
+      // [ADD] "스크롤로 전날·다음 날로" - 좌우 스크롤 + ◀ ▶ 버튼(하루씩) +
+      // 마우스 휠(세로 휠을 가로 이동으로)
+      box.innerHTML = `<div class="nt-top">` +
+          `<button class="nt-nav" data-dir="-1">◀ ${t.prevDay}</button>` +
+          `<div class="nt-status">${status}${canRetry ? ` <a href="#" class="nt-retry" style="color:#38bdf8">${t.retry}</a>` : ''}</div>` +
+          `<button class="nt-nav" data-dir="0">${t.tideNow}</button>` +
+          `<button class="nt-nav" data-dir="1">${t.nextDay} ▶</button>` +
+        `</div>` +
         `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
         `<div class="nt-note">⚠ ${t.tideNote}</div>`;
       const sc = box.querySelector('.nt-scroll');
-      sc.scrollLeft = Math.max(0, nowX - 120);
+      const toNow = () => Math.max(0, nowX - 120);
+      // 같은 정점을 다시 그릴 땐(데이터 도착 등) 보던 위치 유지, 새 정점이면 "지금"으로
+      const keep = box._lastStationId === st.id && typeof box._lastScroll === 'number';
+      sc.scrollLeft = keep ? box._lastScroll : toNow();
+      box._lastStationId = st.id;
+      sc.addEventListener('scroll', () => { box._lastScroll = sc.scrollLeft; }, { passive: true });
+      let pending = null, pendingTimer = null; // 빠르게 여러 번 눌러도 하루씩 누적되게
+      box.querySelectorAll('.nt-nav').forEach(btn => btn.addEventListener('click', () => {
+        const dir = +btn.dataset.dir;
+        const base = pending != null ? pending : sc.scrollLeft;
+        const maxLeft = sc.scrollWidth - sc.clientWidth;
+        const target = Math.max(0, Math.min(maxLeft, dir === 0 ? toNow() : base + dir * (24 / NOW_STEP_H) * COLW));
+        pending = target;
+        clearTimeout(pendingTimer);
+        pendingTimer = setTimeout(() => { pending = null; }, 600);
+        sc.scrollTo({ left: target, behavior: 'smooth' });
+      }));
+      sc.addEventListener('wheel', (e) => {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { sc.scrollLeft += e.deltaY; e.preventDefault(); }
+      }, { passive: false });
+      const retry = box.querySelector('.nt-retry');
+      if (retry) retry.addEventListener('click', (e) => { e.preventDefault(); st._hourlyState = undefined; updateChart(); });
     }
 
     function updateChart() {
@@ -385,12 +418,12 @@
       const legendBox = document.getElementById('chart-legend');
       const tableBox = document.getElementById('now-table');
 
-      // 실시간 현황 탭은 표(now-table), 나머지 탭은 기존 그래프(canvas)
-      const isNow = activeMode === 'now';
-      document.getElementById('detailChart').style.display = isNow ? 'none' : '';
-      legendBox.style.display = isNow ? 'none' : '';
-      tableBox.style.display = isNow ? '' : 'none';
-      if (isNow) { renderNowTable(tableBox); return; }
+      // [CHANGE] 실시간 현황 표는 항상 그리고, 90일 추이/수심 프로파일은
+      // 팝업이 열려 있을 때(activeMode가 'forecast' 또는 'depth')만 그립니다.
+      if (selectedStation) renderNowTable(tableBox);
+      if (!activeMode || !selectedStation) return;
+      document.getElementById('chart-modal-title').innerText =
+        (activeMode === 'forecast' ? t.modalForecast : t.modalDepth) + ` · ${selectedStation.name}`;
 
       if (activeMode === 'forecast') {
         const usingLive = !!selectedStation._liveCache;
@@ -509,7 +542,7 @@
       if (!st.hasDepth) {
         depthBtn.style.opacity = '0.35';
         depthBtn.style.pointerEvents = 'none';
-        if (activeMode === 'depth') setMode('now');
+        if (activeMode === 'depth') closeChartModal();
       } else {
         depthBtn.style.opacity = '1';
         depthBtn.style.pointerEvents = 'auto';
@@ -521,7 +554,7 @@
       // Open-Meteo에서 이 정점의 실제 현재값+과거 5년+올해 실측을 가져옵니다.
       // 한 번 성공한 정점은 세션 내내 캐시돼서 재선택 시 다시 안 불러와요.
       // [CHANGE] 90일 실데이터(요청 2건)는 그 탭을 볼 때만 불러옵니다 -
-      // Open-Meteo 요청 한도를 아끼려고요. 첫 탭(실시간 현황)은 renderNowTable이 따로 불러요.
+      // Open-Meteo 요청 한도를 아끼려고요. 실시간 현황 표는 renderNowTable이 따로 불러요.
       if (activeMode === 'forecast' && st._userRequested) ensureLiveData(st);
     }
 
@@ -539,17 +572,26 @@
       if (selectedStation === st && activeMode === 'forecast') updateChart(); // 그 사이 다른 정점을 안 골랐으면 실데이터로 다시 그림
     }
 
+    // [CHANGE] "90일 정보랑 수심 정보는 버튼을 누르면 보여지게" - 버튼을 누르면
+    // 지도 위에 팝업으로 열리고, ✕(또는 같은 버튼 다시 누르기)로 닫힙니다.
     function setMode(mode) {
+      if (activeMode === mode) { closeChartModal(); return; }
       activeMode = mode;
-      if (selectedStation) selectedStation._userRequested = true; // 탭을 누른 것도 사용자 요청
-      // 수온·조석 실패 상태에서 탭을 다시 누르면 재시도
-      if (mode === 'now' && selectedStation && selectedStation._hourlyState === 'failed') selectedStation._hourlyState = undefined;
+      if (selectedStation) selectedStation._userRequested = true; // 버튼을 누른 것도 사용자 요청
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      if (mode === 'forecast') document.getElementById('btn-ts').classList.add('active');
-      else if (mode === 'now') document.getElementById('btn-now').classList.add('active');
-      else document.getElementById('btn-dp').classList.add('active');
+      document.getElementById(mode === 'forecast' ? 'btn-ts' : 'btn-dp').classList.add('active');
+      document.getElementById('chart-modal-title').innerText =
+        (mode === 'forecast' ? t.modalForecast : t.modalDepth) + (selectedStation ? ` · ${selectedStation.name}` : '');
+      document.getElementById('chart-modal').style.display = 'flex';
       updateChart();
       if (mode === 'forecast' && selectedStation) ensureLiveData(selectedStation);
+    }
+
+    function closeChartModal() {
+      activeMode = null;
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      document.getElementById('chart-modal').style.display = 'none';
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     }
 
     // [ADD] "지구공" 리셋 버튼을 섭씨/화씨 전환 버튼으로 바꿔달라는 요청 반영.

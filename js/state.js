@@ -3,7 +3,7 @@
     let fullGridLoaded = false;
     let selectedStation = null;
     let maxTempStation = null;
-    let activeMode = 'now'; // [CHANGE] 첫 탭 = 수온·조석 ±2일
+    let activeMode = null; // [CHANGE] 팝업에 띄운 그래프: 'forecast' | 'depth' | null(닫힘). 실시간 현황 표는 항상 표시
     let chartInstance = null;
     let tempUnit = 'C'; // [ADD] 섭씨 기본값, 버튼으로 화씨와 전환
 

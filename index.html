@@ -131,22 +131,19 @@
       <div class="station-sub" id="st-info">위도 / 경도 / 관측망</div>
       <div class="station-cond" id="st-cond" style="display:none"></div>
 
-      <!-- [CHANGE] 왼쪽 60% = 실시간 현황 표(항상), 오른쪽 40% = 90일 추이(기본)
-           / 수심 프로파일(버튼으로 교체). 좁은 화면에서는 위아래로 쌓여요. -->
-      <div class="panel-split">
-        <div class="chart-box">
-          <div class="now-table" id="now-table"></div>
-        </div>
-        <div class="side-chart">
-          <div class="tab-bar">
-            <button class="tab-btn active" id="btn-ts" onclick="setMode('forecast')">📈 90일 추이</button>
-            <button class="tab-btn" id="btn-dp" onclick="setMode('depth')">🌡 수심 프로파일</button>
-          </div>
-          <div class="side-chart-body">
-            <canvas id="detailChart"></canvas>
-            <div class="chart-legend-overlay" id="chart-legend"></div>
-          </div>
-        </div>
+      <!-- [CHANGE] "리얼타임 높이에 맞춰서 기존처럼 버튼 3개로 교체" - 세 버튼이
+           같은 자리(실시간 표 높이로 고정)를 번갈아 씁니다. 높이가 고정이라
+           패널 안에 숨은 세로 스크롤이 생기지 않아요. -->
+      <div class="tab-bar">
+        <button class="tab-btn active" id="btn-now" onclick="setMode('now')">실시간 현황 (Now)</button>
+        <button class="tab-btn" id="btn-ts" onclick="setMode('forecast')">📈 90일 추이</button>
+        <button class="tab-btn" id="btn-dp" onclick="setMode('depth')">🌡 수심 프로파일</button>
+      </div>
+
+      <div class="chart-box">
+        <div class="now-table" id="now-table"></div>
+        <canvas id="detailChart"></canvas>
+        <div class="chart-legend-overlay" id="chart-legend"></div>
       </div>
     </section>
   </main>

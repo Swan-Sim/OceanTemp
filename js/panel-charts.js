@@ -432,9 +432,13 @@
       const legendBox = document.getElementById('chart-legend');
       const tableBox = document.getElementById('now-table');
 
-      // [CHANGE] 왼쪽 실시간 현황 표와 오른쪽 그래프(90일 추이 또는 수심)를 항상 같이 그립니다.
-      if (selectedStation) renderNowTable(tableBox);
-      if (!activeMode || !selectedStation) return;
+      // [CHANGE] 버튼 3개가 같은 자리를 번갈아 씀: 실시간 현황이면 표, 아니면 그래프
+      const isNow = activeMode === 'now';
+      tableBox.style.display = isNow ? '' : 'none';
+      document.getElementById('detailChart').style.display = isNow ? 'none' : '';
+      legendBox.style.display = isNow ? 'none' : '';
+      if (!selectedStation) return;
+      if (isNow) { renderNowTable(tableBox); return; }
 
       if (activeMode === 'forecast') {
         const usingLive = !!selectedStation._liveCache;
@@ -553,7 +557,7 @@
       if (!st.hasDepth) {
         depthBtn.style.opacity = '0.35';
         depthBtn.style.pointerEvents = 'none';
-        if (activeMode === 'depth') setMode('forecast');
+        if (activeMode === 'depth') setMode('now');
       } else {
         depthBtn.style.opacity = '1';
         depthBtn.style.pointerEvents = 'auto';
@@ -583,13 +587,13 @@
       if (selectedStation === st && activeMode === 'forecast') updateChart(); // 그 사이 다른 정점을 안 골랐으면 실데이터로 다시 그림
     }
 
-    // [CHANGE] "오른쪽 40%는 Seasonal(90일)이 기본, Depth를 누르면 교체" -
-    // 두 버튼으로 오른쪽 그래프만 바꿉니다(실시간 현황 표는 그대로).
+    // [CHANGE] "기존처럼 버튼 3개로 교체" - 실시간 현황 / 90일 추이 / 수심 프로파일이
+    // 같은 자리(고정 높이)를 번갈아 씁니다.
     function setMode(mode) {
       activeMode = mode;
       if (selectedStation) selectedStation._userRequested = true; // 버튼을 누른 것도 사용자 요청
-      document.querySelectorAll('.side-chart .tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(mode === 'forecast' ? 'btn-ts' : 'btn-dp').classList.add('active');
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(mode === 'forecast' ? 'btn-ts' : mode === 'depth' ? 'btn-dp' : 'btn-now').classList.add('active');
       updateChart();
       if (mode === 'forecast' && selectedStation) ensureLiveData(selectedStation);
     }

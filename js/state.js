@@ -3,7 +3,7 @@
     let fullGridLoaded = false;
     let selectedStation = null;
     let maxTempStation = null;
-    let activeMode = 'forecast'; // [CHANGE] 오른쪽 그래프: 'forecast'(90일, 기본) | 'depth'. 실시간 현황 표는 항상 표시
+    let activeMode = 'now'; // [CHANGE] 버튼 3개: 'now'(실시간 현황, 기본) | 'forecast'(90일) | 'depth'(수심)
     let chartInstance = null;
     let tempUnit = 'C'; // [ADD] 섭씨 기본값, 버튼으로 화씨와 전환
 

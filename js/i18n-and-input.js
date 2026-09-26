@@ -128,6 +128,7 @@
     document.getElementById('st-name').innerText = t.selectPrompt;
     document.getElementById('btn-ts').innerText = t.tabForecast;
     document.getElementById('btn-dp').innerText = t.tabDepth;
+    document.getElementById('btn-now').innerText = t.tabNow;
     document.getElementById('btn-locate').title = t.locateTitle;
     document.getElementById('btn-fullscreen').title = t.fullscreenTitle;
     document.getElementById('txt-disclaimer-label').innerText = t.disclaimerLabel + ':';

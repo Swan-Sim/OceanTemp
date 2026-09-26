@@ -286,52 +286,20 @@
       el.style.display = parts.length ? 'block' : 'none';
     }
 
-    // [CHANGE] "화살표를 위쪽으로, 화살표 위에 초속" 요청 반영 - 차트 맨 위
-    // (탭 버튼 바로 아래)에 바람 화살표 줄을 그리고, 각 화살표 위에 풍속(m/s)
-    // 숫자를 적는 Chart.js 플러그인. 화살표는 바람이 "불어가는" 방향, 색은
-    // 세기. 화면이 좁으면 6시간 간격으로 줄여서 숫자가 겹치지 않게 합니다.
-    const WIND_ROW_H = 30; // 숫자 + 화살표 줄 높이(px)
-    function windArrowPlugin(wind) {
-      return {
-        id: 'windArrows',
-        afterDraw(chart) {
-          if (!wind || !wind.length) return;
-          const { ctx, chartArea, scales } = chart;
-          const stepH = chartArea.right - chartArea.left < 500 ? 6 : 3;
-          const arrowY = chartArea.top - 9;
-          const textY = chartArea.top - 21;
-          ctx.save();
-          ctx.font = 'bold 8px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          wind.forEach(w => {
-            const hour = new Date(w.x).getUTCHours();
-            if (hour % stepH !== 0) return;
-            const px = scales.x.getPixelForValue(w.x);
-            if (px < chartArea.left || px > chartArea.right) return;
-            const color = windColor(w.speed);
-            ctx.fillStyle = color;
-            ctx.fillText(String(Math.round(w.speed)), px, textY);
-            ctx.save();
-            ctx.translate(px, arrowY);
-            ctx.rotate(((w.dir + 180) % 360) * Math.PI / 180); // 불어오는 방향 → 불어가는 방향, 0°=위쪽
-            ctx.beginPath();
-            ctx.moveTo(0, -6); ctx.lineTo(4, 3); ctx.lineTo(0, 1); ctx.lineTo(-4, 3);
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-          });
-          ctx.restore();
-        }
-      };
-    }
+    // [CHANGE] "Windy처럼 복잡한 그래프 대신 숫자로 단순하게" 요청 반영 -
+    // 실시간 현황 탭을 3시간 간격 표(±2일, 32칸)로 바꿨습니다. 각 칸은
+    // 수온·바람(풍속/방향/돌풍)·파고(너울 주기)를 숫자로 보여주고, 맨 아래에는
+    // 조석 곡선을 깔아 만조▲/간조▼ 시각과 높이를 적어요. 좌우로 밀어서 보고,
+    // 처음엔 "지금" 선이 보이도록 자동 스크롤됩니다.
+    // 실데이터가 없을 땐(클릭 전/불러오는 중/실패) 추정값으로 같은 표를 그리고,
+    // 맨 위 상태 줄로 실시간 데이터인지 아닌지만 알려줍니다.
+    const NOW_STEP_H = 3, NOW_COL_W = 34;
 
-    function renderNowChart(chartCanvas, legendBox) {
+    function renderNowTable(box) {
       const st = selectedStation;
       let d = st._hourlyCache;
-      let statusHtml = `<div class="item" style="color:#4ade80;">🟢 ${t.nowSource}</div>`;
+      let status = `<span style="color:#4ade80;">🟢 ${t.nowSource}</span>`;
       if (!d) {
-        // 실데이터가 없으면 추정 그래프를 먼저 그리고, 상태 안내를 같이 보여줍니다
         if (st._userRequested && !st._hourlyState) ensureHourlyData(st);
         d = getEstimatedHourly(st);
         const why = !st._userRequested
@@ -339,111 +307,90 @@
           : st._hourlyState === 'failed'
             ? (st._hourlyError === 'DAILY_LIMIT' ? t.nowDailyLimit : t.nowFailed)
             : `⏳ ${t.nowLoading}`;
-        statusHtml = `<div class="item" style="color:#facc15;">⚠ ${t.nowEstimated}</div>` +
-          `<div class="item" style="color:#94a3b8;">${why}</div>`;
+        status = `<span style="color:#facc15;">⚠ ${t.nowEstimated}</span> <span style="color:#94a3b8;">${why}</span>`;
       }
-      const est = !!d.isEstimate;
 
-      const HOUR = 3600 * 1000;
-      const nowT = interpAt(d.temp, d.nowLocalMs);
-      const nowH = interpAt(d.tide, d.nowLocalMs);
-      const highs = d.extremes.filter(e => e.type === 'high');
-      const lows = d.extremes.filter(e => e.type === 'low');
+      const HOUR = 3600 * 1000, STEP = NOW_STEP_H * HOUR, COLW = NOW_COL_W;
+      const cols = [];
+      for (let x = Math.ceil(d.from / STEP) * STEP; x <= d.to; x += STEP) cols.push(x);
+      const W = cols.length * COLW;
+      const nowX = (d.nowLocalMs - cols[0]) / STEP * COLW + COLW / 2;
+      const xp = (x) => (x - cols[0]) / STEP * COLW + COLW / 2;
+      const hhmm = (ms) => { const dt = new Date(ms); return String(dt.getUTCHours()).padStart(2, '0') + ':' + String(dt.getUTCMinutes()).padStart(2, '0'); };
+      const tempVal = (c) => tempUnit === 'F' ? cToF(c).toFixed(0) : c.toFixed(1);
 
-      // [CHANGE] "절대값으로 - 옆 정점과 비교해서 조석이 강한지 약한지 한눈에"
-      // 요청 반영. 정점마다 축을 자동으로 늘렸다 줄였다 하지 않고 모든 정점에서
-      // 같은 고정 눈금을 씁니다. 수온 0~40°C(2번 탭과 같음), 조석 −8~+8m.
-      // 세계 최대 조차(캐나다 펀디만 약 16m)가 평균해수면 기준 약 ±8m라서
-      // 이 범위면 지구상 어떤 곳도 잘리지 않아요. 두 축 모두 가운데가
-      // 20°C / 0m라 기준선이 정확히 같은 높이에 옵니다.
-      const T_MIN = 0, T_MAX = 40, H_MIN = -8, H_MAX = 8;
-      const tickXs = [];
-      for (let x = Math.ceil(d.from / (12 * HOUR)) * 12 * HOUR; x <= d.to; x += 12 * HOUR) tickXs.push(x);
+      // 조석 곡선 (이 정점 범위에 맞춰 그리고, 정확한 높이는 ▲▼ 숫자로 표시)
+      const TH = 58;
+      const tideIn = d.tide.filter(p => p.x >= cols[0] - HOUR && p.x <= cols[cols.length - 1] + HOUR);
+      let tideSvg = '';
+      if (tideIn.length > 1) {
+        const tMin = Math.min(...tideIn.map(p => p.y)), tMax = Math.max(...tideIn.map(p => p.y));
+        const yp = (y) => 12 + (1 - (y - tMin) / ((tMax - tMin) || 1)) * (TH - 26);
+        const line = tideIn.map((p, i) => (i ? 'L' : 'M') + xp(p.x).toFixed(1) + ',' + yp(p.y).toFixed(1)).join(' ');
+        const area = `${line} L${xp(tideIn[tideIn.length - 1].x).toFixed(1)},${TH} L${xp(tideIn[0].x).toFixed(1)},${TH} Z`;
+        const marks = d.extremes.filter(e => e.x >= cols[0] && e.x <= cols[cols.length - 1]).map(e => {
+          const up = e.type === 'high';
+          const x = Math.max(34, Math.min(W - 34, xp(e.x))); // 양 끝에서 글자가 잘리지 않게
+          return `<text x="${x.toFixed(1)}" y="${(up ? yp(e.y) - 3 : yp(e.y) + 10).toFixed(1)}" fill="${up ? '#fdba74' : '#c4b5fd'}" font-size="8" text-anchor="middle">${up ? '▲' : '▼'}${hhmm(e.x)} ${e.y.toFixed(1)}m</text>`;
+        }).join('');
+        tideSvg = `<svg width="${W}" height="${TH}" style="display:block"><path d="${area}" fill="rgba(56,189,248,0.12)"/><path d="${line}" fill="none" stroke="#38bdf8" stroke-width="1.6"/>${marks}</svg>`;
+      }
 
-      const windData = d.wind || [];
-      legendBox.style.top = windData.length ? `${WIND_ROW_H + 2}px` : ''; // 범례가 화살표 줄을 가리지 않게
-      chartInstance = new Chart(chartCanvas, {
-        type: 'line',
-        plugins: [windArrowPlugin(windData)],
-        data: {
-          datasets: [
-            { label: t.nowTemp, data: d.temp, yAxisID: 'y', borderColor: '#ef4444', borderDash: est ? [5, 4] : [], tension: 0.3, pointRadius: 0, pointHitRadius: 10, borderWidth: 2.2 },
-            { label: t.tideLevel, data: d.tide, yAxisID: 'y2', borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.10)', fill: 'origin', borderDash: est ? [5, 4] : [], tension: 0.35, pointRadius: 0, pointHitRadius: 10, borderWidth: 2 },
-            { label: t.tideHigh, data: highs, yAxisID: 'y2', borderColor: '#f97316', backgroundColor: '#f97316', pointRadius: 3, showLine: false },
-            { label: t.tideLow, data: lows, yAxisID: 'y2', borderColor: '#a78bfa', backgroundColor: '#a78bfa', pointRadius: 3, showLine: false },
-            { label: t.tideNow, data: nowT != null ? [{ x: d.nowLocalMs, y: nowT }] : [], yAxisID: 'y', borderColor: '#ef4444', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, showLine: false },
-            { label: t.tideNow, data: nowH != null ? [{ x: d.nowLocalMs, y: nowH }] : [], yAxisID: 'y2', borderColor: '#38bdf8', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, showLine: false }
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          layout: { padding: { top: windData.length ? WIND_ROW_H : 0 } }, // 바람 화살표 줄 자리 (위쪽)
-          interaction: { mode: 'nearest', axis: 'x', intersect: false },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                title: (items) => fmtLocalTime(items[0].parsed.x, true),
-                label: (ctx) => ctx.dataset.yAxisID === 'y'
-                  ? `${ctx.dataset.label}: ${formatTemp(ctx.parsed.y)}`
-                  : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} m`,
-                // 그 시각의 바람·파도도 같이
-                footer: (items) => {
-                  const x = items[0].parsed.x, out = [];
-                  const w = nearestByX(d.wind, x), wv = nearestByX(d.waves, x);
-                  if (w) out.push(`🌬 ${compass8(w.dir)} ${w.speed.toFixed(1)}m/s` + (w.gust != null ? ` (${t.gust} ${w.gust.toFixed(1)})` : ''));
-                  if (wv) out.push(`🌊 ${t.waveHeight} ${wv.height.toFixed(1)}m` + (wv.swell != null ? ` (${t.swell} ${wv.swell.toFixed(1)}m)` : ''));
-                  return out;
-                }
-              }
-            }
-          },
-          scales: {
-            x: {
-              type: 'linear', min: d.from, max: d.to,
-              ticks: {
-                color: '#64748b', font: { size: 9 }, maxRotation: 0,
-                callback: (v) => { const dd = new Date(v); return dd.getUTCHours() === 0 ? `${t.months[dd.getUTCMonth()]} ${dd.getUTCDate()}` : fmtLocalTime(v, false); }
-              },
-              grid: { color: '#1e293b' },
-              afterBuildTicks: (axis) => { axis.ticks = tickXs.map(v => ({ value: v })); }
-            },
-            y: {
-              position: 'left', min: T_MIN, max: T_MAX,
-              ticks: { color: '#fca5a5', font: { size: 9 }, callback: formatAxisTemp },
-              grid: { color: (c) => c.tick.value === 20 ? '#475569' : '#1e293b' }, // 20°C = 0m 기준선 강조
-              afterBuildTicks: (axis) => { axis.ticks = [0, 5, 10, 15, 20, 25, 30, 35, 40].map(v => ({ value: v })); }
-            },
-            y2: {
-              position: 'right', min: H_MIN, max: H_MAX,
-              ticks: { color: '#7dd3fc', font: { size: 9 }, callback: (v) => `${v > 0 ? '+' : ''}${v}m` },
-              grid: { drawOnChartArea: false },
-              // 왼쪽 5°C 눈금과 오른쪽 2m 눈금이 같은 높이 (0m = 20°C)
-              afterBuildTicks: (axis) => { axis.ticks = [-8, -6, -4, -2, 0, 2, 4, 6, 8].map(v => ({ value: v })); }
-            }
-          }
-        }
+      const cell = (html, style) => `<div class="nt-cell" style="${style || ''}">${html}</div>`;
+      const rows = { date: '', time: '', temp: '', wind: '', dir: '', gust: '', wave: '', swell: '' };
+      let lastDay = null;
+      cols.forEach(x => {
+        const dt = new Date(x), hh = dt.getUTCHours(), day = dt.getUTCDate();
+        const dayEdge = hh === 0 ? 'border-left:1px solid #475569;' : '';
+        rows.date += cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:#e2e8f0;font-weight:700;' + dayEdge);
+        lastDay = day;
+        rows.time += cell(String(hh).padStart(2, '0'), 'color:#94a3b8;' + dayEdge);
+
+        const tp = nearestByX(d.temp, x);
+        rows.temp += cell(tp ? tempVal(tp.y) : '–', tp ? `background:rgba(${getTempColor(tp.y)},0.45);color:#fff;font-weight:700;` : 'color:#64748b;');
+
+        const w = nearestByX(d.wind, x);
+        rows.wind += cell(w ? Math.round(w.speed) : '–', w ? `background:${windColor(w.speed)}26;color:${windColor(w.speed)};font-weight:700;` : 'color:#64748b;');
+        rows.dir += cell(w ? `<span style="display:inline-block;transform:rotate(${(w.dir + 180) % 360}deg);color:${windColor(w.speed)}">⬆</span>` : '');
+        rows.gust += cell(w && w.gust != null ? Math.round(w.gust) : '', 'color:#94a3b8;');
+
+        const wv = nearestByX(d.waves, x);
+        rows.wave += cell(wv ? wv.height.toFixed(1) : '–', wv ? `background:rgba(56,189,248,${Math.min(0.55, 0.08 + wv.height * 0.15).toFixed(2)});color:#e0f2fe;font-weight:700;` : 'color:#64748b;');
+        rows.swell += cell(wv && wv.swellPeriod != null ? Math.round(wv.swellPeriod) + t.sec : '', 'color:#94a3b8;');
       });
 
-      const nextHigh = highs.find(e => e.x > d.nowLocalMs);
-      const nextLow = lows.find(e => e.x > d.nowLocalMs);
-      legendBox.innerHTML =
-        statusHtml +
-        `<div class="item"><span class="swatch" style="background:#ef4444;"></span>${t.nowTemp}</div>` +
-        `<div class="item"><span class="swatch" style="background:#38bdf8;"></span>${t.tideLevel} (m, ${t.tideRef})</div>` +
-        (nextHigh ? `<div class="item"><span class="swatch" style="background:#f97316;"></span>${t.tideNextHigh} ${fmtLocalTime(nextHigh.x, false)} (${nextHigh.y.toFixed(2)} m)</div>` : '') +
-        (nextLow ? `<div class="item"><span class="swatch" style="background:#a78bfa;"></span>${t.tideNextLow} ${fmtLocalTime(nextLow.x, false)} (${nextLow.y.toFixed(2)} m)</div>` : '') +
-        (windData.length ? `<div class="item" style="color:#94a3b8;">${t.windKey}</div>` : '') +
-        `<div class="item" style="color:#94a3b8;">⚠ ${t.tideNote}</div>`;
+      const ROWS = [
+        ['date', '', 14], ['time', '', 14],
+        ['temp', `${t.rowTemp} °${tempUnit}`, 22], ['wind', t.rowWind, 20], ['dir', t.rowDir, 16], ['gust', t.gust, 14],
+        ['wave', t.rowWave, 20], ['swell', t.rowSwell, 14]
+      ];
+      const labelCol = `<div class="nt-labels">` +
+        ROWS.map(([, l, h]) => `<div style="height:${h}px">${l}</div>`).join('') +
+        `<div style="height:${TH}px">${t.rowTide}</div></div>`;
+      const nowLine = `<div class="nt-now" style="left:${nowX.toFixed(1)}px"><span>${t.tideNow}</span></div>`;
+      const grid = `<div class="nt-grid" style="width:${W}px">${nowLine}` +
+        ROWS.map(([k, , h]) => `<div class="nt-row" style="height:${h}px">${rows[k]}</div>`).join('') +
+        tideSvg + `</div>`;
+
+      box.innerHTML = `<div class="nt-status">${status}</div>` +
+        `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
+        `<div class="nt-note">⚠ ${t.tideNote}</div>`;
+      const sc = box.querySelector('.nt-scroll');
+      sc.scrollLeft = Math.max(0, nowX - 120);
     }
 
     function updateChart() {
       const chartCanvas = document.getElementById('detailChart').getContext('2d');
-      if (chartInstance) chartInstance.destroy();
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
       const legendBox = document.getElementById('chart-legend');
-      legendBox.style.top = ''; // 다른 탭에서는 원래 위치
+      const tableBox = document.getElementById('now-table');
 
-      if (activeMode === 'now') { renderNowChart(chartCanvas, legendBox); return; }
+      // 실시간 현황 탭은 표(now-table), 나머지 탭은 기존 그래프(canvas)
+      const isNow = activeMode === 'now';
+      document.getElementById('detailChart').style.display = isNow ? 'none' : '';
+      legendBox.style.display = isNow ? 'none' : '';
+      tableBox.style.display = isNow ? '' : 'none';
+      if (isNow) { renderNowTable(tableBox); return; }
 
       if (activeMode === 'forecast') {
         const usingLive = !!selectedStation._liveCache;
@@ -574,7 +521,7 @@
       // Open-Meteo에서 이 정점의 실제 현재값+과거 5년+올해 실측을 가져옵니다.
       // 한 번 성공한 정점은 세션 내내 캐시돼서 재선택 시 다시 안 불러와요.
       // [CHANGE] 90일 실데이터(요청 2건)는 그 탭을 볼 때만 불러옵니다 -
-      // Open-Meteo 요청 한도를 아끼려고요. 첫 탭(±2일)은 renderNowChart가 따로 불러요.
+      // Open-Meteo 요청 한도를 아끼려고요. 첫 탭(실시간 현황)은 renderNowTable이 따로 불러요.
       if (activeMode === 'forecast' && st._userRequested) ensureLiveData(st);
     }
 

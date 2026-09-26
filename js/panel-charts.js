@@ -246,13 +246,27 @@
       return { temp, tide, extremes, nowLocalMs: nowLocal, from: fromLocal, to: toLocal, isEstimate: true };
     }
 
-    // [ADD] "바람·파도" - 풍속(m/s) 색: 약함 초록 → 강함 빨강.
-    // 해양레저 기준으로 흔히 쓰는 구간(4 / 8 / 12 m/s)에 맞췄어요.
+    // [CHANGE] "바람도 온도처럼 최저 흰색 → 최고 빨간색으로" 요청 반영.
+    // 바람 색에 통일된 국제 표준은 없어서(보퍼트 풍력계급은 구간 이름만 정해요),
+    // 빨간색 끝을 한국 기상청 풍랑주의보 기준 풍속 14m/s에 맞췄습니다.
+    // 0 흰색 → 5 노랑 → 9 주황 → 14m/s 이상 빨강, 사이는 부드럽게 섞어요.
+    const WIND_STOPS = [[0, [255, 255, 255]], [5, [253, 224, 71]], [9, [251, 146, 60]], [14, [239, 68, 68]]];
     function windColor(speed) {
-      if (speed < 4) return '#4ade80';
-      if (speed < 8) return '#facc15';
-      if (speed < 12) return '#fb923c';
-      return '#ef4444';
+      const s = Math.max(0, speed);
+      let i = 0;
+      while (i < WIND_STOPS.length - 2 && s > WIND_STOPS[i + 1][0]) i++;
+      const [s0, c0] = WIND_STOPS[i], [s1, c1] = WIND_STOPS[i + 1];
+      const k = Math.min(1, (s - s0) / (s1 - s0));
+      return '#' + c0.map((v, j) => Math.round(v + (c1[j] - v) * k).toString(16).padStart(2, '0')).join('');
+    }
+
+    // [ADD] "파고가 일정 기준 이상이면 빨간색" - 한국 기상청 풍랑주의보 기준
+    // 유의파고 3m(파도 꼭대기~골 전체 높이, ±1.5m가 아니에요). 3m 미만은
+    // 높을수록 진한 파랑, 3m 이상은 빨강.
+    const WAVE_WARN_M = 3;
+    function waveCellStyle(h) {
+      if (h >= WAVE_WARN_M) return 'background:rgba(239,68,68,0.6);color:#fff;font-weight:800;';
+      return `background:rgba(56,189,248,${(0.08 + h * 0.15).toFixed(2)});color:#e0f2fe;font-weight:700;`;
     }
 
     // 풍향(바람이 불어오는 방향, 0°=북)을 8방위 글자로
@@ -360,7 +374,7 @@
         rows.gust += cell(w && w.gust != null ? Math.round(w.gust) : '', 'color:#94a3b8;');
 
         const wv = nearestByX(d.waves, x);
-        rows.wave += cell(wv ? wv.height.toFixed(1) : '–', wv ? `background:rgba(56,189,248,${Math.min(0.55, 0.08 + wv.height * 0.15).toFixed(2)});color:#e0f2fe;font-weight:700;` : 'color:#64748b;');
+        rows.wave += cell(wv ? wv.height.toFixed(1) : '–', wv ? waveCellStyle(wv.height) : 'color:#64748b;');
         rows.swell += cell(wv && wv.swellPeriod != null ? Math.round(wv.swellPeriod) + t.sec : '', 'color:#94a3b8;');
       });
 
@@ -418,12 +432,9 @@
       const legendBox = document.getElementById('chart-legend');
       const tableBox = document.getElementById('now-table');
 
-      // [CHANGE] 실시간 현황 표는 항상 그리고, 90일 추이/수심 프로파일은
-      // 팝업이 열려 있을 때(activeMode가 'forecast' 또는 'depth')만 그립니다.
+      // [CHANGE] 왼쪽 실시간 현황 표와 오른쪽 그래프(90일 추이 또는 수심)를 항상 같이 그립니다.
       if (selectedStation) renderNowTable(tableBox);
       if (!activeMode || !selectedStation) return;
-      document.getElementById('chart-modal-title').innerText =
-        (activeMode === 'forecast' ? t.modalForecast : t.modalDepth) + ` · ${selectedStation.name}`;
 
       if (activeMode === 'forecast') {
         const usingLive = !!selectedStation._liveCache;
@@ -542,7 +553,7 @@
       if (!st.hasDepth) {
         depthBtn.style.opacity = '0.35';
         depthBtn.style.pointerEvents = 'none';
-        if (activeMode === 'depth') closeChartModal();
+        if (activeMode === 'depth') setMode('forecast');
       } else {
         depthBtn.style.opacity = '1';
         depthBtn.style.pointerEvents = 'auto';
@@ -572,26 +583,15 @@
       if (selectedStation === st && activeMode === 'forecast') updateChart(); // 그 사이 다른 정점을 안 골랐으면 실데이터로 다시 그림
     }
 
-    // [CHANGE] "90일 정보랑 수심 정보는 버튼을 누르면 보여지게" - 버튼을 누르면
-    // 지도 위에 팝업으로 열리고, ✕(또는 같은 버튼 다시 누르기)로 닫힙니다.
+    // [CHANGE] "오른쪽 40%는 Seasonal(90일)이 기본, Depth를 누르면 교체" -
+    // 두 버튼으로 오른쪽 그래프만 바꿉니다(실시간 현황 표는 그대로).
     function setMode(mode) {
-      if (activeMode === mode) { closeChartModal(); return; }
       activeMode = mode;
       if (selectedStation) selectedStation._userRequested = true; // 버튼을 누른 것도 사용자 요청
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.side-chart .tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(mode === 'forecast' ? 'btn-ts' : 'btn-dp').classList.add('active');
-      document.getElementById('chart-modal-title').innerText =
-        (mode === 'forecast' ? t.modalForecast : t.modalDepth) + (selectedStation ? ` · ${selectedStation.name}` : '');
-      document.getElementById('chart-modal').style.display = 'flex';
       updateChart();
       if (mode === 'forecast' && selectedStation) ensureLiveData(selectedStation);
-    }
-
-    function closeChartModal() {
-      activeMode = null;
-      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-      document.getElementById('chart-modal').style.display = 'none';
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     }
 
     // [ADD] "지구공" 리셋 버튼을 섭씨/화씨 전환 버튼으로 바꿔달라는 요청 반영.

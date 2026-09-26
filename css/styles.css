@@ -209,12 +209,18 @@
     .tab-btn { flex: 1; padding: 4px; font-size: 10px; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; cursor: pointer; }
     .tab-btn.active { background: #0284c7; color: #fff; border-color: #38bdf8; }
     .chart-box { flex: 1; position: relative; min-height: 110px; }
-    /* [ADD] 90일 추이 / 수심 프로파일 팝업 - 지도 영역 위에 뜹니다 */
-    .chart-modal { position: absolute; inset: 0; z-index: 80; background: rgba(1,4,9,0.55); display: flex; align-items: center; justify-content: center; padding: 12px; }
-    .chart-modal-card { width: 100%; max-width: 760px; height: 100%; max-height: 420px; background: #0b1329; border: 1px solid #334155; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.7); display: flex; flex-direction: column; padding: 8px 10px 10px; }
-    .chart-modal-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: #f8fafc; margin-bottom: 6px; }
-    .chart-modal-close { background: #111d3d; border: 1px solid #334155; color: #f8fafc; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 13px; }
-    .chart-modal-body { flex: 1; position: relative; min-height: 0; }
+    /* [CHANGE] "아래 좌측 60%는 현황, 우측 40%는 Seasonal 기본, Depth 누르면 교체"
+       - 패널 아래쪽을 좌우로 나눕니다. 화면이 좁으면(모바일 세로) 위아래로 쌓여요. */
+    .panel-split { flex: 1; display: flex; gap: 12px; min-height: 250px; }
+    .panel-split > .chart-box { flex: 6; min-width: 0; }
+    .side-chart { flex: 4; min-width: 0; display: flex; flex-direction: column; border-left: 1px solid #1e293b; padding-left: 12px; }
+    .side-chart .tab-bar { margin-bottom: 4px; }
+    .side-chart-body { flex: 1; position: relative; min-height: 160px; }
+    @media (max-width: 760px) {
+      .panel-split { flex-direction: column; min-height: 0; }
+      .panel-split > .chart-box { flex: 0 0 250px; }
+      .side-chart { flex: 0 0 230px; border-left: none; padding-left: 0; border-top: 1px solid #1e293b; padding-top: 8px; }
+    }
     .chart-legend-overlay {
       position: absolute; top: 2px; right: 2px; z-index: 5;
       display: flex; flex-direction: column; gap: 2px;
@@ -265,12 +271,6 @@
        웹페이지에서도 똑같이" 요청 반영. 떠 있는 작은 박스 대신, 가로 비율이
        긴 화면(모바일 가로모드든 데스크톱 창이든 상관없이)에서는 지구본
        60% + 그래프 40%를 좌우로 나란히, 각각 화면 전체 높이로 씁니다. */
-    @media (orientation: landscape) {
-      main { flex-direction: row; }
-      #viewport-container { flex: 6; min-width: 0; height: 100%; }
-      #bottom-sheet {
-        flex: 4; min-width: 0; height: 100%;
-        border-radius: 0; box-shadow: none;
-        border-top: none; border-left: 1px solid #1e293b;
-      }
-    }
+    /* [CHANGE] "가로형에서 현황 아래 빈 공간이 너무 많아 - 세로형으로만 가자"
+       요청 반영. 예전의 "가로 화면이면 지구본 60% + 패널 40% 좌우 배치"를
+       없애고, 어떤 화면이든 지구본 위 / 패널 아래(세로형)로 통일했습니다. */

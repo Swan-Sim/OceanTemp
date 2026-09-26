@@ -117,20 +117,6 @@
       <!-- 평면 상세 위성 지도 레이어 -->
       <div id="leafletMap"></div>
 
-      <!-- [ADD] 90일 추이 / 수심 프로파일 팝업 (버튼으로 열고 ✕로 닫기) -->
-      <div id="chart-modal" class="chart-modal" style="display:none">
-        <div class="chart-modal-card">
-          <div class="chart-modal-head">
-            <span id="chart-modal-title"></span>
-            <button class="chart-modal-close" onclick="closeChartModal()" aria-label="close">✕</button>
-          </div>
-          <div class="chart-modal-body">
-            <canvas id="detailChart"></canvas>
-            <div class="chart-legend-overlay" id="chart-legend"></div>
-          </div>
-        </div>
-      </div>
-
       <div class="disclaimer-bar">
         ⚠️ <b id="txt-disclaimer-label">Disclaimer:</b> <span id="txt-disclaimer-body">본 서비스의 수온 관측치, 과거 통계 및 추정 모델은 참고용 정보이며 시차나 관측 오차가 발생할 수 있습니다. 항해, 조난 구조 및 극한 해양 레저 활동의 안전 판단에 대한 법적 책임을 지지 않습니다.</span>
       </div>
@@ -145,15 +131,22 @@
       <div class="station-sub" id="st-info">위도 / 경도 / 관측망</div>
       <div class="station-cond" id="st-cond" style="display:none"></div>
 
-      <!-- [CHANGE] 실시간 현황(표)은 탭이 아니라 항상 이 자리에 보이고,
-           90일 추이·수심 프로파일은 버튼을 누르면 지도 위 팝업으로 열려요 -->
-      <div class="tab-bar">
-        <button class="tab-btn" id="btn-ts" onclick="setMode('forecast')">📈 90일 추이</button>
-        <button class="tab-btn" id="btn-dp" onclick="setMode('depth')">🌡 수심 프로파일</button>
-      </div>
-
-      <div class="chart-box">
-        <div class="now-table" id="now-table"></div>
+      <!-- [CHANGE] 왼쪽 60% = 실시간 현황 표(항상), 오른쪽 40% = 90일 추이(기본)
+           / 수심 프로파일(버튼으로 교체). 좁은 화면에서는 위아래로 쌓여요. -->
+      <div class="panel-split">
+        <div class="chart-box">
+          <div class="now-table" id="now-table"></div>
+        </div>
+        <div class="side-chart">
+          <div class="tab-bar">
+            <button class="tab-btn active" id="btn-ts" onclick="setMode('forecast')">📈 90일 추이</button>
+            <button class="tab-btn" id="btn-dp" onclick="setMode('depth')">🌡 수심 프로파일</button>
+          </div>
+          <div class="side-chart-body">
+            <canvas id="detailChart"></canvas>
+            <div class="chart-legend-overlay" id="chart-legend"></div>
+          </div>
+        </div>
       </div>
     </section>
   </main>

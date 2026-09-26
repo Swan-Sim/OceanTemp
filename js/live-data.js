@@ -4,6 +4,7 @@
     // 이 앱이 Claude가 호스팅하는 페이지가 아니라 로컬 HTML 파일이라 가능한
     // 방식이에요 - 그냥 브라우저에서 여는 보통 웹페이지처럼 동작합니다.
     const LIVE_DATA_BASE = 'https://marine-api.open-meteo.com/v1/marine';
+    const WEATHER_API_BASE = 'https://api.open-meteo.com/v1/forecast'; // [ADD] 바람(풍속·풍향·돌풍)
 
     // [FIX] "API 하나 안되면 전체가 멈추는 게 말이 안돼" 요청 반영 -
     // 스크린샷으로 확인해보니 429(Too Many Requests, 요청 과다)였어요.
@@ -250,8 +251,16 @@
     async function fetchStationHourly(station) {
       if (station._hourlyCache) return station._hourlyCache;
       const lat = station.coords[1], lon = station.coords[0];
-      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl&past_days=2&forecast_days=3&timezone=auto`;
-      const res = await fetchJSON(url);
+      // [ADD] "바람·파도도 같이" 요청 반영 - 파고/풍랑/너울은 같은 해양 API
+      // 요청에 항목만 더해서(요청 수 그대로), 바람은 Open-Meteo 날씨 API에서
+      // 1건 더 받아옵니다. 바람 요청이 실패해도 수온·조석·파도는 그대로 보여요.
+      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl,wave_height,wind_wave_height,swell_wave_height,swell_wave_period,swell_wave_direction&past_days=2&forecast_days=3&timezone=auto`;
+      const windUrl = `${WEATHER_API_BASE}?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&past_days=2&forecast_days=3&timezone=auto`;
+      const [marineSettled, windSettled] = await Promise.allSettled([fetchJSON(url), fetchJSON(windUrl)]);
+      if (marineSettled.status !== 'fulfilled') throw marineSettled.reason;
+      const res = marineSettled.value;
+      const windRes = windSettled.status === 'fulfilled' ? windSettled.value : null;
+      if (!windRes) console.warn('[hourly] 바람 데이터 실패 - 바람 없이 표시:', windSettled.reason);
       const h = res && res.hourly;
       if (!h || !h.time) throw new Error('no hourly data');
 
@@ -261,15 +270,30 @@
       const nowLocalMs = Date.now() + offsetSec * 1000;
       const from = nowLocalMs - 48 * 3600 * 1000, to = nowLocalMs + 48 * 3600 * 1000;
 
-      const temp = [], tide = [];
+      const temp = [], tide = [], waves = [], wind = [];
+      const num = (arr, i) => (arr && typeof arr[i] === 'number') ? arr[i] : null;
       h.time.forEach((ts, i) => {
         const x = Date.parse(ts + ':00Z');
         if (x < from - 3600 * 1000 || x > to + 3600 * 1000) return;
-        const tv = h.sea_surface_temperature && h.sea_surface_temperature[i];
-        const sv = h.sea_level_height_msl && h.sea_level_height_msl[i];
-        if (typeof tv === 'number') temp.push({ x, y: +tv.toFixed(2) });
-        if (typeof sv === 'number') tide.push({ x, y: +sv.toFixed(2) });
+        const tv = num(h.sea_surface_temperature, i);
+        const sv = num(h.sea_level_height_msl, i);
+        if (tv != null) temp.push({ x, y: +tv.toFixed(2) });
+        if (sv != null) tide.push({ x, y: +sv.toFixed(2) });
+        const wh = num(h.wave_height, i);
+        if (wh != null) waves.push({
+          x, height: wh, windWave: num(h.wind_wave_height, i), swell: num(h.swell_wave_height, i),
+          swellPeriod: num(h.swell_wave_period, i), swellDir: num(h.swell_wave_direction, i)
+        });
       });
+      if (windRes && windRes.hourly && windRes.hourly.time) {
+        const wh = windRes.hourly;
+        wh.time.forEach((ts, i) => {
+          const x = Date.parse(ts + ':00Z');
+          if (x < from - 3600 * 1000 || x > to + 3600 * 1000) return;
+          const sp = num(wh.wind_speed_10m, i), dir = num(wh.wind_direction_10m, i);
+          if (sp != null && dir != null) wind.push({ x, speed: sp, gust: num(wh.wind_gusts_10m, i), dir });
+        });
+      }
       if (temp.length < 6 && tide.length < 6) throw new Error('no hourly data');
 
       // 만조/간조: 앞뒤 값보다 크거나(만조) 작은(간조) 지점
@@ -280,7 +304,7 @@
         else if (b < a && b <= c) extremes.push({ ...tide[i], type: 'low' });
       }
 
-      const result = { temp, tide, extremes, nowLocalMs, from, to };
+      const result = { temp, tide, waves, wind, extremes, nowLocalMs, from, to };
       station._hourlyCache = result;
       return result;
     }

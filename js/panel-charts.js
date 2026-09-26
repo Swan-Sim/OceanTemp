@@ -167,6 +167,7 @@
       try {
         const d = await fetchStationHourly(st);
         st._hourlyState = 'ok';
+        if (selectedStation === st) renderConditionsLine(st);
         // 헤더 수온도 이 지점의 "지금" 시간별 값으로 맞춰서 그래프와 일치시킵니다
         const nowT = interpAt(d.temp, d.nowLocalMs);
         if (nowT != null) {
@@ -241,6 +242,81 @@
       return { temp, tide, extremes, nowLocalMs, from: nowLocalMs - 48 * HOUR, to: nowLocalMs + 48 * HOUR, isEstimate: true };
     }
 
+    // [ADD] "바람·파도" - 풍속(m/s) 색: 약함 초록 → 강함 빨강.
+    // 해양레저 기준으로 흔히 쓰는 구간(4 / 8 / 12 m/s)에 맞췄어요.
+    function windColor(speed) {
+      if (speed < 4) return '#4ade80';
+      if (speed < 8) return '#facc15';
+      if (speed < 12) return '#fb923c';
+      return '#ef4444';
+    }
+
+    // 풍향(바람이 불어오는 방향, 0°=북)을 8방위 글자로
+    function compass8(deg) {
+      return t.compass[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+    }
+
+    function nearestByX(arr, x) {
+      if (!arr || !arr.length) return null;
+      let best = arr[0], bd = Math.abs(arr[0].x - x);
+      for (const p of arr) { const dd = Math.abs(p.x - x); if (dd < bd) { bd = dd; best = p; } }
+      return bd <= 90 * 60 * 1000 ? best : null; // 1시간 반 이내의 값만
+    }
+
+    // 헤더 아래 "지금 바람·파도" 한 줄. 실데이터가 있을 때만 보여줍니다.
+    function renderConditionsLine(st) {
+      const el = document.getElementById('st-cond');
+      if (!el) return;
+      const d = st && st._hourlyCache;
+      if (!d) { el.innerHTML = ''; el.style.display = 'none'; return; }
+      const w = nearestByX(d.wind, d.nowLocalMs);
+      const wv = nearestByX(d.waves, d.nowLocalMs);
+      const parts = [];
+      if (w) {
+        parts.push(`<span style="color:${windColor(w.speed)}">🌬 ${compass8(w.dir)} ${w.speed.toFixed(1)}m/s</span>` +
+          (w.gust != null ? ` <span style="color:#94a3b8">(${t.gust} ${w.gust.toFixed(1)})</span>` : ''));
+      }
+      if (wv) {
+        let s = `🌊 ${t.waveHeight} ${wv.height.toFixed(1)}m`;
+        if (wv.swell != null) s += ` <span style="color:#94a3b8">(${t.swell} ${wv.swell.toFixed(1)}m` +
+          (wv.swellPeriod != null ? ` / ${Math.round(wv.swellPeriod)}${t.sec}` : '') + ')</span>';
+        parts.push(s);
+      }
+      el.innerHTML = parts.join(' · ');
+      el.style.display = parts.length ? 'block' : 'none';
+    }
+
+    // 차트 아래쪽(x축 날짜 밑)에 바람 화살표 줄을 그리는 Chart.js 플러그인.
+    // 화살표는 바람이 "불어가는" 방향, 색은 세기. 화면이 좁으면 6시간 간격.
+    function windArrowPlugin(wind) {
+      return {
+        id: 'windArrows',
+        afterDraw(chart) {
+          if (!wind || !wind.length) return;
+          const { ctx, chartArea, scales } = chart;
+          const stepH = chartArea.right - chartArea.left < 500 ? 6 : 3;
+          const y = chart.height - 9;
+          ctx.save();
+          wind.forEach(w => {
+            const hour = new Date(w.x).getUTCHours();
+            if (hour % stepH !== 0) return;
+            const px = scales.x.getPixelForValue(w.x);
+            if (px < chartArea.left || px > chartArea.right) return;
+            ctx.save();
+            ctx.translate(px, y);
+            ctx.rotate(((w.dir + 180) % 360) * Math.PI / 180); // 불어오는 방향 → 불어가는 방향, 0°=위쪽
+            ctx.fillStyle = windColor(w.speed);
+            ctx.beginPath();
+            ctx.moveTo(0, -6); ctx.lineTo(4, 3); ctx.lineTo(0, 1); ctx.lineTo(-4, 3);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          });
+          ctx.restore();
+        }
+      };
+    }
+
     function renderNowChart(chartCanvas, legendBox) {
       const st = selectedStation;
       let d = st._hourlyCache;
@@ -275,8 +351,10 @@
       const tickXs = [];
       for (let x = Math.ceil(d.from / (12 * HOUR)) * 12 * HOUR; x <= d.to; x += 12 * HOUR) tickXs.push(x);
 
+      const windData = d.wind || [];
       chartInstance = new Chart(chartCanvas, {
         type: 'line',
+        plugins: [windArrowPlugin(windData)],
         data: {
           datasets: [
             { label: t.nowTemp, data: d.temp, yAxisID: 'y', borderColor: '#ef4444', borderDash: est ? [5, 4] : [], tension: 0.3, pointRadius: 0, pointHitRadius: 10, borderWidth: 2.2 },
@@ -289,6 +367,7 @@
         },
         options: {
           responsive: true, maintainAspectRatio: false,
+          layout: { padding: { bottom: windData.length ? 16 : 0 } }, // 바람 화살표 줄 자리
           interaction: { mode: 'nearest', axis: 'x', intersect: false },
           plugins: {
             legend: { display: false },
@@ -297,7 +376,15 @@
                 title: (items) => fmtLocalTime(items[0].parsed.x, true),
                 label: (ctx) => ctx.dataset.yAxisID === 'y'
                   ? `${ctx.dataset.label}: ${formatTemp(ctx.parsed.y)}`
-                  : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} m`
+                  : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} m`,
+                // 그 시각의 바람·파도도 같이
+                footer: (items) => {
+                  const x = items[0].parsed.x, out = [];
+                  const w = nearestByX(d.wind, x), wv = nearestByX(d.waves, x);
+                  if (w) out.push(`🌬 ${compass8(w.dir)} ${w.speed.toFixed(1)}m/s` + (w.gust != null ? ` (${t.gust} ${w.gust.toFixed(1)})` : ''));
+                  if (wv) out.push(`🌊 ${t.waveHeight} ${wv.height.toFixed(1)}m` + (wv.swell != null ? ` (${t.swell} ${wv.swell.toFixed(1)}m)` : ''));
+                  return out;
+                }
               }
             }
           },
@@ -336,6 +423,7 @@
         `<div class="item"><span class="swatch" style="background:#38bdf8;"></span>${t.tideLevel} (m, ${t.tideRef})</div>` +
         (nextHigh ? `<div class="item"><span class="swatch" style="background:#f97316;"></span>${t.tideNextHigh} ${fmtLocalTime(nextHigh.x, false)} (${nextHigh.y.toFixed(2)} m)</div>` : '') +
         (nextLow ? `<div class="item"><span class="swatch" style="background:#a78bfa;"></span>${t.tideNextLow} ${fmtLocalTime(nextLow.x, false)} (${nextLow.y.toFixed(2)} m)</div>` : '') +
+        (windData.length ? `<div class="item" style="color:#94a3b8;">${t.windKey}</div>` : '') +
         `<div class="item" style="color:#94a3b8;">⚠ ${t.tideNote}</div>`;
     }
 
@@ -457,6 +545,7 @@
 
       const tagStr = st.isBeach ? ` [${t.beachTag}]` : '';
       document.getElementById('st-info').innerText = t.infoCoord(st.network, st.coords[1], st.coords[0]) + tagStr;
+      renderConditionsLine(st); // [ADD] 지금 바람·파도 (실데이터 있을 때만)
 
       const depthBtn = document.getElementById('btn-dp');
       if (!st.hasDepth) {

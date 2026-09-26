@@ -387,7 +387,7 @@ function getCurrentCenterLatLng() {
           void main() {
             float facing = dot(normalize(vNormal), normalize(sunDir));
             float night = smoothstep(0.15, -0.2, facing); // 0=낮, 1=밤, 경계는 부드럽게
-            gl_FragColor = vec4(0.0, 0.01, 0.05, night * 0.72);
+            gl_FragColor = vec4(0.0, 0.01, 0.05, night * 0.5); // [CHANGE] "저녁이 너무 어두워" - 0.72 → 0.5
           }
         `,
         transparent: true,
@@ -446,43 +446,6 @@ function getCurrentCenterLatLng() {
         depthWrite: false
       });
       return new THREE.Mesh(geometry, material);
-    }
-
-    // [CHANGE] "지구 표면 색상(매끈한 히트 오버레이) 빼고 구름 넣자" 요청
-    // 반영 - 1700만 번 거리 계산을 하던 무거운 buildHeatOverlayTexture를
-    // 완전히 없앴습니다. 대신 정점 데이터와 전혀 무관한(그래서 API 상태와
-    // 상관없이 즉시 뜨는) 가벼운 절차적 구름 레이어를 추가했어요 - 실시간
-    // 위성사진 느낌을 주면서도 데이터를 기다릴 필요가 없습니다.
-    function buildCloudTexture() {
-      const W = 512, H = 256;
-      const cvs = document.createElement('canvas');
-      cvs.width = W; cvs.height = H;
-      const c = cvs.getContext('2d');
-      c.clearRect(0, 0, W, H);
-      for (let i = 0; i < 220; i++) {
-        const x = Math.random() * W;
-        const y = Math.random() * H;
-        const r = 8 + Math.random() * 22;
-        const alpha = 0.12 + Math.random() * 0.18;
-        const grad = c.createRadialGradient(x, y, 0, x, y, r);
-        grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
-        grad.addColorStop(1, 'rgba(255,255,255,0)');
-        c.fillStyle = grad;
-        c.beginPath();
-        c.arc(x, y, r, 0, Math.PI * 2);
-        c.fill();
-      }
-      return new THREE.CanvasTexture(cvs);
-    }
-
-    function buildCloudLayer() {
-      const geometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.012, 64, 64);
-      const material = new THREE.MeshBasicMaterial({
-        map: buildCloudTexture(), transparent: true, depthWrite: false
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.renderOrder = 1; // 낮/밤 그림자·라벨보다는 아래, 지구 표면보다는 위
-      return mesh;
     }
 
     // [ADD] "바다에 실제 수온 색상 다시 넣자 (1번)" 요청 반영 - 예전 방식은
@@ -785,12 +748,8 @@ function getCurrentCenterLatLng() {
       globeGroup.add(atmosphereMesh);
       atmosphereMaterialRef = atmosphereMesh.material;
 
-      // [ADD] "색상 빼고 구름 넣자" - 정점 데이터와 무관해서 API 상태와
-      // 상관없이 바로 뜨는 구름 레이어. 지구 자체(사용자 드래그)와는
-      // 별개로 아주 천천히 자체적으로도 흘러가게 해서 "살아있는 행성"
-      // 느낌을 더합니다.
-      cloudMesh = buildCloudLayer();
-      globeGroup.add(cloudMesh);
+      // [REMOVE] "구름이 안 보이니 더 넣든가 빼자" - 수온 색 레이어 위에서
+      // 구름이 거의 안 보이고, 진하게 하면 수온 색을 가려서 뺐습니다.
 
       // [ADD] 바다 햇빛 반사 + 위성 실측 수온 레이어 (수온은 비동기로 도착하는 대로)
       const moonNow = computeSublunarPoint(new Date());
@@ -820,7 +779,6 @@ function getCurrentCenterLatLng() {
 
       function animate() {
         requestAnimationFrame(animate);
-        if (cloudMesh) cloudMesh.rotation.y += 0.0003;
         renderer.render(scene, camera);
       }
       animate();

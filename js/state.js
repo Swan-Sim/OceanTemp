@@ -11,7 +11,7 @@
       maxTempStation = stations.reduce((max, cur) => cur.curTemp > max.curTemp ? cur : max, stations[0]);
     }
 
-    let scene, camera, renderer, globeGroup, globeMesh, cloudMesh;
+    let scene, camera, renderer, globeGroup, globeMesh;
     // [ADD] "태양/달을 실시간으로 움직이게" 요청 반영 - 주기적 갱신에 쓸 참조들
     let sunSpriteRef, mercurySpriteRef, venusSpriteRef, moonGroupRef, moonShadowMaterialRef;
     let shadowMaterialRef, warmGlowMaterialRef, atmosphereMaterialRef;

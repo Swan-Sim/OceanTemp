@@ -286,8 +286,11 @@
       el.style.display = parts.length ? 'block' : 'none';
     }
 
-    // 차트 아래쪽(x축 날짜 밑)에 바람 화살표 줄을 그리는 Chart.js 플러그인.
-    // 화살표는 바람이 "불어가는" 방향, 색은 세기. 화면이 좁으면 6시간 간격.
+    // [CHANGE] "화살표를 위쪽으로, 화살표 위에 초속" 요청 반영 - 차트 맨 위
+    // (탭 버튼 바로 아래)에 바람 화살표 줄을 그리고, 각 화살표 위에 풍속(m/s)
+    // 숫자를 적는 Chart.js 플러그인. 화살표는 바람이 "불어가는" 방향, 색은
+    // 세기. 화면이 좁으면 6시간 간격으로 줄여서 숫자가 겹치지 않게 합니다.
+    const WIND_ROW_H = 30; // 숫자 + 화살표 줄 높이(px)
     function windArrowPlugin(wind) {
       return {
         id: 'windArrows',
@@ -295,17 +298,23 @@
           if (!wind || !wind.length) return;
           const { ctx, chartArea, scales } = chart;
           const stepH = chartArea.right - chartArea.left < 500 ? 6 : 3;
-          const y = chart.height - 9;
+          const arrowY = chartArea.top - 9;
+          const textY = chartArea.top - 21;
           ctx.save();
+          ctx.font = 'bold 8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
           wind.forEach(w => {
             const hour = new Date(w.x).getUTCHours();
             if (hour % stepH !== 0) return;
             const px = scales.x.getPixelForValue(w.x);
             if (px < chartArea.left || px > chartArea.right) return;
+            const color = windColor(w.speed);
+            ctx.fillStyle = color;
+            ctx.fillText(String(Math.round(w.speed)), px, textY);
             ctx.save();
-            ctx.translate(px, y);
+            ctx.translate(px, arrowY);
             ctx.rotate(((w.dir + 180) % 360) * Math.PI / 180); // 불어오는 방향 → 불어가는 방향, 0°=위쪽
-            ctx.fillStyle = windColor(w.speed);
             ctx.beginPath();
             ctx.moveTo(0, -6); ctx.lineTo(4, 3); ctx.lineTo(0, 1); ctx.lineTo(-4, 3);
             ctx.closePath();
@@ -352,6 +361,7 @@
       for (let x = Math.ceil(d.from / (12 * HOUR)) * 12 * HOUR; x <= d.to; x += 12 * HOUR) tickXs.push(x);
 
       const windData = d.wind || [];
+      legendBox.style.top = windData.length ? `${WIND_ROW_H + 2}px` : ''; // 범례가 화살표 줄을 가리지 않게
       chartInstance = new Chart(chartCanvas, {
         type: 'line',
         plugins: [windArrowPlugin(windData)],
@@ -367,7 +377,7 @@
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          layout: { padding: { bottom: windData.length ? 16 : 0 } }, // 바람 화살표 줄 자리
+          layout: { padding: { top: windData.length ? WIND_ROW_H : 0 } }, // 바람 화살표 줄 자리 (위쪽)
           interaction: { mode: 'nearest', axis: 'x', intersect: false },
           plugins: {
             legend: { display: false },
@@ -431,6 +441,7 @@
       const chartCanvas = document.getElementById('detailChart').getContext('2d');
       if (chartInstance) chartInstance.destroy();
       const legendBox = document.getElementById('chart-legend');
+      legendBox.style.top = ''; // 다른 탭에서는 원래 위치
 
       if (activeMode === 'now') { renderNowChart(chartCanvas, legendBox); return; }
 

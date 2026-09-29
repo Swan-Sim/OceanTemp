@@ -205,11 +205,10 @@
     .station-name { font-size: 19px; font-weight: 800; color: #f8fafc; max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.01em; }
     .temp-val { font-size: 16px; font-weight: 800; color: #38bdf8; text-align: right; }
     .station-sub { font-size: 10.5px; color: #94a3b8; margin-bottom: 5px; }
-    .station-cond { font-size: 11px; color: #e2e8f0; margin: -2px 0 6px; } /* [ADD] 지금 바람·파도 한 줄 */
     .tab-bar { display: flex; gap: 6px; margin-bottom: 6px; }
     .tab-btn { flex: 1; padding: 4px; font-size: 10px; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; cursor: pointer; }
     .tab-btn.active { background: #0284c7; color: #fff; border-color: #38bdf8; }
-    .chart-box { flex: 0 0 auto; height: 250px; position: relative; } /* [CHANGE] 실시간 현황 표 높이에 맞춘 고정 높이 - 세 버튼이 이 자리를 같이 씀 */
+    .chart-box { flex: 0 0 auto; height: 262px; position: relative; } /* [CHANGE] 실시간 현황 표 높이에 맞춘 고정 높이 - 세 버튼이 이 자리를 같이 씀 */
     .chart-legend-overlay {
       position: absolute; top: 2px; right: 2px; z-index: 5;
       display: flex; flex-direction: column; gap: 2px;
@@ -220,7 +219,7 @@
     /* [ADD] 실시간 현황 표 (Windy 스타일, 3시간 간격) */
     .now-table { position: absolute; inset: 0; display: flex; flex-direction: column; font-size: 10px; }
     .nt-top { display: flex; align-items: center; gap: 6px; padding: 2px 0 4px; }
-    .nt-status { flex: 1; min-width: 0; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nt-status { flex: 1; min-width: 0; font-size: 10px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .nt-nav { flex: 0 0 auto; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; font-size: 10px; padding: 2px 7px; cursor: pointer; }
     .nt-scroll { flex: 1; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
     .nt-inner { display: flex; min-width: max-content; }
@@ -229,9 +228,14 @@
     .nt-grid { position: relative; }
     .nt-row { display: flex; align-items: center; }
     .nt-cell { flex: 0 0 34px; width: 34px; height: 100%; display: flex; align-items: center; justify-content: center; }
-    .nt-now { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(255,255,255,0.55); z-index: 2; pointer-events: none; }
-    .nt-now span { position: absolute; top: 1px; left: 3px; background: #fff; color: #0f172a; font-size: 8px; font-weight: 700; padding: 0 3px; border-radius: 3px; white-space: nowrap; }
-    .nt-note { font-size: 8.5px; color: #64748b; padding-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* [CHANGE] "지금" 표시: 해당 3시간 칸 전체를 밝은 띠로 강조 + 정확한 시각에 가는 선 */
+    .nt-band { position: absolute; top: 30px; bottom: 0; background: rgba(125,211,252,0.22); z-index: 1; pointer-events: none; }
+    .nt-now { position: absolute; top: 30px; bottom: 0; width: 2px; margin-left: -1px; background: rgba(255,255,255,0.7); z-index: 2; pointer-events: none; }
+    /* 정점명 라벨 - "지금" 칸 위에 뜨고, 좌우로 스크롤해도 화면 밖으로 안 나가게 따라다녀요 */
+    .nt-name { position: absolute; top: 2px; z-index: 4; max-width: 260px; padding: 2px 12px; border: 1.5px solid #e2e8f0; border-radius: 6px; background: #0b1329; color: #f8fafc; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+    .nt-live { color: #4ade80; } .nt-est { color: #facc15; }
+    .nt-note { font-size: 8.5px; color: #64748b; padding-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .station-foot { margin: 4px 0 0; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .chart-legend-overlay .swatch { width: 9px; height: 2px; border-radius: 1px; flex-shrink: 0; }
     .chart-legend-overlay .swatch.dashed { background-image: linear-gradient(to right, currentColor 50%, transparent 50%); background-size: 4px 2px; background-color: transparent !important; }
 

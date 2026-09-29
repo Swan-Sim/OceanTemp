@@ -124,12 +124,13 @@
 
     <section id="bottom-sheet">
       <div id="boot-terminal"></div>
-      <div class="meta-row">
+      <!-- [CHANGE] "아래 데이터 레이어 정리" - 헤더(정점명·수온)와 바람/파도 한 줄은
+           표의 "지금" 칸과 중복이라 숨기고, 정점명은 표의 "지금" 칸 위 라벨로,
+           정점 정보는 맨 아래 한 줄로 옮겼어요. (다른 코드가 참조해서 요소는 남겨둠) -->
+      <div class="meta-row" style="display:none">
         <div class="station-name" id="st-name">정점을 선택하세요</div>
         <div class="temp-val" id="st-temp">--.-°C</div>
       </div>
-      <div class="station-sub" id="st-info">위도 / 경도 / 관측망</div>
-      <div class="station-cond" id="st-cond" style="display:none"></div>
 
       <!-- [CHANGE] "리얼타임 높이에 맞춰서 기존처럼 버튼 3개로 교체" - 세 버튼이
            같은 자리(실시간 표 높이로 고정)를 번갈아 씁니다. 높이가 고정이라
@@ -145,6 +146,7 @@
         <canvas id="detailChart"></canvas>
         <div class="chart-legend-overlay" id="chart-legend"></div>
       </div>
+      <div class="station-sub station-foot" id="st-info">위도 / 경도 / 관측망</div>
     </section>
   </main>
 

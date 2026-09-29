@@ -167,7 +167,6 @@
       try {
         const d = await fetchStationHourly(st);
         st._hourlyState = 'ok';
-        if (selectedStation === st) renderConditionsLine(st);
         // 헤더 수온도 이 지점의 "지금" 시간별 값으로 맞춰서 그래프와 일치시킵니다
         const nowT = interpAt(d.temp, d.nowLocalMs);
         if (nowT != null) {
@@ -281,28 +280,6 @@
       return bd <= 90 * 60 * 1000 ? best : null; // 1시간 반 이내의 값만
     }
 
-    // 헤더 아래 "지금 바람·파도" 한 줄. 실데이터가 있을 때만 보여줍니다.
-    function renderConditionsLine(st) {
-      const el = document.getElementById('st-cond');
-      if (!el) return;
-      const d = st && st._hourlyCache;
-      if (!d) { el.innerHTML = ''; el.style.display = 'none'; return; }
-      const w = nearestByX(d.wind, d.nowLocalMs);
-      const wv = nearestByX(d.waves, d.nowLocalMs);
-      const parts = [];
-      if (w) {
-        parts.push(`<span style="color:${windColor(w.speed)}">🌬 ${compass8(w.dir)} ${w.speed.toFixed(1)}m/s</span>` +
-          (w.gust != null ? ` <span style="color:#94a3b8">(${t.gust} ${w.gust.toFixed(1)})</span>` : ''));
-      }
-      if (wv) {
-        let s = `🌊 ${t.waveHeight} ${wv.height.toFixed(1)}m`;
-        if (wv.swell != null) s += ` <span style="color:#94a3b8">(${t.swell} ${wv.swell.toFixed(1)}m` +
-          (wv.swellPeriod != null ? ` / ${Math.round(wv.swellPeriod)}${t.sec}` : '') + ')</span>';
-        parts.push(s);
-      }
-      el.innerHTML = parts.join(' · ');
-      el.style.display = parts.length ? 'block' : 'none';
-    }
 
     // [CHANGE] "Windy처럼 복잡한 그래프 대신 숫자로 단순하게" 요청 반영 -
     // 실시간 현황 탭을 3시간 간격 표(±2일, 32칸)로 바꿨습니다. 각 칸은
@@ -316,7 +293,7 @@
     function renderNowTable(box) {
       const st = selectedStation;
       let d = st._hourlyCache;
-      let status = `<span style="color:#4ade80;">🟢 ${t.nowSource}</span>`;
+      let status = `<span class="nt-live" title="${t.nowSource}">🟢 ${t.statusLive}</span>`;
       if (!d) {
         if (st._userRequested && !st._hourlyState) ensureHourlyData(st);
         d = getEstimatedHourly(st);
@@ -325,7 +302,7 @@
           : st._hourlyState === 'failed'
             ? (st._hourlyError === 'DAILY_LIMIT' ? t.nowDailyLimit : t.nowFailed)
             : `⏳ ${t.nowLoading}`;
-        status = `<span style="color:#facc15;">⚠ ${t.nowEstimated}</span> <span style="color:#94a3b8;">${why}</span>`;
+        status = `<span style="color:#94a3b8;">${why}</span> <span class="nt-est" title="${t.nowEstimated}">⚠ ${t.statusEst}</span>`;
       }
       const canRetry = !st._hourlyCache && st._hourlyState === 'failed' && st._hourlyError !== 'DAILY_LIMIT';
 
@@ -361,7 +338,7 @@
       cols.forEach(x => {
         const dt = new Date(x), hh = dt.getUTCHours(), day = dt.getUTCDate();
         const dayEdge = hh === 0 ? 'border-left:1px solid #475569;' : '';
-        rows.date += cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:#e2e8f0;font-weight:700;' + dayEdge);
+        rows.date += cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:#e2e8f0;font-weight:700;align-items:flex-end;padding-bottom:1px;' + dayEdge);
         lastDay = day;
         rows.time += cell(String(hh).padStart(2, '0'), 'color:#94a3b8;' + dayEdge);
 
@@ -379,15 +356,19 @@
       });
 
       const ROWS = [
-        ['date', '', 14], ['time', '', 14],
+        ['date', '', 30], ['time', '', 14], // 날짜 줄은 정점명 라벨 자리까지 포함해서 높게
         ['temp', `${t.rowTemp} °${tempUnit}`, 22], ['wind', t.rowWind, 20], ['dir', t.rowDir, 16], ['gust', t.gust, 14],
         ['wave', t.rowWave, 20], ['swell', t.rowSwell, 14]
       ];
       const labelCol = `<div class="nt-labels">` +
         ROWS.map(([, l, h]) => `<div style="height:${h}px">${l}</div>`).join('') +
         `<div style="height:${TH}px">${t.rowTide}</div></div>`;
-      const nowLine = `<div class="nt-now" style="left:${nowX.toFixed(1)}px"><span>${t.tideNow}</span></div>`;
-      const grid = `<div class="nt-grid" style="width:${W}px">${nowLine}` +
+      // [CHANGE] "지금" = 해당 칸 전체 강조 띠 + 정확한 시각의 가는 선 + 그 위 정점명 라벨
+      const nowCol = Math.max(0, Math.min(cols.length - 1, Math.floor((d.nowLocalMs - cols[0] + STEP / 2) / STEP)));
+      const nowBand = `<div class="nt-band" style="left:${nowCol * COLW}px;width:${COLW}px"></div>`;
+      const nowLine = `<div class="nt-now" style="left:${nowX.toFixed(1)}px"></div>`;
+      const nameLabel = `<div class="nt-name">${st.name}</div>`;
+      const grid = `<div class="nt-grid" style="width:${W}px">${nowBand}${nowLine}${nameLabel}` +
         ROWS.map(([k, , h]) => `<div class="nt-row" style="height:${h}px">${rows[k]}</div>`).join('') +
         tideSvg + `</div>`;
 
@@ -395,7 +376,7 @@
       // 마우스 휠(세로 휠을 가로 이동으로)
       box.innerHTML = `<div class="nt-top">` +
           `<button class="nt-nav" data-dir="-1">◀ ${t.prevDay}</button>` +
-          `<div class="nt-status">${status}${canRetry ? ` <a href="#" class="nt-retry" style="color:#38bdf8">${t.retry}</a>` : ''}</div>` +
+          `<div class="nt-status">${canRetry ? `<a href="#" class="nt-retry" style="color:#38bdf8">${t.retry}</a> ` : ''}${status}</div>` +
           `<button class="nt-nav" data-dir="0">${t.tideNow}</button>` +
           `<button class="nt-nav" data-dir="1">${t.nextDay} ▶</button>` +
         `</div>` +
@@ -407,7 +388,18 @@
       const keep = box._lastStationId === st.id && typeof box._lastScroll === 'number';
       sc.scrollLeft = keep ? box._lastScroll : toNow();
       box._lastStationId = st.id;
-      sc.addEventListener('scroll', () => { box._lastScroll = sc.scrollLeft; }, { passive: true });
+      // 정점명 라벨: "지금" 칸 위 가운데에 두되, 스크롤해서 그 칸이 화면 밖으로
+      // 나가면 보이는 영역의 끝에 붙어서 따라옵니다(항상 정점명이 보이게).
+      const nameEl = box.querySelector('.nt-name');
+      const LABEL_COL_W = 58;
+      const placeName = () => {
+        const w = nameEl.offsetWidth;
+        const visL = sc.scrollLeft + 4, visR = sc.scrollLeft + sc.clientWidth - LABEL_COL_W - 4;
+        const ideal = nowX - w / 2;
+        nameEl.style.left = Math.max(visL, Math.min(visR - w, ideal)) + 'px';
+      };
+      placeName();
+      sc.addEventListener('scroll', () => { box._lastScroll = sc.scrollLeft; placeName(); }, { passive: true });
       let pending = null, pendingTimer = null; // 빠르게 여러 번 눌러도 하루씩 누적되게
       box.querySelectorAll('.nt-nav').forEach(btn => btn.addEventListener('click', () => {
         const dir = +btn.dataset.dir;
@@ -435,6 +427,12 @@
       // [CHANGE] 버튼 3개가 같은 자리를 번갈아 씀: 실시간 현황이면 표, 아니면 그래프
       const isNow = activeMode === 'now';
       tableBox.style.display = isNow ? '' : 'none';
+      // 맨 아래 정점 정보: 표에선 "지금" 칸 위에 이름이 있으니 정보만, 그래프 탭에선 이름도 같이
+      if (selectedStation) {
+        const s0 = selectedStation;
+        const info = t.infoCoord(s0.network, s0.coords[1], s0.coords[0]) + (s0.isBeach ? ` [${t.beachTag}]` : '');
+        document.getElementById('st-info').innerText = isNow ? info : `${s0.name} · ${info}`;
+      }
       document.getElementById('detailChart').style.display = isNow ? 'none' : '';
       legendBox.style.display = isNow ? 'none' : '';
       if (!selectedStation) return;
@@ -551,7 +549,6 @@
 
       const tagStr = st.isBeach ? ` [${t.beachTag}]` : '';
       document.getElementById('st-info').innerText = t.infoCoord(st.network, st.coords[1], st.coords[0]) + tagStr;
-      renderConditionsLine(st); // [ADD] 지금 바람·파도 (실데이터 있을 때만)
 
       const depthBtn = document.getElementById('btn-dp');
       if (!st.hasDepth) {

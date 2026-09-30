@@ -404,6 +404,12 @@
     /* [FIX] "버튼 옆 검은 여백은 투명하게" - 탭 줄 뒤(패널 위 29px)가 투명이어도 그 뒤에
        지구본이 없어서 검게 보였어요. 패널을 29px 위로 겹쳐 올려 그 자리에 지구본이
        보이게 하고, 빈 부분은 지구본 드래그가 되도록 클릭을 통과시킵니다. */
+    /* [FIX] "버튼 아래 투명한 빈 공간 / 호박색 테두리가 안 보여" - 탭 줄 높이가 기기(글꼴)마다
+       1~2px씩 달라서, 29px로 고정한 투명 구간과 어긋나 틈이 생겼어요. 탭 줄 높이를 29px로
+       고정해 딱 맞추고, 지도/지구본 위에서도 보이도록 탭 테두리·가로선을 조금 진하게 했어요. */
+    .tab-bar { height: 29px; box-sizing: border-box; align-items: stretch; border-bottom-color: rgba(var(--accent-rgb),0.6); }
+    .tab-btn { height: 28px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; display: flex; align-items: center; justify-content: center; }
+    .tab-btn.active { height: 29px; border-color: rgba(var(--accent-rgb),0.6); }
     #bottom-sheet { margin-top: -29px; pointer-events: none; }
     #bottom-sheet > * { pointer-events: auto; }
     #bottom-sheet > .tab-bar { pointer-events: none; }

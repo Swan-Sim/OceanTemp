@@ -291,9 +291,10 @@
 
     // ───────── [ADD] 시야(물 투명도) - 게이지, 데이터 불러오기, 그래프 공통 ─────────
     const EYE_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-    const VIS_TICKS = [1, 2, 5, 10, 20, 30];
-    // 게이지 위치: 1m~30m 로그 눈금(탁한 곳 차이도 잘 보이게)
-    function visPos(v) { return Math.max(0, Math.min(1, Math.log(Math.max(1, v)) / Math.log(30))) * 100; }
+    // [FIX] 만(灣) 안처럼 1m보다 탁한 곳(Crissy Field 등)은 선이 축 아래로 잘려서 0.5m부터 보여줌
+    const VIS_TICKS = [0.5, 1, 2, 5, 10, 20, 30];
+    // 게이지 위치: 0.5m~30m 로그 눈금(탁한 곳 차이도 잘 보이게)
+    function visPos(v) { return Math.max(0, Math.min(1, Math.log(Math.max(0.5, v) / 0.5) / Math.log(60))) * 100; }
     const mmdd = (iso) => iso.slice(5).replace(/^0/, '').replace('-0', '/').replace('-', '/');
 
     // 정점명 옆 작은 게이지: 숫자 = 오늘 추정 시야, 옅은 띠 = 90일 통상 범위(하위~상위 10%), 흰 눈금 = 오늘
@@ -573,15 +574,17 @@
       if (!selectedStation) return;
       if (isNow) { renderNowTable(tableBox); return; }
 
-      renderForecastTop(selectedStation._visCache);
+      // [FIX] 시야 쪽에서 무슨 오류가 나도 수온/수심 그래프는 항상 그려지게
+      try { renderForecastTop(selectedStation._visCache); } catch (e) { console.warn('[visibility] 상단 칩 오류:', e); }
       legendBox.style.top = '';
       if (activeMode === 'forecast' && forecastView === 'cause' && selectedStation._visCache) {
         legendBox.style.top = '44px';
-        renderVisCause(chartCanvas, legendBox, selectedStation._visCache);
+        try { renderVisCause(chartCanvas, legendBox, selectedStation._visCache); }
+        catch (e) { console.warn('[visibility] 원인 그래프 오류:', e); forecastView = 'temp'; return updateChart(); }
       } else if (activeMode === 'forecast') {
         const usingLive = !!selectedStation._liveCache;
         const data = usingLive ? computeTimeSeriesDataFromLive(selectedStation) : computeTimeSeriesData(selectedStation);
-        const vis = selectedStation._visCache;
+        let vis = selectedStation._visCache;
         const datasets = [
           { label: t.chartPast, data: data.climLine, borderColor: '#5B6474', borderDash: [4, 4], tension: 0.3, pointRadius: 0, pointHitRadius: 20 },
           { label: t.chartActual, data: data.actualLine, borderColor: '#FFB000', backgroundColor: 'rgba(255, 176, 0, 0.10)', fill: true, tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2.2 },
@@ -589,7 +592,7 @@
           { label: t.todayBadge, data: data.todayPoint, borderColor: '#FFB000', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHitRadius: 16, pointHoverRadius: 7, showLine: false }
         ];
         // [ADD] 시야: 실측(위성 7일 평균) 실선 + 일별 점, 앞으로의 추세 점선 + 두꺼운 반투명 오차 범위
-        if (vis) {
+        if (vis) try {
           const P = vis.projection.map(p => ({ x: dateToWindowX(p.t), p }));
           datasets.push(
             { label: t.visBand, data: P.map(o => ({ x: o.x, y: +o.p.lo.toFixed(2) })), yAxisID: 'yv', borderWidth: 0, pointRadius: 0, fill: false, tension: 0.3, _noTip: true },
@@ -598,6 +601,9 @@
             { label: t.visObserved, data: vis.days.map(x => ({ x: dateToWindowX(x.t), y: +x.vis7.toFixed(2) })), yAxisID: 'yv', borderColor: '#38BDF8', borderWidth: 2, pointRadius: 0, pointHitRadius: 10, tension: 0.3, _unit: 'vis' },
             { label: t.visAxis, data: vis.days.map(x => ({ x: dateToWindowX(x.t), y: +x.vis.toFixed(2) })), yAxisID: 'yv', showLine: false, pointRadius: 1.3, pointBackgroundColor: 'rgba(56,189,248,0.45)', pointBorderWidth: 0, _noTip: true }
           );
+        } catch (e) {
+          console.warn('[visibility] 시야 그래프 오류, 수온만 표시:', e);
+          datasets.length = 4; vis = null;
         }
         const scales = {
           x: {
@@ -613,7 +619,7 @@
         };
         // 시야 축(오른쪽): 1~30m 로그 눈금 - 3m와 5m 차이도 30m와 같은 그래프에서 보이게
         if (vis) scales.yv = {
-          type: 'logarithmic', position: 'right', min: 1, max: 30, grid: { drawOnChartArea: false },
+          type: 'logarithmic', position: 'right', min: 0.5, max: 30, grid: { drawOnChartArea: false },
           afterBuildTicks: (ax) => { ax.ticks = VIS_TICKS.map(value => ({ value })); },
           ticks: { color: '#38BDF8', font: { size: 9 }, callback: (val) => val + 'm' }
         };
@@ -697,6 +703,7 @@
     // 부르지 않고 "클릭하면 불러와요" 안내만 보여줍니다. 사람이 정점을
     // 누르거나, 검색하거나, 탭을 누른 순간부터 그 정점의 값을 불러와요.
     async function selectStation(st, opts) {
+      if (selectedStation !== st) forecastView = 'temp'; // [FIX] 정점을 바꾸면 수온·시야 화면부터
       selectedStation = st;
       if (!(opts && opts.auto)) {
         st._userRequested = true; st._userPicked = true;
@@ -808,6 +815,7 @@
     // [CHANGE] "기존처럼 버튼 3개로 교체" - 실시간 현황 / 90일 추이 / 수심 프로파일이
     // 같은 자리(고정 높이)를 번갈아 씁니다.
     function setMode(mode) {
+      if (mode === 'forecast' && activeMode !== 'forecast') forecastView = 'temp'; // [FIX] 90일 추이는 항상 수온·시야 화면부터
       activeMode = mode;
       if (selectedStation) selectedStation._userRequested = true; // 버튼을 누른 것도 사용자 요청
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));

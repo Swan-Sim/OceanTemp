@@ -54,7 +54,7 @@
       // 2) 정점 생성 (동기, 빠름) - 이제 실데이터 검증을 기다리지 않고
       // 바로 그립니다. curTemp는 생성 시 이미 계산돼 있던 추정값(위도
       // 기반 계절 공식)을 그대로 씁니다.
-      stations = generateBeachStations();
+      stations = await generateBeachStations(); // [CHANGE] 정점 목록을 구글 시트/CSV에서 읽어옴
       const gridStations = generateOceanGridStations();
       stations = stations.concat(gridStations);
       fullGridLoaded = true;
@@ -104,7 +104,15 @@
       });
     }
 
+    // [ADD] 접속 통계 - 페이지를 열 때 한 번 /api/track에 알립니다(국가·도시·시간대
+    // 숫자만 올라가고 개인정보는 저장 안 함). 로컬 파일로 열었을 땐 보내지 않아요.
+    function trackVisit() {
+      if (!/^https?:$/.test(location.protocol) || /^(localhost|127\.)/.test(location.hostname)) return;
+      try { fetch('/api/track', { method: 'POST', keepalive: true }).catch(() => {}); } catch (_) {}
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
+      trackVisit();
       // [ADD] 지원하는 브라우저(주로 풀스크린 상태의 안드로이드 크롬)에서는
       // 세로 방향으로 잠가봅니다. 실패해도 조용히 무시 - 가로모드 차단의
       // 실질적인 방어선은 CSS의 .rotate-overlay 쪽입니다 (모든 브라우저에서 동작).

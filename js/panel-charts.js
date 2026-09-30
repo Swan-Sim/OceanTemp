@@ -547,7 +547,13 @@
     // 누르거나, 검색하거나, 탭을 누른 순간부터 그 정점의 값을 불러와요.
     async function selectStation(st, opts) {
       selectedStation = st;
-      if (!(opts && opts.auto)) { st._userRequested = true; st._userPicked = true; }
+      if (!(opts && opts.auto)) {
+        st._userRequested = true; st._userPicked = true;
+        // [ADD] 접속 통계 - 사람이 직접 고른 정점만 "많이 본 정점"으로 셉니다
+        if (/^https?:$/.test(location.protocol) && navigator.sendBeacon) {
+          try { navigator.sendBeacon(`/api/track?e=station&s=${encodeURIComponent(stationDisplayName(st))}`); } catch (_) {}
+        }
+      }
       const isHotspot = maxTempStation && maxTempStation.id === st.id;
       document.getElementById('st-name').innerText = `${st.name} ${isHotspot ? `🔥 [${t.hotspot}]` : ''}`;
       document.getElementById('st-temp').innerText = formatTemp(st.curTemp);

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Ocean Temp · 접속 통계</title>
+<!-- [ADD] "도메인/admin으로 접속하면 패스워드 묻고 날짜별 통계" 요청 반영.
+     데이터는 /api/stats(비밀번호 필요)에서 받아오고, 시간은 이 브라우저의
+     시간대로 바꿔서 보여줍니다(서버에는 UTC 기준으로 저장). -->
+<style>
+  :root { --bg:#070B14; --bg2:#0B1120; --line:rgba(255,255,255,0.08); --text:rgba(255,255,255,0.9); --muted:#8A94A6; --accent:#FFB000; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } .sub { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+  .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 12px; letter-spacing: .02em; }
+  input, button { font: inherit; }
+  input[type=password] { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 10px 12px; width: 220px; }
+  button { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  button.primary, button.on { color: var(--text); border-color: rgba(255,176,0,.5); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .kpi .v { font-size: 26px; font-weight: 700; } .kpi .l { color: var(--muted); font-size: 11px; }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 140px; }
+  .bar { flex: 1; background: rgba(255,176,0,.75); border-radius: 3px 3px 0 0; min-height: 1px; position: relative; }
+  .bar:hover::after { content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #000; color: #fff; font-size: 11px; padding: 3px 6px; border-radius: 4px; white-space: nowrap; margin-bottom: 4px; }
+  .axis { display: flex; gap: 3px; color: var(--muted); font-size: 10px; margin-top: 4px; } .axis span { flex: 1; text-align: center; overflow: hidden; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 6px 4px; border-bottom: 1px solid var(--line); } td.n { text-align: right; color: var(--muted); width: 70px; }
+  .hbar { height: 4px; background: rgba(56,189,248,.6); border-radius: 2px; margin-top: 3px; }
+  .err { color: #FB7185; font-size: 13px; margin-top: 8px; }
+  @media (max-width: 640px) { .grid2, .kpis { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Ocean Temp · 접속 통계</h1>
+  <div class="sub" id="tzNote"></div>
+
+  <div class="card" id="login">
+    <h2>관리자 비밀번호</h2>
+    <form class="row" id="loginForm">
+      <input type="password" id="pw" placeholder="비밀번호" autocomplete="current-password" autofocus>
+      <button class="primary" type="submit">보기</button>
+    </form>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div id="dash" style="display:none">
+    <div class="row" style="margin-bottom:14px">
+      <button data-days="7">7일</button><button data-days="14" class="on">14일</button>
+      <button data-days="30">30일</button><button data-days="90">90일</button>
+      <span style="flex:1"></span><button id="logout">로그아웃</button>
+    </div>
+    <div class="card kpis">
+      <div class="kpi"><div class="v" id="kTotal">–</div><div class="l">기간 전체 방문</div></div>
+      <div class="kpi"><div class="v" id="kToday">–</div><div class="l">오늘 방문</div></div>
+      <div class="kpi"><div class="v" id="kAvg">–</div><div class="l">하루 평균</div></div>
+    </div>
+    <div class="card"><h2>날짜별 방문</h2><div class="bars" id="daily"></div><div class="axis" id="dailyAxis"></div></div>
+    <div class="card"><h2>시간대별 방문 (기간 합계, 내 시간대)</h2><div class="bars" id="hourly"></div><div class="axis" id="hourlyAxis"></div></div>
+    <div class="grid2">
+      <div class="card"><h2>국가</h2><table id="countries"></table></div>
+      <div class="card"><h2>도시</h2><table id="cities"></table></div>
+    </div>
+    <div class="card"><h2>많이 본 정점 (클릭 수)</h2><table id="stations"></table></div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  $('tzNote').textContent = `시간 기준: ${tz} · 개인정보(IP 등)는 저장하지 않고 국가·도시·시간대별 숫자만 모읍니다`;
+  const regionName = (() => { try { const d = new Intl.DisplayNames(['ko'], { type: 'region' }); return (c) => { try { return d.of(c) || c; } catch (_) { return c; } }; } catch (_) { return (c) => c; } })();
+  let days = 14;
+  const getPw = () => { try { return sessionStorage.getItem('adminPw') || ''; } catch (_) { return ''; } };
+  const setPw = (v) => { try { v ? sessionStorage.setItem('adminPw', v) : sessionStorage.removeItem('adminPw'); } catch (_) {} };
+
+  async function load() {
+    const pw = getPw();
+    if (!pw) return showLogin();
+    const r = await fetch(`/api/stats?days=${days}`, { headers: { 'x-admin-password': pw } });
+    if (r.status === 401) { setPw(''); return showLogin('비밀번호가 맞지 않아요'); }
+    const j = await r.json();
+    if (!r.ok) return showLogin(j.error || '불러오지 못했어요');
+    $('login').style.display = 'none'; $('dash').style.display = '';
+    render(j.data);
+  }
+
+  function showLogin(msg) { $('login').style.display = ''; $('dash').style.display = 'none'; $('err').textContent = msg || ''; }
+
+  function localKey(d) { return d.toLocaleDateString('sv-SE', { timeZone: tz }); } // YYYY-MM-DD (내 시간대)
+
+  function render(data) {
+    // UTC 날짜·시간 → 내 시간대 날짜·시간으로 다시 나누기
+    const byDay = {}, byHour = Array(24).fill(0);
+    data.forEach(({ date, hours }) => {
+      Object.entries(hours).forEach(([h, n]) => {
+        const t = new Date(`${date}T${String(h).padStart(2, '0')}:00:00Z`);
+        const k = localKey(t);
+        byDay[k] = (byDay[k] || 0) + n;
+        const lh = +t.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }) % 24;
+        byHour[lh] += n;
+      });
+    });
+    const dayKeys = [];
+    for (let i = days - 1; i >= 0; i--) dayKeys.push(localKey(new Date(Date.now() - i * 86400000)));
+    const dayVals = dayKeys.map(k => byDay[k] || 0);
+    const total = dayVals.reduce((a, b) => a + b, 0);
+    $('kTotal').textContent = total.toLocaleString();
+    $('kToday').textContent = (byDay[localKey(new Date())] || 0).toLocaleString();
+    $('kAvg').textContent = (total / days).toFixed(1);
+    bars('daily', 'dailyAxis', dayVals, dayKeys.map(k => k.slice(5)), dayKeys);
+    bars('hourly', 'hourlyAxis', byHour, byHour.map((_, h) => h % 3 === 0 ? h : ''), byHour.map((_, h) => `${h}시`));
+
+    const sum = (field) => { const o = {}; data.forEach(d => Object.entries(d[field]).forEach(([k, n]) => { o[k] = (o[k] || 0) + n; })); return o; };
+    table('countries', sum('countries'), (k) => k === '??' ? '알 수 없음' : `${regionName(k)} (${k})`);
+    table('cities', sum('cities'), (k) => { const [c, city] = k.split('|'); return `${city === '?' ? '알 수 없음' : city} · ${regionName(c)}`; });
+    table('stations', sum('stations'), (k) => k, 15);
+  }
+
+  function bars(id, axisId, vals, labels, tips) {
+    const max = Math.max(1, ...vals);
+    $(id).innerHTML = vals.map((v, i) => `<div class="bar" style="height:${(v / max * 100).toFixed(1)}%" data-tip="${tips[i]}: ${v}"></div>`).join('');
+    $(axisId).innerHTML = labels.map(l => `<span>${l}</span>`).join('');
+  }
+
+  function table(id, obj, fmt, limit) {
+    const rows = Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, limit || 12);
+    const max = rows.length ? rows[0][1] : 1;
+    $(id).innerHTML = rows.length
+      ? rows.map(([k, n]) => `<tr><td>${fmt(k).replace(/</g, '&lt;')}<div class="hbar" style="width:${(n / max * 100).toFixed(0)}%"></div></td><td class="n">${n.toLocaleString()}</td></tr>`).join('')
+      : '<tr><td style="color:var(--muted)">아직 데이터가 없어요</td></tr>';
+  }
+
+  $('loginForm').addEventListener('submit', (e) => { e.preventDefault(); setPw($('pw').value); load(); });
+  $('logout').addEventListener('click', () => { setPw(''); showLogin(); });
+  document.querySelectorAll('[data-days]').forEach(b => b.addEventListener('click', () => {
+    days = +b.dataset.days;
+    document.querySelectorAll('[data-days]').forEach(x => x.classList.toggle('on', x === b));
+    load();
+  }));
+  load();
+</script>
+</body>
+</html>

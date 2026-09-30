@@ -268,9 +268,11 @@
     }
     .rotate-overlay .icon { font-size: 34px; }
     .rotate-overlay .msg { font-size: 13px; max-width: 420px; line-height: 1.5; }
-    @media (orientation: landscape) and (max-height: 500px) {
-      .rotate-overlay { display: flex !important; }
-    }
+    /* [CHANGE] "가로로 돌려도 세로 화면 그대로" - 안내 문구 대신 페이지를 돌려서
+       세로 화면을 유지합니다(main.js applyForcedPortrait가 클래스를 붙임). */
+    body.force-portrait-90, body.force-portrait-270 { position: fixed; top: 0; left: 0; transform-origin: top left; }
+    body.force-portrait-90 { transform: rotate(-90deg) translateX(-100%); }
+    body.force-portrait-270 { transform: rotate(90deg) translateY(-100%); }
 
     /* =====================================================================
        [CHANGE] "사이트 색을 단순하고 멋있게 - 포인트 색은 호박색(허큘레스
@@ -360,3 +362,13 @@
     /* [ADD] "지금" = 누르면 현재 시각으로 돌아가는 버튼 */
     .nt-nowbtn { background: none; border: none; padding: 0; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline dotted rgba(var(--accent-rgb),0.5); text-underline-offset: 2px; }
     .nt-nowbtn:hover { text-decoration-style: solid; }
+    /* [FIX] "가로 라인이 빠졌어" - 탭 배경을 칠하면서 모든 탭이 아래 가로선을
+       1px 덮고 있었어요. 선택된 탭만 가로선을 덮게(= 열린 폴더 모양) 고쳤습니다. */
+    .tab-btn { margin-bottom: 0; }
+    .tab-btn.active { margin-bottom: -1px; }
+
+    /* [FIX] "검은 지구본 영역과 데이터 영역 사이 양쪽 끝에 선이 빠졌어" - 탭 아래
+       가로선을 패널 좌우 여백까지 끝에서 끝으로 늘렸어요. */
+    .tab-bar { margin-left: -14px; margin-right: -14px; padding: 0 14px; }
+    /* [FIX] 모바일에서 ◀▶⬆ 글자가 이모지로 바뀌어 웹과 모양이 달랐어요 → SVG 아이콘으로 통일 */
+    .nt-arrow svg, .nt-dir svg { display: block; margin: 0 auto; }

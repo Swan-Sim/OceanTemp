@@ -289,6 +289,11 @@
       return String(st.name).replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, '').trim();
     }
 
+    // [FIX] 모바일(iOS 등)에서 ◀ ▶ ⬆ 문자가 컬러 이모지로 바뀌어 보여서,
+    // 웹과 똑같이 보이도록 SVG 아이콘으로 그립니다(색은 글자색을 따라감).
+    const ARROW_UP_SVG = '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 10.5V1.8M6 1.5 2.6 4.9M6 1.5l3.4 3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const CHEVRON_SVG = (dir) => `<svg width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="${dir < 0 ? 'M6 1.5 1.8 6 6 10.5' : 'M2 1.5 6.2 6 2 10.5'}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
     function renderNowTable(box) {
       const st = selectedStation;
       let d = st._hourlyCache;
@@ -355,7 +360,7 @@
 
         const w = nearestByX(d.wind, x);
         rows.wind += cell(w ? Math.round(w.speed) : '–', w ? `color:${windColor(w.speed)};font-weight:600;` : 'color:#4B5565;');
-        rows.dir += cell(w ? `<span style="display:inline-block;transform:rotate(${(w.dir + 180) % 360}deg);color:${w.speed >= 9 ? windColor(w.speed) : '#8A94A6'}">⬆</span>` : '');
+        rows.dir += cell(w ? `<span class="nt-dir" style="display:inline-block;transform:rotate(${(w.dir + 180) % 360}deg);color:${w.speed >= 9 ? windColor(w.speed) : '#8A94A6'}">${ARROW_UP_SVG}</span>` : '');
         rows.gust += cell(w && w.gust != null ? Math.round(w.gust) : '', 'color:#5B6474;');
 
         const wv = nearestByX(d.waves, x);
@@ -390,9 +395,9 @@
       box.innerHTML = `<div class="nt-head"><span class="nt-title" title="${st.name}">${stationDisplayName(st)}</span>` +
           `<span class="nt-status">${status}</span></div>` +
         `<div class="nt-frame">` +
-          `<button class="nt-arrow" data-dir="-1" aria-label="${t.prevDay}">◀</button>` +
+          `<button class="nt-arrow" data-dir="-1" aria-label="${t.prevDay}">${CHEVRON_SVG(-1)}</button>` +
           `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
-          `<button class="nt-arrow" data-dir="1" aria-label="${t.nextDay}">▶</button>` +
+          `<button class="nt-arrow" data-dir="1" aria-label="${t.nextDay}">${CHEVRON_SVG(1)}</button>` +
         `</div>` +
         `<div class="nt-note">${t.tideNote}</div>`;
       const sc = box.querySelector('.nt-scroll');

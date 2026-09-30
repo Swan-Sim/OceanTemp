@@ -1045,8 +1045,10 @@ function getCurrentCenterLatLng() {
           return;
         }
         isDragging = true;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        // [FIX] 가로로 눕혀도 세로 화면 고정(화면 회전) 상태에서도 드래그 방향이 맞게
+        const { x: clientX, y: clientY } = toLayoutXY(
+          e.touches ? e.touches[0].clientX : e.clientX,
+          e.touches ? e.touches[0].clientY : e.clientY);
         prevMousePos = { x: clientX, y: clientY };
       }
 
@@ -1064,8 +1066,10 @@ function getCurrentCenterLatLng() {
           return;
         }
         if (!isDragging) return;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        // [FIX] 가로로 눕혀도 세로 화면 고정(화면 회전) 상태에서도 드래그 방향이 맞게
+        const { x: clientX, y: clientY } = toLayoutXY(
+          e.touches ? e.touches[0].clientX : e.clientX,
+          e.touches ? e.touches[0].clientY : e.clientY);
 
         const deltaX = clientX - prevMousePos.x;
         const deltaY = clientY - prevMousePos.y;
@@ -1093,9 +1097,10 @@ function getCurrentCenterLatLng() {
         }
         if (isDragging) {
           isDragging = false;
-          const rect = container.getBoundingClientRect();
-          const clientX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : e.clientX;
-          const clientY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : e.clientY;
+          const rect = layoutRect(container);
+          const { x: clientX, y: clientY } = toLayoutXY(
+            (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : e.clientX,
+            (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : e.clientY);
 
           mouse.x = ((clientX - rect.left) / width) * 2 - 1;
           mouse.y = -((clientY - rect.top) / height) * 2 + 1;

@@ -158,7 +158,31 @@
       }, delay || 150);
     }
 
-    window.addEventListener('resize', () => scheduleResize(150));
+    // [ADD] "모바일에서 가로로 돌려도 세로 화면 그대로 고정" - 브라우저는 웹페이지의
+    // 화면 방향을 강제로 잠글 수 없어서(전체화면 앱 모드 제외), 휴대폰이 가로로
+    // 누우면(가로 + 높이 500px 이하) 페이지 전체를 반대 방향으로 90° 돌려서
+    // 기기 기준으로는 세로 화면이 그대로 보이게 합니다. 데스크톱 창에는 적용 안 돼요.
+    function applyForcedPortrait() {
+      const w = window.innerWidth, h = window.innerHeight;
+      const phoneLandscape = w > h && h <= 500;
+      document.body.classList.remove('force-portrait-90', 'force-portrait-270');
+      if (!phoneLandscape) {
+        portraitRot = null;
+        document.body.style.width = ''; document.body.style.height = '';
+        return;
+      }
+      let angle = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle
+        : (typeof window.orientation === 'number' ? window.orientation : 90);
+      angle = ((angle % 360) + 360) % 360;
+      const mode = angle === 270 ? '270' : '90';
+      document.body.classList.add('force-portrait-' + mode);
+      document.body.style.width = h + 'px';   // 돌린 뒤의 "세로 화면" 폭 = 실제 화면 높이
+      document.body.style.height = w + 'px';
+      portraitRot = { mode, Lw: h, Lh: w };
+    }
+    applyForcedPortrait();
+
+    window.addEventListener('resize', () => { applyForcedPortrait(); scheduleResize(150); });
 
     // [ADD] "화면 비율 바뀌면 중앙 다시 정렬해줘, 줌은 유지" 요청 반영.
     // matchMedia로 세로↔가로 전환을 정확히 감지해서(작은 리사이즈마다 매번
@@ -168,6 +192,7 @@
     if (window.matchMedia) {
       const orientationQuery = window.matchMedia('(orientation: landscape)');
       const onOrientationFlip = () => {
+        applyForcedPortrait();
         scheduleResize(300);
         // 안전망: 일부 기기는 방향 전환 직후 첫 측정이 아직 최종 크기가
         // 아닐 수 있어서, 조금 더 지난 뒤 한 번 더 확실하게 재확인합니다.

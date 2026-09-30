@@ -32,3 +32,20 @@
     const BOOT_DIST = 620; // [ADD] 로딩 중 "작은 지구" 연출용 초기 카메라 거리
 
     // Natural Earth 공개 지리 데이터(1:110m, world-atlas 배포본, ISC 라이선스) - 육지 윤곽
+
+    // [ADD] "모바일에서 가로로 돌려도 세로 화면이 그대로 나오게" - 휴대폰을 눕히면
+    // 페이지 전체를 반대로 90° 돌려서 세로 화면을 유지합니다(main.js의
+    // applyForcedPortrait). 그때 화면 좌표(터치 위치)를 페이지 안의 좌표로
+    // 바꿔주는 도우미예요. 돌리지 않은 평소에는 그대로 통과합니다.
+    let portraitRot = null; // { mode: '90' | '270', Lw, Lh }
+    function toLayoutXY(x, y) {
+      if (!portraitRot) return { x, y };
+      const { mode, Lw, Lh } = portraitRot;
+      return mode === '90' ? { x: Lw - y, y: x } : { x: y, y: Lh - x };
+    }
+    function layoutRect(el) {
+      if (!portraitRot) return el.getBoundingClientRect();
+      let left = 0, top = 0, n = el;
+      while (n) { left += n.offsetLeft; top += n.offsetTop; n = n.offsetParent; }
+      return { left, top };
+    }

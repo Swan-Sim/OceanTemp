@@ -8,7 +8,7 @@
     //   - 열 순서는 상관없고, 첫 줄(제목 줄)의 이름으로 찾아요.
     //   - show가 N이면 지우지 않고 숨깁니다. 좌표가 잘못된 줄은 건너뛰고 콘솔에 알려줘요.
     // =====================================================================
-    const STATION_SHEET_CSV_URL = ''; // 예: 'https://docs.google.com/spreadsheets/d/e/XXXX/pub?output=csv'
+    const STATION_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
     const STATION_LOCAL_CSV_URL = 'data/stations.csv';
 
     // 따옴표로 감싼 값(쉼표·줄바꿈 포함)까지 처리하는 간단한 CSV 파서

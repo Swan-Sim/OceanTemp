@@ -1,4 +1,3 @@
-yaml
 name: Warm visibility cache
 on:
   schedule:

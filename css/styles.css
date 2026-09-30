@@ -228,11 +228,8 @@
     .nt-grid { position: relative; }
     .nt-row { display: flex; align-items: center; }
     .nt-cell { flex: 0 0 34px; width: 34px; height: 100%; display: flex; align-items: center; justify-content: center; }
-    /* [CHANGE] "지금" 표시: 해당 3시간 칸 전체를 밝은 띠로 강조 + 정확한 시각에 가는 선 */
+    /* [CHANGE] "지금" 표시: 해당 3시간 칸 전체를 테두리로 강조 (가는 세로선은 뺐어요) */
     .nt-band { position: absolute; top: 30px; bottom: 0; background: rgba(125,211,252,0.22); z-index: 1; pointer-events: none; }
-    .nt-now { position: absolute; top: 30px; bottom: 0; width: 2px; margin-left: -1px; background: rgba(255,255,255,0.7); z-index: 2; pointer-events: none; }
-    /* 정점명 라벨 - "지금" 칸 위에 뜨고, 좌우로 스크롤해도 화면 밖으로 안 나가게 따라다녀요 */
-    .nt-name { position: absolute; top: 2px; z-index: 4; max-width: 260px; padding: 2px 12px; border: 1.5px solid #e2e8f0; border-radius: 6px; background: #0b1329; color: #f8fafc; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
     .nt-live { color: #4ade80; } .nt-est { color: #facc15; }
     .nt-note { font-size: 8.5px; color: #64748b; padding-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .station-foot { margin: 4px 0 0; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -274,3 +271,43 @@
     @media (orientation: landscape) and (max-height: 500px) {
       .rotate-overlay { display: flex !important; }
     }
+
+    /* =====================================================================
+       [CHANGE] "사이트 색을 단순하고 멋있게 - 포인트 색은 호박색(허큘레스
+       모니터 / 부팅 터미널과 같은 #FFB000)" 요청 반영. 지구본 수온 색은
+       그대로 두고, UI는 거의 흑백 다크 톤 + 포인트 색 하나로 정리했습니다.
+       호박색 = 강조(선택·지금·실시간), 빨강 = 주의(강풍·높은 파도),
+       파랑 = 물(조석).
+       ===================================================================== */
+    :root {
+      --ui-bg: #070B14; --ui-bg-top: #0B1120;
+      --ui-line: rgba(255,255,255,0.08); --ui-surface: rgba(255,255,255,0.04);
+      --ui-text: #F1F5F9; --ui-muted: #8A94A6; --ui-dim: #5B6474;
+      --accent: #FFB000; --accent-rgb: 255,176,0;
+    }
+    #bottom-sheet { background: linear-gradient(180deg, var(--ui-bg-top) 0%, var(--ui-bg) 100%); border-top: 1px solid var(--ui-line); box-shadow: 0 -12px 40px rgba(0,0,0,0.6); }
+    .tab-bar { background: var(--ui-surface); border: 1px solid var(--ui-line); border-radius: 10px; padding: 3px; gap: 2px; }
+    .tab-btn { background: transparent; border: none; color: var(--ui-muted); font-weight: 600; border-radius: 7px; padding: 6px 4px; }
+    .tab-btn.active { background: rgba(255,255,255,0.08); color: var(--ui-text); border-color: transparent; box-shadow: inset 0 -2px 0 var(--accent); }
+    .ctrl-btn { background: rgba(7,11,20,0.55); border: 1px solid var(--ui-line); color: var(--ui-text); border-radius: 10px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+    .ctrl-btn:active { background: rgba(var(--accent-rgb),0.25); color: var(--ui-text); }
+    .zoom-track { background: rgba(255,255,255,0.08); }
+    .zoom-fill { background: var(--accent); }
+    .zoom-handle { background: #fff; border-color: var(--accent); }
+    .chart-legend-overlay { background: rgba(7,11,20,0.7); border: 1px solid var(--ui-line); color: #CBD5E1; }
+    .nt-nav { background: transparent; border: 1px solid var(--ui-line); color: var(--ui-muted); border-radius: 999px; padding: 3px 10px; }
+    .nt-nav:hover { color: var(--ui-text); }
+    .nt-labels { background: var(--ui-bg); border-right: 1px solid var(--ui-line); }
+    .nt-labels div { color: var(--ui-muted); }
+    .nt-row { border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .nt-cell { font-variant-numeric: tabular-nums; }
+    .nt-band { top: 18px; background: rgba(var(--accent-rgb),0.06); box-shadow: inset 1px 0 0 rgba(var(--accent-rgb),0.65), inset -1px 0 0 rgba(var(--accent-rgb),0.65); }
+    .nt-live { color: var(--accent); }
+    .nt-est { color: var(--ui-muted); font-style: italic; }
+    .nt-status { color: var(--ui-muted); flex: 0 0 auto; }
+    /* [CHANGE] "정점명 앞 이모티콘 빼고, 박스 없이 그냥 텍스트로 가운데" -
+       표 맨 위에 평범한 제목 텍스트로 가운데 정렬합니다. */
+    .nt-title { text-align: center; font-size: 15px; font-weight: 700; color: var(--ui-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.01em; padding: 0 0 2px; }
+    .nt-spacer { flex: 1; }
+    .nt-note { color: #4B5565; }
+    .station-foot { color: var(--ui-muted); }

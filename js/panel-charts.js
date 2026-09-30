@@ -245,18 +245,12 @@
       return { temp, tide, extremes, nowLocalMs: nowLocal, from: fromLocal, to: toLocal, isEstimate: true };
     }
 
-    // [CHANGE] "바람도 온도처럼 최저 흰색 → 최고 빨간색으로" 요청 반영.
-    // 바람 색에 통일된 국제 표준은 없어서(보퍼트 풍력계급은 구간 이름만 정해요),
-    // 빨간색 끝을 한국 기상청 풍랑주의보 기준 풍속 14m/s에 맞췄습니다.
-    // 0 흰색 → 5 노랑 → 9 주황 → 14m/s 이상 빨강, 사이는 부드럽게 섞어요.
-    const WIND_STOPS = [[0, [255, 255, 255]], [5, [253, 224, 71]], [9, [251, 146, 60]], [14, [239, 68, 68]]];
+    // [CHANGE] 색 단순화 - 평소엔 흰/회색, "주의"일 때만 빨강 계열.
+    // 9m/s 이상 연한 빨강, 한국 기상청 풍랑주의보 기준 14m/s 이상 빨강.
     function windColor(speed) {
-      const s = Math.max(0, speed);
-      let i = 0;
-      while (i < WIND_STOPS.length - 2 && s > WIND_STOPS[i + 1][0]) i++;
-      const [s0, c0] = WIND_STOPS[i], [s1, c1] = WIND_STOPS[i + 1];
-      const k = Math.min(1, (s - s0) / (s1 - s0));
-      return '#' + c0.map((v, j) => Math.round(v + (c1[j] - v) * k).toString(16).padStart(2, '0')).join('');
+      if (speed >= 14) return '#EF4444';
+      if (speed >= 9) return '#FB7185';
+      return '#CBD5E1';
     }
 
     // [ADD] "파고가 일정 기준 이상이면 빨간색" - 한국 기상청 풍랑주의보 기준
@@ -264,8 +258,8 @@
     // 높을수록 진한 파랑, 3m 이상은 빨강.
     const WAVE_WARN_M = 3;
     function waveCellStyle(h) {
-      if (h >= WAVE_WARN_M) return 'background:rgba(239,68,68,0.6);color:#fff;font-weight:800;';
-      return `background:rgba(56,189,248,${(0.08 + h * 0.15).toFixed(2)});color:#e0f2fe;font-weight:700;`;
+      if (h >= WAVE_WARN_M) return 'background:rgba(239,68,68,0.18);color:#EF4444;font-weight:700;';
+      return 'color:#CBD5E1;font-weight:600;';
     }
 
     // 풍향(바람이 불어오는 방향, 0°=북)을 8방위 글자로
@@ -290,10 +284,15 @@
     // 맨 위 상태 줄로 실시간 데이터인지 아닌지만 알려줍니다.
     const NOW_STEP_H = 3, NOW_COL_W = 34;
 
+    // [ADD] "정점명 앞 이모티콘 빼줘" - 이름 앞의 이모지(🤿 등)를 떼고 보여줍니다.
+    function stationDisplayName(st) {
+      return String(st.name).replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, '').trim();
+    }
+
     function renderNowTable(box) {
       const st = selectedStation;
       let d = st._hourlyCache;
-      let status = `<span class="nt-live" title="${t.nowSource}">🟢 ${t.statusLive}</span>`;
+      let status = `<span class="nt-live" title="${t.nowSource}">● ${t.statusLive}</span>`;
       if (!d) {
         if (st._userRequested && !st._hourlyState) ensureHourlyData(st);
         d = getEstimatedHourly(st);
@@ -302,7 +301,7 @@
           : st._hourlyState === 'failed'
             ? (st._hourlyError === 'DAILY_LIMIT' ? t.nowDailyLimit : t.nowFailed)
             : `⏳ ${t.nowLoading}`;
-        status = `<span style="color:#94a3b8;">${why}</span> <span class="nt-est" title="${t.nowEstimated}">⚠ ${t.statusEst}</span>`;
+        status = `<span class="nt-est" title="${t.nowEstimated} · ${why.replace(/<[^>]+>/g, '')}">${t.statusEst}</span>`;
       }
       const canRetry = !st._hourlyCache && st._hourlyState === 'failed' && st._hourlyError !== 'DAILY_LIMIT';
 
@@ -327,9 +326,9 @@
         const marks = d.extremes.filter(e => e.x >= cols[0] && e.x <= cols[cols.length - 1]).map(e => {
           const up = e.type === 'high';
           const x = Math.max(34, Math.min(W - 34, xp(e.x))); // 양 끝에서 글자가 잘리지 않게
-          return `<text x="${x.toFixed(1)}" y="${(up ? yp(e.y) - 3 : yp(e.y) + 10).toFixed(1)}" fill="${up ? '#fdba74' : '#c4b5fd'}" font-size="8" text-anchor="middle">${up ? '▲' : '▼'}${hhmm(e.x)} ${e.y.toFixed(1)}m</text>`;
+          return `<text x="${x.toFixed(1)}" y="${(up ? yp(e.y) - 3 : yp(e.y) + 10).toFixed(1)}" fill="${up ? '#BAE6FD' : '#7DA3C0'}" font-size="8" text-anchor="middle">${up ? '▲' : '▼'}${hhmm(e.x)} ${e.y.toFixed(1)}m</text>`;
         }).join('');
-        tideSvg = `<svg width="${W}" height="${TH}" style="display:block"><path d="${area}" fill="rgba(56,189,248,0.12)"/><path d="${line}" fill="none" stroke="#38bdf8" stroke-width="1.6"/>${marks}</svg>`;
+        tideSvg = `<svg width="${W}" height="${TH}" style="display:block"><path d="${area}" fill="rgba(56,189,248,0.12)"/><path d="${line}" fill="none" stroke="#38BDF8" stroke-width="1.5"/>${marks}</svg>`;
       }
 
       const cell = (html, style) => `<div class="nt-cell" style="${style || ''}">${html}</div>`;
@@ -337,26 +336,26 @@
       let lastDay = null;
       cols.forEach(x => {
         const dt = new Date(x), hh = dt.getUTCHours(), day = dt.getUTCDate();
-        const dayEdge = hh === 0 ? 'border-left:1px solid #475569;' : '';
-        rows.date += cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:#e2e8f0;font-weight:700;align-items:flex-end;padding-bottom:1px;' + dayEdge);
+        const dayEdge = hh === 0 ? 'border-left:1px solid rgba(255,255,255,0.10);' : '';
+        rows.date += cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:#F1F5F9;font-weight:700;' + dayEdge);
         lastDay = day;
-        rows.time += cell(String(hh).padStart(2, '0'), 'color:#94a3b8;' + dayEdge);
+        rows.time += cell(String(hh).padStart(2, '0'), 'color:#8A94A6;' + dayEdge);
 
         const tp = nearestByX(d.temp, x);
-        rows.temp += cell(tp ? tempVal(tp.y) : '–', tp ? `background:rgba(${getTempColor(tp.y)},0.45);color:#fff;font-weight:700;` : 'color:#64748b;');
+        rows.temp += cell(tp ? tempVal(tp.y) : '–', tp ? 'color:#F1F5F9;font-weight:700;' : 'color:#4B5565;');
 
         const w = nearestByX(d.wind, x);
-        rows.wind += cell(w ? Math.round(w.speed) : '–', w ? `background:${windColor(w.speed)}26;color:${windColor(w.speed)};font-weight:700;` : 'color:#64748b;');
-        rows.dir += cell(w ? `<span style="display:inline-block;transform:rotate(${(w.dir + 180) % 360}deg);color:${windColor(w.speed)}">⬆</span>` : '');
-        rows.gust += cell(w && w.gust != null ? Math.round(w.gust) : '', 'color:#94a3b8;');
+        rows.wind += cell(w ? Math.round(w.speed) : '–', w ? `color:${windColor(w.speed)};font-weight:600;` : 'color:#4B5565;');
+        rows.dir += cell(w ? `<span style="display:inline-block;transform:rotate(${(w.dir + 180) % 360}deg);color:${w.speed >= 9 ? windColor(w.speed) : '#8A94A6'}">⬆</span>` : '');
+        rows.gust += cell(w && w.gust != null ? Math.round(w.gust) : '', 'color:#5B6474;');
 
         const wv = nearestByX(d.waves, x);
-        rows.wave += cell(wv ? wv.height.toFixed(1) : '–', wv ? waveCellStyle(wv.height) : 'color:#64748b;');
-        rows.swell += cell(wv && wv.swellPeriod != null ? Math.round(wv.swellPeriod) + t.sec : '', 'color:#94a3b8;');
+        rows.wave += cell(wv ? wv.height.toFixed(1) : '–', wv ? waveCellStyle(wv.height) : 'color:#4B5565;');
+        rows.swell += cell(wv && wv.swellPeriod != null ? Math.round(wv.swellPeriod) + t.sec : '', 'color:#5B6474;');
       });
 
       const ROWS = [
-        ['date', '', 30], ['time', '', 14], // 날짜 줄은 정점명 라벨 자리까지 포함해서 높게
+        ['date', '', 18], ['time', '', 14],
         ['temp', `${t.rowTemp} °${tempUnit}`, 22], ['wind', t.rowWind, 20], ['dir', t.rowDir, 16], ['gust', t.gust, 14],
         ['wave', t.rowWave, 20], ['swell', t.rowSwell, 14]
       ];
@@ -366,17 +365,17 @@
       // [CHANGE] "지금" = 해당 칸 전체 강조 띠 + 정확한 시각의 가는 선 + 그 위 정점명 라벨
       const nowCol = Math.max(0, Math.min(cols.length - 1, Math.floor((d.nowLocalMs - cols[0] + STEP / 2) / STEP)));
       const nowBand = `<div class="nt-band" style="left:${nowCol * COLW}px;width:${COLW}px"></div>`;
-      const nowLine = `<div class="nt-now" style="left:${nowX.toFixed(1)}px"></div>`;
-      const nameLabel = `<div class="nt-name">${st.name}</div>`;
-      const grid = `<div class="nt-grid" style="width:${W}px">${nowBand}${nowLine}${nameLabel}` +
+      const grid = `<div class="nt-grid" style="width:${W}px">${nowBand}` +
         ROWS.map(([k, , h]) => `<div class="nt-row" style="height:${h}px">${rows[k]}</div>`).join('') +
         tideSvg + `</div>`;
 
       // [ADD] "스크롤로 전날·다음 날로" - 좌우 스크롤 + ◀ ▶ 버튼(하루씩) +
       // 마우스 휠(세로 휠을 가로 이동으로)
-      box.innerHTML = `<div class="nt-top">` +
+      box.innerHTML = `<div class="nt-title" title="${st.name}">${stationDisplayName(st)}</div>` +
+        `<div class="nt-top">` +
           `<button class="nt-nav" data-dir="-1">◀ ${t.prevDay}</button>` +
-          `<div class="nt-status">${canRetry ? `<a href="#" class="nt-retry" style="color:#38bdf8">${t.retry}</a> ` : ''}${status}</div>` +
+          `<div class="nt-spacer"></div>` +
+          `<div class="nt-status">${canRetry ? `<a href="#" class="nt-retry" style="color:var(--accent)">${t.retry}</a> ` : ''}${status}</div>` +
           `<button class="nt-nav" data-dir="0">${t.tideNow}</button>` +
           `<button class="nt-nav" data-dir="1">${t.nextDay} ▶</button>` +
         `</div>` +
@@ -388,18 +387,7 @@
       const keep = box._lastStationId === st.id && typeof box._lastScroll === 'number';
       sc.scrollLeft = keep ? box._lastScroll : toNow();
       box._lastStationId = st.id;
-      // 정점명 라벨: "지금" 칸 위 가운데에 두되, 스크롤해서 그 칸이 화면 밖으로
-      // 나가면 보이는 영역의 끝에 붙어서 따라옵니다(항상 정점명이 보이게).
-      const nameEl = box.querySelector('.nt-name');
-      const LABEL_COL_W = 58;
-      const placeName = () => {
-        const w = nameEl.offsetWidth;
-        const visL = sc.scrollLeft + 4, visR = sc.scrollLeft + sc.clientWidth - LABEL_COL_W - 4;
-        const ideal = nowX - w / 2;
-        nameEl.style.left = Math.max(visL, Math.min(visR - w, ideal)) + 'px';
-      };
-      placeName();
-      sc.addEventListener('scroll', () => { box._lastScroll = sc.scrollLeft; placeName(); }, { passive: true });
+      sc.addEventListener('scroll', () => { box._lastScroll = sc.scrollLeft; }, { passive: true });
       let pending = null, pendingTimer = null; // 빠르게 여러 번 눌러도 하루씩 누적되게
       box.querySelectorAll('.nt-nav').forEach(btn => btn.addEventListener('click', () => {
         const dir = +btn.dataset.dir;
@@ -431,7 +419,7 @@
       if (selectedStation) {
         const s0 = selectedStation;
         const info = t.infoCoord(s0.network, s0.coords[1], s0.coords[0]) + (s0.isBeach ? ` [${t.beachTag}]` : '');
-        document.getElementById('st-info').innerText = isNow ? info : `${s0.name} · ${info}`;
+        document.getElementById('st-info').innerText = isNow ? info : `${stationDisplayName(s0)} · ${info}`;
       }
       document.getElementById('detailChart').style.display = isNow ? 'none' : '';
       legendBox.style.display = isNow ? 'none' : '';
@@ -445,10 +433,10 @@
           type: 'line',
           data: {
             datasets: [
-              { label: t.chartPast, data: data.climLine, borderColor: '#64748b', borderDash: [4, 4], tension: 0.3, pointRadius: 0, pointHitRadius: 20 },
-              { label: t.chartActual, data: data.actualLine, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.12)', fill: true, tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2.2 },
-              { label: t.chartFuture, data: data.projectedLine, borderColor: '#fca5a5', borderDash: [5, 4], tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2 },
-              { label: t.todayBadge, data: data.todayPoint, borderColor: '#ef4444', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHitRadius: 16, pointHoverRadius: 7, showLine: false }
+              { label: t.chartPast, data: data.climLine, borderColor: '#5B6474', borderDash: [4, 4], tension: 0.3, pointRadius: 0, pointHitRadius: 20 },
+              { label: t.chartActual, data: data.actualLine, borderColor: '#FFB000', backgroundColor: 'rgba(255, 176, 0, 0.10)', fill: true, tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2.2 },
+              { label: t.chartFuture, data: data.projectedLine, borderColor: 'rgba(255, 176, 0, 0.55)', borderDash: [5, 4], tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2 },
+              { label: t.todayBadge, data: data.todayPoint, borderColor: '#FFB000', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHitRadius: 16, pointHoverRadius: 7, showLine: false }
             ]
           },
           options: {
@@ -484,26 +472,26 @@
                   stepSize: 1, color: '#64748b', font: { size: 9 },
                   callback: (v) => t.months[((windowStartMonth + Math.round(v)) % 12 + 12) % 12] || ''
                 },
-                grid: { color: '#1e293b' }
+                grid: { color: 'rgba(255,255,255,0.05)' }
               },
               // [FIX] "상대온도라 날뛰어 보임" - Chart.js가 데이터 범위에
               // 맞춰 Y축을 자동으로 좁게 잡다 보니, 실제로는 1~2도 차이인데
               // 축이 그만큼만 딱 맞춰져서 그래프가 요동치는 것처럼 보였어요.
               // 색상표와 같은 0~40도 절대 범위로 고정해서 실제 변화폭
               // 그대로 보이게 했습니다.
-              y: { min: 0, max: 40, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: '#1e293b' } }
+              y: { min: 0, max: 40, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: 'rgba(255,255,255,0.05)' } }
             }
           }
         });
         const statusLine = usingLive
-          ? `<div class="item" style="color:#4ade80;">🟢 ${t.liveDataOn}</div>`
+          ? `<div class="item" style="color:#FFB000;">● ${t.liveDataOn}</div>`
           : (selectedStation._liveState === 'loading'
               ? `<div class="item" style="color:#facc15;">⏳ ${t.liveDataLoading}</div>`
               : `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>`);
         legendBox.innerHTML = statusLine + `
-          <div class="item"><span class="swatch dashed" style="color:#64748b;background:#64748b;"></span>${t.chartPast}</div>
-          <div class="item"><span class="swatch" style="background:#ef4444;"></span>${t.chartActual}</div>
-          <div class="item"><span class="swatch dashed" style="color:#fca5a5;background:#fca5a5;"></span>${t.chartFuture}</div>
+          <div class="item"><span class="swatch dashed" style="color:#5B6474;background:#5B6474;"></span>${t.chartPast}</div>
+          <div class="item"><span class="swatch" style="background:#FFB000;"></span>${t.chartActual}</div>
+          <div class="item"><span class="swatch dashed" style="color:rgba(255,176,0,0.55);background:rgba(255,176,0,0.55);"></span>${t.chartFuture}</div>
         `;
       } else {
         const data = getDepthProfile(selectedStation.curTemp, selectedStation.isBeach);
@@ -511,7 +499,7 @@
           type: 'line',
           data: {
             labels: data.depths.map(d => `${d}m`),
-            datasets: [{ label: t.chartDepthLabel, data: data.profile, borderColor: '#f43f5e', backgroundColor: 'rgba(244, 63, 94, 0.15)', fill: true, tension: 0.2, pointRadius: 3, pointHitRadius: 20 }]
+            datasets: [{ label: t.chartDepthLabel, data: data.profile, borderColor: '#FFB000', backgroundColor: 'rgba(255, 176, 0, 0.10)', fill: true, tension: 0.2, pointRadius: 3, pointHitRadius: 20 }]
           },
           options: {
             responsive: true, maintainAspectRatio: false,
@@ -521,13 +509,13 @@
               tooltip: { callbacks: { label: (ctx) => `${formatTemp(ctx.parsed.y)}` } }
             },
             scales: {
-              x: { title: { display: true, text: t.depthAxisLabel, color: '#94a3b8', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } },
-              y: { title: { display: true, text: t.tempAxisLabel, color: '#94a3b8', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: '#1e293b' } }
+              x: { title: { display: true, text: t.depthAxisLabel, color: '#94a3b8', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+              y: { title: { display: true, text: t.tempAxisLabel, color: '#94a3b8', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: 'rgba(255,255,255,0.05)' } }
             }
           }
         });
         legendBox.innerHTML = `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>` +
-          `<div class="item"><span class="swatch" style="background:#f43f5e;"></span>${t.chartDepthLabel}</div>`;
+          `<div class="item"><span class="swatch" style="background:#FFB000;"></span>${t.chartDepthLabel}</div>`;
       }
     }
 

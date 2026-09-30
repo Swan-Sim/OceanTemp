@@ -345,3 +345,18 @@
     .station-foot { margin-top: 2px; font-size: 9.5px; }
     .disclaimer-bar { font-size: 7.5px; color: rgba(148,163,184,0.55); text-shadow: none; }
     .disclaimer-bar b { font-weight: 500; }
+
+    /* [CHANGE] "버튼 위 빈 공간 빼서 지구본 공간 넓히기" - 패널 위쪽 여백과
+       둥근 윗부분을 없애고, 탭이 패널 맨 위에 붙게 했어요. 탭 줄 뒤는 투명이라
+       지구본 영역과 자연스럽게 이어집니다. */
+    #bottom-sheet {
+      padding-top: 0; border-radius: 0; border-top: none; box-shadow: none;
+      background: linear-gradient(180deg, transparent 0, transparent 29px, var(--ui-bg-top) 29px, var(--ui-bg) 100%);
+    }
+    .tab-btn { background: var(--ui-bg-top); }
+    /* [CHANGE] "선택된 탭 호박색 테두리는 중요한 값이 아니니 톤 다운" */
+    .tab-bar { border-bottom-color: rgba(var(--accent-rgb),0.35); }
+    .tab-btn.active { border-color: rgba(var(--accent-rgb),0.35); }
+    /* [ADD] "지금" = 누르면 현재 시각으로 돌아가는 버튼 */
+    .nt-nowbtn { background: none; border: none; padding: 0; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline dotted rgba(var(--accent-rgb),0.5); text-underline-offset: 2px; }
+    .nt-nowbtn:hover { text-decoration-style: solid; }

@@ -345,7 +345,7 @@
         const dt = new Date(x), hh = dt.getUTCHours(), day = dt.getUTCDate();
         const dayEdge = hh === 0 ? 'border-left:1px solid rgba(255,255,255,0.10);' : '';
         rows.date += i === nowCol
-          ? cell(t.tideNow, 'color:var(--accent);font-weight:700;')
+          ? cell(`<button class="nt-nowbtn" title="${t.backToNow}">${t.tideNow}</button>`, '')
           : cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:rgba(255,255,255,0.9);font-weight:700;' + dayEdge);
         lastDay = day;
         rows.time += cell(String(hh).padStart(2, '0'), 'color:#8A94A6;' + dayEdge);
@@ -416,6 +416,9 @@
       sc.addEventListener('wheel', (e) => {
         if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { sc.scrollLeft += e.deltaY; e.preventDefault(); }
       }, { passive: false });
+      // [ADD] "지금" 글자를 누르면 현재 시각 칸이 가운데로 오게
+      const nowBtn = box.querySelector('.nt-nowbtn');
+      if (nowBtn) nowBtn.addEventListener('click', () => sc.scrollTo({ left: toNow(), behavior: 'smooth' }));
       const retry = box.querySelector('.nt-retry');
       if (retry) retry.addEventListener('click', (e) => { e.preventDefault(); st._hourlyState = undefined; updateChart(); });
     }

@@ -18,8 +18,8 @@
         stationCount: (n) => `총 ${n.toLocaleString()}개 정점`,
         selectPrompt: "정점을 선택하세요",
         infoCoord: (net, lat, lon) => `${net} | 위도: ${lat.toFixed(3)}°, 경도: ${lon.toFixed(3)}°`,
-        tabForecast: "📈 90일 추이",
-        tabDepth: "🌡 수심 프로파일",
+        tabForecast: "90일 추이",
+        tabDepth: "수심 프로파일",
         chartPast: "평년(계절 추정)",
         chartActual: "실측값(최근 90일)",
         chartFuture: "추정값(오늘~연말)",
@@ -65,7 +65,17 @@
         tideNow: "지금",
         tideNextHigh: "다음 만조",
         tideNextLow: "다음 간조",
-        tideNote: "모델 추정값이라 항구 조위표와 다를 수 있어요 - 항해·안전 판단에 쓰지 마세요"
+        tideNote: "모델 추정값이라 항구 조위표와 다를 수 있어요 - 항해·안전 판단에 쓰지 마세요",
+        // [ADD] 시야(물 투명도) 추정
+        fcTempVis: "수온·시야", fcCause: "시야 원인",
+        visObserved: "시야 추정 (위성, 7일 평균)", visTrend: "시야 추세 ± 오차 (오른쪽 m)", visBand: "오차 범위",
+        visLoading: "시야 불러오는 중…", visFailed: "이 위치는 위성 시야 자료가 없어요",
+        visFormula: "시야 = 1.7 ÷ 탁한 정도", visPlankton: "플랑크톤 (엽록소로 계산)", visOther: "기타 탁도 (모래·강물 등)", visWater: "물 자체",
+        visTurbidity: "탁한 정도 (빛 감쇠)", visAxis: "시야",
+        visLastLine: (d, v, kd) => `${d} 시야 <b class="vis-num">${v}</b> = 1.7 ÷ ${kd}`,
+        visCauseLine: (p, o, chl) => `원인(최근 7일): 플랑크톤 ${p}% · 기타 탁도 ${o}% · 엽록소 ${chl} mg/m³`,
+        visNoChl: "엽록소 자료가 없어 원인은 나눌 수 없어요",
+        visGaugeTitle: (now, p10, p90, lastD, lastV) => `시야 추정(오늘): ${now}\n90일 통상 범위: ${p10}–${p90}\n위성 마지막 관측 ${lastD}: ${lastV}\n위성 추정값이라 실제와 다를 수 있어요`
       },
       en: {
         appTitle: "Global Ocean Temp Monitor (3D Satellite Globe)",
@@ -74,8 +84,8 @@
         stationCount: (n) => `${n.toLocaleString()} Stations`,
         selectPrompt: "Select a station",
         infoCoord: (net, lat, lon) => `${net} | Lat: ${lat.toFixed(3)}°, Lon: ${lon.toFixed(3)}°`,
-        tabForecast: "📈 90-day trend",
-        tabDepth: "🌡 Depth profile",
+        tabForecast: "90-day trend",
+        tabDepth: "Depth profile",
         chartPast: "Seasonal Estimate",
         chartActual: "Actual (Last 90 Days)",
         chartFuture: "Projected (Today–Dec)",
@@ -121,7 +131,16 @@
         tideNow: "Now",
         tideNextHigh: "Next high",
         tideNextLow: "Next low",
-        tideNote: "Model estimate; may differ from harbor tide tables. Not for navigation or safety decisions."
+        tideNote: "Model estimate; may differ from harbor tide tables. Not for navigation or safety decisions.",
+        fcTempVis: "Temp·Visibility", fcCause: "Why murky",
+        visObserved: "Visibility (satellite, 7-day avg)", visTrend: "Visibility trend ± error (right, m)", visBand: "Error range",
+        visLoading: "Loading visibility…", visFailed: "No satellite visibility data here",
+        visFormula: "Visibility = 1.7 ÷ turbidity", visPlankton: "Plankton (from chlorophyll)", visOther: "Other (sand, runoff…)", visWater: "Pure water",
+        visTurbidity: "Turbidity (light attenuation)", visAxis: "Visibility",
+        visLastLine: (d, v, kd) => `${d} visibility <b class="vis-num">${v}</b> = 1.7 ÷ ${kd}`,
+        visCauseLine: (p, o, chl) => `Cause (last 7 days): plankton ${p}% · other ${o}% · chl ${chl} mg/m³`,
+        visNoChl: "No chlorophyll data - cause can't be split",
+        visGaugeTitle: (now, p10, p90, lastD, lastV) => `Estimated visibility today: ${now}\n90-day typical: ${p10}–${p90}\nLast satellite obs ${lastD}: ${lastV}\nSatellite estimate; may differ from reality`
       }
     };
     const t = i18n[lang] || i18n.en;

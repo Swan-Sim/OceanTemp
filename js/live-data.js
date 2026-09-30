@@ -392,3 +392,76 @@
       }
       return n ? sum / n : null;
     }
+
+    // ───────────────────────── [ADD] 시야(물 투명도) 추정 ─────────────────────────
+    // 자료: /api/visibility (NOAA 위성 Kd490 + 엽록소, 구름 빈칸 채운 2km 일별, 최근 90일)
+    // 계산 순서(사이트에서 그대로 보여주는 것과 같아요):
+    //  1) 시야(Secchi) ≈ 1.7 ÷ Kd490        - Kd490 = 빛이 물속에서 약해지는 정도(탁한 정도)
+    //  2) 플랑크톤 몫 = 0.0773 × 엽록소^0.6715 - 엽록소만으로 생기는 탁도(Morel 외 2007)
+    //     물 자체 몫 = 0.0166                  - 아주 깨끗한 바닷물의 기본값
+    //     기타 탁도  = 나머지                  - 모래·강물·녹아있는 유기물 등
+    //  3) 앞으로의 추세: 최근 7일 평균에서 90일 중앙값 쪽으로 서서히 돌아간다고 보고,
+    //     날이 갈수록 커지는 오차 범위(90일 동안의 변동폭 기준)를 같이 그립니다.
+    const VIS_MAX = 30, VIS_MIN = 0.5, KD_WATER = 0.0166, DAY_MS = 864e5;
+    function kdFromChl(chl) { return 0.0773 * Math.pow(chl, 0.6715); }
+
+    function computeVisibility(json) {
+      const days = (json.days || []).filter(r => r.kd != null).map(r => {
+        const vis = Math.max(VIS_MIN, Math.min(VIS_MAX, 1.7 / r.kd));
+        const kw = Math.min(KD_WATER, r.kd);
+        let kc = null, ko = null;
+        if (r.chl != null) {
+          kc = Math.min(kdFromChl(r.chl), Math.max(0, r.kd - kw));
+          ko = Math.max(0, r.kd - kw - kc);
+        }
+        return { d: r.d, t: Date.parse(r.d + 'T12:00:00Z'), kd: r.kd, chl: r.chl, vis, kw, kc, ko };
+      });
+      if (days.length < 5) return null;
+      days.forEach(x => {
+        const w = days.filter(y => Math.abs(y.t - x.t) <= 3.5 * DAY_MS);
+        x.vis7 = Math.exp(w.reduce((a, y) => a + Math.log(y.vis), 0) / w.length);
+      });
+      const sorted = days.map(x => x.vis).sort((a, b) => a - b);
+      const q = (p) => sorted[Math.round(p * (sorted.length - 1))];
+      const median = q(0.5), p10 = q(0.1), p90 = q(0.9);
+      const logs = days.map(x => Math.log(x.vis));
+      const mean = logs.reduce((a, b) => a + b, 0) / logs.length;
+      const sd = Math.max(0.12, Math.sqrt(logs.reduce((a, b) => a + (b - mean) ** 2, 0) / logs.length));
+
+      const last = days[days.length - 1];
+      const startLog = Math.log(last.vis7), medLog = Math.log(median);
+      const projection = [];
+      const end = Date.now() + 30 * DAY_MS;
+      for (let tt = last.t; tt <= end; tt += DAY_MS) {
+        const k = (tt - last.t) / DAY_MS;
+        const L = medLog + (startLog - medLog) * Math.exp(-k / 12);
+        const e = sd * Math.min(1.3, Math.sqrt(k / 10));
+        projection.push({ t: tt, vis: Math.exp(L), lo: Math.max(VIS_MIN, Math.exp(L - e)), hi: Math.min(VIS_MAX, Math.exp(L + e)) });
+      }
+      const nowP = projection.reduce((b, p) => Math.abs(p.t - Date.now()) < Math.abs(b.t - Date.now()) ? p : b, projection[0]);
+      // 최근 7일 원인 비율
+      const recent = days.filter(x => x.t > last.t - 7 * DAY_MS && x.kc != null);
+      let share = null;
+      if (recent.length) {
+        const s = recent.reduce((a, x) => ({ kd: a.kd + x.kd, kc: a.kc + x.kc, ko: a.ko + x.ko, chl: a.chl + x.chl }), { kd: 0, kc: 0, ko: 0, chl: 0 });
+        share = { plankton: s.kc / s.kd, other: s.ko / s.kd, chl: s.chl / recent.length };
+      }
+      return { days, median, p10, p90, sd, last, projection, now: nowP, share, hasChl: !!json.hasChl, pixel: json.pixel };
+    }
+
+    // 시야 숫자 표기: 10m 미만은 소수 한 자리, 30m 이상은 "30m+"
+    function fmtVis(v) {
+      if (v == null) return '–';
+      if (v >= VIS_MAX - 0.05) return VIS_MAX + 'm+';
+      return (v < 10 ? v.toFixed(1) : Math.round(v)) + 'm';
+    }
+
+    async function fetchStationVisibility(st) {
+      const lat = st.coords[1], lon = st.coords[0];
+      const j = await fetchJSON(`/api/visibility?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}`, 40000, 0);
+      if (!j || !j.ok) { const err = new Error(j && j.reason || 'NO_DATA'); err.code = j && j.reason; throw err; }
+      const v = computeVisibility(j);
+      if (!v) throw new Error('NO_DATA');
+      st._visCache = v;
+      return v;
+    }

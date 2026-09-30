@@ -372,3 +372,40 @@
     .tab-bar { margin-left: -14px; margin-right: -14px; padding: 0 14px; }
     /* [FIX] 모바일에서 ◀▶⬆ 글자가 이모지로 바뀌어 웹과 모양이 달랐어요 → SVG 아이콘으로 통일 */
     .nt-arrow svg, .nt-dir svg { display: block; margin: 0 auto; }
+
+    /* ───────── [ADD] 시야(물 투명도) ───────── */
+    /* 정점명 옆 게이지: 숫자 + 1~30m 로그 막대(옅은 띠 = 90일 통상 범위, 흰 눈금 = 오늘 추정) */
+    .nt-head .nt-status { display: inline-flex; align-items: center; gap: 10px; }
+    .nt-vis { display: inline-flex; align-items: center; gap: 5px; color: var(--ui-muted); white-space: nowrap; cursor: help; }
+    .nt-vis svg { flex: 0 0 auto; }
+    .nt-vis b { color: var(--ui-text); font-weight: 600; }
+    .nt-vis-wait { opacity: 0.6; }
+    .nt-vis-track { position: relative; display: inline-block; width: 46px; height: 4px; border-radius: 2px;
+      background: linear-gradient(90deg, #6B7F5E 0%, #3E8E9E 40%, #38BDF8 100%); opacity: 0.55; }
+    .nt-vis-band { position: absolute; top: -1px; bottom: -1px; border-radius: 3px; background: rgba(255,255,255,0.55); }
+    .nt-vis-mark { position: absolute; top: -3px; width: 2px; height: 10px; margin-left: -1px; background: #fff; border-radius: 1px; box-shadow: 0 0 0 1.5px var(--ui-bg); }
+
+    /* 90일 추이 위쪽: 수온·시야 / 시야 원인 전환 칩 + 계산식 요약 */
+    .fc-top { position: absolute; left: 6px; top: 3px; right: 6px; z-index: 6; pointer-events: none; font-size: 10.5px; line-height: 1.35; color: var(--ui-muted); }
+    .fc-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .fc-chips { display: inline-flex; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; overflow: hidden; pointer-events: auto; flex: 0 0 auto; }
+    .fc-chip { background: transparent; border: none; color: var(--ui-muted); font: inherit; font-size: 10px; padding: 2px 9px; cursor: pointer; }
+    .fc-chip.on { background: rgba(56,189,248,0.18); color: #fff; }
+    .fc-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fc-line b { color: var(--ui-text); }
+    .fc-line .vis-num { color: #38BDF8; }
+    .fc-sub { padding: 2px 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* 범례: 왼쪽은 어둡게, 오른쪽 끝으로 갈수록 완전히 투명 - 뒤의 오른쪽 축(시야 m)이 보이게 */
+    .chart-legend-overlay { background: linear-gradient(90deg, rgba(7,11,20,0.78) 0%, rgba(7,11,20,0.78) 50%, rgba(7,11,20,0) 100%); border: none; padding-right: 26px; }
+    .chart-legend-overlay .swatch.sq { width: 8px; height: 8px; border-radius: 1px; }
+    .chart-legend-overlay .swatch.band { height: 6px; background: rgba(56,189,248,0.25); border-top: 1.5px dashed rgba(56,189,248,0.9); border-radius: 0; box-sizing: border-box; }
+
+    /* [FIX] "버튼 옆 검은 여백은 투명하게" - 탭 줄 뒤(패널 위 29px)가 투명이어도 그 뒤에
+       지구본이 없어서 검게 보였어요. 패널을 29px 위로 겹쳐 올려 그 자리에 지구본이
+       보이게 하고, 빈 부분은 지구본 드래그가 되도록 클릭을 통과시킵니다. */
+    #bottom-sheet { margin-top: -29px; pointer-events: none; }
+    #bottom-sheet > * { pointer-events: auto; }
+    #bottom-sheet > .tab-bar { pointer-events: none; }
+    #bottom-sheet > .tab-bar .tab-btn { pointer-events: auto; }
+    .disclaimer-bar { bottom: 33px; }

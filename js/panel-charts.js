@@ -289,6 +289,129 @@
       return String(st.name).replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, '').trim();
     }
 
+    // ───────── [ADD] 시야(물 투명도) - 게이지, 데이터 불러오기, 그래프 공통 ─────────
+    const EYE_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const VIS_TICKS = [1, 2, 5, 10, 20, 30];
+    // 게이지 위치: 1m~30m 로그 눈금(탁한 곳 차이도 잘 보이게)
+    function visPos(v) { return Math.max(0, Math.min(1, Math.log(Math.max(1, v)) / Math.log(30))) * 100; }
+    const mmdd = (iso) => iso.slice(5).replace(/^0/, '').replace('-0', '/').replace('-', '/');
+
+    // 정점명 옆 작은 게이지: 숫자 = 오늘 추정 시야, 옅은 띠 = 90일 통상 범위(하위~상위 10%), 흰 눈금 = 오늘
+    function visGaugeHTML(st) {
+      const v = st._visCache;
+      if (!v) return st._visState === 'loading' ? `<span class="nt-vis nt-vis-wait" title="${t.visLoading}">${EYE_SVG}…</span>` : '';
+      const a = visPos(v.p10), b = visPos(v.p90);
+      const title = t.visGaugeTitle(fmtVis(v.now.vis), fmtVis(v.p10), fmtVis(v.p90), mmdd(v.last.d), fmtVis(v.last.vis));
+      return `<span class="nt-vis" title="${title}">${EYE_SVG}<b>${fmtVis(v.now.vis)}</b>` +
+        `<span class="nt-vis-track"><span class="nt-vis-band" style="left:${a}%;width:${Math.max(3, b - a)}%"></span>` +
+        `<span class="nt-vis-mark" style="left:${visPos(v.now.vis)}%"></span></span></span>`;
+    }
+
+    // 시야 자료는 우리 서버(/api/visibility, 12시간 CDN 캐시)에서 오니 Open-Meteo 한도와 무관 -
+    // 정점을 고르면 바로 불러옵니다. 실패하면 1분 동안은 다시 시도하지 않아요.
+    async function ensureVisData(st) {
+      if (!st || st._visCache || st._visState === 'loading') return;
+      if (!/^https?:$/.test(location.protocol)) return;
+      if (st._visState === 'failed' && Date.now() - (st._visFailAt || 0) < 60000) return;
+      st._visState = 'loading';
+      if (selectedStation === st) updateChart();
+      try {
+        await fetchStationVisibility(st);
+        st._visState = 'ok';
+      } catch (e) {
+        console.warn('[visibility] 시야 자료 실패:', e);
+        st._visState = 'failed'; st._visFailAt = Date.now();
+      }
+      if (selectedStation === st) updateChart();
+    }
+
+    // 날짜(ms) → 90일 추이 그래프의 x(오늘 달의 5달 전 1일 = 0, 한 달 = 1)
+    function dateToWindowX(ms) {
+      const d = new Date(ms);
+      const m = (d.getFullYear() * 12 + d.getMonth()) - (todayObj.getFullYear() * 12 + curMonth - 5);
+      const dim = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      return m + (d.getDate() - 1 + d.getHours() / 24) / dim;
+    }
+
+    // 90일 추이 탭 위쪽: [수온·시야 | 시야 원인] 전환 칩 + (원인 화면일 때) 계산식 요약
+    let forecastView = 'temp';
+    function renderForecastTop(v) {
+      const box = document.querySelector('.chart-box');
+      let top = document.getElementById('fc-top');
+      if (!top) {
+        top = document.createElement('div'); top.id = 'fc-top'; top.className = 'fc-top';
+        box.appendChild(top);
+        top.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-view]');
+          if (!b || b.dataset.view === forecastView) return;
+          forecastView = b.dataset.view; updateChart();
+        });
+      }
+      top.style.display = activeMode === 'forecast' ? '' : 'none';
+      if (activeMode !== 'forecast') return;
+      if (!v) { top.innerHTML = ''; forecastView = 'temp'; return; } // 시야 자료가 없으면 전환 칩도 숨김
+      const chip = (view, label) => `<button type="button" class="fc-chip${forecastView === view ? ' on' : ''}" data-view="${view}">${label}</button>`;
+      let html = `<div class="fc-row"><span class="fc-chips">${chip('temp', t.fcTempVis)}${chip('cause', t.fcCause)}</span>`;
+      if (forecastView === 'cause' && v) {
+        html += `<span class="fc-line">${t.visLastLine(mmdd(v.last.d), fmtVis(v.last.vis), v.last.kd.toFixed(2))}</span></div>`;
+        html += `<div class="fc-sub">${v.share ? t.visCauseLine(Math.round(v.share.plankton * 100), Math.round(v.share.other * 100), v.share.chl.toFixed(1)) : t.visNoChl}</div>`;
+      } else {
+        html += '</div>';
+      }
+      top.innerHTML = html;
+    }
+
+    // 90일 추이 - "시야 원인" 화면: 날짜별 탁한 정도를 원인별로 쌓은 막대 + 시야 선(= 1.7 ÷ 막대 높이)
+    function renderVisCause(chartCanvas, legendBox, v) {
+      const days = v.days;
+      const hasChl = v.hasChl && days.some(x => x.kc != null);
+      const bar = (label, key, color) => ({ label, data: days.map(x => x[key] != null ? +x[key].toFixed(3) : null), yAxisID: 'yk', backgroundColor: color, stack: 'k', barPercentage: 1, categoryPercentage: 0.9, order: 3, _unit: 'kd' });
+      const datasets = [
+        { type: 'line', label: t.visAxis, data: days.map(x => +x.vis.toFixed(1)), yAxisID: 'yv', borderColor: '#38BDF8', borderWidth: 2, pointRadius: 0, pointHitRadius: 8, tension: 0.3, order: 0, _unit: 'vis' }
+      ];
+      if (hasChl) {
+        datasets.push(bar(t.visWater, 'kw', 'rgba(148,163,184,0.35)'), bar(t.visPlankton, 'kc', 'rgba(74,222,128,0.55)'), bar(t.visOther, 'ko', 'rgba(180,140,90,0.55)'));
+      } else {
+        datasets.push(bar(t.visTurbidity, 'kd', 'rgba(148,163,184,0.45)'));
+      }
+      const maxVis = Math.max(...days.map(x => x.vis));
+      const maxKd = Math.max(...days.map(x => x.kd));
+      chartInstance = new Chart(chartCanvas, {
+        type: 'bar',
+        data: { labels: days.map(x => mmdd(x.d)), datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          layout: { padding: { top: 46 } },
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ctx.dataset._unit === 'vis'
+                  ? `${ctx.dataset.label}: ${fmtVis(ctx.parsed.y)}`
+                  : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}`,
+                afterBody: (items) => {
+                  const x = days[items[0].dataIndex];
+                  return x.chl != null ? [`엽록소 ${x.chl.toFixed(2)} mg/m³`] : [];
+                }
+              }
+            }
+          },
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } },
+            yk: { stacked: true, position: 'left', min: 0, suggestedMax: Math.ceil(maxKd * 12) / 10, grid: { color: 'rgba(255,255,255,0.05)' },
+                  ticks: { color: '#8A94A6', font: { size: 9 } }, title: { display: true, text: t.visTurbidity, color: '#8A94A6', font: { size: 9 } } },
+            yv: { position: 'right', min: 0, suggestedMax: Math.max(5, Math.ceil(maxVis * 1.25)), grid: { drawOnChartArea: false },
+                  ticks: { color: '#38BDF8', font: { size: 9 }, callback: (val) => val + 'm' }, title: { display: true, text: t.visAxis, color: '#38BDF8', font: { size: 9 } } }
+          }
+        }
+      });
+      const sq = (c) => `<span class="swatch sq" style="background:${c}"></span>`;
+      legendBox.innerHTML = `<div class="item"><span class="swatch" style="background:#38BDF8"></span>${t.visFormula}</div>` +
+        (hasChl ? `<div class="item">${sq('rgba(74,222,128,.8)')}${t.visPlankton}</div><div class="item">${sq('rgba(180,140,90,.8)')}${t.visOther}</div><div class="item">${sq('rgba(148,163,184,.6)')}${t.visWater}</div>`
+                : `<div class="item">${sq('rgba(148,163,184,.7)')}${t.visTurbidity}</div>`);
+    }
+
     // [FIX] 모바일(iOS 등)에서 ◀ ▶ ⬆ 문자가 컬러 이모지로 바뀌어 보여서,
     // 웹과 똑같이 보이도록 SVG 아이콘으로 그립니다(색은 글자색을 따라감).
     const ARROW_UP_SVG = '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 10.5V1.8M6 1.5 2.6 4.9M6 1.5l3.4 3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -393,7 +516,7 @@
       // 마우스 휠(세로 휠을 가로 이동으로)
       // [CHANGE] 첨부 디자인 반영 - 정점명 옆에 Live, 전날/다음날은 표 양옆 화살표
       box.innerHTML = `<div class="nt-head"><span class="nt-title" title="${st.name}">${stationDisplayName(st)}</span>` +
-          `<span class="nt-status">${status}</span></div>` +
+          `<span class="nt-status">${visGaugeHTML(st)}${status}</span></div>` +
         `<div class="nt-frame">` +
           `<button class="nt-arrow" data-dir="-1" aria-label="${t.prevDay}">${CHEVRON_SVG(-1)}</button>` +
           `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
@@ -445,34 +568,69 @@
       }
       document.getElementById('detailChart').style.display = isNow ? 'none' : '';
       legendBox.style.display = isNow ? 'none' : '';
+      const fcTop = document.getElementById('fc-top');
+      if (fcTop) fcTop.style.display = activeMode === 'forecast' ? '' : 'none';
       if (!selectedStation) return;
       if (isNow) { renderNowTable(tableBox); return; }
 
-      if (activeMode === 'forecast') {
+      renderForecastTop(selectedStation._visCache);
+      legendBox.style.top = '';
+      if (activeMode === 'forecast' && forecastView === 'cause' && selectedStation._visCache) {
+        legendBox.style.top = '44px';
+        renderVisCause(chartCanvas, legendBox, selectedStation._visCache);
+      } else if (activeMode === 'forecast') {
         const usingLive = !!selectedStation._liveCache;
         const data = usingLive ? computeTimeSeriesDataFromLive(selectedStation) : computeTimeSeriesData(selectedStation);
+        const vis = selectedStation._visCache;
+        const datasets = [
+          { label: t.chartPast, data: data.climLine, borderColor: '#5B6474', borderDash: [4, 4], tension: 0.3, pointRadius: 0, pointHitRadius: 20 },
+          { label: t.chartActual, data: data.actualLine, borderColor: '#FFB000', backgroundColor: 'rgba(255, 176, 0, 0.10)', fill: true, tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2.2 },
+          { label: t.chartFuture, data: data.projectedLine, borderColor: 'rgba(255, 176, 0, 0.55)', borderDash: [5, 4], tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2 },
+          { label: t.todayBadge, data: data.todayPoint, borderColor: '#FFB000', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHitRadius: 16, pointHoverRadius: 7, showLine: false }
+        ];
+        // [ADD] 시야: 실측(위성 7일 평균) 실선 + 일별 점, 앞으로의 추세 점선 + 두꺼운 반투명 오차 범위
+        if (vis) {
+          const P = vis.projection.map(p => ({ x: dateToWindowX(p.t), p }));
+          datasets.push(
+            { label: t.visBand, data: P.map(o => ({ x: o.x, y: +o.p.lo.toFixed(2) })), yAxisID: 'yv', borderWidth: 0, pointRadius: 0, fill: false, tension: 0.3, _noTip: true },
+            { label: t.visBand, data: P.map(o => ({ x: o.x, y: +o.p.hi.toFixed(2) })), yAxisID: 'yv', borderWidth: 0, pointRadius: 0, fill: '-1', backgroundColor: 'rgba(56,189,248,0.16)', tension: 0.3, _noTip: true },
+            { label: t.visTrend, data: P.map(o => ({ x: o.x, y: +o.p.vis.toFixed(2) })), yAxisID: 'yv', borderColor: 'rgba(56,189,248,0.9)', borderDash: [5, 4], borderWidth: 2, pointRadius: 0, pointHitRadius: 10, tension: 0.3, _unit: 'vis' },
+            { label: t.visObserved, data: vis.days.map(x => ({ x: dateToWindowX(x.t), y: +x.vis7.toFixed(2) })), yAxisID: 'yv', borderColor: '#38BDF8', borderWidth: 2, pointRadius: 0, pointHitRadius: 10, tension: 0.3, _unit: 'vis' },
+            { label: t.visAxis, data: vis.days.map(x => ({ x: dateToWindowX(x.t), y: +x.vis.toFixed(2) })), yAxisID: 'yv', showLine: false, pointRadius: 1.3, pointBackgroundColor: 'rgba(56,189,248,0.45)', pointBorderWidth: 0, _noTip: true }
+          );
+        }
+        const scales = {
+          x: {
+            type: 'linear', min: -0.4, max: 11.6,
+            ticks: {
+              stepSize: 1, color: '#64748b', font: { size: 9 },
+              callback: (v) => t.months[((windowStartMonth + Math.round(v)) % 12 + 12) % 12] || ''
+            },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          },
+          // [FIX] "상대온도라 날뛰어 보임" - 색상표와 같은 0~40도 절대 범위로 고정
+          y: { min: 0, max: 40, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        };
+        // 시야 축(오른쪽): 1~30m 로그 눈금 - 3m와 5m 차이도 30m와 같은 그래프에서 보이게
+        if (vis) scales.yv = {
+          type: 'logarithmic', position: 'right', min: 1, max: 30, grid: { drawOnChartArea: false },
+          afterBuildTicks: (ax) => { ax.ticks = VIS_TICKS.map(value => ({ value })); },
+          ticks: { color: '#38BDF8', font: { size: 9 }, callback: (val) => val + 'm' }
+        };
         chartInstance = new Chart(chartCanvas, {
           type: 'line',
-          data: {
-            datasets: [
-              { label: t.chartPast, data: data.climLine, borderColor: '#5B6474', borderDash: [4, 4], tension: 0.3, pointRadius: 0, pointHitRadius: 20 },
-              { label: t.chartActual, data: data.actualLine, borderColor: '#FFB000', backgroundColor: 'rgba(255, 176, 0, 0.10)', fill: true, tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2.2 },
-              { label: t.chartFuture, data: data.projectedLine, borderColor: 'rgba(255, 176, 0, 0.55)', borderDash: [5, 4], tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2 },
-              { label: t.todayBadge, data: data.todayPoint, borderColor: '#FFB000', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHitRadius: 16, pointHoverRadius: 7, showLine: false }
-            ]
-          },
+          data: { datasets },
           options: {
             responsive: true, maintainAspectRatio: false,
-            // [FIX] "손가락으로 선택이 잘 안 된다" - 점 자체(반경 0)에 정확히
-            // 닿아야만 반응하던 기본 동작 대신, x축 세로 전체 어디를 눌러도
-            // 그 지점에서 가장 가까운 값을 찾아 보여주도록 히트 영역을 키웠습니다.
-            interaction: { mode: 'index', intersect: false },
+            layout: { padding: { top: 24 } },
+            // 선마다 x 간격이 달라서(수온 주 단위, 시야 일 단위) 누른 곳에서 가장 가까운 값 하나를 보여줘요
+            interaction: { mode: 'nearest', axis: 'x', intersect: false },
             plugins: {
-              legend: { display: false }, // [CHANGE] 기본 범례는 끄고, 차트 안 커스텀 범례로 대체
+              legend: { display: false },
               tooltip: {
+                filter: (item) => !item.dataset._noTip,
                 callbacks: {
-                  // [CHANGE] "오늘이 중앙에 오게" - x가 더 이상 달력 월(0=1월)이
-                  // 아니라 이동 윈도우 위치라서, 실제 달력 월/일로 환산해서 보여줍니다.
+                  // x = 이동 윈도우 위치 → 실제 달력 월/일
                   title: (items) => {
                     const xi = items[0].parsed.x;
                     const wi = Math.max(0, Math.min(12, Math.floor(xi + 1e-6)));
@@ -483,26 +641,13 @@
                     const day = Math.min(dim, Math.round(frac * dim) + 1);
                     return `${t.months[mi]} ${day}`;
                   },
-                  label: (ctx) => `${ctx.dataset.label}: ${formatTemp(ctx.parsed.y)}`
+                  label: (ctx) => ctx.dataset._unit === 'vis'
+                    ? `${ctx.dataset.label}: ${fmtVis(ctx.parsed.y)}`
+                    : `${ctx.dataset.label}: ${formatTemp(ctx.parsed.y)}`
                 }
               }
             },
-            scales: {
-              x: {
-                type: 'linear', min: -0.4, max: 11.6,
-                ticks: {
-                  stepSize: 1, color: '#64748b', font: { size: 9 },
-                  callback: (v) => t.months[((windowStartMonth + Math.round(v)) % 12 + 12) % 12] || ''
-                },
-                grid: { color: 'rgba(255,255,255,0.05)' }
-              },
-              // [FIX] "상대온도라 날뛰어 보임" - Chart.js가 데이터 범위에
-              // 맞춰 Y축을 자동으로 좁게 잡다 보니, 실제로는 1~2도 차이인데
-              // 축이 그만큼만 딱 맞춰져서 그래프가 요동치는 것처럼 보였어요.
-              // 색상표와 같은 0~40도 절대 범위로 고정해서 실제 변화폭
-              // 그대로 보이게 했습니다.
-              y: { min: 0, max: 40, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: 'rgba(255,255,255,0.05)' } }
-            }
+            scales
           }
         });
         const statusLine = usingLive
@@ -510,11 +655,17 @@
           : (selectedStation._liveState === 'loading'
               ? `<div class="item" style="color:#facc15;">⏳ ${t.liveDataLoading}</div>`
               : `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>`);
+        const visLegend = vis
+          ? `<div class="item"><span class="swatch" style="background:#38BDF8;"></span>${t.visObserved}</div>
+             <div class="item"><span class="swatch band"></span>${t.visTrend}</div>`
+          : (selectedStation._visState === 'loading'
+              ? `<div class="item" style="color:#7DD3FC;">${t.visLoading}</div>`
+              : (selectedStation._visState === 'failed' ? `<div class="item" style="color:#94a3b8;">${t.visFailed}</div>` : ''));
         legendBox.innerHTML = statusLine + `
           <div class="item"><span class="swatch dashed" style="color:#5B6474;background:#5B6474;"></span>${t.chartPast}</div>
           <div class="item"><span class="swatch" style="background:#FFB000;"></span>${t.chartActual}</div>
           <div class="item"><span class="swatch dashed" style="color:rgba(255,176,0,0.55);background:rgba(255,176,0,0.55);"></span>${t.chartFuture}</div>
-        `;
+        ` + visLegend;
       } else {
         const data = getDepthProfile(selectedStation.curTemp, selectedStation.isBeach);
         chartInstance = new Chart(chartCanvas, {
@@ -577,6 +728,7 @@
       }
 
       updateChart(); // 실데이터가 아직 없으면 예시값으로 먼저 보여주고
+      ensureVisData(st); // [ADD] 시야(위성) - 우리 서버에서 오니 바로 불러와요
 
       // [ADD] "현재+과거 데이터를 실제로 가져와서 그래프 만들 수 있어?" 요청 반영.
       // Open-Meteo에서 이 정점의 실제 현재값+과거 5년+올해 실측을 가져옵니다.
@@ -662,6 +814,7 @@
       document.getElementById(mode === 'forecast' ? 'btn-ts' : mode === 'depth' ? 'btn-dp' : 'btn-now').classList.add('active');
       updateChart();
       if (mode === 'forecast' && selectedStation) ensureLiveData(selectedStation);
+      if (mode === 'forecast' && selectedStation) ensureVisData(selectedStation);
     }
 
     // [ADD] "지구공" 리셋 버튼을 섭씨/화씨 전환 버튼으로 바꿔달라는 요청 반영.

@@ -860,10 +860,14 @@ function getCurrentCenterLatLng() {
       selectionMarker.renderOrder = 11;
       globeGroup.add(selectionMarker);
 
-      const defaultSpot = stations.find(s => s.name.includes("Ocean Beach")) || stations[0];
-      // [CHANGE] "값을 미리 불러오지 마, 클릭했을 때만" - 처음 화면에 보여주는
-      // 기본 정점은 자동 선택이라 Open-Meteo를 부르지 않습니다(auto: true).
-      selectStation(defaultSpot, { auto: true });
+      // [CHANGE] "처음 열릴 때 추정값만 나와서 첫인상이 안 좋아" - 첫 정점은
+      // 내 위치를 알면 그 근처 해변 정점, 모르면 Ocean Beach로 열고, 실제
+      // 데이터를 받아온 상태로 보여줍니다(실패하면 한 번 더, 그래도 안 되면
+      // 근처 다른 정점으로). 요청은 이 정점 하나에만 나가요.
+      const here = window.__bootAutoLatLon;
+      const defaultSpot = (here && nearestStations(here.lat, here.lon, 1, true)[0])
+        || stations.find(s => s.name.includes("Ocean Beach")) || stations[0];
+      openInitialStation(defaultSpot);
     }
 
     // [ADD] "추정값으로 먼저 칠하고 실데이터는 백그라운드로 천천히" 요청

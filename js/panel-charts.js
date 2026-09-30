@@ -301,9 +301,11 @@
           : st._hourlyState === 'failed'
             ? (st._hourlyError === 'DAILY_LIMIT' ? t.nowDailyLimit : t.nowFailed)
             : `⏳ ${t.nowLoading}`;
-        status = `<span class="nt-est" title="${t.nowEstimated} · ${why.replace(/<[^>]+>/g, '')}">${t.statusEst}</span>`;
+        const loading = st._userRequested && st._hourlyState === 'loading';
+        status = `<span class="nt-est" title="${t.nowEstimated} · ${why.replace(/<[^>]+>/g, '')}">${loading ? t.nowLoadingShort : t.statusEst}</span>`;
       }
       const canRetry = !st._hourlyCache && st._hourlyState === 'failed' && st._hourlyError !== 'DAILY_LIMIT';
+      if (canRetry) status += ` <a href="#" class="nt-retry">${t.retry}</a>`;
 
       const HOUR = 3600 * 1000, STEP = NOW_STEP_H * HOUR, COLW = NOW_COL_W;
       const cols = [];
@@ -315,7 +317,7 @@
       const tempVal = (c) => tempUnit === 'F' ? cToF(c).toFixed(0) : c.toFixed(1);
 
       // 조석 곡선 (이 정점 범위에 맞춰 그리고, 정확한 높이는 ▲▼ 숫자로 표시)
-      const TH = 58;
+      const TH = 50;
       const tideIn = d.tide.filter(p => p.x >= cols[0] - HOUR && p.x <= cols[cols.length - 1] + HOUR);
       let tideSvg = '';
       if (tideIn.length > 1) {
@@ -331,18 +333,25 @@
         tideSvg = `<svg width="${W}" height="${TH}" style="display:block"><path d="${area}" fill="rgba(56,189,248,0.12)"/><path d="${line}" fill="none" stroke="#38BDF8" stroke-width="1.5"/>${marks}</svg>`;
       }
 
-      const cell = (html, style) => `<div class="nt-cell" style="${style || ''}">${html}</div>`;
+      // [CHANGE] "지금" 칸은 좌우로 넘겨도 화면 밖으로 안 나가고 가장자리에 붙어
+      // 있어요(sticky). 그 칸 맨 위(날짜 줄)에 "Now"를 표시합니다.
+      const nowCol = Math.max(0, Math.min(cols.length - 1, Math.floor((d.nowLocalMs - cols[0] + STEP / 2) / STEP)));
+      let colIdx = 0;
+      const cell = (html, style) => `<div class="nt-cell${colIdx === nowCol ? ' nt-nowcell' : ''}" style="${style || ''}">${html}</div>`;
       const rows = { date: '', time: '', temp: '', wind: '', dir: '', gust: '', wave: '', swell: '' };
       let lastDay = null;
-      cols.forEach(x => {
+      cols.forEach((x, i) => {
+        colIdx = i;
         const dt = new Date(x), hh = dt.getUTCHours(), day = dt.getUTCDate();
         const dayEdge = hh === 0 ? 'border-left:1px solid rgba(255,255,255,0.10);' : '';
-        rows.date += cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:#F1F5F9;font-weight:700;' + dayEdge);
+        rows.date += i === nowCol
+          ? cell(t.tideNow, 'color:var(--accent);font-weight:700;')
+          : cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:rgba(255,255,255,0.9);font-weight:700;' + dayEdge);
         lastDay = day;
         rows.time += cell(String(hh).padStart(2, '0'), 'color:#8A94A6;' + dayEdge);
 
         const tp = nearestByX(d.temp, x);
-        rows.temp += cell(tp ? tempVal(tp.y) : '–', tp ? 'color:#F1F5F9;font-weight:700;' : 'color:#4B5565;');
+        rows.temp += cell(tp ? tempVal(tp.y) : '–', tp ? 'color:rgba(255,255,255,0.9);font-weight:700;' : 'color:#4B5565;');
 
         const w = nearestByX(d.wind, x);
         rows.wind += cell(w ? Math.round(w.speed) : '–', w ? `color:${windColor(w.speed)};font-weight:600;` : 'color:#4B5565;');
@@ -362,34 +371,39 @@
       const labelCol = `<div class="nt-labels">` +
         ROWS.map(([, l, h]) => `<div style="height:${h}px">${l}</div>`).join('') +
         `<div style="height:${TH}px">${t.rowTide}</div></div>`;
-      // [CHANGE] "지금" = 해당 칸 전체 강조 띠 + 정확한 시각의 가는 선 + 그 위 정점명 라벨
-      const nowCol = Math.max(0, Math.min(cols.length - 1, Math.floor((d.nowLocalMs - cols[0] + STEP / 2) / STEP)));
-      const nowBand = `<div class="nt-band" style="left:${nowCol * COLW}px;width:${COLW}px"></div>`;
-      const grid = `<div class="nt-grid" style="width:${W}px">${nowBand}` +
+      // 조석 줄: 곡선은 뒤에 깔고, "지금" 칸 자리에는 현재 해수면 높이와
+      // 오르는 중(↑)/내리는 중(↓)을 적은 칸을 sticky로 얹어요.
+      const tNow = typeof interpAt === 'function' ? interpAt(d.tide, d.nowLocalMs) : null;
+      const tNext = typeof interpAt === 'function' ? interpAt(d.tide, d.nowLocalMs + HOUR) : null;
+      const tideNowTxt = tNow != null ? `${tNow.toFixed(1)}m<br>${tNext != null && tNext >= tNow ? '↑' : '↓'}` : '';
+      const tideRow = `<div class="nt-row nt-tiderow" style="height:${TH}px">` +
+        `<div class="nt-tidesvg">${tideSvg}</div>` +
+        `<div style="flex:0 0 ${nowCol * COLW}px"></div>` +
+        `<div class="nt-cell nt-nowcell nt-tidenow">${tideNowTxt}</div></div>`;
+      const grid = `<div class="nt-grid" style="width:${W}px">` +
         ROWS.map(([k, , h]) => `<div class="nt-row" style="height:${h}px">${rows[k]}</div>`).join('') +
-        tideSvg + `</div>`;
+        tideRow + `</div>`;
 
       // [ADD] "스크롤로 전날·다음 날로" - 좌우 스크롤 + ◀ ▶ 버튼(하루씩) +
       // 마우스 휠(세로 휠을 가로 이동으로)
-      box.innerHTML = `<div class="nt-title" title="${st.name}">${stationDisplayName(st)}</div>` +
-        `<div class="nt-top">` +
-          `<button class="nt-nav" data-dir="-1">◀ ${t.prevDay}</button>` +
-          `<div class="nt-spacer"></div>` +
-          `<div class="nt-status">${canRetry ? `<a href="#" class="nt-retry" style="color:var(--accent)">${t.retry}</a> ` : ''}${status}</div>` +
-          `<button class="nt-nav" data-dir="0">${t.tideNow}</button>` +
-          `<button class="nt-nav" data-dir="1">${t.nextDay} ▶</button>` +
+      // [CHANGE] 첨부 디자인 반영 - 정점명 옆에 Live, 전날/다음날은 표 양옆 화살표
+      box.innerHTML = `<div class="nt-head"><span class="nt-title" title="${st.name}">${stationDisplayName(st)}</span>` +
+          `<span class="nt-status">${status}</span></div>` +
+        `<div class="nt-frame">` +
+          `<button class="nt-arrow" data-dir="-1" aria-label="${t.prevDay}">◀</button>` +
+          `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
+          `<button class="nt-arrow" data-dir="1" aria-label="${t.nextDay}">▶</button>` +
         `</div>` +
-        `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
-        `<div class="nt-note">⚠ ${t.tideNote}</div>`;
+        `<div class="nt-note">${t.tideNote}</div>`;
       const sc = box.querySelector('.nt-scroll');
-      const toNow = () => Math.max(0, nowX - 120);
+      const toNow = () => Math.max(0, nowX - (sc.clientWidth - 58) / 2);
       // 같은 정점을 다시 그릴 땐(데이터 도착 등) 보던 위치 유지, 새 정점이면 "지금"으로
       const keep = box._lastStationId === st.id && typeof box._lastScroll === 'number';
       sc.scrollLeft = keep ? box._lastScroll : toNow();
       box._lastStationId = st.id;
       sc.addEventListener('scroll', () => { box._lastScroll = sc.scrollLeft; }, { passive: true });
       let pending = null, pendingTimer = null; // 빠르게 여러 번 눌러도 하루씩 누적되게
-      box.querySelectorAll('.nt-nav').forEach(btn => btn.addEventListener('click', () => {
+      box.querySelectorAll('.nt-arrow').forEach(btn => btn.addEventListener('click', () => {
         const dir = +btn.dataset.dir;
         const base = pending != null ? pending : sc.scrollLeft;
         const maxLeft = sc.scrollWidth - sc.clientWidth;
@@ -525,7 +539,7 @@
     // 누르거나, 검색하거나, 탭을 누른 순간부터 그 정점의 값을 불러와요.
     async function selectStation(st, opts) {
       selectedStation = st;
-      if (!(opts && opts.auto)) st._userRequested = true;
+      if (!(opts && opts.auto)) { st._userRequested = true; st._userPicked = true; }
       const isHotspot = maxTempStation && maxTempStation.id === st.id;
       document.getElementById('st-name').innerText = `${st.name} ${isHotspot ? `🔥 [${t.hotspot}]` : ''}`;
       document.getElementById('st-temp').innerText = formatTemp(st.curTemp);
@@ -570,6 +584,59 @@
         st._liveState = 'failed';
       }
       if (selectedStation === st && activeMode === 'forecast') updateChart(); // 그 사이 다른 정점을 안 골랐으면 실데이터로 다시 그림
+    }
+
+    // [ADD] (lat, lon)에서 가까운 정점 목록 (beachOnly면 해변 정점만)
+    function nearestStations(lat, lon, count, beachOnly, exclude) {
+      const list = [];
+      stations.forEach(s => {
+        if (exclude && exclude.includes(s)) return;
+        if (beachOnly && !s.isBeach) return;
+        const dLat = s.coords[1] - lat;
+        let dLon = s.coords[0] - lon;
+        if (dLon > 180) dLon -= 360;
+        if (dLon < -180) dLon += 360;
+        const dLonKm = dLon * Math.cos(lat * Math.PI / 180);
+        list.push({ s, d: dLat * dLat + dLonKm * dLonKm });
+      });
+      list.sort((a, b) => a.d - b.d);
+      return list.slice(0, count).map(x => x.s);
+    }
+
+    // [ADD] 첫 화면 정점을 "실제 데이터가 있는 상태"로 여는 함수.
+    // 1) 고른 정점을 바로 선택(화면엔 "불러오는 중")  2) 실패하면 1.5초 뒤 한 번 더
+    // 3) 그래도 안 되면 근처 해변 정점을 최대 3곳까지 차례로 시도.
+    // 하루 한도 초과면 더 시도해도 소용없어서 바로 멈춰요. 그 사이 사용자가
+    // 다른 정점을 직접 누르면 즉시 중단합니다.
+    async function openInitialStation(first) {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const candidates = [first, ...nearestStations(first.coords[1], first.coords[0], 3, true, [first])];
+      for (const st of candidates) {
+        if (selectedStation && selectedStation !== st && selectedStation._userPicked) return; // 사용자가 직접 고름
+        st._userRequested = true;
+        st._hourlyState = 'loading';
+        selectStation(st, { auto: true });
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const d = await fetchStationHourly(st);
+            st._hourlyState = 'ok';
+            const nowT = interpAt(d.temp, d.nowLocalMs);
+            if (nowT != null) st.curTemp = +nowT.toFixed(1);
+            if (selectedStation === st) updateChart();
+            return;
+          } catch (e) {
+            if (e && e.code === 'DAILY_LIMIT') {
+              st._hourlyState = 'failed'; st._hourlyError = 'DAILY_LIMIT';
+              if (selectedStation === st) updateChart();
+              return;
+            }
+            if (attempt === 0) await sleep(1500);
+          }
+          if (selectedStation !== st) return; // 그 사이 사용자가 다른 정점을 누름
+        }
+        st._hourlyState = 'failed';
+      }
+      if (selectedStation) updateChart();
     }
 
     // [CHANGE] "기존처럼 버튼 3개로 교체" - 실시간 현황 / 90일 추이 / 수심 프로파일이

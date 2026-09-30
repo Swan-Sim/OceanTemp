@@ -282,7 +282,7 @@
     :root {
       --ui-bg: #070B14; --ui-bg-top: #0B1120;
       --ui-line: rgba(255,255,255,0.08); --ui-surface: rgba(255,255,255,0.04);
-      --ui-text: #F1F5F9; --ui-muted: #8A94A6; --ui-dim: #5B6474;
+      --ui-text: rgba(255,255,255,0.9); /* [CHANGE] "흰색이 너무 강해 - 10% 투명하게" */ --ui-muted: #8A94A6; --ui-dim: #5B6474;
       --accent: #FFB000; --accent-rgb: 255,176,0;
     }
     #bottom-sheet { background: linear-gradient(180deg, var(--ui-bg-top) 0%, var(--ui-bg) 100%); border-top: 1px solid var(--ui-line); box-shadow: 0 -12px 40px rgba(0,0,0,0.6); }
@@ -311,3 +311,37 @@
     .nt-spacer { flex: 1; }
     .nt-note { color: #4B5565; }
     .station-foot { color: var(--ui-muted); }
+
+    /* =====================================================================
+       [CHANGE] 첨부 디자인 반영 (실시간 현황 표 v2)
+       - 탭: 폴더 탭 모양(선택된 탭만 호박색 윤곽, 나머지는 글자 + 구분선)
+       - 정점명 가운데 + 옆에 Live, 전날/다음날은 표 양옆 화살표
+       - "지금" 칸은 좌우로 넘겨도 가장자리에 붙어 있음(sticky)
+       - 높이 축소, 경고 문구 톤 다운
+       ===================================================================== */
+    .chart-box { height: 232px; }
+    .tab-bar { background: transparent; border: none; border-bottom: 1px solid var(--accent); border-radius: 0; padding: 0; gap: 0; margin-bottom: 6px; }
+    .tab-btn { position: relative; border: 1px solid transparent; border-bottom: none; border-radius: 10px 10px 0 0; padding: 7px 4px; margin-bottom: -1px; box-shadow: none; }
+    .tab-btn + .tab-btn::before { content: ''; position: absolute; left: 0; top: 25%; bottom: 25%; width: 1px; background: var(--ui-line); }
+    .tab-btn.active { background: var(--ui-bg-top); color: var(--ui-text); border-color: var(--accent); box-shadow: none; }
+    .tab-btn.active::before, .tab-btn.active + .tab-btn::before { display: none; }
+
+    .nt-head { display: flex; justify-content: center; align-items: baseline; gap: 10px; padding: 0 0 5px; min-width: 0; }
+    .nt-head .nt-title { display: inline; font-size: 16px; padding: 0; min-width: 0; }
+    .nt-head .nt-status { flex: 0 0 auto; font-size: 12px; text-align: left; overflow: visible; }
+    .nt-retry { color: var(--accent); margin-left: 4px; }
+    .nt-frame { flex: 1; min-height: 0; display: flex; border: 1px solid var(--ui-line); border-radius: 10px; overflow: hidden; }
+    .nt-arrow { flex: 0 0 20px; background: transparent; border: none; color: var(--ui-muted); font-size: 9px; cursor: pointer; padding: 0; }
+    .nt-arrow:hover { color: var(--ui-text); background: rgba(255,255,255,0.03); }
+    .nt-arrow[data-dir="-1"] { border-right: 1px solid var(--ui-line); }
+    .nt-arrow[data-dir="1"] { border-left: 1px solid var(--ui-line); }
+    .nt-scroll { scrollbar-width: none; }
+    .nt-scroll::-webkit-scrollbar { display: none; }
+    .nt-nowcell { position: sticky; left: 58px; right: 0; z-index: 2; background: #0E1524; box-shadow: inset 1px 0 0 rgba(var(--accent-rgb),0.6), inset -1px 0 0 rgba(var(--accent-rgb),0.6); }
+    .nt-tiderow { position: relative; align-items: stretch; }
+    .nt-tidesvg { position: absolute; left: 0; top: 0; }
+    .nt-tidenow { font-size: 9px; line-height: 1.25; color: #BAE6FD; text-align: center; background: #0E1524; }
+    .nt-note { font-size: 8px; color: #3F4756; padding-top: 3px; }
+    .station-foot { margin-top: 2px; font-size: 9.5px; }
+    .disclaimer-bar { font-size: 7.5px; color: rgba(148,163,184,0.55); text-shadow: none; }
+    .disclaimer-bar b { font-weight: 500; }

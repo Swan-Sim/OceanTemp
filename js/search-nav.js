@@ -111,6 +111,7 @@
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             __bootAutoChoice = computeRotationForLatLon(pos.coords.latitude, pos.coords.longitude);
+            window.__bootAutoLatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude }; // [ADD] 첫 정점을 내 위치 근처로
             // 사용자가 아직 아무 것도 안 골랐으면 예비 회전 정도는 보여줍니다
             if (!__bootManualChoice) animateGlobeRotationTo(__bootAutoChoice.x, __bootAutoChoice.y, 900);
           },

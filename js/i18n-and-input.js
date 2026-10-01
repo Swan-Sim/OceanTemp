@@ -75,6 +75,10 @@
         visLastLine: (d, v, kd) => `${d} 시야 <b class="vis-num">${v}</b> = 1.7 ÷ ${kd}`,
         visCauseLine: (p, o, chl) => `원인(최근 7일): 플랑크톤 ${p}% · 기타 탁도 ${o}% · 엽록소 ${chl} mg/m³`,
         visNoChl: "엽록소 자료가 없어 원인은 나눌 수 없어요",
+        // [ADD] 근처 관측소 실측 (국립해양조사원 / NOAA)
+        obsNote: (src, pred) => `<span class="nt-obsdot"></span> 점 = 실측: ${src} · 이후 칸은 예보${pred ? ' (조석은 NOAA 예측)' : ''}`,
+        obsSource: (src) => `지금까지: 실측 - ${src} · 이후: 예보 모델 (Open-Meteo)`,
+        obsKhoa: (name) => `국립해양조사원 ${name}`, obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC ${id} 부이`,
         visGaugeTitle: (now, p10, p90, lastD, lastV) => `시야 추정(오늘): ${now}\n90일 통상 범위: ${p10}–${p90}\n위성 마지막 관측 ${lastD}: ${lastV}\n위성 추정값이라 실제와 다를 수 있어요`
       },
       en: {
@@ -140,6 +144,9 @@
         visLastLine: (d, v, kd) => `${d} visibility <b class="vis-num">${v}</b> = 1.7 ÷ ${kd}`,
         visCauseLine: (p, o, chl) => `Cause (last 7 days): plankton ${p}% · other ${o}% · chl ${chl} mg/m³`,
         visNoChl: "No chlorophyll data - cause can't be split",
+        obsNote: (src, pred) => `<span class="nt-obsdot"></span> dot = observed: ${src} · later columns are forecast${pred ? ' (tide: NOAA prediction)' : ''}`,
+        obsSource: (src) => `Up to now: observed - ${src} · later: forecast model (Open-Meteo)`,
+        obsKhoa: (name) => `KHOA ${name}`, obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC buoy ${id}`,
         visGaugeTitle: (now, p10, p90, lastD, lastV) => `Estimated visibility today: ${now}\n90-day typical: ${p10}–${p90}\nLast satellite obs ${lastD}: ${lastV}\nSatellite estimate; may differ from reality`
       }
     };

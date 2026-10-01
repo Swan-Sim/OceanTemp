@@ -58,6 +58,18 @@ async function warm(st) {
   }
 }
 
+// 국립해양조사원 관측소 목록(한국 정점 짝짓기용)도 미리 만들어 둠
+try {
+  const r = await fetch(`${SITE}/api/khoa?svc=stations`, { signal: AbortSignal.timeout(60000) });
+  const j = await r.json();
+  console.log(`KHOA 관측소 목록: ${j.count ?? '?'}곳`);
+} catch (e) { console.log('KHOA 관측소 목록 실패:', e.message); }
+try {
+  const r = await fetch(`${SITE}/api/noaa?svc=stations`, { signal: AbortSignal.timeout(60000) });
+  const j = await r.json();
+  console.log(`NOAA 관측소 목록: CO-OPS ${j.coops?.length ?? '?'}곳, NDBC ${j.ndbc?.length ?? '?'}곳`);
+} catch (e) { console.log('NOAA 관측소 목록 실패:', e.message); }
+
 const stations = await loadStations();
 console.log(`정점 ${stations.length}곳 시야 자료 미리 불러오기 시작`);
 const results = [];

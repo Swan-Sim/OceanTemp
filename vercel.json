@@ -1,5 +1,13 @@
 {
   "functions": {
-    "api/visibility.js": { "maxDuration": 30 }
+    "api/visibility.js": {
+      "maxDuration": 30
+    },
+    "api/khoa.js": {
+      "maxDuration": 60
+    },
+    "api/noaa.js": {
+      "maxDuration": 60
+    }
   }
 }

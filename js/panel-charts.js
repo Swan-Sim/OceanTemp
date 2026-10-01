@@ -421,7 +421,7 @@
     function renderNowTable(box) {
       const st = selectedStation;
       let d = st._hourlyCache;
-      let status = `<span class="nt-live" title="${t.nowSource}">● ${t.statusLive}</span>`;
+      let status = `<span class="nt-live" title="${d && d._obs && d._obs.sources.length ? t.obsSource(obsSourceText(d._obs.sources)) : t.nowSource}">● ${t.statusLive}</span>`;
       if (!d) {
         if (st._userRequested && !st._hourlyState) ensureHourlyData(st);
         d = getEstimatedHourly(st);
@@ -480,15 +480,15 @@
         rows.time += cell(String(hh).padStart(2, '0'), 'color:#8A94A6;' + dayEdge);
 
         const tp = nearestByX(d.temp, x);
-        rows.temp += cell(tp ? tempVal(tp.y) : '–', tp ? 'color:rgba(255,255,255,0.9);font-weight:700;' : 'color:#4B5565;');
+        rows.temp += cell(tp ? (tp.obs ? `<span class="nt-obs">${tempVal(tp.y)}</span>` : tempVal(tp.y)) : '–', tp ? 'color:rgba(255,255,255,0.9);font-weight:700;' : 'color:#4B5565;');
 
         const w = nearestByX(d.wind, x);
-        rows.wind += cell(w ? Math.round(w.speed) : '–', w ? `color:${windColor(w.speed)};font-weight:600;` : 'color:#4B5565;');
+        rows.wind += cell(w ? (w.obs ? `<span class="nt-obs">${Math.round(w.speed)}</span>` : Math.round(w.speed)) : '–', w ? `color:${windColor(w.speed)};font-weight:600;` : 'color:#4B5565;');
         rows.dir += cell(w ? `<span class="nt-dir" style="display:inline-block;transform:rotate(${(w.dir + 180) % 360}deg);color:${w.speed >= 9 ? windColor(w.speed) : '#8A94A6'}">${ARROW_UP_SVG}</span>` : '');
         rows.gust += cell(w && w.gust != null ? Math.round(w.gust) : '', 'color:#5B6474;');
 
         const wv = nearestByX(d.waves, x);
-        rows.wave += cell(wv ? wv.height.toFixed(1) : '–', wv ? waveCellStyle(wv.height) : 'color:#4B5565;');
+        rows.wave += cell(wv ? (wv.obs ? `<span class="nt-obs">${wv.height.toFixed(1)}</span>` : wv.height.toFixed(1)) : '–', wv ? waveCellStyle(wv.height) : 'color:#4B5565;');
         rows.swell += cell(wv && wv.swellPeriod != null ? Math.round(wv.swellPeriod) + t.sec : '', 'color:#5B6474;');
       });
 
@@ -523,7 +523,7 @@
           `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
           `<button class="nt-arrow" data-dir="1" aria-label="${t.nextDay}">${CHEVRON_SVG(1)}</button>` +
         `</div>` +
-        `<div class="nt-note">${t.tideNote}</div>`;
+        `<div class="nt-note">${d._obs && d._obs.sources.length ? t.obsNote(obsSourceText(d._obs.sources), !!d._tidePred) : t.tideNote}</div>`;
       const sc = box.querySelector('.nt-scroll');
       const toNow = () => Math.max(0, nowX - (sc.clientWidth - 58) / 2);
       // 같은 정점을 다시 그릴 땐(데이터 도착 등) 보던 위치 유지, 새 정점이면 "지금"으로

@@ -22,12 +22,14 @@ const KD_DS = 'noaacwNPPN20S3AkdSCIDINEOF2kmDaily';
 const CHL_DS = 'noaacwNPPN20S3ASCIDINEOF2kmDaily';
 // [CHANGE] "코론 시야가 실제 20m 가까운데 2.8m" - 정점 좌표의 픽셀 하나만 쓰면 해안·항구·얕은 산호초 바닥
 // 반사 때문에 그 픽셀만 유난히 탁하게 나오는 일이 많았어요(바로 옆 픽셀은 8~10m). 그래서
-//   1) 정점 반경 약 5km 안의 모든 바다 픽셀을 받아 날짜별 "중앙값"을 씁니다(튀는 픽셀 하나에 안 끌려감).
-//      값이 하나도 없으면(육지 안쪽 좌표) 반경 약 10km로 넓혀요.
+//   1) 정점 반경 약 3km 안의 모든 바다 픽셀을 받아 날짜별 "중앙값"을 씁니다(튀는 픽셀 하나에 안 끌려감).
+//      값이 없으면(육지 안쪽 좌표) 6km, 10km로 넓혀요.
 //   2) 교차 확인: 처리 방식이 다른 NOAA VIIRS 근실시간 4km 자료(빈칸 채우기 없음, 더 최근까지)로
 //      최근 14일 반경 약 12km 중앙값을 따로 계산해 같이 돌려줍니다(check).
 const CHECK_DS = 'noaacwNPPVIIRSkd490Daily';
-const R1 = 0.05, R2 = 0.1, RCHECK = 0.11;
+// [CHANGE] 부산항처럼 항구(2~4m)와 바깥 바다(20m+)가 몇 km 사이에 갈리는 곳이 있어서 5km → 3km로 좁힘.
+// 3km 안에도 픽셀 7개쯤이라 튀는 픽셀 하나는 여전히 걸러져요. 값이 없으면 6km, 10km로 넓힘
+const RADII = [0.03, 0.06, 0.1], RCHECK = 0.11;
 const FRESH_MS = 20 * 3600e3, KEEP_SEC = 7 * 86400;
 
 async function fetchText(url, timeoutMs) {
@@ -71,19 +73,21 @@ async function fetchFromNoaa(lat, lon) {
   const deadline = Date.now() + 40000;
   const T90 = 'last-89:1:last';
   const [kdRes, chlRes, chkRes] = await Promise.allSettled([
-    fetchBox(KD_DS, 'kd_490', lat, lon, R1, T90, deadline),
-    fetchBox(CHL_DS, 'chlor_a', lat, lon, R1, T90, deadline),
+    fetchBox(KD_DS, 'kd_490', lat, lon, RADII[0], T90, deadline),
+    fetchBox(CHL_DS, 'chlor_a', lat, lon, RADII[0], T90, deadline),
     fetchBox(CHECK_DS, 'kd_490', lat, lon, RCHECK, 'last-13:1:last', deadline)
   ]);
   if (kdRes.status !== 'fulfilled') throw kdRes.reason;
-  let kd = kdRes.value, chl = chlRes.status === 'fulfilled' ? chlRes.value : null, radiusKm = 5;
+  let kd = kdRes.value, chl = chlRes.status === 'fulfilled' ? chlRes.value : null, radiusKm = 3;
   const count = (by) => Object.keys(by || {}).length;
-  if (count(kd) < 10) { // 육지 안쪽 좌표 등 → 반경 10km로
-    kd = await fetchBox(KD_DS, 'kd_490', lat, lon, R2, T90, deadline).catch(() => ({}));
-    chl = await fetchBox(CHL_DS, 'chlor_a', lat, lon, R2, T90, deadline).catch(() => null);
-    radiusKm = 10;
-    if (count(kd) < 10) return { ok: false, reason: 'no-ocean-pixel' };
+  for (const r of RADII.slice(1)) {
+    if (count(kd) >= 10) break;
+    // 육지 안쪽 좌표 등 → 반경을 넓혀서
+    kd = await fetchBox(KD_DS, 'kd_490', lat, lon, r, T90, deadline).catch(() => ({}));
+    chl = await fetchBox(CHL_DS, 'chlor_a', lat, lon, r, T90, deadline).catch(() => null);
+    radiusKm = Math.round(r * 111);
   }
+  if (count(kd) < 10) return { ok: false, reason: 'no-ocean-pixel' };
   const dates = Object.keys(kd).sort();
   const days = dates.map(d => ({
     d, kd: +median(kd[d]).toFixed(4), n: kd[d].length,
@@ -109,7 +113,7 @@ module.exports = async function handler(req, res) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
     return res.status(400).json({ error: 'lat, lon 필요' });
   }
-  const key = `vis2:${lat.toFixed(3)}_${lon.toFixed(3)}`; // 방식이 바뀌어서 새 키(예전 한 픽셀 값과 섞이지 않게)
+  const key = `vis3:${lat.toFixed(3)}_${lon.toFixed(3)}`; // 방식이 바뀌어서 새 키(예전 한 픽셀 값과 섞이지 않게)
   const send = (body, cacheState, maxAge) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', `s-maxage=${maxAge}, stale-while-revalidate=86400`);

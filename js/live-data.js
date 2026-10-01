@@ -516,7 +516,7 @@
 
     async function fetchStationVisibility(st) {
       const lat = st.coords[1], lon = st.coords[0];
-      const j = await fetchJSON(`/api/visibility?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&v=2`, 60000, 0);
+      const j = await fetchJSON(`/api/visibility?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&v=3`, 60000, 0);
       if (!j || !j.ok) { const err = new Error(j && j.reason || 'NO_DATA'); err.code = j && j.reason; throw err; }
       const v = computeVisibility(j);
       if (!v) throw new Error('NO_DATA');

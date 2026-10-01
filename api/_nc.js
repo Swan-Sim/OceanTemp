@@ -28,7 +28,8 @@ function pickColumn(file, name, nt, depthOf) {
 // 반환: [{ t(UTC ms), wt, wv, per, ws, wd, sl }]
 async function parseNc(buf) {
   const { File, FS } = await h5();
-  const path = '/tmp_' + Math.random().toString(36).slice(2) + '.nc';
+  // h5wasm(node)은 실제 디스크를 쓰는데 Vercel에서는 /tmp만 쓸 수 있어요
+  const path = require('os').tmpdir() + '/cm_' + Math.random().toString(36).slice(2) + '.nc';
   FS.writeFile(path, new Uint8Array(buf));
   let f;
   try {

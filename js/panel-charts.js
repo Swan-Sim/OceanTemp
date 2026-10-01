@@ -656,8 +656,9 @@
             scales
           }
         });
+        const obsSrc = usingLive && selectedStation._liveCache.obsSource;
         const statusLine = usingLive
-          ? `<div class="item" style="color:#FFB000;">● ${t.liveDataOn}</div>`
+          ? `<div class="item" style="color:#FFB000;">● ${obsSrc ? t.liveDataObs(obsSourceText([obsSrc])) : t.liveDataOn}</div>`
           : (selectedStation._liveState === 'loading'
               ? `<div class="item" style="color:#facc15;">⏳ ${t.liveDataLoading}</div>`
               : `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>`);

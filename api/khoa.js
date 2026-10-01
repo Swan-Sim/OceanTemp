@@ -3,6 +3,7 @@
 // 사용 예:
 //   /api/khoa?svc=stations                       → 관측소 목록(코드·이름·위도·경도). 사이트가 가까운 관측소를 찾을 때 씀
 //   /api/khoa?svc=obs&obs=DT_0004&days=3          → 최근 3일 실측(10분 간격: 수온·조위·바람·기온), 간추린 형태
+//   /api/khoa?svc=wtdaily&obs=DT_0004&days=150    → 실측 수온 일평균(90일 추이용, Redis에 날짜별 저장)
 //   /api/khoa?svc=recent&obs=DT_0004              → 최신 관측 원본(오늘, 10분 간격)
 //   /api/khoa?svc=wtemp&obs=DT_0004&date=20261001 → 실측 수온 원본(1시간 간격, 그날 하루)
 // 정해진 서비스만 허용하고(아무 주소나 대신 불러주지 않게), 결과는 Vercel CDN에 캐시해요.
@@ -91,6 +92,41 @@ async function recentObs(key, obs, days) {
   return { meta, rows };
 }
 
+
+// [ADD] 90일 추이용: 실측 수온 "일평균"을 최근 N일(최대 160일) 돌려줌.
+// 실측 수온 API는 하루치씩만 주기 때문에, 한 번 계산한 날은 Redis에 저장해 두고 빠진 날만 새로 받아요
+// (처음 한 번만 오래 걸리고, 이후엔 하루 1번 호출).
+async function dailyWaterTemp(key, obs, days) {
+  const H = `khoa:wtd:${obs}`;
+  const dates = Array.from({ length: days }, (_, i) => ymd(Date.now() - (i + 1) * 86400e3)); // 어제부터 과거로
+  let stored = {};
+  try { const [{ result }] = await redisPipeline([['HGETALL', H]]); if (Array.isArray(result)) for (let i = 0; i < result.length; i += 2) stored[result[i]] = result[i + 1]; } catch (_) {}
+  const missing = dates.filter(d => !(d in stored));
+  const fresh = {};
+  let next = 0;
+  const deadline = Date.now() + 40000;
+  await Promise.all(Array.from({ length: 6 }, async () => {
+    while (next < missing.length && Date.now() < deadline) {
+      const d = missing[next++];
+      try {
+        const items = await callKhoa(key, SERVICES.wtemp, obs, d, 30);
+        const v = items.map(a => +a.wtem).filter(x => Number.isFinite(x) && x > -3 && x < 40);
+        // 자료가 없는 날은 'na'로 표시(3일 넘게 지난 날만 - 최근 날은 나중에 들어올 수 있어서 다시 시도)
+        if (v.length) fresh[d] = (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2);
+        else if (Date.now() - Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)) > 4 * 86400e3) fresh[d] = 'na';
+      } catch (_) { /* 이번엔 건너뛰고 다음 요청 때 다시 */ }
+    }
+  }));
+  const freshKeys = Object.keys(fresh);
+  if (freshKeys.length) {
+    try { await redisPipeline([['HSET', H, ...freshKeys.flatMap(k => [k, fresh[k]])], ['EXPIRE', H, String(400 * 86400)]]); } catch (_) {}
+  }
+  const all = { ...stored, ...fresh };
+  return dates.slice().reverse()
+    .filter(d => all[d] && all[d] !== 'na')
+    .map(d => ({ d: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`, t: +all[d] }));
+}
+
 module.exports = async function handler(req, res) {
   const key = process.env.KHOA_API_KEY;
   if (!key) return res.status(500).json({ ok: false, error: 'KHOA_API_KEY 환경변수가 없어요 (Vercel → Environments → Production에 추가)' });
@@ -108,13 +144,18 @@ module.exports = async function handler(req, res) {
       return sendJson({ ok: true, ms: Date.now() - t0, count: list.length, stations: list }, 86400);
     }
     if (!/^[A-Z]{2}_\d{4}$/.test(obs)) return res.status(400).json({ ok: false, error: 'obs(예: DT_0004)가 필요해요' });
+    if (svcName === 'wtdaily') {
+      const days = Math.max(7, Math.min(160, parseInt(req.query.days, 10) || 90));
+      const rows = await dailyWaterTemp(key, obs, days);
+      return sendJson({ ok: true, obs, ms: Date.now() - t0, count: rows.length, rows }, 21600);
+    }
     if (svcName === 'obs') {
       const days = Math.max(1, Math.min(7, parseInt(req.query.days, 10) || 3));
       const { meta, rows } = await recentObs(key, obs, days);
       return sendJson({ ok: true, obs, ms: Date.now() - t0, meta, count: rows.length, rows }, 600);
     }
     const svc = SERVICES[svcName];
-    if (!svc) return res.status(400).json({ ok: false, error: 'svc는 stations | obs | recent | wtemp 중 하나예요' });
+    if (!svc) return res.status(400).json({ ok: false, error: 'svc는 stations | obs | wtdaily | recent | wtemp 중 하나예요' });
     const date = /^\d{8}$/.test(req.query.date || '') ? req.query.date : ymd(Date.now());
     const items = await callKhoa(key, svc, obs, date, 300);
     return sendJson({ ok: true, svc: svcName, obs, date, ms: Date.now() - t0, count: items.length, items }, svc.cache);

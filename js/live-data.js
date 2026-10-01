@@ -234,6 +234,21 @@
       );
 
       const result = { currentTemp, climByMonth, actualLine, isLive: true, climIsEstimated: true };
+
+      // [ADD] 근처 관측소 실측 수온이 있으면 과거 구간을 그걸로 바꿔요(최대 15초 기다리고, 안 되면 Open-Meteo 그대로)
+      try {
+        const obs = await Promise.race([obsDailyTemps(station), new Promise(r => setTimeout(() => r(null), 15000))]);
+        if (obs && obs.daily.length >= 14) {
+          result.actualLine = obs.daily.map(o => {
+            const d = new Date(o.d + 'T00:00:00Z');
+            const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+            return { x: d.getUTCMonth() + (d.getUTCDate() - 1) / dim, y: o.t };
+          });
+          result.obsSource = obs.source;
+          result.currentTemp = obs.daily[obs.daily.length - 1].t; // 그래프가 끊기지 않게 최신 실측에서 이어 감
+        }
+      } catch (e) { console.warn('[obs] 90일 실측 실패, Open-Meteo 사용:', e); }
+
       station._liveCache = result;
       return result;
     }
@@ -650,4 +665,32 @@
     // 표 아래 출처 문구용: "국립해양조사원 서귀포 관측소(1.1km) · NDBC 46026 부이(28km)"
     function obsSourceText(sources) {
       return sources.map(s => (s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
+    }
+
+    // ───────── [ADD] 90일 추이: 근처 관측소 실측 수온 일평균 (한국 KHOA / 미국 NOAA CO-OPS) ─────────
+    // 그래프 왼쪽(오늘 이전 약 5개월)을 모델 대신 관측소 실측으로 채워요. 관측소가 없으면 기존처럼 Open-Meteo.
+    const OBS_DAILY_DAYS = 155;
+    async function obsDailyTemps(st) {
+      if (!/^https?:$/.test(location.protocol)) return null;
+      const lat = st.coords[1], lon = st.coords[0];
+      if (inKoreaWaters(lat, lon)) {
+        const j = await once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 45000, 0));
+        const p = nearestOf(j && j.ok ? j.stations : [], lat, lon, OBS_RADIUS_KM);
+        if (!p) return null;
+        const r = await fetchJSON(`/api/khoa?svc=wtdaily&obs=${p.code}&days=${OBS_DAILY_DAYS}`, 50000, 0);
+        const daily = (r && r.ok && r.rows) || [];
+        return daily.length ? { daily, source: { kind: 'khoa', name: p.name, dist: p.dist } } : null;
+      }
+      if (inUsWaters(lat, lon)) {
+        const j = await once('noaa-st', () => fetchJSON('/api/noaa?svc=stations', 45000, 0));
+        const p = nearestOf(j && j.ok ? j.coops : [], lat, lon, OBS_RADIUS_KM, s => s.wt);
+        if (!p) return null;
+        const ymdUtc = (ms) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
+        const r = await coopsGet(p.id, 'water_temperature', `&interval=h&begin_date=${ymdUtc(Date.now() - OBS_DAILY_DAYS * 86400e3)}&end_date=${ymdUtc(Date.now())}`);
+        const by = {};
+        ((r && r.data) || []).forEach(o => { const v = +o.v; if (!Number.isFinite(v) || v < -3 || v > 40) return; const d = String(o.t).slice(0, 10); (by[d] = by[d] || []).push(v); });
+        const daily = Object.keys(by).sort().map(d => ({ d, t: +(by[d].reduce((a, b) => a + b, 0) / by[d].length).toFixed(2) }));
+        return daily.length ? { daily, source: { kind: 'coops', name: p.name, dist: p.dist } } : null;
+      }
+      return null;
     }

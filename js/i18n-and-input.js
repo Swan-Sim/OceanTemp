@@ -83,6 +83,8 @@
         visRadius: (km) => `정점 반경 ${km}km 바다 픽셀의 중앙값`,
         visCheck: (v, a, b, ok) => `교차 확인(다른 위성 처리, ${a}~${b} 중앙값): ${v}${ok ? '' : '\n두 위성 자료 차이가 커요 - 해안·얕은 바닥 영향일 수 있어요'}`,
         visCheckShort: "교차 확인(VIIRS 14일)",
+        visGround: (name, km, v, q, a, b) => `실측 투명도(부산시 측정, ${name} ${km}km·대략 위치, ${a}~${b}년 ${q}분기 평균): ${v}`,
+        visGroundShort: (name) => `실측 투명도(부산시, ${name})`,
         // [ADD] 근처 관측소 실측 (국립해양조사원 / NOAA)
         obsNote: (src, pred) => `<span class="nt-obsdot"></span> 점 = 실측: ${src} · 이후 칸은 예보${pred ? ' (조석은 NOAA 예측)' : ''}`,
         obsSource: (src) => `지금까지: 실측 - ${src} · 이후: 예보 모델 (Open-Meteo)`,
@@ -160,6 +162,8 @@
         visRadius: (km) => `Median of ocean pixels within ${km} km`,
         visCheck: (v, a, b, ok) => `Cross-check (different satellite processing, ${a}–${b} median): ${v}${ok ? '' : '\nThe two satellite sources disagree - coast or shallow bottom may affect them'}`,
         visCheckShort: "Cross-check (VIIRS 14d)",
+        visGround: (name, km, v, q, a, b) => `Measured transparency (Busan city, ${name} ${km} km, approx. location, Q${q} avg ${a}–${b}): ${v}`,
+        visGroundShort: (name) => `Measured transparency (Busan, ${name})`,
         obsNote: (src, pred) => `<span class="nt-obsdot"></span> dot = observed: ${src} · later columns are forecast${pred ? ' (tide: NOAA prediction)' : ''}`,
         obsSource: (src) => `Up to now: observed - ${src} · later: forecast model (Open-Meteo)`,
         obsKhoa: (name) => `KHOA ${name}`, obsKma: (name) => `KMA ${name}`, obsBuoyWord: 'buoy', obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC buoy ${id}`, obsCmems: (name) => `Copernicus Marine ${name}`,

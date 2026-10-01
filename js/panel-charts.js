@@ -352,6 +352,7 @@
       let title = t.visGaugeTitle(fmtVis(v.now.vis), fmtVis(v.p10), fmtVis(v.p90), mmdd(v.last.d), fmtVis(v.last.vis));
       if (v.radiusKm) title = t.visRadius(v.radiusKm) + '\n' + title;
       if (v.check) title += '\n' + t.visCheck(fmtVis(v.check.vis), mmdd(v.check.from), mmdd(v.check.to), v.check.agree);
+      if (v.ground && v.ground.now != null) title += '\n' + t.visGround(v.ground.name, v.ground.dist.toFixed(1), fmtVis(v.ground.now), v.ground.qi + 1, v.ground.from, v.ground.to);
       // 두 위성 자료가 크게 다르면 숫자 옆에 작은 "≠" 표시(마우스를 올리면 설명)
       const warn = v.check && !v.check.agree ? `<span class="nt-vis-warn">≠${fmtVis(v.check.vis)}</span>` : '';
       return `<span class="nt-vis" title="${title}">${EYE_SVG}<b>${fmtVis(v.now.vis)}</b>${warn}` +
@@ -690,6 +691,17 @@
             { label: t.visObserved, data: vis.days.map(x => ({ x: dateToWindowX(x.t), y: +x.vis7.toFixed(2) })), yAxisID: 'yv', borderColor: '#38BDF8', borderWidth: 2, pointRadius: 0, pointHitRadius: 10, tension: 0.3, _unit: 'vis' },
             { label: t.visAxis, data: vis.days.map(x => ({ x: dateToWindowX(x.t), y: +x.vis.toFixed(2) })), yAxisID: 'yv', showLine: false, pointRadius: 1.3, pointBackgroundColor: 'rgba(56,189,248,0.45)', pointBorderWidth: 0, _noTip: true }
           );
+          // 실측 투명도(분기 평균): 분기 가운데 달 15일에 노란 동그라미
+          if (vis.ground) {
+            const pts = [];
+            for (let k = -1; k <= 1; k++) vis.ground.q.forEach((val, qi) => {
+              if (val == null) return;
+              const x = dateToWindowX(new Date(todayObj.getFullYear() + k, qi * 3 + 1, 15).getTime());
+              if (x >= -0.4 && x <= 11.6) pts.push({ x, y: val });
+            });
+            pts.sort((a, b) => a.x - b.x);
+            if (pts.length) datasets.push({ label: t.visGroundShort(vis.ground.name), data: pts, yAxisID: 'yv', showLine: false, pointStyle: 'circle', pointRadius: 4.5, pointHoverRadius: 6, pointBackgroundColor: 'rgba(15,23,42,0.9)', pointBorderColor: '#FCD34D', pointBorderWidth: 1.8, _unit: 'vis' });
+          }
           if (vis.check) datasets.push({ label: t.visCheckShort, data: [{ x: dateToWindowX(Date.parse(vis.check.to + 'T12:00:00Z')), y: +vis.check.vis.toFixed(2) }], yAxisID: 'yv', showLine: false, pointStyle: 'rectRot', pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: 'rgba(15,23,42,0.9)', pointBorderColor: '#7DD3FC', pointBorderWidth: 1.6, _unit: 'vis' });
         } catch (e) {
           console.warn('[visibility] 시야 그래프 오류, 수온만 표시:', e);
@@ -755,7 +767,8 @@
         const visLegend = vis
           ? `<div class="item"><span class="swatch" style="background:#38BDF8;"></span>${t.visObserved}</div>
              <div class="item"><span class="swatch band"></span>${t.visTrend}</div>` +
-            (vis.check ? `<div class="item"><span style="display:inline-block;width:7px;height:7px;border:1.5px solid #7DD3FC;transform:rotate(45deg);margin:0 5px 0 2px;"></span>${t.visCheckShort} ${fmtVis(vis.check.vis)}</div>` : '')
+            (vis.check ? `<div class="item"><span style="display:inline-block;width:7px;height:7px;border:1.5px solid #7DD3FC;transform:rotate(45deg);margin:0 5px 0 2px;"></span>${t.visCheckShort} ${fmtVis(vis.check.vis)}</div>` : '') +
+            (vis.ground ? `<div class="item"><span style="display:inline-block;width:8px;height:8px;border:1.8px solid #FCD34D;border-radius:50%;margin:0 5px 0 1px;"></span>${t.visGroundShort(vis.ground.name)}</div>` : '')
           : (selectedStation._visState === 'loading'
               ? `<div class="item" style="color:#7DD3FC;">${t.visLoading}</div>`
               : (selectedStation._visState === 'failed' ? `<div class="item" style="color:#94a3b8;">${t.visFailed}</div>` : ''));

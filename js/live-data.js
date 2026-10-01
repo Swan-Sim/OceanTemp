@@ -520,8 +520,21 @@
       if (!j || !j.ok) { const err = new Error(j && j.reason || 'NO_DATA'); err.code = j && j.reason; throw err; }
       const v = computeVisibility(j);
       if (!v) throw new Error('NO_DATA');
+      // [ADD] 부산 연안: 부산시가 직접 잰 투명도(분기 평균)를 실측 참고값으로 붙임
+      try { v.ground = await groundTransparency(lat, lon); } catch (_) {}
       st._visCache = v;
       return v;
+    }
+
+    // 사람이 직접 잰 투명도(세키 원판) - 지금은 부산시 해양환경 측정망만. 정점 6km 안 가장 가까운 지점
+    const GROUND_KM = 6;
+    async function groundTransparency(lat, lon) {
+      if (!(lat > 34.9 && lat < 35.45 && lon > 128.7 && lon < 129.45)) return null;
+      const j = await once('busanwq', () => fetchJSON('/api/busanwq', 20000, 0));
+      const s = nearestOf(j && j.ok ? j.sites : [], lat, lon, GROUND_KM);
+      if (!s) return null;
+      const qi = Math.floor(new Date().getMonth() / 3);
+      return { name: s.name, dist: s.dist, q: s.q, now: s.q[qi], qi, from: s.from, to: s.to, src: 'busan' };
     }
 
     // ───────── [ADD] 근처 관측소 실측으로 실시간 현황표의 "지금까지" 칸 채우기 ─────────

@@ -435,3 +435,7 @@
 
     /* [ADD] 후원 버튼: 다른 버튼과 같은 모양, 컵 아이콘만 호박색 */
     .ctrl-btn.donate-btn { display: flex; align-items: center; justify-content: center; color: var(--accent); text-decoration: none; }
+
+    /* [ADD] 시야는 하늘색으로 통일: 게이지 숫자 + 출처 표기 */
+    .nt-vis b { color: #7DD3FC; }
+    .nt-src-vis { color: #7DD3FC; }

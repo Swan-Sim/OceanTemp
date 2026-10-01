@@ -418,8 +418,10 @@
       const kinds = [...new Set((sources || []).map(s => s.kind === 'khoa' ? 'KHOA' : 'NOAA'))];
       return kinds.length ? kinds.join('·') : 'Open-Meteo';
     }
-    function statusHTML(label, title, src) {
-      return `<span class="nt-live" title="${title}">● ${label}</span><span class="nt-src" title="${title}">${src}</span>`;
+    function statusHTML(label, title, src, st) {
+      // [ADD] 시야 출처도 같이: 시야 값과 같은 하늘색으로 "NOAA 위성"
+      const vis = st && st._visCache ? ` · <span class="nt-src-vis" title="${t.visSrcTitle}">${t.visSrc}</span>` : '';
+      return `<span class="nt-live" title="${title}">● ${label}</span><span class="nt-src" title="${title}">${src}${vis}</span>`;
     }
     // [ADD] "90일·수심 탭에도 정점명" - 그래프 탭 맨 위에 실시간 현황과 같은 머리줄(정점명 + 시야 + 상태)
     function renderModeHead(show) {
@@ -432,8 +434,8 @@
       const st = selectedStation, live = st._liveCache;
       let status;
       if (activeMode === 'depth') status = `<span class="nt-est">${t.statusEst}</span>`;
-      else if (live && live.obsSource) status = statusHTML(t.statusObs, t.liveDataObs(obsSourceText([live.obsSource])), srcShort([live.obsSource]));
-      else if (live) status = statusHTML(t.statusLive, t.liveDataOn, 'Open-Meteo');
+      else if (live && live.obsSource) status = statusHTML(t.statusObs, t.liveDataObs(obsSourceText([live.obsSource])), srcShort([live.obsSource]), st);
+      else if (live) status = statusHTML(t.statusLive, t.liveDataOn, 'Open-Meteo', st);
       else status = `<span class="nt-est">${st._liveState === 'loading' ? t.nowLoadingShort : t.statusEst}</span>`;
       head.innerHTML = `<span class="nt-title" title="${st.name}">${stationDisplayName(st)}</span><span class="nt-status">${visGaugeHTML(st)}${status}</span>`;
     }
@@ -447,7 +449,7 @@
       const st = selectedStation;
       let d = st._hourlyCache;
       const hasObs = d && d._obs && d._obs.sources.length;
-      let status = statusHTML(t.statusLive, hasObs ? t.obsSource(obsSourceText(d._obs.sources)) : t.nowSource, hasObs ? srcShort(d._obs.sources) + ' · Open-Meteo' : 'Open-Meteo');
+      let status = statusHTML(t.statusLive, hasObs ? t.obsSource(obsSourceText(d._obs.sources)) : t.nowSource, hasObs ? srcShort(d._obs.sources) + ' · Open-Meteo' : 'Open-Meteo', st);
       if (!d) {
         if (st._userRequested && !st._hourlyState) ensureHourlyData(st);
         d = getEstimatedHourly(st);

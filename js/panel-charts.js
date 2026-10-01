@@ -415,7 +415,7 @@
 
     // [ADD] "Live 출처 병행 표기" - 정점명 옆 상태에 데이터 출처를 짧게 같이 적어요(KHOA / NOAA / Open-Meteo)
     function srcShort(sources) {
-      const kinds = [...new Set((sources || []).map(s => s.kind === 'khoa' ? 'KHOA' : s.kind === 'kma' ? 'KMA' : 'NOAA'))];
+      const kinds = [...new Set((sources || []).map(s => s.kind === 'khoa' ? 'KHOA' : s.kind === 'kma' ? 'KMA' : s.kind === 'cmems' ? 'Copernicus' : 'NOAA'))];
       return kinds.length ? kinds.join('·') : 'Open-Meteo';
     }
     function statusHTML(label, title, src, st) {

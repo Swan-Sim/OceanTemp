@@ -11,6 +11,9 @@
     },
     "api/kma.js": {
       "maxDuration": 120
+    },
+    "api/cmems.js": {
+      "maxDuration": 60
     }
   }
 }

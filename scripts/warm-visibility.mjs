@@ -126,3 +126,22 @@ try {
     if (!j.fetched) break;
   }
 } catch (e) { console.log('기상청 부이 쌓기 실패:', e.message); }
+
+// [ADD] 유럽 등(Copernicus): 정점 40km 안 수온 관측소의 지난 3년 월별 파일 → 일평균 미리 쌓기 (평년용)
+try {
+  const cj = await (await fetch(`${SITE}/api/cmems?svc=stations`, { signal: AbortSignal.timeout(90000) })).json();
+  console.log(`Copernicus 관측소 목록: ${cj.count ?? '?'}곳`);
+  const ids = new Map();
+  for (const st of stations) {
+    const p = nearestWithin(cj.stations || [], st, 40, s => s.p.includes('T'));
+    if (p) ids.set(p.id, p);
+  }
+  console.log(`Copernicus 수온 미리 쌓기: ${ids.size}곳`);
+  for (const p of ids.values()) {
+    try {
+      const q = `id=${encodeURIComponent(p.id)}${p.m ? '&m=' + encodeURIComponent(p.m) : ''}`;
+      const j = await (await fetch(`${SITE}/api/cmems?svc=backfill&${q}&months=36&maxFetch=18`, { signal: AbortSignal.timeout(70000) })).json();
+      console.log(`Copernicus ${p.name}: ${j.years ?? '?'}년치 (이번에 ${j.fetched ?? '?'}개월)${j.error ? ' ' + j.error : ''}`);
+    } catch (e) { console.log(`Copernicus ${p.name} 실패: ${e.message}`); }
+  }
+} catch (e) { console.log('Copernicus 쌓기 실패:', e.message); }

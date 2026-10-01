@@ -1,0 +1,11 @@
+{
+  "name": "otemp",
+  "private": true,
+  "description": "Global Ocean Temp Monitor (otemp.app)",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "h5wasm": "0.7.8"
+  }
+}

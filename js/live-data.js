@@ -679,6 +679,44 @@
       return { hourly, sources, tideIsMsl: true, predSeries, hiloList };
     }
 
+    // ── 유럽 등 그 밖의 바다: Copernicus Marine In Situ (각국 부이·조위관측소 모음) ──
+    // 조위 25km, 수온·바람 40km, 파도 60km 안에서 값이 있는 가장 가까운 관측소. 시각은 UTC → 현지 시각으로.
+    const EU_TEMP_KM = 40, EU_WAVE_KM = 60;
+    const cmemsName = (s) => /^\d+$/.test(s.name) ? `${s.name} ${t.obsBuoyWord}` : String(s.name).replace(/[-_]/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
+    async function cmemsObs(lat, lon, d) {
+      const j = await once('cmems-st', () => fetchJSON('/api/cmems?svc=stations', 60000, 0)).catch(() => null);
+      const list = j && j.ok ? j.stations : [];
+      const tSt = nearestOf(list, lat, lon, EU_TEMP_KM, s => s.p.includes('T'));
+      const wSt = nearestOf(list, lat, lon, EU_WAVE_KM, s => s.p.includes('W'));
+      const vSt = nearestOf(list, lat, lon, EU_TEMP_KM, s => s.p.includes('V'));
+      const sSt = nearestOf(list, lat, lon, OBS_RADIUS_KM, s => s.p.includes('S'));
+      const sts = [...new Map([tSt, wSt, vSt, sSt].filter(Boolean).map(s => [s.id, s])).values()];
+      if (!sts.length) return null;
+      const days = Math.min(8, NOW_PAST_DAYS + 1);
+      const rowsById = {};
+      await Promise.all(sts.map(s => fetchJSON(`/api/cmems?svc=obs&id=${encodeURIComponent(s.id)}&days=${days}`, 45000, 0)
+        .then(o => { rowsById[s.id] = (o && o.ok && o.rows) || []; }).catch(() => { rowsById[s.id] = []; })));
+      const offset = Math.round((d.nowLocalMs - Date.now()) / 900e3) * 900e3;
+      const okTemp = (x, v) => { if (v == null || v < -2 || v > 35) return false; const m = interpAt(d.temp, x); return m == null || Math.abs(v - m) <= 6; };
+      // 각 항목마다 값이 실제로 들어온 관측소 중 가장 가까운 곳 (목록에 항목이 있어도 요즘 값이 없을 수 있음)
+      const has = (s, k) => s && (rowsById[s.id] || []).some(r => r[k] != null);
+      const byDist = sts.slice().sort((a, b) => a.dist - b.dist);
+      const pick = (k, maxKm) => byDist.find(s => s.dist <= maxKm && has(s, k)) || null;
+      const T = pick('wt', EU_TEMP_KM), W = pick('wv', EU_WAVE_KM), V = pick('ws', EU_TEMP_KM), S = pick('sl', OBS_RADIUS_KM);
+      const raw = [];
+      sts.forEach(s => (rowsById[s.id] || []).forEach(r => {
+        const x = r.t + offset, o = { x };
+        if (s === T && okTemp(x, r.wt)) o.wt = r.wt;
+        if (s === W) { o.wv = r.wv; o.per = r.per; }
+        if (s === V && r.wd != null) { o.ws = r.ws; o.wd = r.wd; }
+        if (s === S) o.tide = r.sl;
+        raw.push(o);
+      }));
+      const used = [...new Set([S, T, V, W].filter(Boolean))];
+      if (raw.length < 6 || !used.length) return null;
+      return { hourly: toHourly(raw), sources: used.map(s => ({ kind: 'cmems', name: cmemsName(s), dist: s.dist })) };
+    }
+
     async function mergeNearbyObs(st) {
       const d = st._hourlyCache;
       if (!d || d._obs || !/^https?:$/.test(location.protocol)) return false;
@@ -686,6 +724,7 @@
       let r = null;
       if (inKoreaWaters(lat, lon)) r = await khoaObs(lat, lon, d);
       else if (inUsWaters(lat, lon)) r = await noaaObs(lat, lon, d);
+      else r = await cmemsObs(lat, lon, d);
       if (!r) { d._obs = { sources: [] }; return false; }
       const h = r.hourly;
       d.temp = splice(d.temp, h.temp);
@@ -711,7 +750,7 @@
 
     // 표 아래 출처 문구용: "국립해양조사원 서귀포 관측소(1.1km) · NDBC 46026 부이(28km)"
     function obsSourceText(sources) {
-      return sources.map(s => (s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'kma' ? t.obsKma(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
+      return sources.map(s => (s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'kma' ? t.obsKma(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : s.kind === 'cmems' ? t.obsCmems(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
     }
 
     // ───────── [ADD] 90일 추이: 근처 관측소 실측 수온 일평균 (한국 KHOA / 미국 NOAA CO-OPS) ─────────
@@ -750,5 +789,13 @@
         const clim = await fetchJSON(`/api/noaa?svc=wtclim&id=${p.id}`, 40000, 0).catch(() => null);
         return daily.length ? { daily, clim, source: { kind: 'coops', name: p.name, dist: p.dist } } : null;
       }
-      return null;
+      // 유럽 등: Copernicus 고정 관측소 수온 (최근 약 30일은 하루 파일, 그 전은 월별 파일)
+      const j = await once('cmems-st', () => fetchJSON('/api/cmems?svc=stations', 60000, 0)).catch(() => null);
+      const p = nearestOf(j && j.ok ? j.stations : [], lat, lon, EU_TEMP_KM, s => s.p.includes('T'));
+      if (!p) return null;
+      const q = `id=${encodeURIComponent(p.id)}${p.m ? '&m=' + encodeURIComponent(p.m) : ''}`;
+      const r = await fetchJSON(`/api/cmems?svc=wtdaily&${q}&days=${OBS_DAILY_DAYS}`, 55000, 0).catch(() => null);
+      const daily = (r && r.ok && r.rows) || [];
+      const clim = await fetchJSON(`/api/cmems?svc=wtclim&${q}`, 15000, 0).catch(() => null);
+      return daily.length >= 7 ? { daily, clim, source: { kind: 'cmems', name: cmemsName(p), dist: p.dist } } : null;
     }

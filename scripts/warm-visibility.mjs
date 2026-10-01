@@ -107,22 +107,22 @@ try {
   for (const code of khoaCodes) {
     const t0 = Date.now();
     try {
-      const j = await (await fetch(`${SITE}/api/khoa?svc=wtdaily&obs=${code}&days=1095&maxFetch=350`, { signal: AbortSignal.timeout(70000) })).json();
-      console.log(`KHOA ${code}: 쌓인 날 ${j.count ?? '?'}/1095 (${Date.now() - t0}ms)${j.error ? ' ' + j.error : ''}`);
+      const j = await (await fetch(`${SITE}/api/khoa?svc=wtdaily&obs=${code}&days=1250&maxFetch=350`, { signal: AbortSignal.timeout(70000) })).json();
+      console.log(`KHOA ${code}: 쌓인 날 ${j.count ?? '?'}/1250 (${Date.now() - t0}ms)${j.error ? ' ' + j.error : ''}`);
     } catch (e) { console.log(`KHOA ${code} 실패: ${e.message}`); }
   }
   for (const id of coopsIds) {
     try {
-      const j = await (await fetch(`${SITE}/api/noaa?svc=wtclim&id=${id}`, { signal: AbortSignal.timeout(70000) })).json();
-      console.log(`NOAA ${id}: ${j.years ?? '?'}년치`);
+      const j = await (await fetch(`${SITE}/api/noaa?svc=wtyears&id=${id}`, { signal: AbortSignal.timeout(70000) })).json();
+      console.log(`NOAA ${id}: ${Object.keys(j.days || {}).length}일치`);
     } catch (e) { console.log(`NOAA ${id} 실패: ${e.message}`); }
   }
 } catch (e) { console.log('실측 수온 미리 쌓기 실패:', e.message); }
 // [ADD] 기상청 부이 정오 수온 3년치 (전국 부이를 한 번에 받는 자료라 한 번 호출로 모든 부이가 같이 쌓여요)
 try {
   for (let i = 0; i < 2; i++) {
-    const j = await (await fetch(`${SITE}/api/kma?svc=backfill&days=1095&maxFetch=300`, { signal: AbortSignal.timeout(130000) })).json();
-    console.log(`기상청 부이 정오 수온: ${j.have ?? '?'}/1095일 (이번에 ${j.fetched ?? '?'}일)${j.error ? ' ' + j.error : ''}`);
+    const j = await (await fetch(`${SITE}/api/kma?svc=backfill&days=1250&maxFetch=300`, { signal: AbortSignal.timeout(130000) })).json();
+    console.log(`기상청 부이 정오 수온: ${j.have ?? '?'}/1250일 (이번에 ${j.fetched ?? '?'}일)${j.error ? ' ' + j.error : ''}`);
     if (!j.fetched) break;
   }
 } catch (e) { console.log('기상청 부이 쌓기 실패:', e.message); }
@@ -140,7 +140,7 @@ try {
   for (const p of ids.values()) {
     try {
       const q = `id=${encodeURIComponent(p.id)}${p.m ? '&m=' + encodeURIComponent(p.m) : ''}`;
-      const j = await (await fetch(`${SITE}/api/cmems?svc=backfill&${q}&months=36&maxFetch=18`, { signal: AbortSignal.timeout(70000) })).json();
+      const j = await (await fetch(`${SITE}/api/cmems?svc=backfill&${q}&months=41&maxFetch=20`, { signal: AbortSignal.timeout(70000) })).json();
       console.log(`Copernicus ${p.name}: ${j.years ?? '?'}년치 (이번에 ${j.fetched ?? '?'}개월)${j.error ? ' ' + j.error : ''}`);
     } catch (e) { console.log(`Copernicus ${p.name} 실패: ${e.message}`); }
   }

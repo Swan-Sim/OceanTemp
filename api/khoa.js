@@ -153,12 +153,18 @@ module.exports = async function handler(req, res) {
     }
     if (!/^[A-Z]{2}_\d{4}$/.test(obs)) return res.status(400).json({ ok: false, error: 'obs(예: DT_0004)가 필요해요' });
     if (svcName === 'wtdaily') {
-      const days = Math.max(7, Math.min(1100, parseInt(req.query.days, 10) || 90));
+      const days = Math.max(7, Math.min(1300, parseInt(req.query.days, 10) || 90));
       const maxFetch = Math.max(1, Math.min(600, parseInt(req.query.maxFetch, 10) || 400));
       const rows = await dailyWaterTemp(key, obs, days, maxFetch);
       // 3년치 미리 채우기(days>200) 호출은 목록 대신 개수만
       if (days > 200) return sendJson({ ok: true, obs, ms: Date.now() - t0, count: rows.length }, 0);
       return sendJson({ ok: true, obs, ms: Date.now() - t0, count: rows.length, rows }, 21600);
+    }
+    if (svcName === 'wtyears') {
+      // 지난 해 같은 날짜 비교용: Redis에 쌓인 일평균(최대 3년) 그대로
+      const days = {};
+      try { const [{ result }] = await redisPipeline([['HGETALL', `khoa:wtd:${obs}`]]); if (Array.isArray(result)) for (let i = 0; i < result.length; i += 2) if (result[i + 1] !== 'na') days[result[i]] = +result[i + 1]; } catch (_) {}
+      return sendJson({ ok: true, obs, days }, 43200);
     }
     if (svcName === 'wtclim') {
       // 평년: Redis에 쌓인 일평균(최대 3년)으로 월별 평균. 새로 받지는 않음(미리 채우기는 매일 GitHub 작업이 함)

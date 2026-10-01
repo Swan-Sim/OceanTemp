@@ -238,13 +238,32 @@
       // [ADD] 근처 관측소 실측 수온이 있으면 과거 구간을 그걸로 바꿔요(최대 15초 기다리고, 안 되면 Open-Meteo 그대로)
       try {
         const obs = await Promise.race([obsDailyTemps(station), new Promise(r => setTimeout(() => r(null), 15000))]);
-        if (obs && obs.daily.length >= 14) {
-          result.actualLine = obs.daily.map(o => {
+        // [ADD] 지난 해 같은 날짜 비교(연간 추이의 흰 선·띠)용: 정리된 일평균 + 평년도 이걸로 다시 계산(고장 센서 값 제외)
+        if (obs && obs.days) {
+          const clean = cleanDailyMap(obs.days);
+          if (Object.keys(clean).length >= 60) {
+            result.prevDays = clean;
+            obs.clim = climFromDaily(clean);
+          }
+        }
+        // 최근 실측도 같은 기준으로 걸러요(지난 해 기록이 있으면 그 달 범위와 비교)
+        if (obs && obs.daily.length) {
+          const recent = cleanDailyMap(Object.fromEntries([
+            ...Object.entries(result.prevDays || {}),
+            ...obs.daily.map(o => [o.d.replace(/-/g, ''), o.t])
+          ]));
+          obs.daily = obs.daily.filter(o => recent[o.d.replace(/-/g, '')] != null);
+          // 지금 Open-Meteo 값과 6°C 넘게 다르면 최근 실측은 쓰지 않아요
+          const lastObs = obs.daily.length ? obs.daily[obs.daily.length - 1].t : null;
+          if (lastObs != null && Math.abs(lastObs - currentTemp) > 6) obs.daily = [];
+        }
+        if (obs && (obs.daily.length >= 14 || result.prevDays)) {
+          if (obs.daily.length >= 14) result.actualLine = obs.daily.map(o => {
             const d = new Date(o.d + 'T00:00:00Z');
             const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
             return { x: d.getUTCMonth() + (d.getUTCDate() - 1) / dim, y: o.t };
           });
-          result.obsSource = obs.source;
+          if (obs.daily.length >= 14) result.obsSource = obs.source; else result.prevSource = obs.source;
           // 평년: 관측소 실측이 1년 이상 쌓였으면(10개월 이상 값) 사인파 추정 대신 실측 월평균으로
           const cm = obs.clim && obs.clim.ok && obs.clim.months;
           if (cm && cm.filter(v => v != null).length >= 10 && obs.clim.years >= 0.9) {
@@ -258,7 +277,7 @@
             result.climIsEstimated = false;
             result.climYears = Math.max(1, Math.round(obs.clim.years));
           }
-          result.currentTemp = obs.daily[obs.daily.length - 1].t; // 그래프가 끊기지 않게 최신 실측에서 이어 감
+          if (obs.daily.length >= 14) result.currentTemp = obs.daily[obs.daily.length - 1].t; // 그래프가 끊기지 않게 최신 실측에서 이어 감
         }
       } catch (e) { console.warn('[obs] 90일 실측 실패, Open-Meteo 사용:', e); }
 
@@ -759,6 +778,12 @@
     async function obsDailyTemps(st) {
       if (!/^https?:$/.test(location.protocol)) return null;
       const lat = st.coords[1], lon = st.coords[0];
+      const get = (url, ms) => fetchJSON(url, ms, 0).catch(() => null);
+      const pack = (r, clim, yrs, source) => {
+        const daily = (r && r.ok && r.rows) || [];
+        const days = (yrs && yrs.ok && yrs.days) || null;
+        return (daily.length || days) ? { daily, clim, days, source } : null;
+      };
       if (inKoreaWaters(lat, lon)) {
         const j = await once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 130000, 0));
         const p = nearestOf(j && j.ok ? j.stations : [], lat, lon, OBS_RADIUS_KM, s => s.kind !== 'buoy');
@@ -767,35 +792,63 @@
           const mj = await once('kma-st', () => fetchJSON('/api/kma?svc=stations', 30000, 0)).catch(() => null);
           const m = nearestOf(mj && mj.ok ? mj.stations : [], lat, lon, KOREA_BUOY_KM);
           if (!m) return null;
-          const r = await fetchJSON(`/api/kma?svc=daily&stn=${m.id}&days=${OBS_DAILY_DAYS}`, 50000, 0).catch(() => null);
-          const daily = (r && r.ok && r.rows) || [];
-          const clim = await fetchJSON(`/api/kma?svc=clim&stn=${m.id}`, 15000, 0).catch(() => null);
-          return daily.length ? { daily, clim, source: { kind: 'kma', name: m.name + ' ' + t.obsBuoyWord, dist: m.dist } } : null;
+          const [r, clim, yrs] = await Promise.all([get(`/api/kma?svc=daily&stn=${m.id}&days=${OBS_DAILY_DAYS}`, 50000), get(`/api/kma?svc=clim&stn=${m.id}`, 15000), get(`/api/kma?svc=years&stn=${m.id}`, 15000)]);
+          return pack(r, clim, yrs, { kind: 'kma', name: m.name + ' ' + t.obsBuoyWord, dist: m.dist });
         }
-        const r = await fetchJSON(`/api/khoa?svc=wtdaily&obs=${p.code}&days=${OBS_DAILY_DAYS}`, 50000, 0);
-        const daily = (r && r.ok && r.rows) || [];
-        const clim = await fetchJSON(`/api/khoa?svc=wtclim&obs=${p.code}`, 15000, 0).catch(() => null);
-        return daily.length ? { daily, clim, source: { kind: 'khoa', name: p.name, dist: p.dist } } : null;
+        const [r, clim, yrs] = await Promise.all([get(`/api/khoa?svc=wtdaily&obs=${p.code}&days=${OBS_DAILY_DAYS}`, 50000), get(`/api/khoa?svc=wtclim&obs=${p.code}`, 15000), get(`/api/khoa?svc=wtyears&obs=${p.code}`, 15000)]);
+        return pack(r, clim, yrs, { kind: 'khoa', name: p.name, dist: p.dist });
       }
       if (inUsWaters(lat, lon)) {
         const j = await once('noaa-st', () => fetchJSON('/api/noaa?svc=stations', 45000, 0));
         const p = nearestOf(j && j.ok ? j.coops : [], lat, lon, OBS_RADIUS_KM, s => s.wt);
         if (!p) return null;
         const ymdUtc = (ms) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
-        const r = await coopsGet(p.id, 'water_temperature', `&interval=h&begin_date=${ymdUtc(Date.now() - OBS_DAILY_DAYS * 86400e3)}&end_date=${ymdUtc(Date.now())}`);
+        const [r, clim, yrs] = await Promise.all([
+          coopsGet(p.id, 'water_temperature', `&interval=h&begin_date=${ymdUtc(Date.now() - OBS_DAILY_DAYS * 86400e3)}&end_date=${ymdUtc(Date.now())}`),
+          get(`/api/noaa?svc=wtclim&id=${p.id}`, 40000), get(`/api/noaa?svc=wtyears&id=${p.id}`, 40000)
+        ]);
         const by = {};
         ((r && r.data) || []).forEach(o => { const v = +o.v; if (!Number.isFinite(v) || v < -3 || v > 40) return; const d = String(o.t).slice(0, 10); (by[d] = by[d] || []).push(v); });
-        const daily = Object.keys(by).sort().map(d => ({ d, t: +(by[d].reduce((a, b) => a + b, 0) / by[d].length).toFixed(2) }));
-        const clim = await fetchJSON(`/api/noaa?svc=wtclim&id=${p.id}`, 40000, 0).catch(() => null);
-        return daily.length ? { daily, clim, source: { kind: 'coops', name: p.name, dist: p.dist } } : null;
+        const rows = Object.keys(by).sort()
+          .filter(d => !(by[d].length >= 6 && Math.max(...by[d]) - Math.min(...by[d]) < 0.05)) // 멈춘 센서
+          .map(d => ({ d, t: +(by[d].reduce((a, b) => a + b, 0) / by[d].length).toFixed(2) }));
+        return pack({ ok: true, rows }, clim, yrs, { kind: 'coops', name: p.name, dist: p.dist });
       }
       // 유럽 등: Copernicus 고정 관측소 수온 (최근 약 30일은 하루 파일, 그 전은 월별 파일)
       const j = await once('cmems-st', () => fetchJSON('/api/cmems?svc=stations', 60000, 0)).catch(() => null);
       const p = nearestOf(j && j.ok ? j.stations : [], lat, lon, EU_TEMP_KM, s => s.p.includes('T'));
       if (!p) return null;
       const q = `id=${encodeURIComponent(p.id)}${p.m ? '&m=' + encodeURIComponent(p.m) : ''}`;
-      const r = await fetchJSON(`/api/cmems?svc=wtdaily&${q}&days=${OBS_DAILY_DAYS}`, 55000, 0).catch(() => null);
-      const daily = (r && r.ok && r.rows) || [];
-      const clim = await fetchJSON(`/api/cmems?svc=wtclim&${q}`, 15000, 0).catch(() => null);
-      return daily.length >= 7 ? { daily, clim, source: { kind: 'cmems', name: cmemsName(p), dist: p.dist } } : null;
+      const [r, clim, yrs] = await Promise.all([get(`/api/cmems?svc=wtdaily&${q}&days=${OBS_DAILY_DAYS}`, 55000), get(`/api/cmems?svc=wtclim&${q}`, 15000), get(`/api/cmems?svc=wtyears&${q}`, 15000)]);
+      return pack(r, clim, yrs, { kind: 'cmems', name: cmemsName(p), dist: p.dist });
+    }
+
+    // [ADD] 관측소 일평균 정리: 고장 센서 값 걸러내기
+    //  1) 말이 안 되는 값  2) 4일 넘게 똑같은 값이 이어지면(멈춘 센서) 통째로  3) 같은 달 중앙값과 6°C 넘게 다르면
+    function cleanDailyMap(days) {
+      const keys = Object.keys(days || {}).filter(d => /^\d{8}$/.test(d)).sort();
+      let arr = keys.map(d => ({ d, v: +days[d] })).filter(o => Number.isFinite(o.v) && o.v > -2.5 && o.v < 36);
+      const keep = new Array(arr.length).fill(true);
+      for (let i = 0; i < arr.length;) {
+        let j = i;
+        while (j + 1 < arr.length && Math.abs(arr[j + 1].v - arr[i].v) < 0.005) j++;
+        if (j - i + 1 >= 4) for (let k = i; k <= j; k++) keep[k] = false;
+        i = j + 1;
+      }
+      arr = arr.filter((_, i) => keep[i]);
+      const byM = {};
+      arr.forEach(o => (byM[o.d.slice(4, 6)] = byM[o.d.slice(4, 6)] || []).push(o.v));
+      const med = {};
+      Object.keys(byM).forEach(m => { const a = byM[m].slice().sort((x, y) => x - y); med[m] = a[Math.floor(a.length / 2)]; });
+      const out = {};
+      arr.forEach(o => { if (Math.abs(o.v - med[o.d.slice(4, 6)]) <= 6) out[o.d] = o.v; });
+      return out;
+    }
+    // 정리된 일평균 → 월별 평년(10일 이상 있는 달만) + 몇 년치인지
+    function climFromDaily(days) {
+      const byMonth = Array.from({ length: 12 }, () => []);
+      Object.entries(days).forEach(([d, v]) => byMonth[+d.slice(4, 6) - 1].push(v));
+      const months = byMonth.map(a => a.length >= 10 ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null);
+      const nDays = byMonth.reduce((a, m) => a + m.length, 0);
+      return { ok: true, months, nDays, years: +(nDays / 365).toFixed(1) };
     }

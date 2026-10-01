@@ -140,6 +140,10 @@ module.exports = async function handler(req, res) {
       const rows = dates.filter(d => o[d] != null).sort().map(d => ({ d: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`, t: o[d] }));
       return send({ ok: true, stn, ms: Date.now() - t0, count: rows.length, rows }, 21600);
     }
+    if (svc === 'years') {
+      const days = await stationNoon(stn);
+      return send({ ok: true, stn, days }, 43200);
+    }
     if (svc === 'clim') {
       const o = await stationNoon(stn);
       const byMonth = Array.from({ length: 12 }, () => []);
@@ -149,7 +153,7 @@ module.exports = async function handler(req, res) {
       return send({ ok: true, stn, months, nDays, years: +(nDays / 365).toFixed(1) }, 43200);
     }
     if (svc === 'backfill') {
-      const days = Math.max(7, Math.min(1100, parseInt(req.query.days, 10) || 1095));
+      const days = Math.max(7, Math.min(1300, parseInt(req.query.days, 10) || 1250));
       const maxFetch = Math.max(1, Math.min(400, parseInt(req.query.maxFetch, 10) || 300));
       const r = await fillNoon(key, noonDates(days), maxFetch, 100000);
       return send({ ok: true, ms: Date.now() - t0, ...r, of: days }, 0);

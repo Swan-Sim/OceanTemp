@@ -74,24 +74,34 @@ async function ndbcRecent(id) {
   return rows;
 }
 
-// 평년: CO-OPS 수온 최근 3년(1년씩 3번 요청) → 월별 평균. Redis에 30일 저장
-async function coopsClim(id) {
-  const key = `noaa:wtclim:${id}`;
+// 지난 해 비교·평년: CO-OPS 수온 최근 4년(1년씩 4번 요청) → 날짜별 평균. Redis에 7일 저장
+// 고장 난 센서가 하루 종일 같은 값(예: 0.0)을 보내는 날은 버려요(하루 최고-최저 차이가 0.05°C 미만)
+async function coopsDaily(id) {
+  const key = `noaa:wtd:${id}`;
   try { const [{ result }] = await redisPipeline([['GET', key]]); if (result) return JSON.parse(result); } catch (_) {}
   const ymd = (ms) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
   const now = Date.now(), Y = 365 * 86400e3;
-  const parts = await Promise.all([0, 1, 2].map(i => getText(
+  const parts = await Promise.all([0, 1, 2, 3].map(i => getText(
     `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=${id}&product=water_temperature&units=metric&time_zone=lst_ldt&format=json&application=OceanTemp&interval=h&begin_date=${ymd(now - (i + 1) * Y + 86400e3)}&end_date=${ymd(now - i * Y)}`, 25000
   ).then(t => JSON.parse(t)).catch(() => null)));
-  const daily = {};
-  parts.forEach(j => ((j && j.data) || []).forEach(o => { const v = +o.v; if (!Number.isFinite(v) || v < -3 || v > 40) return; const d = String(o.t).slice(0, 10); (daily[d] = daily[d] || []).push(v); }));
-  const byMonth = Array.from({ length: 12 }, () => []);
-  Object.entries(daily).forEach(([d, a]) => byMonth[+d.slice(5, 7) - 1].push(a.reduce((x, y) => x + y, 0) / a.length));
-  const months = byMonth.map(a => a.length >= 10 ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null);
-  const nDays = Object.keys(daily).length;
-  const body = { months, nDays, years: +(nDays / 365).toFixed(1) };
-  if (nDays > 60) { try { await redisPipeline([['SET', key, JSON.stringify(body), 'EX', String(30 * 86400)]]); } catch (_) {} }
+  const by = {};
+  parts.forEach(j => ((j && j.data) || []).forEach(o => { const v = +o.v; if (!Number.isFinite(v) || v < -3 || v > 40) return; const d = String(o.t).slice(0, 10).replace(/-/g, ''); (by[d] = by[d] || []).push(v); }));
+  const days = {};
+  Object.entries(by).forEach(([d, a]) => {
+    if (a.length >= 6 && Math.max(...a) - Math.min(...a) < 0.05) return; // 멈춘 센서
+    days[d] = +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2);
+  });
+  const body = { days };
+  if (Object.keys(days).length > 60) { try { await redisPipeline([['SET', key, JSON.stringify(body), 'EX', String(7 * 86400)]]); } catch (_) {} }
   return body;
+}
+async function coopsClim(id) {
+  const { days } = await coopsDaily(id);
+  const byMonth = Array.from({ length: 12 }, () => []);
+  Object.entries(days).forEach(([d, v]) => byMonth[+d.slice(4, 6) - 1].push(v));
+  const months = byMonth.map(a => a.length >= 10 ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null);
+  const nDays = Object.keys(days).length;
+  return { months, nDays, years: +(nDays / 365).toFixed(1) };
 }
 
 module.exports = async function handler(req, res) {
@@ -118,7 +128,13 @@ module.exports = async function handler(req, res) {
       const body = await coopsClim(id);
       return send({ ok: true, id, ms: Date.now() - t0, ...body }, 86400);
     }
-    return res.status(400).json({ ok: false, error: 'svc는 stations | ndbc | wtclim' });
+    if (req.query.svc === 'wtyears') {
+      const id = String(req.query.id || '');
+      if (!/^\d{7}$/.test(id)) return res.status(400).json({ ok: false, error: 'id(7자리) 필요' });
+      const body = await coopsDaily(id);
+      return send({ ok: true, id, ms: Date.now() - t0, days: body.days }, 43200);
+    }
+    return res.status(400).json({ ok: false, error: 'svc는 stations | ndbc | wtclim | wtyears' });
   } catch (e) {
     res.setHeader('Cache-Control', 'no-store');
     const cause = e && e.cause ? ' (' + (e.cause.code || e.cause.message || e.cause) + ')' : '';

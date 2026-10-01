@@ -209,8 +209,14 @@ module.exports = async function handler(req, res) {
       const stored = await hgetall(`cmems:wtd:${id}`);
       return send({ ok: true, id, ...climFrom(stored) }, 43200);
     }
+    if (svc === 'wtyears') {
+      const stored = await hgetall(`cmems:wtd:${id}`);
+      const days = {};
+      Object.entries(stored).forEach(([d, v]) => { if (/^\d{8}$/.test(d) && v !== 'na') days[d] = +v; });
+      return send({ ok: true, id, days }, 43200);
+    }
     if (svc === 'backfill') {
-      const months = Math.max(1, Math.min(40, parseInt(req.query.months, 10) || 36));
+      const months = Math.max(1, Math.min(44, parseInt(req.query.months, 10) || 41));
       const maxFetch = Math.max(1, Math.min(40, parseInt(req.query.maxFetch, 10) || 12));
       const stored = await hgetall(`cmems:wtd:${id}`);
       const fetched = await fillMonths(id, mid, months, maxFetch, stored);

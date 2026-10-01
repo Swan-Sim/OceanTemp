@@ -101,7 +101,7 @@ try {
   const khoaCodes = new Set(), coopsIds = new Set();
   for (const st of stations) {
     const k = nearestWithin(kh.stations, st, 25, s => s.kind !== 'buoy'); if (k) khoaCodes.add(k.code);
-    const n = nearestWithin(nw.coops, st, 25, s => s.wt); if (n) coopsIds.add(n.id);
+    const n = nearestWithin(nw.coops, st, 25, s => s.wt); if (n) coopsIds.add(n.id); // 미국 정점: NOAA 4년치 수온 미리 받아 두기
   }
   console.log(`실측 수온 미리 쌓기: KHOA ${khoaCodes.size}곳, NOAA ${coopsIds.size}곳`);
   for (const code of khoaCodes) {
@@ -113,7 +113,7 @@ try {
   }
   for (const id of coopsIds) {
     try {
-      const j = await (await fetch(`${SITE}/api/noaa?svc=wtyears&id=${id}`, { signal: AbortSignal.timeout(70000) })).json();
+      const j = await (await fetch(`${SITE}/api/noaa?svc=wtyears&id=${id}&refresh=1`, { signal: AbortSignal.timeout(70000) })).json();
       console.log(`NOAA ${id}: ${Object.keys(j.days || {}).length}일치`);
     } catch (e) { console.log(`NOAA ${id} 실패: ${e.message}`); }
   }

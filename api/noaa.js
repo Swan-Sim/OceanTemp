@@ -76,9 +76,13 @@ async function ndbcRecent(id) {
 
 // 지난 해 비교·평년: CO-OPS 수온 최근 4년(1년씩 4번 요청) → 날짜별 평균. Redis에 7일 저장
 // 고장 난 센서가 하루 종일 같은 값(예: 0.0)을 보내는 날은 버려요(하루 최고-최저 차이가 0.05°C 미만)
-async function coopsDaily(id) {
+// refresh=true(매일 GitHub 작업)면 저장한 지 5일 넘은 것만 새로 받아서, 사용자가 처음 열 때 기다리는 일이 없게
+async function coopsDaily(id, refresh) {
   const key = `noaa:wtd:${id}`;
-  try { const [{ result }] = await redisPipeline([['GET', key]]); if (result) return JSON.parse(result); } catch (_) {}
+  try {
+    const [{ result }] = await redisPipeline([['GET', key]]);
+    if (result) { const c = JSON.parse(result); if (!refresh || Date.now() - (c.savedAt || 0) < 5 * 86400e3) return c; }
+  } catch (_) {}
   const ymd = (ms) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
   const now = Date.now(), Y = 365 * 86400e3;
   const parts = await Promise.all([0, 1, 2, 3].map(i => getText(
@@ -91,8 +95,8 @@ async function coopsDaily(id) {
     if (a.length >= 6 && Math.max(...a) - Math.min(...a) < 0.05) return; // 멈춘 센서
     days[d] = +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2);
   });
-  const body = { days };
-  if (Object.keys(days).length > 60) { try { await redisPipeline([['SET', key, JSON.stringify(body), 'EX', String(7 * 86400)]]); } catch (_) {} }
+  const body = { days, savedAt: Date.now() };
+  if (Object.keys(days).length > 60) { try { await redisPipeline([['SET', key, JSON.stringify(body), 'EX', String(14 * 86400)]]); } catch (_) {} }
   return body;
 }
 async function coopsClim(id) {
@@ -131,8 +135,9 @@ module.exports = async function handler(req, res) {
     if (req.query.svc === 'wtyears') {
       const id = String(req.query.id || '');
       if (!/^\d{7}$/.test(id)) return res.status(400).json({ ok: false, error: 'id(7자리) 필요' });
-      const body = await coopsDaily(id);
-      return send({ ok: true, id, ms: Date.now() - t0, days: body.days }, 43200);
+      const refresh = req.query.refresh === '1';
+      const body = await coopsDaily(id, refresh);
+      return send({ ok: true, id, ms: Date.now() - t0, days: body.days }, refresh ? 0 : 43200);
     }
     return res.status(400).json({ ok: false, error: 'svc는 stations | ndbc | wtclim | wtyears' });
   } catch (e) {

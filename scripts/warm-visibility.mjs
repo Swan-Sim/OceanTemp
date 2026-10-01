@@ -70,6 +70,12 @@ try {
   console.log(`NOAA 관측소 목록: CO-OPS ${j.coops?.length ?? '?'}곳, NDBC ${j.ndbc?.length ?? '?'}곳`);
 } catch (e) { console.log('NOAA 관측소 목록 실패:', e.message); }
 
+// [ADD] 지구 바다 색(위성 수온 격자)도 매일 서버에 새로 저장
+try {
+  const r = await fetch(`${SITE}/api/sst?refresh=1`, { signal: AbortSignal.timeout(60000) });
+  console.log(`위성 수온 격자: ${r.status} ${r.headers.get('x-sst-cache') || ''}`);
+} catch (e) { console.log('위성 수온 격자 실패:', e.message); }
+
 const stations = await loadStations();
 console.log(`정점 ${stations.length}곳 시야 자료 미리 불러오기 시작`);
 const results = [];

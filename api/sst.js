@@ -15,7 +15,20 @@ const ERDDAP_URL =
 const W = 360, H = 180;          // 1° 격자
 const LAT0 = 89.975, LON0 = -179.975; // 0행 = 북쪽 끝, 0열 = 서경 180°
 
+// [ADD] 서버(Redis)에 저장해 두고 바로 돌려줘요. 6시간 지나면 새로 받고, 원본이 안 되면 저장본으로.
+const { redisPipeline } = require('./_redis');
+const KEY = 'sst:grid';
+function sendGrid(res, body, tag) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 's-maxage=21600, stale-while-revalidate=86400');
+  res.setHeader('X-Sst-Cache', tag);
+  res.status(200).send(body);
+}
+
 module.exports = async function handler(req, res) {
+  let saved = null;
+  try { const [{ result }] = await redisPipeline([['GET', KEY]]); if (result) saved = JSON.parse(result); } catch (_) {}
+  if (saved && Date.now() - saved.savedAt < 6 * 3600e3 && req.query.refresh !== '1') return sendGrid(res, saved.body, 'redis');
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 25000);
@@ -39,13 +52,17 @@ module.exports = async function handler(req, res) {
       v[row * W + col] = Math.round(sst * 10);
     }
 
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 's-maxage=21600, stale-while-revalidate=86400');
-    res.status(200).send(JSON.stringify({
+    const body = JSON.stringify({
       source: 'NOAA Coral Reef Watch CoralTemp v3.1 (PacIOOS ERDDAP dhw_5km)',
       date, w: W, h: H, lat0: LAT0, lon0: LON0, scale: 0.1, v
-    }));
+    });
+    if (v.filter(x => x != null).length > 20000) {
+      try { await redisPipeline([['SET', KEY, JSON.stringify({ savedAt: Date.now(), body }), 'EX', String(10 * 86400)]]); } catch (_) {}
+    }
+    return sendGrid(res, body, 'erddap');
   } catch (e) {
+    if (saved) return sendGrid(res, saved.body, 'redis-stale'); // 원본이 안 되면 저장본(며칠 지난 것)이라도
+
     res.setHeader('Cache-Control', 'no-store');
     const cause = e && e.cause ? ' (' + (e.cause.code || e.cause.message || e.cause) + ')' : '';
     res.status(502).json({ error: String(e && e.message || e) + cause });

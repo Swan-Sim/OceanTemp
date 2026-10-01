@@ -81,9 +81,11 @@ async function dayRows(id, ymd) {
   return rows;
 }
 
+const errors = [];
 async function recentObs(id, days) {
+  errors.length = 0;
   const dates = Array.from({ length: days + 1 }, (_, i) => ymdUtc(Date.now() - i * 86400e3));
-  const parts = await Promise.all(dates.map(d => dayRows(id, d).catch(() => [])));
+  const parts = await Promise.all(dates.map(d => dayRows(id, d).catch(e => { errors.push(d + ': ' + String(e && e.message || e).slice(0, 200)); return []; })));
   const cutoff = Date.now() - days * 86400e3;
   return parts.flat().filter(r => r.t >= cutoff).sort((a, b) => a.t - b.t);
 }
@@ -191,7 +193,7 @@ module.exports = async function handler(req, res) {
     if (svc === 'obs') {
       const days = Math.max(1, Math.min(8, parseInt(req.query.days, 10) || 7));
       const rows = await recentObs(id, days);
-      return send({ ok: true, id, ms: Date.now() - t0, count: rows.length, rows }, 1200);
+      return send({ ok: true, id, ms: Date.now() - t0, count: rows.length, rows, ...(errors.length ? { errors: errors.slice(0, 3) } : {}) }, rows.length ? 1200 : 0);
     }
     if (svc === 'wtdaily') {
       const days = Math.max(7, Math.min(200, parseInt(req.query.days, 10) || 155));

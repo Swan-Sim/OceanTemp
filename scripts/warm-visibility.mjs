@@ -118,3 +118,11 @@ try {
     } catch (e) { console.log(`NOAA ${id} 실패: ${e.message}`); }
   }
 } catch (e) { console.log('실측 수온 미리 쌓기 실패:', e.message); }
+// [ADD] 기상청 부이 정오 수온 3년치 (전국 부이를 한 번에 받는 자료라 한 번 호출로 모든 부이가 같이 쌓여요)
+try {
+  for (let i = 0; i < 2; i++) {
+    const j = await (await fetch(`${SITE}/api/kma?svc=backfill&days=1095&maxFetch=300`, { signal: AbortSignal.timeout(130000) })).json();
+    console.log(`기상청 부이 정오 수온: ${j.have ?? '?'}/1095일 (이번에 ${j.fetched ?? '?'}일)${j.error ? ' ' + j.error : ''}`);
+    if (!j.fetched) break;
+  }
+} catch (e) { console.log('기상청 부이 쌓기 실패:', e.message); }

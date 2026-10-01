@@ -8,6 +8,9 @@
     },
     "api/noaa.js": {
       "maxDuration": 60
+    },
+    "api/kma.js": {
+      "maxDuration": 120
     }
   }
 }

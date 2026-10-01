@@ -587,34 +587,47 @@
     }
 
     // ── 한국: KHOA ──
-    // 조위관측소(조위·수온·바람, 25km) + 해양관측부이(파고·주기 + 수온·바람, 40km).
-    // 수온·바람은 둘 중 정점에 더 가까운 쪽을 써요(해수욕장 부이는 항구 안 관측소보다 정점 물에 가까움).
-    const KHOA_BUOY_KM = 40;
-    async function khoaObs(lat, lon) {
-      const j = await once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 130000, 0));
-      const list = j && j.ok ? j.stations : [];
-      const tideSt = nearestOf(list, lat, lon, OBS_RADIUS_KM, s => s.kind !== 'buoy');
-      const buoy = nearestOf(list, lat, lon, KHOA_BUOY_KM, s => s.kind === 'buoy');
-      if (!tideSt && !buoy) return null;
-      const days = Math.min(7, NOW_PAST_DAYS + 1);
-      const [o1, o2] = await Promise.all([
-        tideSt ? fetchJSON(`/api/khoa?svc=obs&obs=${tideSt.code}&days=${days}`, 25000, 0).catch(() => null) : null,
-        buoy ? fetchJSON(`/api/khoa?svc=obs&obs=${buoy.code}&days=${days}`, 25000, 0).catch(() => null) : null
+    // 한국: 국립해양조사원 조위관측소(조위, 25km) + 국립해양조사원 해양관측부이 + 기상청 해양기상·파고부이(40km).
+    // 수온·바람·파도는 값이 있는 곳 중 정점에 "가장 가까운" 관측소를 써요(해수욕장·독도 부이처럼 정점 바로 앞 부이가 우선).
+    const KOREA_BUOY_KM = 40;
+    async function khoaObs(lat, lon, d) {
+      const [kj, mj] = await Promise.all([
+        once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 130000, 0)).catch(() => null),
+        once('kma-st', () => fetchJSON('/api/kma?svc=stations', 30000, 0)).catch(() => null)
       ]);
-      const rows1 = (o1 && o1.ok && o1.rows) || [], rows2 = (o2 && o2.ok && o2.rows) || [];
-      const buoyCloser = buoy && (!tideSt || buoy.dist < tideSt.dist);
-      const buoyHasT = rows2.some(r => r.wt != null), buoyHasW = rows2.some(r => r.ws != null);
-      const tFromBuoy = buoyHasT && (buoyCloser || !rows1.some(r => r.wt != null));
-      const wFromBuoy = buoyHasW && (buoyCloser || !rows1.some(r => r.ws != null));
+      const klist = kj && kj.ok ? kj.stations : [], mlist = mj && mj.ok ? mj.stations : [];
+      const tideSt = nearestOf(klist, lat, lon, OBS_RADIUS_KM, s => s.kind !== 'buoy');
+      const kBuoy = nearestOf(klist, lat, lon, KOREA_BUOY_KM, s => s.kind === 'buoy');
+      const mBuoy = nearestOf(mlist, lat, lon, KOREA_BUOY_KM);
+      if (!tideSt && !kBuoy && !mBuoy) return null;
+      const days = Math.min(7, NOW_PAST_DAYS + 1);
+      const get = (url) => fetchJSON(url, 45000, 0).then(o => (o && o.ok && o.rows) || []).catch(() => []);
+      const [r1, r2, r3] = await Promise.all([
+        tideSt ? get(`/api/khoa?svc=obs&obs=${tideSt.code}&days=${days}`) : [],
+        kBuoy ? get(`/api/khoa?svc=obs&obs=${kBuoy.code}&days=${days}`) : [],
+        mBuoy ? get(`/api/kma?svc=obs&stn=${mBuoy.id}&days=${days}`) : []
+      ]);
+      const srcs = [
+        tideSt && { st: tideSt, rows: r1, label: tideSt.name, kind: 'khoa' },
+        kBuoy && { st: kBuoy, rows: r2, label: kBuoy.name + ' ' + t.obsBuoyWord, kind: 'khoa' },
+        mBuoy && { st: mBuoy, rows: r3, label: mBuoy.name + ' ' + t.obsBuoyWord, kind: 'kma' }
+      ].filter(x => x && x.rows.length);
+      // 모델과 너무 다른 값(센서 고장 등)은 버림: 수온이 모델과 6°C 넘게 차이 나면 제외
+      const okTemp = (x, v) => { if (v == null || v < 3 || v > 35) return false; const m = interpAt(d.temp, x); return m == null || Math.abs(v - m) <= 6; };
+      const pick = (field) => srcs.filter(sv => sv.rows.some(r => r[field] != null)).sort((a, b) => a.st.dist - b.st.dist)[0] || null;
+      const tSrc = pick('wt'), wSrc = pick('ws'), vSrc = pick('wv');
       const raw = [];
-      rows1.forEach(r => raw.push({ x: localStrToX(r.t), tide: r.tide != null ? r.tide / 100 : null,
-        ...(tFromBuoy ? {} : { wt: r.wt }), ...(wFromBuoy ? {} : { ws: r.ws, wd: r.wd, gust: r.gust }) }));
-      rows2.forEach(r => raw.push({ x: localStrToX(r.t), wv: r.wv, per: r.per,
-        ...(tFromBuoy ? { wt: r.wt } : {}), ...(wFromBuoy ? { ws: r.ws, wd: r.wd, gust: r.gust } : {}) }));
+      srcs.forEach(sv => sv.rows.forEach(r => {
+        const x = localStrToX(r.t), o = { x };
+        if (sv === srcs.find(s => s.st === tideSt) && r.tide != null) o.tide = r.tide / 100;
+        if (sv === tSrc && okTemp(x, r.wt)) o.wt = r.wt;
+        if (sv === wSrc) { o.ws = r.ws; o.wd = r.wd; o.gust = r.gust; }
+        if (sv === vSrc) { o.wv = r.wv; o.per = r.per; }
+        raw.push(o);
+      }));
       if (raw.length < 6) return null;
-      const sources = [];
-      if (tideSt && rows1.length) sources.push({ kind: 'khoa', name: tideSt.name, dist: tideSt.dist });
-      if (buoy && rows2.length) sources.push({ kind: 'khoa', name: buoy.name + ' ' + t.obsBuoyWord, dist: buoy.dist });
+      const used = new Set([srcs.find(s => s.st === tideSt), tSrc, wSrc, vSrc].filter(Boolean));
+      const sources = [...used].map(sv => ({ kind: sv.kind, name: sv.label, dist: sv.st.dist }));
       return sources.length ? { hourly: toHourly(raw), sources } : null;
     }
 
@@ -671,7 +684,7 @@
       if (!d || d._obs || !/^https?:$/.test(location.protocol)) return false;
       const lat = st.coords[1], lon = st.coords[0];
       let r = null;
-      if (inKoreaWaters(lat, lon)) r = await khoaObs(lat, lon);
+      if (inKoreaWaters(lat, lon)) r = await khoaObs(lat, lon, d);
       else if (inUsWaters(lat, lon)) r = await noaaObs(lat, lon, d);
       if (!r) { d._obs = { sources: [] }; return false; }
       const h = r.hourly;
@@ -698,7 +711,7 @@
 
     // 표 아래 출처 문구용: "국립해양조사원 서귀포 관측소(1.1km) · NDBC 46026 부이(28km)"
     function obsSourceText(sources) {
-      return sources.map(s => (s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
+      return sources.map(s => (s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'kma' ? t.obsKma(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
     }
 
     // ───────── [ADD] 90일 추이: 근처 관측소 실측 수온 일평균 (한국 KHOA / 미국 NOAA CO-OPS) ─────────
@@ -710,7 +723,16 @@
       if (inKoreaWaters(lat, lon)) {
         const j = await once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 130000, 0));
         const p = nearestOf(j && j.ok ? j.stations : [], lat, lon, OBS_RADIUS_KM, s => s.kind !== 'buoy');
-        if (!p) return null;
+        if (!p) {
+          // 근처에 조위관측소가 없으면(독도·먼바다) 기상청 부이 정오 수온으로
+          const mj = await once('kma-st', () => fetchJSON('/api/kma?svc=stations', 30000, 0)).catch(() => null);
+          const m = nearestOf(mj && mj.ok ? mj.stations : [], lat, lon, KOREA_BUOY_KM);
+          if (!m) return null;
+          const r = await fetchJSON(`/api/kma?svc=daily&stn=${m.id}&days=${OBS_DAILY_DAYS}`, 50000, 0).catch(() => null);
+          const daily = (r && r.ok && r.rows) || [];
+          const clim = await fetchJSON(`/api/kma?svc=clim&stn=${m.id}`, 15000, 0).catch(() => null);
+          return daily.length ? { daily, clim, source: { kind: 'kma', name: m.name + ' ' + t.obsBuoyWord, dist: m.dist } } : null;
+        }
         const r = await fetchJSON(`/api/khoa?svc=wtdaily&obs=${p.code}&days=${OBS_DAILY_DAYS}`, 50000, 0);
         const daily = (r && r.ok && r.rows) || [];
         const clim = await fetchJSON(`/api/khoa?svc=wtclim&obs=${p.code}`, 15000, 0).catch(() => null);

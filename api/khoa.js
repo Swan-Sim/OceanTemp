@@ -96,12 +96,12 @@ async function recentObs(key, obs, days) {
 // [ADD] 90일 추이용: 실측 수온 "일평균"을 최근 N일(최대 160일) 돌려줌.
 // 실측 수온 API는 하루치씩만 주기 때문에, 한 번 계산한 날은 Redis에 저장해 두고 빠진 날만 새로 받아요
 // (처음 한 번만 오래 걸리고, 이후엔 하루 1번 호출).
-async function dailyWaterTemp(key, obs, days) {
+async function dailyWaterTemp(key, obs, days, maxFetch) {
   const H = `khoa:wtd:${obs}`;
   const dates = Array.from({ length: days }, (_, i) => ymd(Date.now() - (i + 1) * 86400e3)); // 어제부터 과거로
   let stored = {};
   try { const [{ result }] = await redisPipeline([['HGETALL', H]]); if (Array.isArray(result)) for (let i = 0; i < result.length; i += 2) stored[result[i]] = result[i + 1]; } catch (_) {}
-  const missing = dates.filter(d => !(d in stored));
+  const missing = dates.filter(d => !(d in stored)).slice(0, maxFetch || 400); // 한 번에 받을 최대 일수(하루 호출 한도 보호)
   const fresh = {};
   let next = 0;
   const deadline = Date.now() + 40000;
@@ -145,9 +145,22 @@ module.exports = async function handler(req, res) {
     }
     if (!/^[A-Z]{2}_\d{4}$/.test(obs)) return res.status(400).json({ ok: false, error: 'obs(예: DT_0004)가 필요해요' });
     if (svcName === 'wtdaily') {
-      const days = Math.max(7, Math.min(160, parseInt(req.query.days, 10) || 90));
-      const rows = await dailyWaterTemp(key, obs, days);
+      const days = Math.max(7, Math.min(1100, parseInt(req.query.days, 10) || 90));
+      const maxFetch = Math.max(1, Math.min(600, parseInt(req.query.maxFetch, 10) || 400));
+      const rows = await dailyWaterTemp(key, obs, days, maxFetch);
+      // 3년치 미리 채우기(days>200) 호출은 목록 대신 개수만
+      if (days > 200) return sendJson({ ok: true, obs, ms: Date.now() - t0, count: rows.length }, 0);
       return sendJson({ ok: true, obs, ms: Date.now() - t0, count: rows.length, rows }, 21600);
+    }
+    if (svcName === 'wtclim') {
+      // 평년: Redis에 쌓인 일평균(최대 3년)으로 월별 평균. 새로 받지는 않음(미리 채우기는 매일 GitHub 작업이 함)
+      let stored = {};
+      try { const [{ result }] = await redisPipeline([['HGETALL', `khoa:wtd:${obs}`]]); if (Array.isArray(result)) for (let i = 0; i < result.length; i += 2) stored[result[i]] = result[i + 1]; } catch (_) {}
+      const byMonth = Array.from({ length: 12 }, () => []); const years = new Set();
+      Object.entries(stored).forEach(([d, v]) => { if (v === 'na') return; byMonth[+d.slice(4, 6) - 1].push(+v); years.add(d.slice(0, 4)); });
+      const months = byMonth.map(a => a.length >= 10 ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null);
+      const nDays = byMonth.reduce((a, m) => a + m.length, 0);
+      return sendJson({ ok: true, obs, months, nDays, years: +(nDays / 365).toFixed(1) }, 43200);
     }
     if (svcName === 'obs') {
       const days = Math.max(1, Math.min(7, parseInt(req.query.days, 10) || 3));
@@ -155,7 +168,7 @@ module.exports = async function handler(req, res) {
       return sendJson({ ok: true, obs, ms: Date.now() - t0, meta, count: rows.length, rows }, 600);
     }
     const svc = SERVICES[svcName];
-    if (!svc) return res.status(400).json({ ok: false, error: 'svc는 stations | obs | wtdaily | recent | wtemp 중 하나예요' });
+    if (!svc) return res.status(400).json({ ok: false, error: 'svc는 stations | obs | wtdaily | wtclim | recent | wtemp 중 하나예요' });
     const date = /^\d{8}$/.test(req.query.date || '') ? req.query.date : ymd(Date.now());
     const items = await callKhoa(key, svc, obs, date, 300);
     return sendJson({ ok: true, svc: svcName, obs, date, ms: Date.now() - t0, count: items.length, items }, svc.cache);

@@ -13,7 +13,9 @@ module.exports = async function handler(req, res) {
     const hour = String(now.getUTCHours());               // UTC 시(0~23)
     const q = req.query || {};
     const cmds = [];
-    if (q.e === 'station' && q.s) {
+    if (q.e === 'donate') {
+      cmds.push(['HINCRBY', `ev:${day}`, 'donate_click', 1]); // [ADD] 후원 버튼 클릭 수
+    } else if (q.e === 'station' && q.s) {
       const name = String(q.s).slice(0, 120);
       cmds.push(['HINCRBY', `st:${day}`, name, 1]);
     } else {

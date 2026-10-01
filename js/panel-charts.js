@@ -382,7 +382,7 @@
         data: { labels: days.map(x => mmdd(x.d)), datasets },
         options: {
           responsive: true, maintainAspectRatio: false, animation: false,
-          layout: { padding: { top: 46 } },
+          layout: { padding: { top: 70 } },
           interaction: { mode: 'index', intersect: false },
           plugins: {
             legend: { display: false },
@@ -413,6 +413,31 @@
                 : `<div class="item">${sq('rgba(148,163,184,.7)')}${t.visTurbidity}</div>`);
     }
 
+    // [ADD] "Live 출처 병행 표기" - 정점명 옆 상태에 데이터 출처를 짧게 같이 적어요(KHOA / NOAA / Open-Meteo)
+    function srcShort(sources) {
+      const kinds = [...new Set((sources || []).map(s => s.kind === 'khoa' ? 'KHOA' : 'NOAA'))];
+      return kinds.length ? kinds.join('·') : 'Open-Meteo';
+    }
+    function statusHTML(label, title, src) {
+      return `<span class="nt-live" title="${title}">● ${label}</span><span class="nt-src" title="${title}">${src}</span>`;
+    }
+    // [ADD] "90일·수심 탭에도 정점명" - 그래프 탭 맨 위에 실시간 현황과 같은 머리줄(정점명 + 시야 + 상태)
+    function renderModeHead(show) {
+      const box = document.querySelector('.chart-box');
+      let head = document.getElementById('mode-head');
+      if (!head) { head = document.createElement('div'); head.id = 'mode-head'; head.className = 'nt-head mode-head'; box.appendChild(head); }
+      box.classList.toggle('with-head', !!show);
+      head.style.display = show ? '' : 'none';
+      if (!show || !selectedStation) return;
+      const st = selectedStation, live = st._liveCache;
+      let status;
+      if (activeMode === 'depth') status = `<span class="nt-est">${t.statusEst}</span>`;
+      else if (live && live.obsSource) status = statusHTML(t.statusObs, t.liveDataObs(obsSourceText([live.obsSource])), srcShort([live.obsSource]));
+      else if (live) status = statusHTML(t.statusLive, t.liveDataOn, 'Open-Meteo');
+      else status = `<span class="nt-est">${st._liveState === 'loading' ? t.nowLoadingShort : t.statusEst}</span>`;
+      head.innerHTML = `<span class="nt-title" title="${st.name}">${stationDisplayName(st)}</span><span class="nt-status">${visGaugeHTML(st)}${status}</span>`;
+    }
+
     // [FIX] 모바일(iOS 등)에서 ◀ ▶ ⬆ 문자가 컬러 이모지로 바뀌어 보여서,
     // 웹과 똑같이 보이도록 SVG 아이콘으로 그립니다(색은 글자색을 따라감).
     const ARROW_UP_SVG = '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 10.5V1.8M6 1.5 2.6 4.9M6 1.5l3.4 3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -421,7 +446,8 @@
     function renderNowTable(box) {
       const st = selectedStation;
       let d = st._hourlyCache;
-      let status = `<span class="nt-live" title="${d && d._obs && d._obs.sources.length ? t.obsSource(obsSourceText(d._obs.sources)) : t.nowSource}">● ${t.statusLive}</span>`;
+      const hasObs = d && d._obs && d._obs.sources.length;
+      let status = statusHTML(t.statusLive, hasObs ? t.obsSource(obsSourceText(d._obs.sources)) : t.nowSource, hasObs ? srcShort(d._obs.sources) + ' · Open-Meteo' : 'Open-Meteo');
       if (!d) {
         if (st._userRequested && !st._hourlyState) ensureHourlyData(st);
         d = getEstimatedHourly(st);
@@ -565,12 +591,13 @@
       if (selectedStation) {
         const s0 = selectedStation;
         const info = t.infoCoord(s0.network, s0.coords[1], s0.coords[0]) + (s0.isBeach ? ` [${t.beachTag}]` : '');
-        document.getElementById('st-info').innerText = isNow ? info : `${stationDisplayName(s0)} · ${info}`;
+        document.getElementById('st-info').innerText = info;
       }
       document.getElementById('detailChart').style.display = isNow ? 'none' : '';
       legendBox.style.display = isNow ? 'none' : '';
       const fcTop = document.getElementById('fc-top');
       if (fcTop) fcTop.style.display = activeMode === 'forecast' ? '' : 'none';
+      renderModeHead(!isNow && !!selectedStation);
       if (!selectedStation) return;
       if (isNow) { renderNowTable(tableBox); return; }
 
@@ -578,7 +605,7 @@
       try { renderForecastTop(selectedStation._visCache); } catch (e) { console.warn('[visibility] 상단 칩 오류:', e); }
       legendBox.style.top = '';
       if (activeMode === 'forecast' && forecastView === 'cause' && selectedStation._visCache) {
-        legendBox.style.top = '44px';
+        legendBox.style.top = '68px';
         try { renderVisCause(chartCanvas, legendBox, selectedStation._visCache); }
         catch (e) { console.warn('[visibility] 원인 그래프 오류:', e); forecastView = 'temp'; return updateChart(); }
       } else if (activeMode === 'forecast') {
@@ -586,7 +613,7 @@
         const data = usingLive ? computeTimeSeriesDataFromLive(selectedStation) : computeTimeSeriesData(selectedStation);
         let vis = selectedStation._visCache;
         const datasets = [
-          { label: t.chartPast, data: data.climLine, borderColor: '#5B6474', borderDash: [4, 4], tension: 0.3, pointRadius: 0, pointHitRadius: 20 },
+          { label: (selectedStation._liveCache && selectedStation._liveCache.climYears) ? t.chartPastObs(selectedStation._liveCache.climYears) : t.chartPast, data: data.climLine, borderColor: '#5B6474', borderDash: [4, 4], tension: 0.3, pointRadius: 0, pointHitRadius: 20 },
           { label: t.chartActual, data: data.actualLine, borderColor: '#FFB000', backgroundColor: 'rgba(255, 176, 0, 0.10)', fill: true, tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2.2 },
           { label: t.chartFuture, data: data.projectedLine, borderColor: 'rgba(255, 176, 0, 0.55)', borderDash: [5, 4], tension: 0.25, pointRadius: 0, pointHitRadius: 20, borderWidth: 2 },
           { label: t.todayBadge, data: data.todayPoint, borderColor: '#FFB000', backgroundColor: '#ffffff', borderWidth: 3, pointRadius: 5, pointHitRadius: 16, pointHoverRadius: 7, showLine: false }
@@ -628,7 +655,7 @@
           data: { datasets },
           options: {
             responsive: true, maintainAspectRatio: false,
-            layout: { padding: { top: 24 } },
+            layout: { padding: { top: 48 } },
             // 선마다 x 간격이 달라서(수온 주 단위, 시야 일 단위) 누른 곳에서 가장 가까운 값 하나를 보여줘요
             interaction: { mode: 'nearest', axis: 'x', intersect: false },
             plugins: {
@@ -669,7 +696,7 @@
               ? `<div class="item" style="color:#7DD3FC;">${t.visLoading}</div>`
               : (selectedStation._visState === 'failed' ? `<div class="item" style="color:#94a3b8;">${t.visFailed}</div>` : ''));
         legendBox.innerHTML = statusLine + `
-          <div class="item"><span class="swatch dashed" style="color:#5B6474;background:#5B6474;"></span>${t.chartPast}</div>
+          <div class="item"><span class="swatch dashed" style="color:#5B6474;background:#5B6474;"></span>${(selectedStation._liveCache && selectedStation._liveCache.climYears) ? t.chartPastObs(selectedStation._liveCache.climYears) : t.chartPast}</div>
           <div class="item"><span class="swatch" style="background:#FFB000;"></span>${t.chartActual}</div>
           <div class="item"><span class="swatch dashed" style="color:rgba(255,176,0,0.55);background:rgba(255,176,0,0.55);"></span>${t.chartFuture}</div>
         ` + visLegend;
@@ -683,6 +710,7 @@
           },
           options: {
             responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 26 } },
             interaction: { mode: 'index', intersect: false },
             plugins: {
               legend: { display: false },

@@ -84,3 +84,37 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
 }));
 const ok = results.filter(r => r.ok).length;
 console.log(`완료: ${ok}/${results.length}곳 성공`);
+
+// ───── [ADD] 관측소 실측 수온 3년치 미리 쌓기 (90일 추이의 실측 구간 + "평년(실측 N년 평균)"용) ─────
+// 우리 정점에서 25km 안에 있는 관측소만. 한국은 하루치씩 받는 API라 하루 호출 한도(1만)를 지키려고
+// 관측소마다 하루 최대 350일씩 나눠서 채워요(처음 며칠이면 3년치가 다 쌓이고, 이후엔 하루 1번씩).
+const R = 6371, rad = Math.PI / 180;
+const km = (a, b, c, d) => 2 * R * Math.asin(Math.sqrt(Math.sin((c - a) * rad / 2) ** 2 + Math.cos(a * rad) * Math.cos(c * rad) * Math.sin((d - b) * rad / 2) ** 2));
+const nearestWithin = (list, st, maxKm, f) => {
+  let best = null;
+  for (const k of list || []) { if (f && !f(k)) continue; const d = km(st.lat, st.lon, k.lat, k.lon); if (d <= maxKm && (!best || d < best.d)) best = { ...k, d }; }
+  return best;
+};
+try {
+  const kh = await (await fetch(`${SITE}/api/khoa?svc=stations`, { signal: AbortSignal.timeout(60000) })).json();
+  const nw = await (await fetch(`${SITE}/api/noaa?svc=stations`, { signal: AbortSignal.timeout(60000) })).json();
+  const khoaCodes = new Set(), coopsIds = new Set();
+  for (const st of stations) {
+    const k = nearestWithin(kh.stations, st, 25); if (k) khoaCodes.add(k.code);
+    const n = nearestWithin(nw.coops, st, 25, s => s.wt); if (n) coopsIds.add(n.id);
+  }
+  console.log(`실측 수온 미리 쌓기: KHOA ${khoaCodes.size}곳, NOAA ${coopsIds.size}곳`);
+  for (const code of khoaCodes) {
+    const t0 = Date.now();
+    try {
+      const j = await (await fetch(`${SITE}/api/khoa?svc=wtdaily&obs=${code}&days=1095&maxFetch=350`, { signal: AbortSignal.timeout(70000) })).json();
+      console.log(`KHOA ${code}: 쌓인 날 ${j.count ?? '?'}/1095 (${Date.now() - t0}ms)${j.error ? ' ' + j.error : ''}`);
+    } catch (e) { console.log(`KHOA ${code} 실패: ${e.message}`); }
+  }
+  for (const id of coopsIds) {
+    try {
+      const j = await (await fetch(`${SITE}/api/noaa?svc=wtclim&id=${id}`, { signal: AbortSignal.timeout(70000) })).json();
+      console.log(`NOAA ${id}: ${j.years ?? '?'}년치`);
+    } catch (e) { console.log(`NOAA ${id} 실패: ${e.message}`); }
+  }
+} catch (e) { console.log('실측 수온 미리 쌓기 실패:', e.message); }

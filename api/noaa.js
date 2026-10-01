@@ -74,6 +74,26 @@ async function ndbcRecent(id) {
   return rows;
 }
 
+// 평년: CO-OPS 수온 최근 3년(1년씩 3번 요청) → 월별 평균. Redis에 30일 저장
+async function coopsClim(id) {
+  const key = `noaa:wtclim:${id}`;
+  try { const [{ result }] = await redisPipeline([['GET', key]]); if (result) return JSON.parse(result); } catch (_) {}
+  const ymd = (ms) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
+  const now = Date.now(), Y = 365 * 86400e3;
+  const parts = await Promise.all([0, 1, 2].map(i => getText(
+    `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=${id}&product=water_temperature&units=metric&time_zone=lst_ldt&format=json&application=OceanTemp&interval=h&begin_date=${ymd(now - (i + 1) * Y + 86400e3)}&end_date=${ymd(now - i * Y)}`, 25000
+  ).then(t => JSON.parse(t)).catch(() => null)));
+  const daily = {};
+  parts.forEach(j => ((j && j.data) || []).forEach(o => { const v = +o.v; if (!Number.isFinite(v) || v < -3 || v > 40) return; const d = String(o.t).slice(0, 10); (daily[d] = daily[d] || []).push(v); }));
+  const byMonth = Array.from({ length: 12 }, () => []);
+  Object.entries(daily).forEach(([d, a]) => byMonth[+d.slice(5, 7) - 1].push(a.reduce((x, y) => x + y, 0) / a.length));
+  const months = byMonth.map(a => a.length >= 10 ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null);
+  const nDays = Object.keys(daily).length;
+  const body = { months, nDays, years: +(nDays / 365).toFixed(1) };
+  if (nDays > 60) { try { await redisPipeline([['SET', key, JSON.stringify(body), 'EX', String(30 * 86400)]]); } catch (_) {} }
+  return body;
+}
+
 module.exports = async function handler(req, res) {
   const t0 = Date.now();
   const send = (body, cache) => {
@@ -92,7 +112,13 @@ module.exports = async function handler(req, res) {
       const rows = await ndbcRecent(id);
       return send({ ok: true, id, ms: Date.now() - t0, count: rows.length, rows }, 1200);
     }
-    return res.status(400).json({ ok: false, error: 'svc는 stations | ndbc' });
+    if (req.query.svc === 'wtclim') {
+      const id = String(req.query.id || '');
+      if (!/^\d{7}$/.test(id)) return res.status(400).json({ ok: false, error: 'id(7자리) 필요' });
+      const body = await coopsClim(id);
+      return send({ ok: true, id, ms: Date.now() - t0, ...body }, 86400);
+    }
+    return res.status(400).json({ ok: false, error: 'svc는 stations | ndbc | wtclim' });
   } catch (e) {
     res.setHeader('Cache-Control', 'no-store');
     const cause = e && e.cause ? ' (' + (e.cause.code || e.cause.message || e.cause) + ')' : '';

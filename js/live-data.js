@@ -245,6 +245,19 @@
             return { x: d.getUTCMonth() + (d.getUTCDate() - 1) / dim, y: o.t };
           });
           result.obsSource = obs.source;
+          // 평년: 관측소 실측이 1년 이상 쌓였으면(10개월 이상 값) 사인파 추정 대신 실측 월평균으로
+          const cm = obs.clim && obs.clim.ok && obs.clim.months;
+          if (cm && cm.filter(v => v != null).length >= 10 && obs.clim.years >= 0.9) {
+            const filled = cm.map((v, i) => {
+              if (v != null) return v;
+              let a = null, b = null; // 빈 달은 앞뒤 달 평균
+              for (let k = 1; k < 12 && (a == null || b == null); k++) { if (a == null) a = cm[(i - k + 12) % 12]; if (b == null) b = cm[(i + k) % 12]; }
+              return (a + b) / 2;
+            });
+            result.climByMonth = filled;
+            result.climIsEstimated = false;
+            result.climYears = Math.max(1, Math.round(obs.clim.years));
+          }
           result.currentTemp = obs.daily[obs.daily.length - 1].t; // 그래프가 끊기지 않게 최신 실측에서 이어 감
         }
       } catch (e) { console.warn('[obs] 90일 실측 실패, Open-Meteo 사용:', e); }
@@ -679,7 +692,8 @@
         if (!p) return null;
         const r = await fetchJSON(`/api/khoa?svc=wtdaily&obs=${p.code}&days=${OBS_DAILY_DAYS}`, 50000, 0);
         const daily = (r && r.ok && r.rows) || [];
-        return daily.length ? { daily, source: { kind: 'khoa', name: p.name, dist: p.dist } } : null;
+        const clim = await fetchJSON(`/api/khoa?svc=wtclim&obs=${p.code}`, 15000, 0).catch(() => null);
+        return daily.length ? { daily, clim, source: { kind: 'khoa', name: p.name, dist: p.dist } } : null;
       }
       if (inUsWaters(lat, lon)) {
         const j = await once('noaa-st', () => fetchJSON('/api/noaa?svc=stations', 45000, 0));
@@ -690,7 +704,8 @@
         const by = {};
         ((r && r.data) || []).forEach(o => { const v = +o.v; if (!Number.isFinite(v) || v < -3 || v > 40) return; const d = String(o.t).slice(0, 10); (by[d] = by[d] || []).push(v); });
         const daily = Object.keys(by).sort().map(d => ({ d, t: +(by[d].reduce((a, b) => a + b, 0) / by[d].length).toFixed(2) }));
-        return daily.length ? { daily, source: { kind: 'coops', name: p.name, dist: p.dist } } : null;
+        const clim = await fetchJSON(`/api/noaa?svc=wtclim&id=${p.id}`, 40000, 0).catch(() => null);
+        return daily.length ? { daily, clim, source: { kind: 'coops', name: p.name, dist: p.dist } } : null;
       }
       return null;
     }

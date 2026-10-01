@@ -423,3 +423,15 @@
     .nt-obs { position: relative; }
     .nt-obs::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 3px; height: 3px; margin-left: -1.5px; border-radius: 50%; background: #38BDF8; }
     .nt-obsdot { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: #38BDF8; vertical-align: middle; margin-right: 2px; }
+
+    /* [ADD] 상태 옆 데이터 출처(작게) */
+    .nt-src { margin-left: 5px; font-size: 10px; color: var(--ui-muted); white-space: nowrap; }
+    /* [ADD] 90일·수심 탭 머리줄(정점명) - 그래프 위에 겹쳐 두고 그래프·칩·범례를 그만큼 아래로 */
+    .mode-head { position: absolute; left: 0; right: 0; top: 0; z-index: 7; background: transparent; }
+    .chart-box.with-head .fc-top { top: 27px; }
+    .chart-box.with-head .chart-legend-overlay { top: 26px; }
+    /* [FIX] "정점명을 눌러도 선택" - 확대 지도의 이름표가 클릭을 통과시키고 있었어요 */
+    .lf-label { pointer-events: auto; cursor: pointer; }
+
+    /* [ADD] 후원 버튼: 다른 버튼과 같은 모양, 컵 아이콘만 호박색 */
+    .ctrl-btn.donate-btn { display: flex; align-items: center; justify-content: center; color: var(--accent); text-decoration: none; }

@@ -32,6 +32,7 @@
         disclaimerLabel: "Disclaimer",
         locateTitle: "내 위치",
         fullscreenTitle: "전체화면",
+        donateTitle: "커피 한 잔 후원하기 (Buy Me a Coffee)",
         expandNote: "확대시 전체",
         depthAxisLabel: "수심 (m)",
         tempAxisLabel: "수온 (°C)",
@@ -39,6 +40,7 @@
         rotateMsg: "화면을 세로로 돌려주세요 — 가로모드에서는 화면이 너무 좁아 지구본과 그래프를 함께 보기 어려워요.",
         liveDataOn: "실시간 데이터 (Open-Meteo)",
         liveDataObs: (src) => `실측: ${src}`,
+        statusObs: "실측", chartPastObs: (y) => `평년(실측 ${y}년 평균)`,
         liveDataLoading: "실시간 데이터 불러오는 중...",
         liveDataFallback: "실제 데이터 연결이 안 되어 추정 알고리즘으로 만든 데이터입니다",
         tabNow: "실시간 현황",
@@ -103,6 +105,7 @@
         disclaimerLabel: "Disclaimer",
         locateTitle: "My location",
         fullscreenTitle: "Fullscreen",
+        donateTitle: "Buy me a coffee",
         expandNote: "full list on zoom-in",
         depthAxisLabel: "Depth (m)",
         tempAxisLabel: "Temp (°C)",
@@ -110,6 +113,7 @@
         rotateMsg: "Please rotate your device to portrait — landscape mode is too narrow to show the globe and chart together.",
         liveDataOn: "Live data (Open-Meteo)",
         liveDataObs: (src) => `Observed: ${src}`,
+        statusObs: "Observed", chartPastObs: (y) => `Normal (${y}-yr observed avg)`,
         liveDataLoading: "Loading live data...",
         liveDataFallback: "Live data unavailable — this is estimated",
         tabNow: "Real-time Monitor",
@@ -161,6 +165,14 @@
     document.getElementById('btn-now').innerText = t.tabNow;
     document.getElementById('btn-locate').title = t.locateTitle;
     document.getElementById('btn-fullscreen').title = t.fullscreenTitle;
+    // [ADD] 커피값 후원 버튼 - Buy Me a Coffee 페이지 주소를 넣으면 버튼이 나타나요 (비워 두면 숨김)
+    const DONATE_URL = '';
+    (() => {
+      const b = document.getElementById('btn-donate');
+      if (!b || !DONATE_URL) return;
+      b.href = DONATE_URL; b.title = t.donateTitle; b.style.display = '';
+      b.addEventListener('click', () => { try { navigator.sendBeacon && navigator.sendBeacon('/api/track?e=donate'); } catch (_) {} });
+    })();
     document.getElementById('txt-disclaimer-label').innerText = t.disclaimerLabel + ':';
     document.getElementById('txt-disclaimer-body').innerText = t.disclaimer;
     document.getElementById('txt-rotate-msg').innerText = t.rotateMsg;

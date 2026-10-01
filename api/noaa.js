@@ -12,7 +12,7 @@ async function getText(url, ms) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms || 15000);
   try {
-    const r = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'OceanTemp (oceantemp.vercel.app)' } });
+    const r = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'OceanTemp (otemp.app)' } });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.text();
   } finally { clearTimeout(timer); }

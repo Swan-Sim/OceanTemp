@@ -5,7 +5,7 @@
 // 정점 목록은 사이트와 똑같이 구글 시트 → 실패하면 data/stations.csv 순서로 읽어요.
 import { readFile } from 'node:fs/promises';
 
-const SITE = process.env.SITE_URL || 'https://oceantemp.vercel.app';
+const SITE = process.env.SITE_URL || 'https://otemp.app';
 const SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
 const CONCURRENCY = 2; // NOAA 서버가 동시 요청이 많으면 502를 내서 2개씩만
 

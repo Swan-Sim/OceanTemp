@@ -881,16 +881,65 @@ function getCurrentCenterLatLng() {
       // [FIX] "조석이 계속 로딩" 근본 원인 수정 - 정점 1,500개를 Open-Meteo로
       // 확인하던 걸(요청 한도 초과의 원인) 위성 수온 격자 한 번으로 대체합니다.
       // (Open-Meteo는 앱을 켤 때 전혀 부르지 않아요 - 정점을 클릭했을 때만)
+      const spotObsP = fetchSpotObs(); // 정점 실측 모음은 동시에 받아 두고
       try {
         const grid = await getSstGrid();
         applySstGridToStations(grid);
-        return;
       } catch (e) {
         // [CHANGE] "값을 미리 불러오지 마" - 격자를 못 받아도 예전처럼 정점
         // 1,500개를 Open-Meteo로 한꺼번에 확인하지 않고, 추정값 그대로 둡니다.
         // 실제 값은 사용자가 정점을 클릭했을 때만 불러와요.
         console.warn('[validate] 위성 수온 격자 실패 - 정점은 추정값으로 둡니다:', e.message);
       }
+      applySpotObs(await spotObsP); // 위성 값 위에 해변 정점만 실측으로 덮어써요
+    }
+
+    // [ADD] 해변 정점 실측 수온 모음(/api/spotobs, 서버가 1시간마다 갱신) → 정점 점 색과 값
+    async function fetchSpotObs() {
+      if (!/^https?:$/.test(location.protocol)) return null;
+      try { const j = await fetchJSON('/api/spotobs', 20000, 0); return j && j.ok ? j : null; }
+      catch (e) { console.warn('[spotobs] 정점 실측 모음 실패 - 위성 값 그대로:', e.message); return null; }
+    }
+    function applySpotObs(j) {
+      if (!j || !j.spots) return;
+      const key = (lat, lon) => `${(+lat).toFixed(3)},${(+lon).toFixed(3)}`;
+      const by = new Map(j.spots.map(s => [key(s.lat, s.lon), s]));
+      let n = 0;
+      stations.forEach(st => {
+        if (!st.isBeach) return;
+        const o = by.get(key(st.coords[1], st.coords[0]));
+        if (!o) return;
+        if (!st._hourlyCache) st.curTemp = o.t; // 이미 표를 연 정점은 그 값(더 최신)을 유지
+        st._spotObs = { ...o.src, at: o.at, t: o.t };
+        st._liveCurrentVerified = true;
+        n++;
+      });
+      console.info(`[spotobs] 정점 ${n}곳을 근처 관측소 실측 수온으로 표시`);
+      refreshMaxTempStation();
+      refreshBeachSprites();
+      if (selectedStation && selectedStation._spotObs && !selectedStation._hourlyCache) {
+        const el = document.getElementById('st-temp');
+        if (el) el.innerText = formatTemp(selectedStation.curTemp);
+      }
+    }
+    // 해변 정점 스프라이트(점+이름표)를 지금 수온 색으로 다시 그리기
+    function refreshBeachSprites() {
+      const byId = new Map(stations.map(s => [s.id, s]));
+      beachSprites.forEach(sp => {
+        const st = byId.get(sp.userData.stationId);
+        if (!st) return;
+        const label = st.label;
+        const r = drawMarkerTexture(st, { selected: false, labelOnLeft: false, label });
+        const l = drawMarkerTexture(st, { selected: false, labelOnLeft: true, label });
+        [sp.userData.rightVariant, sp.userData.leftVariant].forEach(v => v && v.texture && v.texture.dispose());
+        sp.userData.rightVariant = r; sp.userData.leftVariant = l;
+        const v = sp.userData.labelOnLeft ? l : r;
+        sp.material.map = v.texture;
+        sp.material.needsUpdate = true;
+        sp.center.set(v.dotX / v.canvasW, 1 - v.dotY / v.canvasH);
+      });
+      if (selectionMarker) selectionMarker.userData.forId = null; // 선택 표시도 새 색으로
+      try { refreshSelectionMarker(); } catch (_) {}
     }
 
     // [ADD] "로딩 끝나면 화면 회전하면서 지구로 줌인" 요청 반영 - 멀리서
@@ -921,6 +970,7 @@ function getCurrentCenterLatLng() {
       const colorHelper = new THREE.Color();
       let colorDirty = false, matrixDirty = false;
       stations.forEach(st => {
+        if (st._spotObs) return; // 근처 관측소 실측으로 이미 칠한 정점
         const val = sstAt(grid, st.coords[1], st.coords[0]);
         if (val != null) {
           st.curTemp = +val.toFixed(1);
@@ -943,6 +993,7 @@ function getCurrentCenterLatLng() {
         if (matrixDirty) instancedDotsRef.instanceMatrix.needsUpdate = true;
       }
       refreshMaxTempStation();
+      refreshBeachSprites();
       // 이미 선택된 정점이 있으면 새 값으로 다시 표시
       if (selectedStation) {
         const el = document.getElementById('st-temp');

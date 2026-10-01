@@ -151,3 +151,9 @@ try {
     } catch (e) { console.log(`Copernicus ${p.name} 실패: ${e.message}`); }
   }
 } catch (e) { console.log('Copernicus 쌓기 실패:', e.message); }
+
+// [ADD] 정점 실측 수온 모음(처음 화면 정점 색) 새로 만들기
+try {
+  const j = await (await fetch(`${SITE}/api/spotobs?refresh=1`, { signal: AbortSignal.timeout(90000) })).json();
+  console.log(`정점 실측 수온: ${j.count ?? '?'}/${j.of ?? '?'}곳 (${j.ms ?? '?'}ms)`);
+} catch (e) { console.log('정점 실측 수온 실패:', e.message); }

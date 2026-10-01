@@ -166,7 +166,7 @@
     document.getElementById('btn-locate').title = t.locateTitle;
     document.getElementById('btn-fullscreen').title = t.fullscreenTitle;
     // [ADD] 커피값 후원 버튼 - Buy Me a Coffee 페이지 주소를 넣으면 버튼이 나타나요 (비워 두면 숨김)
-    const DONATE_URL = '';
+    const DONATE_URL = 'https://buymeacoffee.com/suhwan';
     (() => {
       const b = document.getElementById('btn-donate');
       if (!b || !DONATE_URL) return;

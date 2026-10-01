@@ -4,7 +4,7 @@
       "maxDuration": 30
     },
     "api/khoa.js": {
-      "maxDuration": 60
+      "maxDuration": 120
     },
     "api/noaa.js": {
       "maxDuration": 60

@@ -11,13 +11,20 @@ const { redisPipeline } = require('./_redis');
 
 const SERVICES = {
   recent: { path: '1192136/dtRecent/GetDTRecentApiService', min: 10, cache: 600 },
-  wtemp:  { path: '1192136/surveyWaterTemp/GetSurveyWaterTempApiService', min: 60, cache: 1800 }
+  wtemp:  { path: '1192136/surveyWaterTemp/GetSurveyWaterTempApiService', min: 60, cache: 1800 },
+  // [ADD] 해양관측부이(해수욕장·먼바다 부이): 수온·파고·파주기·바람·유향유속
+  buoy:   { path: '1192136/twRecent/GetTWRecentApiService', min: 10, cache: 600 }
 };
+const isBuoy = (code) => /^(TW|KG)_/.test(code);
+const svcFor = (code) => isBuoy(code) ? SERVICES.buoy : SERVICES.recent;
 
 // 관측소 코드 후보: 조위관측소(DT_0001~0099)와 해양과학기지(IE_). 값이 나오는 코드만 목록에 넣어요.
 const CANDIDATES = [
   ...Array.from({ length: 99 }, (_, i) => 'DT_' + String(i + 1).padStart(4, '0')),
-  'IE_0060', 'IE_0061', 'IE_0062'
+  'IE_0060', 'IE_0061', 'IE_0062',
+  // [ADD] 해양관측부이: 해수욕장 부이(TW_)와 먼바다 부이(KG_)
+  ...Array.from({ length: 99 }, (_, i) => 'TW_' + String(i + 1).padStart(4, '0')),
+  ...Array.from({ length: 30 }, (_, i) => 'KG_' + String(i + 1).padStart(4, '0')), 'KG_0101', 'KG_0102'
 ];
 
 const ymd = (ms) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10).replace(/-/g, ''); // 한국 날짜
@@ -42,22 +49,22 @@ async function callKhoa(key, svc, obs, date, rows) {
 // 관측소 목록: 후보 코드를 한 줄씩만 조회해서 이름·위치를 모읍니다. 오래 걸리니 Redis에 7일 저장.
 async function stationList(key) {
   try {
-    const [{ result }] = await redisPipeline([['GET', 'khoa:stations']]);
+    const [{ result }] = await redisPipeline([['GET', 'khoa:stations2']]);
     if (result) { const s = JSON.parse(result); if (Date.now() - s.savedAt < 7 * 86400e3) return s.list; }
   } catch (_) {}
   const today = ymd(Date.now()), yday = ymd(Date.now() - 86400e3);
   const list = [];
   let next = 0;
-  await Promise.all(Array.from({ length: 4 }, async () => {
+  await Promise.all(Array.from({ length: 6 }, async () => {
     while (next < CANDIDATES.length) {
       const code = CANDIDATES[next++];
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          let it = await callKhoa(key, SERVICES.recent, code, today, 1);
-          if (!it.length) it = await callKhoa(key, SERVICES.recent, code, yday, 1);
+          let it = await callKhoa(key, svcFor(code), code, today, 1);
+          if (!it.length) it = await callKhoa(key, svcFor(code), code, yday, 1);
           const a = it[0];
           if (a && Number.isFinite(+a.lat) && Number.isFinite(+a.lot)) {
-            list.push({ code, name: a.obsvtrNm, lat: +(+a.lat).toFixed(5), lon: +(+a.lot).toFixed(5) });
+            list.push({ code, name: a.obsvtrNm, lat: +(+a.lat).toFixed(5), lon: +(+a.lot).toFixed(5), kind: isBuoy(code) ? 'buoy' : 'tide' });
           }
           break;
         } catch (e) {
@@ -70,7 +77,7 @@ async function stationList(key) {
   }));
   list.sort((a, b) => a.code.localeCompare(b.code));
   if (list.length >= 30) { // 일부만 잡힌 목록이 오래 저장되지 않게
-    try { await redisPipeline([['SET', 'khoa:stations', JSON.stringify({ savedAt: Date.now(), list }), 'EX', String(40 * 86400)]]); } catch (_) {}
+    try { await redisPipeline([['SET', 'khoa:stations2', JSON.stringify({ savedAt: Date.now(), list }), 'EX', String(40 * 86400)]]); } catch (_) {}
   }
   return list;
 }
@@ -78,7 +85,7 @@ async function stationList(key) {
 // 최근 며칠 실측을 간추려서: t(한국시각 "YYYY-MM-DD HH:MM"), wt 수온, tide 조위(cm), ws 풍속, wd 풍향, gust 순간최대, at 기온
 async function recentObs(key, obs, days) {
   const dates = Array.from({ length: days }, (_, i) => ymd(Date.now() - i * 86400e3));
-  const parts = await Promise.all(dates.map(d => callKhoa(key, SERVICES.recent, obs, d, 300).catch(() => [])));
+  const parts = await Promise.all(dates.map(d => callKhoa(key, svcFor(obs), obs, d, 300).catch(() => [])));
   const seen = new Set(), rows = [];
   let meta = null;
   parts.flat().forEach(a => {
@@ -86,7 +93,8 @@ async function recentObs(key, obs, days) {
     seen.add(a.obsrvnDt);
     if (!meta) meta = { name: a.obsvtrNm, lat: +a.lat, lon: +a.lot };
     const n = (v) => (v == null || v === '' || !Number.isFinite(+v)) ? null : +v;
-    rows.push({ t: String(a.obsrvnDt).slice(0, 16), wt: n(a.wtem), tide: n(a.bscTdlvHgt), ws: n(a.wspd), wd: n(a.wndrct), gust: n(a.maxMmntWspd), at: n(a.artmp) });
+    rows.push({ t: String(a.obsrvnDt).slice(0, 16), wt: n(a.wtem), tide: n(a.bscTdlvHgt), ws: n(a.wspd), wd: n(a.wndrct), gust: n(a.maxMmntWspd), at: n(a.artmp),
+      wv: n(a.wvhgt), per: n(a.wvpd), cs: n(a.crsp), cd: n(a.crdir) }); // 파고(m)·파주기(s)·유속(cm/s)·유향 - 부이만
   });
   rows.sort((a, b) => a.t.localeCompare(b.t));
   return { meta, rows };

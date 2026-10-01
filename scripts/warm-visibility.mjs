@@ -60,7 +60,7 @@ async function warm(st) {
 
 // 국립해양조사원 관측소 목록(한국 정점 짝짓기용)도 미리 만들어 둠
 try {
-  const r = await fetch(`${SITE}/api/khoa?svc=stations`, { signal: AbortSignal.timeout(60000) });
+  const r = await fetch(`${SITE}/api/khoa?svc=stations`, { signal: AbortSignal.timeout(130000) });
   const j = await r.json();
   console.log(`KHOA 관측소 목록: ${j.count ?? '?'}곳`);
 } catch (e) { console.log('KHOA 관측소 목록 실패:', e.message); }
@@ -96,11 +96,11 @@ const nearestWithin = (list, st, maxKm, f) => {
   return best;
 };
 try {
-  const kh = await (await fetch(`${SITE}/api/khoa?svc=stations`, { signal: AbortSignal.timeout(60000) })).json();
+  const kh = await (await fetch(`${SITE}/api/khoa?svc=stations`, { signal: AbortSignal.timeout(130000) })).json();
   const nw = await (await fetch(`${SITE}/api/noaa?svc=stations`, { signal: AbortSignal.timeout(60000) })).json();
   const khoaCodes = new Set(), coopsIds = new Set();
   for (const st of stations) {
-    const k = nearestWithin(kh.stations, st, 25); if (k) khoaCodes.add(k.code);
+    const k = nearestWithin(kh.stations, st, 25, s => s.kind !== 'buoy'); if (k) khoaCodes.add(k.code);
     const n = nearestWithin(nw.coops, st, 25, s => s.wt); if (n) coopsIds.add(n.id);
   }
   console.log(`실측 수온 미리 쌓기: KHOA ${khoaCodes.size}곳, NOAA ${coopsIds.size}곳`);

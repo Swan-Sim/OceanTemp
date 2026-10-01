@@ -587,14 +587,35 @@
     }
 
     // ── 한국: KHOA ──
+    // 조위관측소(조위·수온·바람, 25km) + 해양관측부이(파고·주기 + 수온·바람, 40km).
+    // 수온·바람은 둘 중 정점에 더 가까운 쪽을 써요(해수욕장 부이는 항구 안 관측소보다 정점 물에 가까움).
+    const KHOA_BUOY_KM = 40;
     async function khoaObs(lat, lon) {
-      const j = await once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 45000, 0));
-      const p = nearestOf(j && j.ok ? j.stations : [], lat, lon, OBS_RADIUS_KM);
-      if (!p) return null;
-      const o = await fetchJSON(`/api/khoa?svc=obs&obs=${p.code}&days=${Math.min(7, NOW_PAST_DAYS + 1)}`, 25000, 0);
-      const raw = ((o && o.ok && o.rows) || []).map(r => ({ x: localStrToX(r.t), wt: r.wt, ws: r.ws, wd: r.wd, gust: r.gust, tide: r.tide != null ? r.tide / 100 : null }));
+      const j = await once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 130000, 0));
+      const list = j && j.ok ? j.stations : [];
+      const tideSt = nearestOf(list, lat, lon, OBS_RADIUS_KM, s => s.kind !== 'buoy');
+      const buoy = nearestOf(list, lat, lon, KHOA_BUOY_KM, s => s.kind === 'buoy');
+      if (!tideSt && !buoy) return null;
+      const days = Math.min(7, NOW_PAST_DAYS + 1);
+      const [o1, o2] = await Promise.all([
+        tideSt ? fetchJSON(`/api/khoa?svc=obs&obs=${tideSt.code}&days=${days}`, 25000, 0).catch(() => null) : null,
+        buoy ? fetchJSON(`/api/khoa?svc=obs&obs=${buoy.code}&days=${days}`, 25000, 0).catch(() => null) : null
+      ]);
+      const rows1 = (o1 && o1.ok && o1.rows) || [], rows2 = (o2 && o2.ok && o2.rows) || [];
+      const buoyCloser = buoy && (!tideSt || buoy.dist < tideSt.dist);
+      const buoyHasT = rows2.some(r => r.wt != null), buoyHasW = rows2.some(r => r.ws != null);
+      const tFromBuoy = buoyHasT && (buoyCloser || !rows1.some(r => r.wt != null));
+      const wFromBuoy = buoyHasW && (buoyCloser || !rows1.some(r => r.ws != null));
+      const raw = [];
+      rows1.forEach(r => raw.push({ x: localStrToX(r.t), tide: r.tide != null ? r.tide / 100 : null,
+        ...(tFromBuoy ? {} : { wt: r.wt }), ...(wFromBuoy ? {} : { ws: r.ws, wd: r.wd, gust: r.gust }) }));
+      rows2.forEach(r => raw.push({ x: localStrToX(r.t), wv: r.wv, per: r.per,
+        ...(tFromBuoy ? { wt: r.wt } : {}), ...(wFromBuoy ? { ws: r.ws, wd: r.wd, gust: r.gust } : {}) }));
       if (raw.length < 6) return null;
-      return { hourly: toHourly(raw), sources: [{ kind: 'khoa', name: p.name, dist: p.dist }] };
+      const sources = [];
+      if (tideSt && rows1.length) sources.push({ kind: 'khoa', name: tideSt.name, dist: tideSt.dist });
+      if (buoy && rows2.length) sources.push({ kind: 'khoa', name: buoy.name + ' ' + t.obsBuoyWord, dist: buoy.dist });
+      return sources.length ? { hourly: toHourly(raw), sources } : null;
     }
 
     // ── 미국: NOAA CO-OPS + NDBC ──
@@ -687,8 +708,8 @@
       if (!/^https?:$/.test(location.protocol)) return null;
       const lat = st.coords[1], lon = st.coords[0];
       if (inKoreaWaters(lat, lon)) {
-        const j = await once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 45000, 0));
-        const p = nearestOf(j && j.ok ? j.stations : [], lat, lon, OBS_RADIUS_KM);
+        const j = await once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 130000, 0));
+        const p = nearestOf(j && j.ok ? j.stations : [], lat, lon, OBS_RADIUS_KM, s => s.kind !== 'buoy');
         if (!p) return null;
         const r = await fetchJSON(`/api/khoa?svc=wtdaily&obs=${p.code}&days=${OBS_DAILY_DAYS}`, 50000, 0);
         const daily = (r && r.ok && r.rows) || [];

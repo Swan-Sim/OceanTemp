@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/visibility.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     },
     "api/khoa.js": {
       "maxDuration": 120

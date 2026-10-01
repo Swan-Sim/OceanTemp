@@ -439,3 +439,6 @@
     /* [ADD] 시야는 하늘색으로 통일: 게이지 숫자 + 출처 표기 */
     .nt-vis b { color: #7DD3FC; }
     .nt-src-vis { color: #7DD3FC; }
+
+    /* [ADD] 시야: 두 위성 자료 차이가 클 때 숫자 옆 작은 표시 */
+    .nt-vis-warn { margin-left: 3px; font-size: 10px; font-weight: 600; color: #FBBF24; opacity: .9; }

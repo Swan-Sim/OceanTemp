@@ -501,7 +501,10 @@
         const s = recent.reduce((a, x) => ({ kd: a.kd + x.kd, kc: a.kc + x.kc, ko: a.ko + x.ko, chl: a.chl + x.chl }), { kd: 0, kc: 0, ko: 0, chl: 0 });
         share = { plankton: s.kc / s.kd, other: s.ko / s.kd, chl: s.chl / recent.length };
       }
-      return { days, median, p10, p90, sd, last, projection, now: nowP, share, hasChl: !!json.hasChl, pixel: json.pixel };
+      // 교차 확인(다른 위성 처리 자료, 최근 14일 중앙값)
+      const check = json.check && json.check.kd > 0 ? { ...json.check, vis: Math.max(VIS_MIN, Math.min(VIS_MAX, 1.7 / json.check.kd)) } : null;
+      if (check) { const r = check.vis / nowP.vis; check.agree = r >= 0.6 && r <= 1.67; }
+      return { days, median, p10, p90, sd, last, projection, now: nowP, share, hasChl: !!json.hasChl, pixel: json.pixel, radiusKm: json.radiusKm, check };
     }
 
     // 시야 숫자 표기: 10m 미만은 소수 한 자리, 30m 이상은 "30m+"
@@ -513,7 +516,7 @@
 
     async function fetchStationVisibility(st) {
       const lat = st.coords[1], lon = st.coords[0];
-      const j = await fetchJSON(`/api/visibility?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}`, 40000, 0);
+      const j = await fetchJSON(`/api/visibility?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&v=2`, 60000, 0);
       if (!j || !j.ok) { const err = new Error(j && j.reason || 'NO_DATA'); err.code = j && j.reason; throw err; }
       const v = computeVisibility(j);
       if (!v) throw new Error('NO_DATA');

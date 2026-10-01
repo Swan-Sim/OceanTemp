@@ -20,7 +20,14 @@ const { redisPipeline } = require('./_redis');
 const BASE = 'https://coastwatch.noaa.gov/erddap/griddap/';
 const KD_DS = 'noaacwNPPN20S3AkdSCIDINEOF2kmDaily';
 const CHL_DS = 'noaacwNPPN20S3ASCIDINEOF2kmDaily';
-const OFFSETS = [[0, -0.03], [0, 0.03], [-0.03, 0], [0.03, 0]]; // 해안 픽셀에 값이 없을 때만 사용
+// [CHANGE] "코론 시야가 실제 20m 가까운데 2.8m" - 정점 좌표의 픽셀 하나만 쓰면 해안·항구·얕은 산호초 바닥
+// 반사 때문에 그 픽셀만 유난히 탁하게 나오는 일이 많았어요(바로 옆 픽셀은 8~10m). 그래서
+//   1) 정점 반경 약 5km 안의 모든 바다 픽셀을 받아 날짜별 "중앙값"을 씁니다(튀는 픽셀 하나에 안 끌려감).
+//      값이 하나도 없으면(육지 안쪽 좌표) 반경 약 10km로 넓혀요.
+//   2) 교차 확인: 처리 방식이 다른 NOAA VIIRS 근실시간 4km 자료(빈칸 채우기 없음, 더 최근까지)로
+//      최근 14일 반경 약 12km 중앙값을 따로 계산해 같이 돌려줍니다(check).
+const CHECK_DS = 'noaacwNPPVIIRSkd490Daily';
+const R1 = 0.05, R2 = 0.1, RCHECK = 0.11;
 const FRESH_MS = 20 * 3600e3, KEEP_SEC = 7 * 86400;
 
 async function fetchText(url, timeoutMs) {
@@ -33,61 +40,67 @@ async function fetchText(url, timeoutMs) {
   } finally { clearTimeout(timer); }
 }
 
-// 90일치 한 픽셀 시계열 → { pixel:[lat,lon], rows:[[날짜, 값|null], ...] }
-async function fetchSeries(ds, variable, lat, lon, deadline) {
-  const url = `${BASE}${ds}.csv?${variable}%5Blast-89:1:last%5D%5B0%5D%5B(${lat.toFixed(3)})%5D%5B(${lon.toFixed(3)})%5D`;
+const median = (a) => { const s = a.slice().sort((x, y) => x - y); const n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+const kmBetween = (la1, lo1, la2, lo2) => Math.hypot(la2 - la1, (lo2 - lo1) * Math.cos(la1 * Math.PI / 180)) * 111.2;
+
+// 반경 r(도) 상자 → 원 안 픽셀만, 날짜별 { 날짜: [값...] }
+async function fetchBox(ds, variable, lat, lon, r, timeSel, deadline) {
+  const url = `${BASE}${ds}.csv?${variable}%5B${timeSel}%5D%5B0%5D%5B(${(lat + r).toFixed(3)}):(${(lat - r).toFixed(3)})%5D%5B(${(lon - r).toFixed(3)}):(${(lon + r).toFixed(3)})%5D`;
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     const left = deadline - Date.now();
-    if (left < 1500) break;
+    if (left < 2000) break;
     try {
-      const lines = (await fetchText(url, Math.min(12000, left))).trim().split('\n').slice(2);
-      let pixel = null;
-      const rows = lines.map(l => {
+      const lines = (await fetchText(url, Math.min(20000, left))).trim().split('\n').slice(2);
+      const by = {};
+      const rKm = r * 111.2;
+      for (const l of lines) {
         const c = l.split(',');
-        if (!pixel) pixel = [+(+c[2]).toFixed(4), +(+c[3]).toFixed(4)];
         const v = parseFloat(c[4]);
-        return [c[0].slice(0, 10), Number.isFinite(v) && v > 0 ? +v.toFixed(4) : null];
-      });
-      return { pixel, rows };
+        if (!(v > 0)) continue;
+        if (kmBetween(lat, lon, +c[2], +c[3]) > rKm) continue;
+        (by[c[0].slice(0, 10)] = by[c[0].slice(0, 10)] || []).push(v);
+      }
+      return by;
     } catch (e) { lastErr = e; }
   }
   throw lastErr || new Error('timeout');
 }
 
-const validCount = (s) => s ? s.rows.filter(r => r[1] != null).length : 0;
-
 async function fetchFromNoaa(lat, lon) {
-  const deadline = Date.now() + 25000;
-  // Kd490과 엽록소를 동시에 요청 (엽록소는 실패해도 시야는 보여줄 수 있음)
-  const [kdRes, chlRes] = await Promise.allSettled([
-    fetchSeries(KD_DS, 'kd_490', lat, lon, deadline),
-    fetchSeries(CHL_DS, 'chlor_a', lat, lon, deadline)
+  const deadline = Date.now() + 40000;
+  const T90 = 'last-89:1:last';
+  const [kdRes, chlRes, chkRes] = await Promise.allSettled([
+    fetchBox(KD_DS, 'kd_490', lat, lon, R1, T90, deadline),
+    fetchBox(CHL_DS, 'chlor_a', lat, lon, R1, T90, deadline),
+    fetchBox(CHECK_DS, 'kd_490', lat, lon, RCHECK, 'last-13:1:last', deadline)
   ]);
-  let kd = kdRes.status === 'fulfilled' ? kdRes.value : null;
-  let chl = chlRes.status === 'fulfilled' ? chlRes.value : null;
-  if (!kd && kdRes.reason) throw kdRes.reason;
-  // 해안에 너무 붙어 값이 없으면(육지 픽셀) 바다 쪽으로 조금씩 옮겨서 다시
-  if (validCount(kd) < 10) {
-    kd = null; chl = null;
-    for (const [dLat, dLon] of OFFSETS) {
-      if (deadline - Date.now() < 3000) break;
-      const s = await fetchSeries(KD_DS, 'kd_490', lat + dLat, lon + dLon, deadline).catch(() => null);
-      if (validCount(s) >= 10) {
-        kd = s;
-        chl = await fetchSeries(CHL_DS, 'chlor_a', lat + dLat, lon + dLon, deadline).catch(() => null);
-        break;
-      }
-    }
-    if (!kd) return { ok: false, reason: 'no-ocean-pixel' };
+  if (kdRes.status !== 'fulfilled') throw kdRes.reason;
+  let kd = kdRes.value, chl = chlRes.status === 'fulfilled' ? chlRes.value : null, radiusKm = 5;
+  const count = (by) => Object.keys(by || {}).length;
+  if (count(kd) < 10) { // 육지 안쪽 좌표 등 → 반경 10km로
+    kd = await fetchBox(KD_DS, 'kd_490', lat, lon, R2, T90, deadline).catch(() => ({}));
+    chl = await fetchBox(CHL_DS, 'chlor_a', lat, lon, R2, T90, deadline).catch(() => null);
+    radiusKm = 10;
+    if (count(kd) < 10) return { ok: false, reason: 'no-ocean-pixel' };
   }
-  const chlMap = {};
-  if (chl) chl.rows.forEach(([d, v]) => { chlMap[d] = v; });
+  const dates = Object.keys(kd).sort();
+  const days = dates.map(d => ({
+    d, kd: +median(kd[d]).toFixed(4), n: kd[d].length,
+    chl: chl && chl[d] && chl[d].length ? +median(chl[d]).toFixed(4) : null
+  }));
+  // 교차 확인: 14일 동안의 모든 픽셀 값을 모아 중앙값(구름 때문에 날마다 픽셀 수가 달라서)
+  let check = null;
+  if (chkRes.status === 'fulfilled') {
+    const all = [].concat(...Object.values(chkRes.value));
+    const ds = Object.keys(chkRes.value).sort();
+    if (all.length >= 5) check = { src: 'NOAA VIIRS NRT 4km', kd: +median(all).toFixed(4), n: all.length, from: ds[0], to: ds[ds.length - 1], radiusKm: 12 };
+  }
   return {
     ok: true,
-    source: 'NOAA CoastWatch NESDIS STAR - VIIRS/OLCI gap-filled (DINEOF) Kd490 & chlorophyll-a, 2km daily',
-    pixel: kd.pixel, hasChl: !!chl,
-    days: kd.rows.map(([d, v]) => ({ d, kd: v, chl: chl ? (chlMap[d] ?? null) : null }))
+    source: `NOAA CoastWatch NESDIS STAR - VIIRS/OLCI gap-filled (DINEOF) Kd490 & chlorophyll-a, 2km daily, median within ${radiusKm} km`,
+    method: 'median', radiusKm, pixel: [lat, lon], hasChl: !!chl && days.some(x => x.chl != null),
+    days, check
   };
 }
 
@@ -96,7 +109,7 @@ module.exports = async function handler(req, res) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
     return res.status(400).json({ error: 'lat, lon 필요' });
   }
-  const key = `vis:${lat.toFixed(3)}_${lon.toFixed(3)}`;
+  const key = `vis2:${lat.toFixed(3)}_${lon.toFixed(3)}`; // 방식이 바뀌어서 새 키(예전 한 픽셀 값과 섞이지 않게)
   const send = (body, cacheState, maxAge) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', `s-maxage=${maxAge}, stale-while-revalidate=86400`);

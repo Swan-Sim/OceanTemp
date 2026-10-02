@@ -364,6 +364,9 @@
     // 정점을 고르면 바로 불러옵니다. 실패하면 1분 동안은 다시 시도하지 않아요.
     async function ensureVisData(st) {
       if (!st || st._visCache || st._visState === 'loading') return;
+      // [CHANGE] 먼바다 격자 정점(Station #…)은 시야를 받지 않아요 - 다이빙하러 가는 곳이 아니고,
+      // 미리 받아 두는 대상(해변 정점)도 아니라서 누를 때마다 NOAA에서 새로 받느라 느리기만 했어요.
+      if (!st.isBeach) return;
       if (!/^https?:$/.test(location.protocol)) return;
       if (st._visState === 'failed' && Date.now() - (st._visFailAt || 0) < 60000) return;
       st._visState = 'loading';

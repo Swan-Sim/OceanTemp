@@ -815,6 +815,7 @@
       selectedStation = st;
       if (!(opts && opts.auto)) {
         st._userRequested = true; st._userPicked = true;
+        openSheet(); // [ADD] 시트 모드(가로 화면)에서는 정점을 누르면 패널이 바로 올라옴
         // [ADD] 접속 통계 - 사람이 직접 고른 정점만 "많이 본 정점"으로 셉니다
         if (/^https?:$/.test(location.protocol) && navigator.sendBeacon) {
           try { navigator.sendBeacon(`/api/track?e=station&s=${encodeURIComponent(stationDisplayName(st))}`); } catch (_) {}
@@ -952,5 +953,126 @@
         updateChart();
       }
     }
+
+    // ───────── [ADD] 그래프 범례: 눌러서 접기/펴기, 끌어서 옮기기, 그래프 밖(아래)으로 치우기 ─────────
+    // 범례 내용은 그래프를 다시 그릴 때마다 새로 써지므로, 바뀔 때마다 머리줄(⠿ 범례 ▾ ⤓)을 다시 붙여요.
+    //  - 머리줄 탭: 접기/펴기  - 머리줄 끌기: 그래프 안에서 옮기기
+    //  - ⤓ 누르기 또는 그래프 아래 끝 밖으로 끌어내리기: 그래프 아래 줄로 치움(가로로 펼쳐짐). ⤒ 또는 위로 끌면 다시 그래프 위로
+    // 위치·접힘·치움 상태는 이 브라우저에만 기억(localStorage). 처음엔 좁은 화면(휴대폰)이면 접힌 채로 시작.
+    (function setupLegendControls() {
+      const box = document.getElementById('chart-legend');
+      const chartBox = box && box.parentElement;
+      if (!box || !chartBox) return;
+      const store = {
+        get(k, d) { try { const v = localStorage.getItem('otemp.legend.' + k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
+        set(k, v) { try { localStorage.setItem('otemp.legend.' + k, JSON.stringify(v)); } catch (_) {} }
+      };
+      // 아이콘은 SVG로(아이폰에서 ⤓ 같은 문자가 컬러 이모지로 바뀌지 않게)
+      const LG_DOWN_SVG = '<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1v6M2.2 4.4 5 7.2l2.8-2.8M1.5 9h7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      const LG_UP_SVG = '<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 9V3M2.2 5.6 5 2.8l2.8 2.8M1.5 1h7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      let collapsed = store.get('collapsed', window.innerWidth < 600);
+      let docked = store.get('docked', false);
+      let off = store.get('offset', { x: 0, y: 0 });
+      const place = () => {
+        if (docked) { if (box.parentElement === chartBox) chartBox.after(box); box.style.transform = 'none'; return; }
+        if (box.parentElement !== chartBox) chartBox.appendChild(box);
+        const pr = chartBox.getBoundingClientRect();
+        box.style.transform = 'none';
+        const br = box.getBoundingClientRect();
+        if (!br.width) return;
+        // 그래프 상자 밖으로 나가지 않게
+        off.x = Math.min(pr.right - br.right, Math.max(pr.left - br.left, off.x)) || 0;
+        off.y = Math.min(pr.bottom - br.bottom, Math.max(pr.top - br.top, off.y)) || 0;
+        box.style.transform = `translate(${off.x}px, ${off.y}px)`;
+      };
+      const apply = () => {
+        box.classList.toggle('collapsed', collapsed);
+        box.classList.toggle('docked', docked);
+        const arrow = box.querySelector('.lg-head .lg-arrow');
+        if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
+        const dock = box.querySelector('.lg-head .lg-dock');
+        if (dock) { dock.innerHTML = docked ? LG_UP_SVG : LG_DOWN_SVG; dock.title = docked ? t.legendUndock : t.legendDock; }
+        place();
+      };
+      const setDocked = (v) => { docked = v; store.set('docked', v); if (!v) { off = { x: 0, y: 0 }; store.set('offset', off); } apply(); };
+      const addHead = () => {
+        if (!box.firstElementChild || box.querySelector('.lg-head')) return;
+        const head = document.createElement('div');
+        head.className = 'lg-head';
+        head.innerHTML = `<span class="lg-grip">⠿</span><span>${t.legendTitle || 'Legend'}</span><span class="lg-arrow"></span><span class="lg-dock" role="button"></span>`;
+        box.insertBefore(head, box.firstChild);
+        let start = null, moved = false;
+        head.addEventListener('pointerdown', (e) => {
+          start = { x: e.clientX, y: e.clientY, ox: off.x, oy: off.y, dockBtn: !!(e.target.closest && e.target.closest('.lg-dock')) }; moved = false;
+          head.setPointerCapture(e.pointerId);
+        });
+        head.addEventListener('pointermove', (e) => {
+          if (!start) return;
+          const dx = e.clientX - start.x, dy = e.clientY - start.y;
+          if (!moved && Math.hypot(dx, dy) < 6) return; // 살짝 누른 건 "탭"
+          moved = true;
+          if (docked) return; // 치운 상태에선 끌기 = 위로 올리기만(손 뗄 때 판단)
+          off = { x: start.ox + dx, y: start.oy + dy };
+          box.style.transform = `translate(${off.x}px, ${off.y}px)`;
+        });
+        const end = (e) => {
+          if (!start) return;
+          const s0 = start; start = null;
+          if (!moved) {
+            if (s0.dockBtn) return setDocked(!docked);
+            collapsed = !collapsed; store.set('collapsed', collapsed); return apply();
+          }
+          if (docked) { if (e.clientY - s0.y < -30) setDocked(false); return; }
+          // 그래프 아래 끝보다 더 끌어내리면 그래프 밖(아래 줄)으로 치움
+          const pr = chartBox.getBoundingClientRect(), br = box.getBoundingClientRect();
+          if (br.top > pr.bottom - 24) return setDocked(true);
+          place(); store.set('offset', off);
+        };
+        head.addEventListener('pointerup', end);
+        head.addEventListener('pointercancel', () => { start = null; });
+        apply();
+      };
+      new MutationObserver(addHead).observe(box, { childList: true });
+      addHead();
+      window.addEventListener('resize', () => requestAnimationFrame(place));
+    })();
+
+    // ───────── [ADD] 시트 모드(가로로 넓고 낮은 화면): 패널을 팝업처럼 올리고 내리기 ─────────
+    // 열기: 탭 누르기, 정점 누르기. 닫기: 오른쪽 위 ✕, 맨 위 손잡이를 아래로 끌기, Esc 키.
+    function sheetEl() { return document.getElementById('bottom-sheet'); }
+    function openSheet() {
+      if (!document.body.classList.contains('sheet-mode')) return;
+      const bs = sheetEl(); if (!bs || bs.classList.contains('open')) return;
+      bs.classList.add('open');
+      setTimeout(() => { if (typeof updateChart === 'function' && selectedStation) updateChart(); }, 340); // 올라온 뒤 크기 맞춰 다시 그림
+    }
+    function closeSheet() {
+      const bs = sheetEl(); if (bs) { bs.classList.remove('open'); bs.style.transform = ''; }
+    }
+    (function setupSheet() {
+      const bs = sheetEl(); if (!bs) return;
+      const handle = document.createElement('div');
+      handle.className = 'sheet-handle'; handle.innerHTML = '<span></span>';
+      bs.insertBefore(handle, bs.firstChild);
+      const x = document.createElement('button');
+      x.className = 'sheet-close'; x.type = 'button'; x.setAttribute('aria-label', 'close');
+      x.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+      x.addEventListener('click', closeSheet);
+      bs.appendChild(x);
+      document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', openSheet));
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+      // 손잡이 끌어내리기: 손가락을 따라 내려가다가 80px 넘게 내리면 닫힘
+      let y0 = null;
+      handle.addEventListener('pointerdown', (e) => { if (!bs.classList.contains('open')) return openSheet(); y0 = e.clientY; handle.setPointerCapture(e.pointerId); bs.style.transition = 'none'; });
+      handle.addEventListener('pointermove', (e) => { if (y0 == null) return; const dy = Math.max(0, e.clientY - y0); bs.style.transform = `translateY(${dy}px)`; });
+      const end = (e) => {
+        if (y0 == null) return;
+        const dy = e.clientY - y0; y0 = null;
+        bs.style.transition = ''; bs.style.transform = '';
+        if (dy > 80) closeSheet();
+      };
+      handle.addEventListener('pointerup', end);
+      handle.addEventListener('pointercancel', end);
+    })();
 
 // Three.js 구체 UV 매핑 표준 정렬

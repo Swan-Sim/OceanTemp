@@ -116,9 +116,7 @@
       // [ADD] 지원하는 브라우저(주로 풀스크린 상태의 안드로이드 크롬)에서는
       // 세로 방향으로 잠가봅니다. 실패해도 조용히 무시 - 가로모드 차단의
       // 실질적인 방어선은 CSS의 .rotate-overlay 쪽입니다 (모든 브라우저에서 동작).
-      if (screen.orientation && screen.orientation.lock) {
-        screen.orientation.lock('portrait').catch(() => {});
-      }
+      // [CHANGE] 가로 화면은 이제 "시트 모드"로 지원하므로 세로 잠금은 하지 않아요
       bootApp().catch(err => {
         // [FIX] 초기화 중 에러가 나면 "로딩 중..."에서 그대로 멈춰버렸던 문제.
         // 화면에 에러를 보여주고 콘솔에도 남겨서 원인을 바로 알 수 있게 합니다.
@@ -170,23 +168,19 @@
     // 화면 방향을 강제로 잠글 수 없어서(전체화면 앱 모드 제외), 휴대폰이 가로로
     // 누우면(가로 + 높이 500px 이하) 페이지 전체를 반대 방향으로 90° 돌려서
     // 기기 기준으로는 세로 화면이 그대로 보이게 합니다. 데스크톱 창에는 적용 안 돼요.
+    // [CHANGE] "가로모드는 지구로만 채우고, 패널은 팝업처럼 올라오게 / 웹도 비율이 넘으면 똑같이" -
+    // 예전에는 휴대폰을 가로로 돌리면 페이지 전체를 90° 돌려 세로 화면을 유지했는데(고개를 꺾어 봐야 해서 불편),
+    // 이제는 화면이 가로로 넓고 높이가 낮아(높이 640px 미만) 지구와 패널을 위아래로 둘 수 없으면
+    // "시트 모드"가 됩니다: 지구가 화면을 다 쓰고, 아래에 탭만 걸쳐 있다가 탭·정점을 누르면 패널이 올라와요.
+    // 휴대폰 가로·낮은 웹 창 모두 같은 규칙. (함수 이름은 호출하는 곳이 많아서 그대로 둠)
     function applyForcedPortrait() {
-      const w = window.innerWidth, h = window.innerHeight;
-      const phoneLandscape = w > h && h <= 500;
       document.body.classList.remove('force-portrait-90', 'force-portrait-270');
-      if (!phoneLandscape) {
-        portraitRot = null;
-        document.body.style.width = ''; document.body.style.height = '';
-        return;
-      }
-      let angle = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle
-        : (typeof window.orientation === 'number' ? window.orientation : 90);
-      angle = ((angle % 360) + 360) % 360;
-      const mode = angle === 270 ? '270' : '90';
-      document.body.classList.add('force-portrait-' + mode);
-      document.body.style.width = h + 'px';   // 돌린 뒤의 "세로 화면" 폭 = 실제 화면 높이
-      document.body.style.height = w + 'px';
-      portraitRot = { mode, Lw: h, Lh: w };
+      document.body.style.width = ''; document.body.style.height = '';
+      portraitRot = null;
+      const w = window.innerWidth, h = window.innerHeight;
+      const sheetMode = w > h * 1.15 && h < 640;
+      document.body.classList.toggle('sheet-mode', sheetMode);
+      if (!sheetMode && typeof closeSheet === 'function') closeSheet();
     }
     applyForcedPortrait();
 

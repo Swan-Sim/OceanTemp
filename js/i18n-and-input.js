@@ -85,6 +85,7 @@
         visCheckShort: "교차 확인(VIIRS 14일)",
         visGround: (name, km, v, q, a, b) => `실측 투명도(부산시 측정, ${name} ${km}km·대략 위치, ${a}~${b}년 ${q}분기 평균): ${v}`,
         visGroundShort: (name) => `실측 투명도(부산시, ${name})`,
+        legendTitle: '범례', legendDock: '그래프 아래로 치우기', legendUndock: '그래프 위로 다시 올리기',
         // [ADD] 근처 관측소 실측 (국립해양조사원 / NOAA)
         obsNote: (src, pred) => `<span class="nt-obsdot"></span> 점 = 실측: ${src} · 이후 칸은 예보${pred ? ' (조석은 NOAA 예측)' : ''}`,
         obsSource: (src) => `지금까지: 실측 - ${src} · 이후: 예보 모델 (Open-Meteo)`,
@@ -164,6 +165,7 @@
         visCheckShort: "Cross-check (VIIRS 14d)",
         visGround: (name, km, v, q, a, b) => `Measured transparency (Busan city, ${name} ${km} km, approx. location, Q${q} avg ${a}–${b}): ${v}`,
         visGroundShort: (name) => `Measured transparency (Busan, ${name})`,
+        legendTitle: 'Legend', legendDock: 'Move below the chart', legendUndock: 'Put back on the chart',
         obsNote: (src, pred) => `<span class="nt-obsdot"></span> dot = observed: ${src} · later columns are forecast${pred ? ' (tide: NOAA prediction)' : ''}`,
         obsSource: (src) => `Up to now: observed - ${src} · later: forecast model (Open-Meteo)`,
         obsKhoa: (name) => `KHOA ${name}`, obsKma: (name) => `KMA ${name}`, obsBuoyWord: 'buoy', obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC buoy ${id}`, obsCmems: (name) => `Copernicus Marine ${name}`,

@@ -725,11 +725,11 @@
           // [FIX] "상대온도라 날뛰어 보임" - 색상표와 같은 0~40도 절대 범위로 고정
           y: { min: 0, max: 40, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: 'rgba(255,255,255,0.05)' } }
         };
-        // 시야 축(오른쪽): 1~30m 로그 눈금 - 3m와 5m 차이도 30m와 같은 그래프에서 보이게
+        // [CHANGE] "시야 10m와 30m 차이가 없어 보임" - 로그 눈금 대신 0~30m 일정 간격(절대값) 눈금으로.
+        // 30m는 위성 추정의 상한(30m+)이라 축 끝도 30m.
         if (vis) scales.yv = {
-          type: 'logarithmic', position: 'right', min: 0.5, max: 30, grid: { drawOnChartArea: false },
-          afterBuildTicks: (ax) => { ax.ticks = VIS_TICKS.map(value => ({ value })); },
-          ticks: { color: '#38BDF8', font: { size: 9 }, callback: (val) => val + 'm' }
+          type: 'linear', position: 'right', min: 0, max: 30, grid: { drawOnChartArea: false },
+          ticks: { stepSize: 5, color: '#38BDF8', font: { size: 9 }, callback: (val) => val + 'm' }
         };
         chartInstance = new Chart(chartCanvas, {
           type: 'line',

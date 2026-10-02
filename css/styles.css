@@ -493,3 +493,8 @@
       .nt-tidesvg .tl-line { stroke-width: 2.8; }
       .nt-tidesvg .tl-mark { font-size: 10px; }
     }
+
+    /* [ADD] 내 위치 안내 문구 */
+    #locate-msg { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 3000; padding: 7px 14px; border-radius: 8px;
+      background: rgba(15,23,42,.88); color: #f8fafc; font-size: 13px; border: 1px solid rgba(255,255,255,.25); opacity: 0; pointer-events: none; transition: opacity .25s; }
+    #locate-msg.show { opacity: 1; }

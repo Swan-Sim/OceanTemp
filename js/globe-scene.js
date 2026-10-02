@@ -1081,6 +1081,57 @@ function getCurrentCenterLatLng() {
       // [ADD] 핀치 줌(두 손가락으로 오므리기/벌리기) 상태
       let pinchStartDist = null;
       let pinchStartCameraDist = null;
+      let lastPinchLatLon = null;
+      // [FIX] "줌인할 때 마우스 커서 위치로 안 되고 가운데로 됨" - 확대·축소 전에 커서 아래 지구 지점을 잡아 두고,
+      // 줌 후에도 그 지점이 커서 아래에 그대로 있도록 지구를 살짝 돌려요(지도 앱처럼 커서 쪽으로 확대).
+      // 커서가 지구 밖(우주)에 있으면 예전처럼 가운데로 확대합니다. 손가락 두 개(핀치)는 두 손가락 가운데 기준.
+      function ndcAt(clientX, clientY) {
+        const r = renderer.domElement.getBoundingClientRect();
+        return new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+      }
+      function hitGlobeAt(ndc) {
+        raycaster.setFromCamera(ndc, camera);
+        const h = raycaster.intersectObject(globeMesh, false)[0];
+        return h ? h.point.clone() : null;
+      }
+      function zoomToward(clientX, clientY, newDist) {
+        const ndc = ndcAt(clientX, clientY);
+        camera.updateMatrixWorld(); globeGroup.updateMatrixWorld(true);
+        const p1 = hitGlobeAt(ndc);
+        const latLon = p1 ? worldPointToLatLon(p1) : null;
+        cameraDistance = newDist;
+        camera.position.z = cameraDistance;
+        camera.updateMatrixWorld();
+        const p2 = p1 ? hitGlobeAt(ndc) : null;
+        if (p1 && p2) {
+          // 지구 위 그 지점(로컬 방향 L)이 새 커서 방향(T)을 향하도록 회전값(x, y)을 몇 번의 반복 계산으로 찾음
+          const L = p1.clone().applyQuaternion(globeGroup.quaternion.clone().invert()).normalize();
+          const T = p2.clone().normalize();
+          const order = globeGroup.rotation.order;
+          const f = (x, y) => L.clone().applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, 0, order)));
+          let x = globeGroup.rotation.x, y = globeGroup.rotation.y;
+          for (let it = 0; it < 8; it++) {
+            const v = f(x, y), h = 1e-4, vx = f(x + h, y), vy = f(x, y + h);
+            const e = [v.x - T.x, v.y - T.y, v.z - T.z];
+            const J = [[(vx.x - v.x) / h, (vy.x - v.x) / h], [(vx.y - v.y) / h, (vy.y - v.y) / h], [(vx.z - v.z) / h, (vy.z - v.z) / h]];
+            let a = 0, b = 0, c = 0, g1 = 0, g2 = 0;
+            for (let i = 0; i < 3; i++) { a += J[i][0] ** 2; b += J[i][0] * J[i][1]; c += J[i][1] ** 2; g1 += J[i][0] * e[i]; g2 += J[i][1] * e[i]; }
+            const det = a * c - b * b;
+            if (Math.abs(det) < 1e-12) break;
+            const dx = -(c * g1 - b * g2) / det, dy = -(-b * g1 + a * g2) / det;
+            x += dx; y += dy;
+            if (Math.hypot(dx, dy) < 1e-7) break;
+          }
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            globeGroup.rotation.x = Math.max(-1.2, Math.min(1.2, x));
+            globeGroup.rotation.y = y;
+          }
+        }
+        updateZoomGauge();
+        if (typeof updateLabelOrientation === 'function') updateLabelOrientation();
+        return latLon; // 확대 전 커서 아래 위경도(상세 지도로 넘어갈 때 그 자리로)
+      }
+
       function getTouchDist(touches) {
         const dx = touches[0].clientX - touches[1].clientX;
         const dy = touches[0].clientY - touches[1].clientY;
@@ -1111,9 +1162,8 @@ function getCurrentCenterLatLng() {
           const ratio = pinchStartDist / Math.max(newDist, 1);
           let newCam = pinchStartCameraDist * ratio;
           newCam = Math.max(MIN_DIST, Math.min(MAX_DIST, newCam));
-          cameraDistance = newCam;
-          camera.position.z = cameraDistance;
-          updateZoomGauge();
+          const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2, my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          lastPinchLatLon = zoomToward(mx, my, newCam) || lastPinchLatLon; // 두 손가락 가운데 쪽으로 확대
           return;
         }
         if (!isDragging) return;
@@ -1140,9 +1190,10 @@ function getCurrentCenterLatLng() {
           pinchStartDist = null;
           if (wasPinching && (!e.touches || e.touches.length < 2)) {
             if (cameraDistance <= MIN_DIST + 15) {
-              const center = getCurrentCenterLatLng();
+              const center = lastPinchLatLon || getCurrentCenterLatLng();
               showDetailMap(center.lat, center.lon, 6);
             }
+            lastPinchLatLon = null;
             return;
           }
         }
@@ -1218,8 +1269,15 @@ function getCurrentCenterLatLng() {
 
       container.addEventListener('wheel', (e) => {
         e.preventDefault();
-        if (e.deltaY < 0) zoomIn();
-        else zoomOut();
+        if (isDetailMode) { if (e.deltaY < 0) zoomIn(); else zoomOut(); return; }
+        const zoomingIn = e.deltaY < 0;
+        const target = zoomingIn ? Math.max(MIN_DIST, cameraDistance - 25) : Math.min(MAX_DIST, cameraDistance + 25);
+        const at = zoomToward(e.clientX, e.clientY, target); // 커서 쪽으로 확대·축소
+        // 충분히 확대되면 커서가 가리키던 자리의 상세 지도로
+        if (zoomingIn && cameraDistance <= MIN_DIST + 15) {
+          const c = at || getCurrentCenterLatLng();
+          showDetailMap(c.lat, c.lon, 6);
+        }
       }, { passive: false });
     }
 

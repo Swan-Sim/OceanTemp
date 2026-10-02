@@ -539,10 +539,13 @@
         const area = `${line} L${xp(tideIn[tideIn.length - 1].x).toFixed(1)},${TH} L${xp(tideIn[0].x).toFixed(1)},${TH} Z`;
         const marks = d.extremes.filter(e => e.x >= cols[0] && e.x <= cols[cols.length - 1]).map(e => {
           const up = e.type === 'high';
-          const x = Math.max(34, Math.min(W - 34, xp(e.x))); // 양 끝에서 글자가 잘리지 않게
-          return `<text x="${x.toFixed(1)}" y="${(up ? yp(e.y) - 3 : yp(e.y) + 10).toFixed(1)}" fill="${up ? '#BAE6FD' : '#7DA3C0'}" font-size="8" text-anchor="middle">${up ? '▲' : '▼'}${hhmm(e.x)} ${e.y.toFixed(1)}m</text>`;
+          const x = Math.max(42, Math.min(W - 42, xp(e.x))); // 양 끝에서 글자가 잘리지 않게(글자를 키워서 여유도 늘림)
+          return `<text class="tl-mark" x="${x.toFixed(1)}" y="${(up ? yp(e.y) - 4 : yp(e.y) + 12).toFixed(1)}" fill="${up ? '#E0F2FE' : '#A5C4DC'}" font-size="9" font-weight="600" text-anchor="middle">${up ? '▲' : '▼'}${hhmm(e.x)} ${e.y.toFixed(1)}m</text>`;
         }).join('');
-        tideSvg = `<svg width="${W}" height="${TH}" style="display:block"><path d="${area}" fill="rgba(56,189,248,0.12)"/><path d="${line}" fill="none" stroke="#38BDF8" stroke-width="1.5"/>${marks}</svg>`;
+        // [FIX] "모바일에서 조석 곡선이 너무 얇아 안 보임" - 선을 굵게, 아래 채움을 진하게, 글자를 크고 밝게(굵기는 CSS에서 화면 크기별로)
+        // 하루 경계(0시)에 옅은 세로선을 그어 위 칸들과 이어져 보이게
+        const dayLines = cols.filter(x => new Date(x).getUTCHours() === 0).map(x => `<line x1="${(xp(x) - COLW / 2).toFixed(1)}" y1="0" x2="${(xp(x) - COLW / 2).toFixed(1)}" y2="${TH}" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>`).join('');
+        tideSvg = `<svg width="${W}" height="${TH}" style="display:block">${dayLines}<path d="${area}" fill="rgba(56,189,248,0.20)"/><path class="tl-line" d="${line}" fill="none" stroke="#38BDF8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>${marks}</svg>`;
       }
 
       // [CHANGE] "지금" 칸은 좌우로 넘겨도 화면 밖으로 안 나가고 가장자리에 붙어

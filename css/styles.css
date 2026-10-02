@@ -487,3 +487,9 @@
     #leafletMap .leaflet-control-attribution { background: rgba(7,11,20,0.55) !important; color: #94A3B8 !important; font-size: 9px; padding: 0 5px; }
     #leafletMap .leaflet-control-attribution a { color: #94A3B8 !important; }
     #leafletMap .leaflet-bottom.leaflet-right { bottom: 32px; }
+
+    /* [FIX] 조석 곡선: 휴대폰(좁은 화면)에서 더 굵고 글자도 조금 더 크게 */
+    @media (max-width: 600px) {
+      .nt-tidesvg .tl-line { stroke-width: 2.8; }
+      .nt-tidesvg .tl-mark { font-size: 10px; }
+    }

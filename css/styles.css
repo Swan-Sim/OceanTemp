@@ -498,3 +498,9 @@
     #locate-msg { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 3000; padding: 7px 14px; border-radius: 8px;
       background: rgba(15,23,42,.88); color: #f8fafc; font-size: 13px; border: 1px solid rgba(255,255,255,.25); opacity: 0; pointer-events: none; transition: opacity .25s; }
     #locate-msg.show { opacity: 1; }
+
+    /* [ADD] 좌표 찍기 팝업 */
+    .cp-box { font-size: 12px; text-align: center; }
+    .cp-val { font-weight: 700; font-size: 13px; user-select: all; }
+    .cp-dms { color: #64748b; font-size: 11px; margin: 2px 0 6px; }
+    .cp-copy { padding: 3px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f1f5f9; cursor: pointer; font-size: 12px; }

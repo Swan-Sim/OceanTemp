@@ -50,7 +50,7 @@ async function warm(st) {
   const url = `${SITE}/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&refresh=1`;
   const t0 = Date.now();
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(45000) });
+    const r = await fetch(url, { signal: AbortSignal.timeout(65000) }); // 처음 받는 정점은 30일씩 3번이라 조금 더 기다림
     const j = await r.json().catch(() => ({}));
     return { st, ms: Date.now() - t0, status: r.status, ok: !!j.ok, cache: r.headers.get('x-vis-cache'), reason: j.reason || j.error };
   } catch (e) {

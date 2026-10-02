@@ -347,6 +347,7 @@
     // 정점명 옆 작은 게이지: 숫자 = 오늘 추정 시야, 옅은 띠 = 90일 통상 범위(하위~상위 10%), 흰 눈금 = 오늘
     function visGaugeHTML(st) {
       const v = st._visCache;
+      if (!v && st._visFar) return `<span class="nt-vis nt-vis-wait" title="${t.visFar(st._visFar)}">${EYE_SVG}–</span>`;
       if (!v) return st._visState === 'loading' ? `<span class="nt-vis nt-vis-wait" title="${t.visLoading}">${EYE_SVG}…</span>` : '';
       const a = visPos(v.p10), b = visPos(v.p90);
       let title = t.visGaugeTitle(fmtVis(v.now.vis), fmtVis(v.p10), fmtVis(v.p90), mmdd(v.last.d), fmtVis(v.last.vis));
@@ -777,7 +778,8 @@
             (vis.ground ? `<div class="item"><span style="display:inline-block;width:8px;height:8px;border:1.8px solid #FCD34D;border-radius:50%;margin:0 5px 0 1px;"></span>${t.visGroundShort(vis.ground.name)}</div>` : '')
           : (selectedStation._visState === 'loading'
               ? `<div class="item" style="color:#7DD3FC;">${t.visLoading}</div>`
-              : (selectedStation._visState === 'failed' ? `<div class="item" style="color:#94a3b8;">${t.visFailed}</div>` : ''));
+              : (selectedStation._visFar ? `<div class="item" style="color:#94a3b8;">${t.visFar(selectedStation._visFar)}</div>`
+                : (selectedStation._visState === 'failed' ? `<div class="item" style="color:#94a3b8;">${t.visFailed}</div>` : '')));
         legendBox.innerHTML = statusLine + `
           ${prev
             ? `<div class="item"><span class="swatch" style="background:rgba(226,232,240,.85);"></span>${t.prevAvg(prev.nYears)}</div><div class="item"><span class="swatch" style="background:rgba(203,213,225,.35);height:6px;"></span>${t.prevRange(prev.nYears)}</div>`

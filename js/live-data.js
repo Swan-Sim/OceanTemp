@@ -518,6 +518,8 @@
       const lat = st.coords[1], lon = st.coords[0];
       const j = await fetchJSON(`/api/visibility?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&v=3`, 60000, 0);
       if (!j || !j.ok) { const err = new Error(j && j.reason || 'NO_DATA'); err.code = j && j.reason; throw err; }
+      // [ADD] 정점 좌표가 바다에서 3km 넘게 떨어져 있으면(육지 안쪽 좌표) 시야를 보여주지 않음 - 근처 다른 바다 값을 그 자리 값처럼 보이게 하지 않으려고
+      if (j.nearestSeaKm != null && j.nearestSeaKm > 3) { st._visFar = j.nearestSeaKm; const err = new Error('FAR_FROM_SEA'); err.code = 'FAR_FROM_SEA'; throw err; }
       const v = computeVisibility(j);
       if (!v) throw new Error('NO_DATA');
       // [ADD] 부산 연안: 부산시가 직접 잰 투명도(분기 평균)를 실측 참고값으로 붙임

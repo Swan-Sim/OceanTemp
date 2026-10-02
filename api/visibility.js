@@ -56,13 +56,17 @@ async function fetchBox(ds, variable, lat, lon, r, timeSel, deadline) {
       const lines = (await fetchText(url, Math.min(15000, left))).trim().split('\n').slice(2);
       const by = {};
       const rKm = r * 111.2;
+      let minKm = Infinity; // 정점 좌표에서 가장 가까운 "바다 값이 있는" 픽셀까지 거리
       for (const l of lines) {
         const c = l.split(',');
         const v = parseFloat(c[4]);
         if (!(v > 0)) continue;
-        if (kmBetween(lat, lon, +c[2], +c[3]) > rKm) continue;
+        const dk = kmBetween(lat, lon, +c[2], +c[3]);
+        if (dk < minKm) minKm = dk;
+        if (dk > rKm) continue;
         (by[c[0].slice(0, 10)] = by[c[0].slice(0, 10)] || []).push(v);
       }
+      Object.defineProperty(by, '__minKm', { value: minKm, enumerable: false });
       return by;
     } catch (e) { lastErr = e; }
   }
@@ -98,10 +102,14 @@ async function fetchChunk(lat, lon, r, sel, deadline) {
     fetchBox(KD_DS, 'kd_490', lat, lon, r, sel, deadline),
     fetchBox(CHL_DS, 'chlor_a', lat, lon, r, sel, deadline).catch(() => null)
   ]);
-  return toDays(kd, chl);
+  const days = toDays(kd, chl);
+  days.minKm = kd.__minKm; // 배열에 거리 정보를 붙여서 돌려줌
+  return days;
 }
-const bodyOf = (lat, lon, radiusKm, days, check) => ({
-  ok: true,
+// [ADD] "시내(육지) 좌표면 측정 불가가 정상" - 정점 좌표에서 가장 가까운 바다 픽셀까지 거리(km)를 같이 돌려줘서
+// 3km보다 멀면 화면에서 시야를 보여주지 않게 해요(좌표가 육지 안쪽이라는 뜻).
+const bodyOf = (lat, lon, radiusKm, days, check, nearestSeaKm) => ({
+  ok: true, nearestSeaKm: Number.isFinite(nearestSeaKm) ? +nearestSeaKm.toFixed(1) : null,
   source: `NOAA CoastWatch NESDIS STAR - VIIRS/OLCI gap-filled (DINEOF) Kd490 & chlorophyll-a, 2km daily, median within ${radiusKm} km`,
   method: 'median', radiusKm, pixel: [lat, lon], hasChl: days.some(x => x.chl != null), days, check
 });
@@ -111,9 +119,11 @@ async function fetchFull(lat, lon) {
   const deadline = Date.now() + 50000;
   const checkP = fetchCheck(lat, lon, deadline);
   let days = [], r = RADII[0];
+  let seaKm = Infinity;
   for (const rr of RADII) {
     r = rr;
     days = await fetchChunk(lat, lon, rr, CHUNKS[0], deadline);
+    if (Number.isFinite(days.minKm)) seaKm = Math.min(seaKm, days.minKm);
     if (days.length >= 5) break;
   }
   if (days.length < 5) return { ok: false, reason: 'no-ocean-pixel' };
@@ -121,7 +131,7 @@ async function fetchFull(lat, lon) {
     if (deadline - Date.now() < 8000) break;
     try { days = mergeDays(days, await fetchChunk(lat, lon, r, sel, deadline)); } catch (_) {}
   }
-  return bodyOf(lat, lon, Math.round(r * 111), days, await checkP);
+  return bodyOf(lat, lon, Math.round(r * 111), days, await checkP, seaKm);
 }
 
 // 갱신: 최근 10일만 + (90일이 덜 찼으면) 오래된 구간 하나
@@ -129,14 +139,16 @@ async function fetchUpdate(lat, lon, prev) {
   const deadline = Date.now() + 40000;
   const r = (prev.radiusKm || 3) / 111;
   const checkP = fetchCheck(lat, lon, deadline);
-  let days = mergeDays(prev.days, await fetchChunk(lat, lon, r, 'last-9:1:last', deadline));
+  const recent = await fetchChunk(lat, lon, r, 'last-9:1:last', deadline);
+  let seaKm = Number.isFinite(recent.minKm) ? recent.minKm : (prev.nearestSeaKm ?? Infinity);
+  let days = mergeDays(prev.days, recent);
   if (days.length < 75) {
     for (const sel of CHUNKS.slice(1).reverse()) {
       if (deadline - Date.now() < 8000) break;
       try { days = mergeDays(days, await fetchChunk(lat, lon, r, sel, deadline)); break; } catch (_) {}
     }
   }
-  return bodyOf(lat, lon, prev.radiusKm || 3, days, (await checkP) || prev.check || null);
+  return bodyOf(lat, lon, prev.radiusKm || 3, days, (await checkP) || prev.check || null, seaKm);
 }
 
 module.exports = async function handler(req, res) {

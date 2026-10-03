@@ -100,7 +100,8 @@ let pin = null;
 let country = '', countryHow = '', userPickedCountry = false, knownSpots = [];
 function renderCountries() {
   const L = T[lang], sel = $('countrySel');
-  const items = OTLists.REGIONS.map(c => [c, OTLists.regionIn(c, lang)]).sort((a, b) => a[1].localeCompare(b[1], lang));
+  const ui = OTLists.uiLocale(); // [CHANGE] 나라 이름은 브라우저 언어로
+  const items = OTLists.REGIONS.map(c => [c, OTLists.regionIn(c, ui)]).sort((a, b) => a[1].localeCompare(b[1], ui));
   sel.innerHTML = `<option value="">—</option>` + items.map(([c, n]) => `<option value="${c}"${c === country ? ' selected' : ''}>${n.replace(/[<>&]/g, '')}</option>`).join('');
   $('countryVal').value = country ? OTLists.regionEnglish(country) : ''; // 시트와 같은 영어 이름으로 저장
   $('countryHint').textContent = countryHow === 'map' ? L.countryAuto : countryHow === 'browser' ? L.countryBrowser : '';

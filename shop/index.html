@@ -237,7 +237,7 @@ function renderLangs() {
   const full = langs.length >= MAX_LANGS;
   $('langAdd').disabled = full;
   $('langAdd').innerHTML = `<option value="">${esc(full ? L.langFull : L.langAdd)}</option>` +
-    OTLists.LANGS.filter(c => !langs.includes(c)).map(c => { const nat = OTLists.langNative(c), loc = OTLists.langIn(c, lang); return `<option value="${c}">${esc(nat)}${loc.toLowerCase() !== nat.toLowerCase() ? ` (${esc(loc)})` : ''}</option>`; }).join('');
+    OTLists.LANGS.filter(c => !langs.includes(c)).map(c => { const nat = OTLists.langNative(c), loc = OTLists.langIn(c, OTLists.uiLocale()); return `<option value="${c}">${esc(nat)}${loc.toLowerCase() !== nat.toLowerCase() ? ` (${esc(loc)})` : ''}</option>`; }).join('');
 }
 $('langAdd').onchange = () => { const c = $('langAdd').value; if (c) setLangs([...langs, c]); };
 $('langChips').onclick = (e) => { const b = e.target.closest('[data-rmlang]'); if (b) setLangs(langs.filter(c => c !== b.dataset.rmlang)); };

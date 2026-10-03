@@ -23,5 +23,15 @@
   // 브라우저 설정에서 나라(ko-KR → KR), 언어(ko)
   const browserLang = () => (navigator.language || 'en').split('-')[0].toLowerCase();
   const browserRegion = () => { const m = (navigator.languages || [navigator.language || '']).map(l => (l.split('-')[1] || '')).find(r => /^[A-Z]{2}$/i.test(r)); return m ? m.toUpperCase() : ''; };
-  g.OTLists = { LANGS, REGIONS, langNative, langIn, regionIn, regionCode, regionEnglish, browserLang, browserRegion };
+  // [ADD] 목록 이름을 보여줄 브라우저 언어(ko-KR, ja, en-US …)
+  const uiLocale = () => { try { return Intl.getCanonicalLocales(navigator.language || 'en')[0]; } catch (_) { return 'en'; } };
+  // [ADD] 좌표 → 가장 가까운 알려진 포인트의 나라(maxKm 안). spots: [{lat, lon, code, name}]
+  function nearestCountry(lat, lon, spots, maxKm) {
+    const R = 6371, rad = Math.PI / 180; let best = null, bd = Infinity;
+    (spots || []).forEach(s => { if (!s.code || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return;
+      const d = 2 * R * Math.asin(Math.sqrt(Math.sin((s.lat - lat) * rad / 2) ** 2 + Math.cos(lat * rad) * Math.cos(s.lat * rad) * Math.sin((s.lon - lon) * rad / 2) ** 2));
+      if (d < bd) { bd = d; best = s; } });
+    return best && bd <= (maxKm || 500) ? { code: best.code, km: Math.round(bd), name: best.name || '' } : null;
+  }
+  g.OTLists = { uiLocale, nearestCountry, LANGS, REGIONS, langNative, langIn, regionIn, regionCode, regionEnglish, browserLang, browserRegion };
 })(window);

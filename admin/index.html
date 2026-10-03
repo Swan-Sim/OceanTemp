@@ -143,6 +143,7 @@
   </div>
 </div>
 
+<script src="/shop/lists.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -252,12 +253,19 @@
   const SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
   fetch(SHEET).then(r => r.text()).then(text => {
     const lines = text.split(/\r?\n/), head = lines.shift().split(',').map(h => h.trim().toLowerCase());
-    const iNo = head.indexOf('no'), iLabel = head.indexOf('label'), iName = head.indexOf('name'), iCountry = head.indexOf('country');
+    const iNo = head.indexOf('no'), iLabel = head.indexOf('label'), iName = head.indexOf('name'), iCountry = head.indexOf('country'), iLat = head.indexOf('lat'), iLon = head.indexOf('lon');
     lines.forEach(l => { const m = l.match(/^(\d+),/); if (!m || iNo !== 0) return; const cells = l.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(c => c.replace(/,$/, '').replace(/^"|"$/g, ''));
-      const no = +cells[iNo]; spotNames[no] = cells[iLabel] || cells[iName]; spotAll.push({ no, name: cells[iName] || '', label: cells[iLabel] || '', country: cells[iCountry] || '' }); });
+      const no = +cells[iNo]; spotNames[no] = cells[iLabel] || cells[iName]; spotAll.push({ no, name: cells[iName] || '', label: cells[iLabel] || '', country: cells[iCountry] || '', lat: +cells[iLat], lon: +cells[iLon], code: OTLists.regionCode(cells[iCountry]) }); });
     if (mg) renderMgmt();
   }).catch(() => {});
   const spotsText = (arr) => (arr || []).map(n => `<span title="#${n}">${esc(spotNames[n] || ('#' + n))}</span>`).join(', ');
+  // [ADD] 나라 셀렉트(값은 시트와 같은 영어 이름, 보이는 이름은 한국어)
+  function countrySelect(cur) {
+    const code = OTLists.regionCode(cur);
+    const ui = OTLists.uiLocale(); // [CHANGE] 브라우저 언어로 나라 이름
+    const items = OTLists.REGIONS.map(c => [c, OTLists.regionIn(c, ui)]).sort((a, b) => a[1].localeCompare(b[1], ui));
+    return `<select class="f" data-k="country"><option value="">—</option>${items.map(([c, n]) => `<option value="${esc(OTLists.regionEnglish(c))}"${c === code ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  }
   const PLANS = [['trial', '무료(제한)'], ['friend', '무료(지인)'], ['paid', '유료']];
   const planKo = (p) => ({ trial: '무료(제한)', friend: '무료(지인)', free: '무료(지인)', paid: '유료' })[p] || p;
   const planOpts = (cur) => PLANS.map(([v, l]) => `<option value="${v}"${(cur === v || (cur === 'free' && v === 'friend')) ? ' selected' : ''}>${l}</option>`).join('');
@@ -345,12 +353,29 @@
       <div class="ed" style="border-color:var(--line);margin-top:8px">
         <label>이름</label><input class="f" data-k="name" value="${esc(r.data.name)}">
         <label>짧은 이름</label><input class="f" data-k="label" value="${esc(r.data.label)}">
-        <label>나라</label><input class="f" data-k="country" value="${esc(r.data.country)}">
+        <label>나라</label>${countrySelect(r.data.country)}
+        <label>추천 나라</label><div class="muted" data-cty-hint></div>
         <label>위도, 경도</label><div class="row"><input class="f" data-k="lat" value="${esc(r.data.lat)}" style="width:120px"><input class="f" data-k="lon" value="${esc(r.data.lon)}" style="width:120px">
           <a href="/spot/?lat=${encodeURIComponent(r.data.lat)}&lon=${encodeURIComponent(r.data.lon)}" target="_blank" rel="noopener">위성 지도에서 보기</a></div>
         ${r.data.note ? `<label>설명</label><div>${esc(r.data.note)}</div>` : ''}
       </div>
       <div class="actions"><button class="primary" data-act="sapprove">승인 (번호 자동)</button><button data-act="sreject">거절</button></div></div>`).join('') : '<div class="muted">대기 중인 요청이 없어요</div>';
+    // [ADD] 좌표로 추천 나라 자동 선택(가까운 기존 포인트 500km 안). 처음 열 때 + 위도·경도를 고칠 때
+    $('spotReqs').querySelectorAll('[data-sreq]').forEach(card => {
+      const pick = (force) => {
+        const la = parseFloat(card.querySelector('[data-k=lat]').value), lo = parseFloat(card.querySelector('[data-k=lon]').value);
+        const hint = card.querySelector('[data-cty-hint]'), sel = card.querySelector('select[data-k=country]');
+        if (!Number.isFinite(la) || !Number.isFinite(lo)) { hint.textContent = '위도·경도를 넣으면 추천해요'; return; }
+        const all = spotAll.concat((mg.spots || []).map(x => ({ lat: +x.lat, lon: +x.lon, code: OTLists.regionCode(x.country), name: x.label || x.name })));
+        const n = OTLists.nearestCountry(la, lo, all.map(x => ({ ...x, name: x.label || x.name })), 500);
+        if (!n) { hint.textContent = '500km 안에 기존 포인트가 없어 추천할 수 없어요 - 직접 골라주세요'; return; }
+        const nm = OTLists.regionIn(n.code, OTLists.uiLocale());
+        hint.textContent = `${nm} (가장 가까운 포인트: ${n.name}, ${n.km}km)`;
+        if (force || !sel.value) sel.value = OTLists.regionEnglish(n.code);
+      };
+      card.querySelectorAll('[data-k=lat], [data-k=lon]').forEach(i => i.addEventListener('input', () => pick(true)));
+      pick(false);
+    });
     $('spotList').innerHTML = (mg.spots || []).length ? `<table>${mg.spots.sort((a, b) => a.no - b.no).map(s => `<tr data-no="${s.no}">
       <td><b>#${s.no} ${esc(s.name)}</b> ${s.show === false ? '<span class="tag off">숨김</span>' : ''}<div class="muted">${esc(s.label)} · ${esc(s.country)} · ${s.lat}, ${s.lon}</div></td>
       <td class="act"><button data-act="stoggle">${s.show === false ? '보이기' : '숨기기'}</button> <button data-act="sdel">삭제</button></td></tr>`).join('')}</table>` : '<div class="muted">아직 없어요 (구글 시트 정점은 시트에서 관리)</div>';
@@ -362,7 +387,9 @@
     const s = editing;
     const inp = (k, v, ph) => `<input class="f" data-k="${k}" value="${esc(v)}" placeholder="${esc(ph || '')}">`;
     $('shopEditor').innerHTML = `<div class="ed">
-      ${FIELDS.map(([k, label]) => k === 'spots'
+      ${FIELDS.map(([k, label]) => k === 'lang'
+        ? `<label>${label} (최대 5개)</label><div><select class="f" id="edLangAdd"></select><div id="edLangChips" class="chips"></div></div>`
+        : k === 'spots'
         ? `<label>${label} (최대 5곳)</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div>`
         : `<label>${label}</label>${inp(k, s[k] || '', k === 'lang' ? '언어 코드, 최대 5개: ko,en,ja,zh,es …' : '')}`).join('')}
       <label>이메일(비공개)</label>${inp('email', s.email)}
@@ -373,6 +400,9 @@
       <span></span><div class="row"><button class="primary" data-act="esave">저장</button><button data-act="ecancel">취소</button></div></div>`;
     edSpots = (s.spots || []).slice();
     renderEdChips();
+    edLangs = parseLangs(s.lang); renderEdLangs();
+    $('edLangAdd').onchange = () => { const c = $('edLangAdd').value; if (c && edLangs.length < 5 && !edLangs.includes(c)) edLangs.push(c); renderEdLangs(); };
+    $('edLangChips').onclick = (e) => { const b = e.target.closest('[data-rmlang]'); if (b) { edLangs = edLangs.filter(c => c !== b.dataset.rmlang); renderEdLangs(); } };
     $('edPlan').onchange = () => { $('edExp').value = defExp($('edPlan').value); };
     $('edSpotQ').oninput = () => {
       const q = $('edSpotQ').value.trim().toLowerCase(), box = $('edSugg');
@@ -387,7 +417,20 @@
       edSpots.push(+d.dataset.no); renderEdChips(); $('edSpotQ').value = ''; $('edSugg').style.display = 'none'; };
     $('edChips').onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { edSpots = edSpots.filter(n => n !== +b.dataset.rm); renderEdChips(); } };
   }
-  let edSpots = [];
+  let edSpots = [], edLangs = [];
+  // 언어: 코드("ko,en")로 저장. 예전 글자 입력("한국어 · English")은 이름으로 코드 찾기
+  function parseLangs(v) {
+    v = String(v || '').trim(); if (!v) return [];
+    if (/^[a-z]{2,3}(,[a-z]{2,3})*$/.test(v)) return v.split(',').slice(0, 5);
+    return v.split(/[·,\/|]+/).map(x => x.trim().toLowerCase()).map(x => OTLists.LANGS.find(c => [OTLists.langNative(c), OTLists.langIn(c, 'en'), OTLists.langIn(c, 'ko'), c].some(n => n.toLowerCase() === x))).filter(Boolean).slice(0, 5);
+  }
+  function renderEdLangs() {
+    const sel = $('edLangAdd'); if (!sel) return;
+    const full = edLangs.length >= 5;
+    sel.disabled = full;
+    sel.innerHTML = `<option value="">${full ? '5개까지 고를 수 있어요' : '+ 언어 추가'}</option>` + OTLists.LANGS.filter(c => !edLangs.includes(c)).map(c => `<option value="${c}">${esc(OTLists.langNative(c))} (${esc(OTLists.langIn(c, OTLists.uiLocale()))})</option>`).join('');
+    $('edLangChips').innerHTML = edLangs.map(c => `<span class="chip">${esc(OTLists.langNative(c))}<button type="button" data-rmlang="${c}">×</button></span>`).join('');
+  }
   function renderEdChips() { const c = $('edChips'); if (c) c.innerHTML = edSpots.map(n => `<span class="chip" title="#${n}">${esc(spotNames[n] || '#' + n)}<button type="button" data-rm="${n}">×</button></span>`).join(''); }
   const readEd = (root) => { const o = {}; root.querySelectorAll('[data-k]').forEach(el => { o[el.dataset.k] = el.value; }); return o; };
 
@@ -405,7 +448,7 @@
       else if (act === 'reject') { if (!confirm('이 요청을 거절할까요? (요청 내용은 지워져요)')) return; await api('shopReject', { reqId: req.dataset.req }); }
       else if (act === 'edit') { editing = Object.assign({}, mg.shops.find(s => String(s.id) === tr.dataset.id)); renderEditor(); $('shopEditor').scrollIntoView({ behavior: 'smooth' }); return; }
       else if (act === 'ecancel') { editing = null; renderEditor(); return; }
-      else if (act === 'esave') { const o = readEd($('shopEditor')); o.spots = edSpots; o.show = o.show === '1'; if (editing.id) o.id = editing.id;
+      else if (act === 'esave') { const o = readEd($('shopEditor')); o.spots = edSpots; o.lang = edLangs.join(','); o.show = o.show === '1'; if (editing.id) o.id = editing.id;
         const j = await api('shopSave', o); editing = null; if (j.links && j.links.length) showLinks(j.links); }
       else if (act === 'link') { const s = mg.shops.find(x => String(x.id) === tr.dataset.id);
         if (!confirm(`${s.name}의 새 수정 링크를 만들까요? 예전 링크는 더 이상 안 돼요.`)) return;

@@ -145,10 +145,12 @@
         <button class="tab-btn active" id="btn-now" onclick="setMode('now')">실시간 현황</button>
         <button class="tab-btn" id="btn-ts" onclick="setMode('forecast')">연간 추이</button>
         <button class="tab-btn" id="btn-dp" onclick="setMode('depth')">수심 프로파일</button>
+        <button class="tab-btn" id="btn-shop" onclick="setMode('shop')" style="display:none">다이빙샵</button>
       </div>
 
       <div class="chart-box">
         <div class="now-table" id="now-table"></div>
+        <div class="shop-box" id="shop-box" style="display:none"></div>
         <canvas id="detailChart"></canvas>
         <div class="chart-legend-overlay" id="chart-legend"></div>
       </div>
@@ -164,6 +166,7 @@
   <script src="js/i18n-and-input.js"></script>
   <script src="js/stations.js"></script>
   <script src="js/panel-charts.js"></script>
+  <script src="js/shops.js"></script>
   <script src="js/astronomy.js"></script>
   <script src="js/space-decor.js"></script>
   <script src="js/globe-scene.js"></script>

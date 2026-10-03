@@ -67,6 +67,7 @@
       <div class="card"><h2>도시</h2><table id="cities"></table></div>
     </div>
     <div class="card"><h2>많이 본 정점 (클릭 수)</h2><table id="stations"></table></div>
+    <div class="card"><h2>다이빙샵 연락 버튼 클릭</h2><table id="shops"></table></div>
   </div>
 </div>
 
@@ -79,6 +80,8 @@
   const getPw = () => { try { return sessionStorage.getItem('adminPw') || ''; } catch (_) { return ''; } };
   const setPw = (v) => { try { v ? sessionStorage.setItem('adminPw', v) : sessionStorage.removeItem('adminPw'); } catch (_) {} };
 
+  let shopNames = {};
+  fetch('/api/shops').then(r => r.json()).then(j => { (j.shops || []).forEach(s => { shopNames[s.id] = s.name; }); }).catch(() => {});
   async function load() {
     const pw = getPw();
     if (!pw) return showLogin();
@@ -120,6 +123,9 @@
     table('countries', sum('countries'), (k) => k === '??' ? '알 수 없음' : `${regionName(k)} (${k})`);
     table('cities', sum('cities'), (k) => { const [c, city] = k.split('|'); return `${city === '?' ? '알 수 없음' : city} · ${regionName(c)}`; });
     table('stations', sum('stations'), (k) => k, 15);
+    // [ADD] 다이빙샵 클릭: "샵id|종류" → "샵이름 · 전화"
+    const KIND = { tel: '전화', kakao: '카톡', whatsapp: 'WhatsApp', instagram: '인스타', web: '웹', all: '전체 보기' };
+    table('shops', sum('shops'), (k) => { const [id, kd] = k.split('|'); return `${shopNames[id] || '샵 ' + id} · ${KIND[kd] || kd}`; }, 30);
   }
 
   function bars(id, axisId, vals, labels, tips) {

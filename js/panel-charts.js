@@ -652,7 +652,20 @@
       if (selectedStation) {
         const s0 = selectedStation;
         const info = t.infoCoord(s0.network, s0.coords[1], s0.coords[0]) + (s0.isBeach ? ` [${t.beachTag}]` : '');
-        document.getElementById('st-info').innerText = info;
+        setFootInfo(info);
+      }
+      // [ADD] 다이빙샵 탭: 표·그래프 대신 샵 카드
+      const shopBox = document.getElementById('shop-box');
+      const isShop = activeMode === 'shop';
+      if (shopBox) shopBox.style.display = isShop ? '' : 'none';
+      if (isShop) {
+        document.getElementById('detailChart').style.display = 'none';
+        legendBox.style.display = 'none';
+        const fcTop0 = document.getElementById('fc-top');
+        if (fcTop0) fcTop0.style.display = 'none';
+        renderModeHead(false);
+        if (selectedStation && shopBox) renderShopTab(shopBox);
+        return;
       }
       document.getElementById('detailChart').style.display = isNow ? 'none' : '';
       legendBox.style.display = isNow ? 'none' : '';
@@ -839,7 +852,8 @@
       if (typeof updateLeafletSelection === 'function') updateLeafletSelection();
 
       const tagStr = st.isBeach ? ` [${t.beachTag}]` : '';
-      document.getElementById('st-info').innerText = t.infoCoord(st.network, st.coords[1], st.coords[0]) + tagStr;
+      updateShopUI(st, !(opts && opts.auto)); // [ADD] 다이빙샵 탭 버튼 + 새로 열 때마다 순서 다시 섞기
+      setFootInfo(t.infoCoord(st.network, st.coords[1], st.coords[0]) + tagStr);
 
       const depthBtn = document.getElementById('btn-dp');
       if (!st.hasDepth) {
@@ -936,7 +950,7 @@
       activeMode = mode;
       if (selectedStation) selectedStation._userRequested = true; // 버튼을 누른 것도 사용자 요청
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(mode === 'forecast' ? 'btn-ts' : mode === 'depth' ? 'btn-dp' : 'btn-now').classList.add('active');
+      document.getElementById(mode === 'forecast' ? 'btn-ts' : mode === 'depth' ? 'btn-dp' : mode === 'shop' ? 'btn-shop' : 'btn-now').classList.add('active');
       updateChart();
       if (mode === 'forecast' && selectedStation) ensureLiveData(selectedStation);
       if (mode === 'forecast' && selectedStation) ensureVisData(selectedStation);

@@ -63,7 +63,8 @@
           shortName: get(r, 'label') || name,
           lat, lon,
           depth: !/^n/i.test(get(r, 'depth')),
-          net: get(r, 'network') || 'Beach/local'
+          net: get(r, 'network') || 'Beach/local',
+          no: parseInt(get(r, 'no'), 10) || null // [ADD] 정점 번호 - 다이빙샵 시트의 spots 칸과 연결
         });
       });
       return spots;
@@ -120,7 +121,8 @@
           // 첫 표시용 대략값(위도 기반) - 곧 위성 수온 격자 값으로 바뀝니다
           curTemp: +Math.max(0.1, 31 - Math.abs(s.lat) * 0.45).toFixed(1),
           hasDepth: s.depth,
-          network: s.net
+          network: s.net,
+          no: s.no
         });
       });
 

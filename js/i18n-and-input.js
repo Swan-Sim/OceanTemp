@@ -20,7 +20,7 @@
         infoCoord: (net, lat, lon) => `${net} | 위도: ${lat.toFixed(3)}°, 경도: ${lon.toFixed(3)}°`,
         tabForecast: "연간 추이",
         prevAvg: (n) => `지난 ${n}년 같은 날 실측 평균`, prevRange: (n) => `지난 ${n}년 범위(최저~최고)`,
-        tabDepth: "수심 프로파일",
+        tabDepth: "수심 프로파일", tabShop: "다이빙샵", shopPartner: "제휴", shopPartnerOnly: "제휴 샵만 보여요", shopMayChange: "정보가 바뀌었을 수 있어요", shopCall: "전화", shopKakao: "카톡", shopInsta: "인스타", shopWeb: "웹", shopAll: (n) => n > 1 ? `전체 ${n}곳 ›` : "자세히 ›", shopChecked: (d) => `확인 ${d}`,
         chartPast: "평년(계절 추정)",
         chartActual: "실측값(과거)",
         chartFuture: "추정값(오늘~연말)",
@@ -101,7 +101,7 @@
         infoCoord: (net, lat, lon) => `${net} | Lat: ${lat.toFixed(3)}°, Lon: ${lon.toFixed(3)}°`,
         tabForecast: "Yearly trend",
         prevAvg: (n) => `Past ${n}-yr observed avg (same dates)`, prevRange: (n) => `Past ${n}-yr range (min-max)`,
-        tabDepth: "Depth profile",
+        tabDepth: "Depth profile", tabShop: "Dive shops", shopPartner: "Partner", shopPartnerOnly: "Partner shops only", shopMayChange: "Details may have changed", shopCall: "Call", shopKakao: "KakaoTalk", shopInsta: "Instagram", shopWeb: "Web", shopAll: (n) => n > 1 ? `All ${n} ›` : "More ›", shopChecked: (d) => `Checked ${d}`,
         chartPast: "Seasonal Estimate",
         chartActual: "Actual (past)",
         chartFuture: "Projected (Today–Dec)",
@@ -179,6 +179,7 @@
     document.getElementById('btn-ts').innerText = t.tabForecast;
     document.getElementById('btn-dp').innerText = t.tabDepth;
     document.getElementById('btn-now').innerText = t.tabNow;
+    if (typeof updateShopUI === 'function' && typeof selectedStation !== 'undefined' && selectedStation) updateShopUI(selectedStation);
     document.getElementById('btn-locate').title = t.locateTitle;
     document.getElementById('btn-fullscreen').title = t.fullscreenTitle;
     // [ADD] 커피값 후원 버튼 - Buy Me a Coffee 페이지 주소를 넣으면 버튼이 나타나요 (비워 두면 숨김)

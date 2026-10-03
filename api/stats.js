@@ -32,15 +32,16 @@ module.exports = async function handler(req, res) {
     }
     const cmds = [];
     dates.forEach(d => {
-      cmds.push(['HGETALL', `v:h:${d}`], ['HGETALL', `v:c:${d}`], ['HGETALL', `v:ct:${d}`], ['HGETALL', `st:${d}`]);
+      cmds.push(['HGETALL', `v:h:${d}`], ['HGETALL', `v:c:${d}`], ['HGETALL', `v:ct:${d}`], ['HGETALL', `st:${d}`], ['HGETALL', `sc:${d}`]);
     });
     const out = await redisPipeline(cmds);
     const data = dates.map((d, i) => ({
       date: d,
-      hours: toObj(out[i * 4].result),
-      countries: toObj(out[i * 4 + 1].result),
-      cities: toObj(out[i * 4 + 2].result),
-      stations: toObj(out[i * 4 + 3].result)
+      hours: toObj(out[i * 5].result),
+      countries: toObj(out[i * 5 + 1].result),
+      cities: toObj(out[i * 5 + 2].result),
+      stations: toObj(out[i * 5 + 3].result),
+      shops: toObj(out[i * 5 + 4].result) // [ADD] 다이빙샵 연락 버튼 클릭 "샵id|종류"
     }));
     res.status(200).json({ days, data });
   } catch (e) {

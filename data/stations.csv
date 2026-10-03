@@ -1,255 +1,255 @@
-country,name,label,lat,lon,network,depth,show
-United States,Ocean Beach (San Francisco),Ocean Beach,37.7589,-122.5121,NOAA/CeNCOOS,Y,Y
-United States,Baker Beach (Golden Gate View),Baker Beach,37.7936,-122.4847,NOAA/CeNCOOS,Y,Y
-United States,China Beach (San Francisco),China Beach,37.7887,-122.4917,NOAA/CeNCOOS,Y,Y
-United States,Aquatic Park Cove (SF Bay),Aquatic Park,37.8076,-122.4235,NOAA/CeNCOOS,Y,Y
-United States,Crissy Field East Beach (SF),Crissy Field,37.807,-122.451,NOAA/CeNCOOS,Y,Y
-United States,Rodeo Beach (Marin Headlands),Rodeo Beach,37.8307,-122.5387,NOAA/CeNCOOS,Y,Y
-United States,Pacifica State Beach (Linda Mar),Linda Mar,37.5989,-122.5034,NOAA/CeNCOOS,Y,Y
-United States,Half Moon Bay (Mavericks),Half Moon Bay,37.498,-122.4955,NOAA/CeNCOOS,Y,Y
-United States,Monterey Breakwater (San Carlos),San Carlos Beach,36.613,-121.893,NOAA/CeNCOOS,Y,Y
-United States,Lovers Point Beach (Pacific Grove),Lovers Point,36.6257,-121.9152,NOAA/CeNCOOS,Y,Y
-United States,Monastery Beach (Carmel),Monastery Beach,36.523,-121.928,NOAA/CeNCOOS,Y,Y
-United States,Catalina Island (Casino Point),Casino Point,33.348,-118.326,NOAA/SCCOOS,Y,Y
-United States,La Jolla Shores Beach (San Diego),La Jolla Shores,32.8587,-117.258,NOAA/SCCOOS,Y,Y
-United States,"Laguna Beach (California, USA)",Laguna Beach,33.5408,-117.7849,NOAA/SCCOOS,Y,Y
-United States,"Venice Beach (Los Angeles, USA)",Venice Beach,33.9822,-118.4733,NOAA/SCCOOS,Y,Y
-United States,"Santa Monica Beach (California, USA)",Santa Monica,34.0081,-118.4983,NOAA/SCCOOS,Y,Y
-United States,"Zuma Beach (Malibu, USA)",Malibu,34.0187,-118.8296,NOAA/SCCOOS,Y,Y
-United States,"Cocoa Beach (Florida, USA)",Cocoa Beach,28.32,-80.6066,NOAA/NDBC,Y,Y
-United States,"Daytona Beach (Florida, USA)",Daytona Beach,29.2186,-81.0021,NOAA/NDBC,Y,Y
-United States,"Lanikai Beach (Oahu, Hawaii)",Lanikai,21.393,-157.715,NOAA/PacIOOS,Y,Y
-South Korea,고성 아야진 해변 (Ayajin Beach),아야진 해변,38.2727,128.5581,Beach/NIFS,Y,Y
-South Korea,속초 등대해변 (Sokcho Light Beach),속초등대,38.2151,128.6012,Beach/NIFS,Y,Y
-South Korea,양양 남애3리 해변 (Namae Beach),남애 해변,37.947,128.788,Beach/NIFS,Y,Y
-South Korea,강릉 사천진 해변 (Sacheonjin Beach),사천진 해변,37.8355,128.8765,Beach/NIFS,Y,Y
-South Korea,삼척 장호항/갈남항 해변,장호/갈남항,37.283,129.321,Beach/NIFS,Y,Y
-South Korea,포항 이가리 닻 해변,이가리 해변,36.195,129.387,Beach/NIFS,Y,Y
-South Korea,제주 한림 협재 해변,협재 해변,33.3952,126.2396,Beach/KHOA,Y,Y
-South Korea,제주 함덕해수욕장,함덕,33.5441,126.6698,Beach/KHOA,Y,Y
-South Korea,제주 김녕해수욕장,김녕,33.5581,126.7583,Beach/KHOA,Y,Y
-South Korea,제주 이호테우해변,이호테우,33.499,126.449,Beach/KHOA,Y,Y
-South Korea,제주 곽지해수욕장,곽지,33.45,126.31,Beach/KHOA,Y,Y
-South Korea,제주 중문색달해수욕장,중문색달,33.239,126.412,Beach/KHOA,Y,Y
-South Korea,제주 화순금모래해변,화순,33.235,126.358,Beach/KHOA,Y,Y
-South Korea,제주 표선해수욕장,표선,33.3264,126.8382,Beach/KHOA,Y,Y
-South Korea,제주 삼양검은모래해변,삼양,33.5258,126.5813,Beach/KHOA,Y,Y
-South Korea,제주 신양섭지코지해변,섭지코지,33.424,126.927,Beach/KHOA,Y,Y
-South Korea,제주 금능해수욕장,금능,33.393,126.227,Beach/KHOA,Y,Y
-South Korea,제주 우도 하고수동해변 (다이빙),우도,33.5138,126.9589,Beach/KHOA,Y,Y
-South Korea,제주 범섬 다이빙포인트,범섬,33.21713,126.51446,Beach/KHOA,Y,Y
-South Korea,제주 사계리 용머리해안,사계리,33.226,126.31,Beach/KHOA,Y,Y
-South Korea,인천항 관측지점,인천,37.453,126.6121,Beach/NIFS·badatime,Y,Y
-South Korea,평택항 관측지점,평택,36.965,126.823,Beach/NIFS·badatime,Y,Y
-South Korea,보령(대천) 관측지점,보령,36.353,126.492,Beach/NIFS·badatime,Y,Y
-South Korea,장항 관측지점,장항,36.0065,126.691,Beach/NIFS·badatime,Y,Y
-South Korea,군산 관측지점,군산,35.9872,126.6913,Beach/NIFS·badatime,Y,Y
-South Korea,위도 관측지점,위도,35.6123,126.296,Beach/NIFS·badatime,Y,Y
-South Korea,영광 관측지점,영광,35.348,126.29,Beach/NIFS·badatime,Y,Y
-South Korea,목포 관측지점,목포,34.8139,126.3694,Beach/NIFS·badatime,Y,Y
-South Korea,흑산도 관측지점,흑산도,34.685,125.435,Beach/NIFS·badatime,Y,Y
-South Korea,완도 관측지점,완도,34.316,126.755,Beach/NIFS·badatime,Y,Y
-South Korea,거문도 관측지점,거문도,34.032,127.313,Beach/NIFS·badatime,Y,Y
-South Korea,나로도 관측지점,나로도,34.485,127.487,Beach/NIFS·badatime,Y,Y
-South Korea,여수 관측지점,여수,34.756,127.6626,Beach/NIFS·badatime,Y,Y
-South Korea,삼천포 관측지점,삼천포,34.9275,128.0612,Beach/NIFS·badatime,Y,Y
-South Korea,통영 관측지점,통영,34.8437,128.4337,Beach/NIFS·badatime,Y,Y
-South Korea,거제 관측지점,거제,34.8943,128.6117,Beach/NIFS·badatime,Y,Y
-South Korea,가덕도 관측지점,가덕도,35.0251,128.8088,Beach/NIFS·badatime,Y,Y
-South Korea,진해 관측지점,진해,35.1386,128.6948,Beach/NIFS·badatime,Y,Y
-South Korea,부산 해운대 관측지점,해운대,35.15,129.22,Beach/NIFS·badatime,Y,Y
-South Korea,부산항 관측지점,부산,35.0975,129.0462,Beach/NIFS·badatime,Y,Y
-South Korea,울산 관측지점,울산,35.48,129.5,Beach/NIFS·badatime,Y,Y
-South Korea,포항 관측지점,포항,36.0172,129.4878,Beach/NIFS·badatime,Y,Y
-South Korea,영덕 38 난파선,영덕 38 난파선,36.5713,129.4403,Beach/NIFS·badatime,Y,Y
-South Korea,울진 죽변항 1km,울진 죽변항 1km,37.05682,129.44332,Beach/NIFS·badatime,Y,Y
-South Korea,후포 관측지점,후포,36.677,129.52,Beach/NIFS·badatime,Y,Y
-South Korea,울릉도 저동 관측지점,울릉도,37.4813,130.9109,Beach/NIFS·badatime,Y,Y
-South Korea,울릉도 쌍정초,쌍정초,37.5565,130.939556,Beach/NIFS·badatime,Y,Y
-South Korea,독도 관측지점,독도,37.242,131.868,Beach/NIFS·badatime,Y,Y
-South Korea,울릉도 쌍정초,쌍정초,37.5565,130.939556,Beach/NIFS·badatime,Y,Y
-South Korea,주문진 관측지점,주문진,37.8934,128.8315,Beach/NIFS·badatime,Y,Y
-South Korea,동해항 관측지점,동해항,37.507,129.135,Beach/NIFS·badatime,Y,Y
-South Korea,묵호 관측지점,묵호,37.55,129.115,Beach/NIFS·badatime,Y,Y
-South Korea,백령도 관측지점,백령도,37.9731,124.6321,Beach/NIFS·badatime,Y,Y
-South Korea,대청도 관측지점,대청도,37.8271,124.7161,Beach/NIFS·badatime,Y,Y
-South Korea,태안 관측지점,태안,36.787,126.13,Beach/NIFS·badatime,Y,Y
-South Korea,제주항 관측지점,제주항,33.529,126.532,Beach/NIFS·badatime,Y,Y
-South Korea,성산포 관측지점,성산포,33.474,126.927,Beach/NIFS·badatime,Y,Y
-South Korea,모슬포 관측지점,모슬포,33.213,126.251,Beach/NIFS·badatime,Y,Y
-South Korea,추자도 관측지점,추자도,33.964,126.301,Beach/NIFS·badatime,Y,Y
-South Korea,이어도 관측지점,이어도,32.123,125.182,Beach/NIFS·badatime,Y,Y
-Bahrain,Half Moon Bay Beach (Persian Gulf),Half Moon Bay (PG),26.162,50.041,ROPME,Y,Y
-United States,Hanauma Bay Beach (Hawaii),Hanauma Bay,21.269,-157.694,NOAA/PacIOOS,Y,Y
-Brazil,Copacabana Beach (Rio de Janeiro),코파카바나,-22.9719,-43.1813,Beach/INMET,Y,Y
-Brazil,Ipanema Beach (Rio de Janeiro),이파네마,-22.9885,-43.2036,Beach/INMET,Y,Y
-Brazil,Praia da Pipa (Brazil),피파 비치,-6.229,-35.037,Beach/INMET,Y,Y
-France,"Promenade des Anglais (Nice, France)",니스 해변,43.6937,7.2652,Beach/Météo-France,Y,Y
-Croatia,"Zlatni Rat (Bol, Croatia)",즐라트니 라트,43.255,16.635,Beach/DHMZ,Y,Y
-Greece,"Navagio Beach (Zakynthos, Greece)",나바지오,37.8601,20.6238,Beach/HNMS,Y,Y
-Portugal,"Praia da Marinha (Algarve, Portugal)",마리냐 해변,37.0891,-8.4123,Beach/IPMA,Y,Y
-Spain,Playa de las Catedrales (Spain),카테드랄 해변,43.5615,-7.19,Beach/AEMET,Y,Y
-South Africa,Camps Bay Beach (Cape Town),캠스베이,-33.9557,18.3747,Beach/SAWS,Y,Y
-Seychelles,Anse Source d'Argent (Seychelles),앙스 소스다르장,-4.371,55.826,Beach/SMA,Y,Y
-Tanzania,"Nungwi Beach (Zanzibar, Tanzania)",능위 해변,-5.7228,39.2963,Beach/TMA,Y,Y
-Egypt,Ras Mohammed / Sharm El Sheikh (Red Sea),샤름 엘 셰이크,27.735,34.265,Beach/EMA,Y,Y
-Australia,"Bondi Beach (Sydney, Australia)",본다이 비치,-33.8923,151.2779,Beach/BOM,Y,Y
-Australia,"Whitehaven Beach (Whitsundays, Australia)",화이트헤이븐,-20.2812,149.0393,Beach/BOM,Y,Y
-United States,"Waikiki Beach (Oahu, Hawaii)",와이키키,21.276,-157.827,NOAA/PacIOOS,Y,Y
-French Polynesia,Matira Beach (Bora Bora),마티라 비치,-16.539,-151.751,Beach/Météo-France PF,Y,Y
-Fiji,Natadola Beach (Fiji),나타돌라,-18.198,177.377,Beach/FMS,Y,Y
-Thailand,"Maya Bay (Ko Phi Phi, Thailand)",마야 베이,7.6777,98.7708,Beach/TMD,Y,Y
-Philippines,"White Beach (Boracay, Philippines)",보라카이,11.9653,121.9208,Beach/PAGASA,Y,Y
-Indonesia,"Kuta Beach (Bali, Indonesia)",쿠타 비치,-8.7173,115.1678,Beach/BMKG,Y,Y
-Singapore,"Siloso Beach (Sentosa, Singapore)",실로소 비치,1.249,103.81,Beach/MSS,Y,Y
-Japan,"Manza Beach (Okinawa, Japan)",만자 비치,26.50601,127.85738,Beach/JMA,Y,Y
-Japan,"Emerald Beach (Motobu, Okinawa, Japan)",에메랄드비치,26.69256,127.87004,Beach/JMA,Y,Y
-Japan,"Kabira Bay (Ishigaki, Japan)",카비라만,24.457,124.173,Beach/JMA,Y,Y
-Japan,"Yonaha Maehama Beach (Miyako, Japan)",요나하마에하마,24.7325,125.267,Beach/JMA,Y,Y
-Japan,"Shirahama Beach (Wakayama, Japan)",시라하마,33.677,135.336,Beach/JMA,Y,Y
-Japan,"Shonan / Enoshima Beach (Kanagawa, Japan)",쇼난/에노시마,35.3019,139.4783,Beach/JMA,Y,Y
-Japan,"Kawana (Izu Peninsula, Japan)",이즈반도,34.897,139.113,Beach/JMA,Y,Y
-Japan,"Chirihama Beach (Ishikawa, Japan)",치리하마,36.86,136.755,Beach/JMA,Y,Y
-Japan,"Amakusa (Kumamoto, Japan)",아마쿠사,32.53,130,Beach/JMA,Y,Y
-Turks and Caicos Islands,Grace Bay (Turks & Caicos),그레이스 베이,21.7995,-72.1755,Beach/local,Y,Y
-Cayman Islands,Seven Mile Beach (Grand Cayman),세븐마일 비치,19.345,-81.383,Beach/CIMWS,Y,Y
-Cuba,Varadero Beach (Cuba),바라데로,23.1587,-81.2461,Beach/INSMET,Y,Y
-Palau,Rock Islands (Palau),팔라우,7.283,134.478,Beach/local,Y,Y
-Maldives,Male Atoll (Maldives),몰디브,4.1801,73.5119,Beach/Met Maldives,Y,Y
-United States,"South Beach (Miami, USA)",마이애미 사우스비치,25.7817,-80.1272,NOAA/local,Y,Y
-United States,"Myrtle Beach (South Carolina, USA)",머틀비치,33.6908,-78.8779,NOAA/local,Y,Y
-United States,Cape Cod National Seashore (USA),케이프 코드,41.8914,-69.9614,NOAA/local,Y,Y
-Mexico,Tulum Beach (Mexico),툴룸,20.211,-87.429,Beach/SMN,Y,Y
-Mexico,Cancún Beach (Mexico),칸쿤,21.06,-86.772,Beach/SMN,Y,Y
-Canada,"Tofino (Vancouver Island, Canada)",토피노,49.1551,-125.9051,Beach/ECCC,Y,Y
-Uruguay,Punta del Este (Uruguay),푼타델에스테,-34.96,-54.951,Beach/INUMET,Y,Y
-Argentina,Mar del Plata (Argentina),마르델플라타,-38.0057,-57.537,Beach/SMN-AR,Y,Y
-Chile,Viña del Mar (Chile),비냐델마르,-33.0163,-71.5601,Beach/DMC,Y,Y
-Colombia,Cartagena Beach (Colombia),카르타헤나,10.4199,-75.5498,Beach/IDEAM,Y,Y
-Ecuador,Montañita (Ecuador),몬타니타,-1.826,-80.765,Beach/INAMHI,Y,Y
-Ecuador,"Tortuga Bay (Galápagos, Ecuador)",갈라파고스,-0.7572,-90.3127,Beach/INAMHI,Y,Y
-Italy,Amalfi Coast Beach (Italy),아말피,40.6329,14.6038,Beach/local,Y,Y
-Spain,Costa del Sol / Marbella (Spain),마르베야,36.5055,-4.8853,Beach/AEMET,Y,Y
-Spain,"Ses Salines Beach (Ibiza, Spain)",이비자,38.87,1.386,Beach/AEMET,Y,Y
-Greece,"Kamari Beach (Santorini, Greece)",산토리니,36.3696,25.4821,Beach/HNMS,Y,Y
-Malta,Mellieħa Bay (Malta),몰타,35.968,14.362,Beach/local,Y,Y
-Cyprus,Nissi Beach (Cyprus),키프로스,34.9876,33.9708,Beach/DOM-CY,Y,Y
-Turkey,Kaş Beach (Turkey),카쉬,36.1978,29.6389,Beach/MGM,Y,Y
-Montenegro,Sveti Stefan Beach (Montenegro),몬테네그로,42.255,18.892,Beach/local,Y,Y
-Israel,Tel Aviv Beach (Israel),텔아비브,32.083,34.766,Beach/IMS,Y,Y
-Morocco,Agadir Beach (Morocco),아가디르,30.4163,-9.6075,Beach/DMN,Y,Y
-Ghana,"Labadi Beach (Accra, Ghana)",라바디,5.556,-0.153,Beach/GMet,Y,Y
-Kenya,"Diani Beach (Mombasa, Kenya)",디아니,-4.2799,39.5956,Beach/KMD,Y,Y
-South Africa,"Umhlanga Rocks (Durban, South Africa)",움흘랑가,-29.7277,31.0898,Beach/SAWS,Y,Y
-Mauritius,Belle Mare Beach (Mauritius),모리셔스,-20.1897,57.7752,Beach/MMS,Y,Y
-Egypt,"Hurghada Beach (Red Sea, Egypt)",후르가다,27.2631,33.8112,Beach/EMA,Y,Y
-Vietnam,Nha Trang Beach (Vietnam),냐짱,12.2383,109.1984,Beach/NCHMF,Y,Y
-Vietnam,"My Khe Beach (Da Nang, Vietnam)",다낭,16.0546,108.2493,Beach/NCHMF,Y,Y
-India,"Baga Beach (Goa, India)",고아,15.556,73.751,Beach/IMD,Y,Y
-Sri Lanka,Unawatuna Beach (Sri Lanka),우나와투나,6.0087,80.249,Beach/DoM,Y,Y
-India,"Radhanagar Beach (Andaman, India)",안다만,11.598,92.947,Beach/IMD,Y,Y
-China,"Yalong Bay (Sanya, China)",싼야,18.2313,109.5573,Beach/CMA,Y,Y
-Taiwan,Kenting Beach (Taiwan),컨딩,21.9431,120.7954,Beach/CWA,Y,Y
-New Zealand,Bay of Islands (New Zealand),베이오브아일랜즈,-35.263,174.106,Beach/MetService,Y,Y
-Vanuatu,Champagne Beach (Vanuatu),바누아투,-15.233,167.1699,Beach/VMGD,Y,Y
-New Caledonia,"Anse Vata (Nouméa, New Caledonia)",누메아,-22.286,166.4437,Beach/Météo-France NC,Y,Y
-Aruba,Eagle Beach (Aruba),아루바,12.5634,-70.0538,Beach/local,Y,Y
-Bahamas,"Cable Beach (Nassau, Bahamas)",바하마,25.0769,-77.4015,Beach/local,Y,Y
-Jamaica,Negril Beach (Jamaica),네그릴,18.263,-78.348,Beach/local,Y,Y
-Puerto Rico,"Flamenco Beach (Culebra, Puerto Rico)",쿨레브라,18.3307,-65.3139,NOAA/local,Y,Y
-Barbados,Accra Beach (Barbados),바베이도스,13.075,-59.616,Beach/local,Y,Y
-Russia,Sochi Beach (Russia),소치,43.5824,39.7166,Beach/Roshydromet,Y,Y
-United States,"Key West Beach (Florida, USA)",키웨스트,24.5612,-81.7815,NOAA/NDBC,Y,Y
-United States,"Virginia Beach (Virginia, USA)",버지니아비치,36.8464,-75.9715,NOAA/NDBC,Y,Y
-United States,"Cape Hatteras (Outer Banks, USA)",케이프해터러스,35.2484,-75.5226,NOAA/NDBC,Y,Y
-United States,"Newport Beach (California, USA)",뉴포트비치,33.6061,-117.9293,NOAA/SCCOOS,Y,Y
-Mexico,Puerto Vallarta Beach (Mexico),푸에르토바야르타,20.6402,-105.2386,Beach/SMN,Y,Y
-Mexico,Cabo San Lucas Beach (Mexico),카보산루카스,22.8849,-109.9102,Beach/SMN,Y,Y
-Mexico,Cozumel Beach (Mexico),코수멜,20.5,-86.968,Beach/SMN,Y,Y
-Vietnam,Phu Quoc Beach (Vietnam),푸꾸옥,10.18,103.95,Beach/NCHMF,Y,Y
-Vietnam,Ha Long Bay (Vietnam),하롱베이,20.91,107.184,Beach/NCHMF,Y,Y
-Philippines,"El Nido Beach (Palawan, Philippines)",엘니도,11.185,119.392,Beach/PAGASA,Y,Y
-Philippines,"Mactan Island (Cebu, Philippines)",막탄섬,10.3205,123.9959,Beach/PAGASA,Y,Y
-Indonesia,Gili Trawangan (Indonesia),길리트라왕안,-8.3482,116.0438,Beach/BMKG,Y,Y
-Indonesia,Raja Ampat (Indonesia),라자암팟,-0.2426,130.5181,Beach/BMKG,Y,Y
-Malaysia,Port Klang Beach (Malaysia),포트클랑,2.999,101.3897,Beach/MetMalaysia,Y,Y
-Malaysia,Langkawi Beach (Malaysia),랑카위,6.29,99.712,Beach/MetMalaysia,Y,Y
-Malaysia,Malacca Beach (Malaysia),말라카,2.17,102.24,Beach/MetMalaysia,Y,Y
-Spain,Barcelona Beach (Spain),바르셀로나,41.375,2.192,Beach/AEMET,Y,Y
-Croatia,Dubrovnik Beach (Croatia),두브로브니크,42.64,18.106,Beach/local,Y,Y
-Greece,Mykonos Beach (Greece),미코노스,37.4459,25.3253,Beach/HNMS,Y,Y
-Italy,"Taormina Beach (Sicily, Italy)",타오르미나,37.847,15.289,Beach/local,Y,Y
-Turkey,Antalya Beach (Turkey),안탈리아,36.8843,30.6998,Beach/MGM,Y,Y
-Egypt,Alexandria Beach (Egypt),알렉산드리아,31.2122,29.9142,Beach/EMA,Y,Y
-Egypt,"Dahab Beach (Red Sea, Egypt)",다합,28.5117,34.5174,Beach/EMA,Y,Y
-Japan,"Naha Beach (Okinawa, Japan)",나하,26.22629,127.64688,Beach/JMA,Y,Y
-Japan,"Shimoda Beach (Izu, Japan)",시모다,34.673,138.9499,Beach/JMA,Y,Y
-Taiwan,Green Island (Taiwan),뤼다오,22.6772,121.4932,Beach/CWA,Y,Y
-Taiwan,Xiaoliuqiu (Taiwan),샤오류추,22.3558,120.3753,Beach/CWA,Y,Y
-Thailand,"Patong Beach (Phuket, Thailand)",파통비치,7.8964,98.2944,Beach/TMD,Y,Y
-Thailand,"Railay Beach (Krabi, Thailand)",라일레이,8.01,98.837,Beach/TMD,Y,Y
-France,Saint-Tropez Beach (France),생트로페,43.272,6.638,Beach/local,Y,Y
-Italy,"Positano Beach (Amalfi, Italy)",포지타노,40.6264,14.4853,Beach/local,Y,Y
-Italy,Lido di Venezia (Italy),리도디베네치아,45.408,12.3729,Beach/local,Y,Y
-Australia,"Surfers Paradise (Gold Coast, Australia)",서퍼스파라다이스,-28.003,153.4328,Beach/BOM,Y,Y
-Seychelles,Anse Source d'Argent (Seychelles),앙스소스다르장,-4.371,55.826,Beach/local,Y,Y
-South Africa,"Clifton Beach (Cape Town, South Africa)",클리프턴비치,-33.951,18.377,Beach/SAWS,Y,Y
-Indonesia,"Seminyak Beach (Bali, Indonesia)",스미냑,-8.6944,115.1582,Beach/BMKG,Y,Y
-Mexico,Playa del Carmen (Mexico),플라야델카르멘,20.6254,-87.0701,Beach/SMN,Y,Y
-Bahamas,"Pink Sands Beach (Harbour Island, Bahamas)",핑크샌즈비치,25.5076,-76.6384,Beach/local,Y,Y
-Mexico,"Socorro Island (Revillagigedo, Mexico)",소코로,18.7194,-110.9495,Beach/SMN,Y,Y
-United Kingdom,"National Oceanography Centre (Southampton, UK)",사우샘프턴 NOC,50.8824,-1.3922,Institute/NOC,Y,Y
-United Kingdom,Plymouth Marine Laboratory (UK),플리머스,50.363,-4.1407,Institute/PML,Y,Y
-Norway,"Institute of Marine Research (Bergen, Norway)",베르겐 IMR,60.3962,5.3225,Institute/Havforskningsinstituttet,Y,Y
-Germany,"Alfred Wegener Institute (Bremerhaven, Germany)",브레머하펜 AWI,53.5386,8.5756,Institute/AWI,Y,Y
-France,"IFREMER (Brest, France)",브레스트 IFREMER,48.3799,-4.489,Institute/IFREMER,Y,Y
-Netherlands,NIOZ Royal Netherlands Institute for Sea Research (Texel),텍셀 NIOZ,53.002,4.789,Institute/NIOZ,Y,Y
-Spain,"IEO Instituto Español de Oceanografía (Vigo, Spain)",비고 IEO,42.2428,-8.7213,Institute/IEO,Y,Y
-Portugal,IPMA Instituto Português do Mar e da Atmosfera (Lisbon),리스본 IPMA,38.706,-9.135,Institute/IPMA,Y,Y
-India,"National Institute of Oceanography (Goa, India)",고아 NIO,15.452,73.805,Institute/NIO,Y,Y
-China,"Institute of Oceanology, CAS (Qingdao, China)",칭다오 IOCAS,36.0603,120.3819,Institute/IOCAS,Y,Y
-Russia,"Pacific Oceanological Institute (Vladivostok, Russia)",블라디보스토크 POI,43.1123,131.885,Institute/POI RAS,Y,Y
-Canada,"Bedford Institute of Oceanography (Dartmouth, Canada)",베드퍼드,44.674,-63.64,Institute/BIO,Y,Y
-Brazil,"Instituto Oceanográfico (Santos, Brazil)",산투스 해양연구소,-23.9726,-46.3348,Institute/IO-USP,Y,Y
-South Africa,"Oceanographic Research Institute (Durban, South Africa)",더반 ORI,-29.8652,31.0471,Institute/ORI,Y,Y
-New Zealand,"NIWA (Wellington, New Zealand)",웰링턴 NIWA,-41.2866,174.78,Institute/NIWA,Y,Y
-Chile,"SHOA Servicio Hidrográfico y Oceanográfico (Valparaíso, Chile)",발파라이소 SHOA,-33.036,-71.627,Institute/SHOA,Y,Y
-Peru,IMARPE Instituto del Mar del Perú (Callao),카야오 IMARPE,-12.0545,-77.1474,Institute/IMARPE,Y,Y
-Kenya,Kenya Marine and Fisheries Research Institute (Mombasa),몸바사 KMFRI,-4.043,39.658,Institute/KMFRI,Y,Y
-Nigeria,Nigerian Institute for Oceanography and Marine Research (Lagos),라고스 NIOMR,6.455,3.393,Institute/NIOMR,Y,Y
-Turkey,"Institute of Marine Sciences (Erdemli, Turkey)",에르데믈리,36.562,34.254,Institute/IMS-METU,Y,Y
-Australia,"Great Barrier Reef (Cairns, Australia)",그레이트배리어리프,-16.9178,145.7767,Beach/BOM,Y,Y
-Australia,"Ningaloo Reef (Exmouth, Australia)",닝갈루리프,-21.93,114.1402,Beach/BOM,Y,Y
-Australia,"Cottesloe Beach (Perth, Australia)",코테슬로비치,-31.996,115.7502,Beach/BOM,Y,Y
-Australia,"Manly Beach (Sydney, Australia)",맨리비치,-33.7967,151.2893,Beach/BOM,Y,Y
-Australia,AIMS Australian Institute of Marine Science (Townsville),타운즈빌 AIMS,-19.255,147.06,Institute/AIMS,Y,Y
-Australia,"CSIRO Marine (Hobart, Tasmania)",호바트 CSIRO,-42.8836,147.3347,Institute/CSIRO,Y,Y
-Micronesia,Chuuk Lagoon (Micronesia),추크석호,7.412,151.79,Beach/local,Y,Y
-Micronesia,Pohnpei (Micronesia),포나페,6.99,158.24,Beach/local,Y,Y
-Northern Mariana Islands,Micro Beach (Saipan),사이판 미크로비치,15.214,145.7,Beach/local,Y,Y
-Northern Mariana Islands,Banzai Cliff Diving Area (Saipan),반자이클리프,15.245,145.751,Beach/local,Y,Y
-Indonesia,"Komodo National Park (Labuan Bajo, Indonesia)",코모도,-8.536,119.615,Beach/BMKG,Y,Y
-Indonesia,Wakatobi (Indonesia),와카토비,-5.478,123.749,Beach/BMKG,Y,Y
-Indonesia,"Bunaken (Manado, Indonesia)",부나켄,1.6196,124.759,Beach/BMKG,Y,Y
-Egypt,Marsa Alam (Egypt),마르사알람,25.0727,34.8982,Beach/EMA,Y,Y
-Egypt,Ras Mohammed National Park (Egypt),라스모하메드,27.73,34.25,Beach/EMA,Y,Y
-Turkey,Bodrum (Turkey),보드룸,37.0341,27.4287,Beach/MGM,Y,Y
-Turkey,"Ölüdeniz (Fethiye, Turkey)",욀루데니즈,36.548,29.117,Beach/MGM,Y,Y
-Northern Mariana Islands,Tinian Island (Northern Mariana Islands),티니안섬,14.9878,145.6083,Beach/local,Y,Y
-Northern Mariana Islands,Challenger Deep (Mariana Trench),챌린저해연,11.35,142.2,Beach/NOAA,Y,Y
-Guam,Tumon Bay (Guam),투몬베이,13.5134,144.8021,Beach/NOAA,Y,Y
-Norway (Svalbard),"Ny-Ålesund (Svalbard, Arctic)",니올레순(북극),78.9237,11.9508,Institute/Arctic,Y,Y
-Antarctica,McMurdo Station (Antarctica),맥머도(남극),-77.8456,166.6545,Institute/Antarctic,Y,Y
-Philippines,"Panglao Island (Bohol, Philippines)",보홀 팡라오,9.5762,123.7447,Beach/PAGASA,Y,Y
-Philippines,"Moalboal (Cebu, Philippines)",모알보알,9.94,123.36,Beach/PAGASA,Y,Y
-Philippines,"Coron (Palawan, Philippines)",코론,11.9978,120.1987,Beach/PAGASA,Y,Y
-Philippines,Siargao Island (Philippines),시아르가오,9.812,126.172,Beach/PAGASA,Y,Y
-Philippines,"Anilao (Batangas, Philippines)",아닐라오,13.75,120.9,Beach/PAGASA,Y,Y
-United States,"Long Beach (California, USA)",롱비치,33.7623,-118.1802,NOAA/SCCOOS,Y,Y
-United States,"Huntington Beach (California, USA)",헌팅턴비치,33.6531,-118.0013,NOAA/SCCOOS,Y,Y
-United States,"Morro Bay (California, USA)",모로베이,35.3651,-120.8543,NOAA/SCCOOS,Y,Y
-South Korea,고성 화진포 관측지점,고성,38.3924,128.4905,Beach/NIFS·badatime,Y,Y
-United States,"Homer (Kachemak Bay, Alaska)",호머(알래스카),59.6381,-151.5506,Beach/NOAA,Y,Y
-Indonesia,"Triton Bay (West Papua, Indonesia)",트리톤베이,-3.65,133.6923,Beach/BMKG,Y,Y
-South Korea,제주 문섬 다이빙포인트,문섬,33.22763,126.56726,Beach/KHOA,Y,Y
-South Korea,제주 섶섬 다이빙포인트,섶섬,33.2327,126.5974,Beach/KHOA,Y,Y
+no,country,name,label,lat,lon,network,depth,show
+1,United States,Ocean Beach (San Francisco),Ocean Beach,37.7589,-122.5121,NOAA/CeNCOOS,Y,Y
+2,United States,Baker Beach (Golden Gate View),Baker Beach,37.7936,-122.4847,NOAA/CeNCOOS,Y,Y
+3,United States,China Beach (San Francisco),China Beach,37.7887,-122.4917,NOAA/CeNCOOS,Y,Y
+4,United States,Aquatic Park Cove (SF Bay),Aquatic Park,37.8076,-122.4235,NOAA/CeNCOOS,Y,Y
+5,United States,Crissy Field East Beach (SF),Crissy Field,37.807,-122.451,NOAA/CeNCOOS,Y,Y
+6,United States,Rodeo Beach (Marin Headlands),Rodeo Beach,37.8307,-122.5387,NOAA/CeNCOOS,Y,Y
+7,United States,Pacifica State Beach (Linda Mar),Linda Mar,37.5989,-122.5034,NOAA/CeNCOOS,Y,Y
+8,United States,Half Moon Bay (Mavericks),Half Moon Bay,37.498,-122.4955,NOAA/CeNCOOS,Y,Y
+9,United States,Monterey Breakwater (San Carlos),San Carlos Beach,36.613,-121.893,NOAA/CeNCOOS,Y,Y
+10,United States,Lovers Point Beach (Pacific Grove),Lovers Point,36.6257,-121.9152,NOAA/CeNCOOS,Y,Y
+11,United States,Monastery Beach (Carmel),Monastery Beach,36.523,-121.928,NOAA/CeNCOOS,Y,Y
+12,United States,Catalina Island (Casino Point),Casino Point,33.348,-118.326,NOAA/SCCOOS,Y,Y
+13,United States,La Jolla Shores Beach (San Diego),La Jolla Shores,32.8587,-117.258,NOAA/SCCOOS,Y,Y
+14,United States,"Laguna Beach (California, USA)",Laguna Beach,33.5408,-117.7849,NOAA/SCCOOS,Y,Y
+15,United States,"Venice Beach (Los Angeles, USA)",Venice Beach,33.9822,-118.4733,NOAA/SCCOOS,Y,Y
+16,United States,"Santa Monica Beach (California, USA)",Santa Monica,34.0081,-118.4983,NOAA/SCCOOS,Y,Y
+17,United States,"Zuma Beach (Malibu, USA)",Malibu,34.0187,-118.8296,NOAA/SCCOOS,Y,Y
+18,United States,"Cocoa Beach (Florida, USA)",Cocoa Beach,28.32,-80.6066,NOAA/NDBC,Y,Y
+19,United States,"Daytona Beach (Florida, USA)",Daytona Beach,29.2186,-81.0021,NOAA/NDBC,Y,Y
+20,United States,"Lanikai Beach (Oahu, Hawaii)",Lanikai,21.393,-157.715,NOAA/PacIOOS,Y,Y
+21,South Korea,고성 아야진 해변 (Ayajin Beach),아야진 해변,38.2727,128.5581,Beach/NIFS,Y,Y
+22,South Korea,속초 등대해변 (Sokcho Light Beach),속초등대,38.2151,128.6012,Beach/NIFS,Y,Y
+23,South Korea,양양 남애3리 해변 (Namae Beach),남애 해변,37.947,128.788,Beach/NIFS,Y,Y
+24,South Korea,강릉 사천진 해변 (Sacheonjin Beach),사천진 해변,37.8355,128.8765,Beach/NIFS,Y,Y
+25,South Korea,삼척 장호항/갈남항 해변,장호/갈남항,37.283,129.321,Beach/NIFS,Y,Y
+26,South Korea,포항 이가리 닻 해변,이가리 해변,36.195,129.387,Beach/NIFS,Y,Y
+27,South Korea,제주 한림 협재 해변,협재 해변,33.3952,126.2396,Beach/KHOA,Y,Y
+28,South Korea,제주 함덕해수욕장,함덕,33.5441,126.6698,Beach/KHOA,Y,Y
+29,South Korea,제주 김녕해수욕장,김녕,33.5581,126.7583,Beach/KHOA,Y,Y
+30,South Korea,제주 이호테우해변,이호테우,33.499,126.449,Beach/KHOA,Y,Y
+31,South Korea,제주 곽지해수욕장,곽지,33.45,126.31,Beach/KHOA,Y,Y
+32,South Korea,제주 중문색달해수욕장,중문색달,33.239,126.412,Beach/KHOA,Y,Y
+33,South Korea,제주 화순금모래해변,화순,33.235,126.358,Beach/KHOA,Y,Y
+34,South Korea,제주 표선해수욕장,표선,33.3264,126.8382,Beach/KHOA,Y,Y
+35,South Korea,제주 삼양검은모래해변,삼양,33.5258,126.5813,Beach/KHOA,Y,Y
+36,South Korea,제주 신양섭지코지해변,섭지코지,33.424,126.927,Beach/KHOA,Y,Y
+37,South Korea,제주 금능해수욕장,금능,33.393,126.227,Beach/KHOA,Y,Y
+38,South Korea,제주 우도 하고수동해변 (다이빙),우도,33.5138,126.9589,Beach/KHOA,Y,Y
+39,South Korea,제주 범섬 다이빙포인트,범섬,33.21713,126.51446,Beach/KHOA,Y,Y
+40,South Korea,제주 사계리 용머리해안,사계리,33.226,126.31,Beach/KHOA,Y,Y
+41,South Korea,인천항 관측지점,인천,37.453,126.6121,Beach/NIFS·badatime,Y,Y
+42,South Korea,평택항 관측지점,평택,36.965,126.823,Beach/NIFS·badatime,Y,Y
+43,South Korea,보령(대천) 관측지점,보령,36.353,126.492,Beach/NIFS·badatime,Y,Y
+44,South Korea,장항 관측지점,장항,36.0065,126.691,Beach/NIFS·badatime,Y,Y
+45,South Korea,군산 관측지점,군산,35.9872,126.6913,Beach/NIFS·badatime,Y,Y
+46,South Korea,위도 관측지점,위도,35.6123,126.296,Beach/NIFS·badatime,Y,Y
+47,South Korea,영광 관측지점,영광,35.348,126.29,Beach/NIFS·badatime,Y,Y
+48,South Korea,목포 관측지점,목포,34.8139,126.3694,Beach/NIFS·badatime,Y,Y
+49,South Korea,흑산도 관측지점,흑산도,34.685,125.435,Beach/NIFS·badatime,Y,Y
+50,South Korea,완도 관측지점,완도,34.316,126.755,Beach/NIFS·badatime,Y,Y
+51,South Korea,거문도 관측지점,거문도,34.032,127.313,Beach/NIFS·badatime,Y,Y
+52,South Korea,나로도 관측지점,나로도,34.485,127.487,Beach/NIFS·badatime,Y,Y
+53,South Korea,여수 관측지점,여수,34.756,127.6626,Beach/NIFS·badatime,Y,Y
+54,South Korea,삼천포 관측지점,삼천포,34.9275,128.0612,Beach/NIFS·badatime,Y,Y
+55,South Korea,통영 관측지점,통영,34.8437,128.4337,Beach/NIFS·badatime,Y,Y
+56,South Korea,거제 관측지점,거제,34.8943,128.6117,Beach/NIFS·badatime,Y,Y
+57,South Korea,가덕도 관측지점,가덕도,35.0251,128.8088,Beach/NIFS·badatime,Y,Y
+58,South Korea,진해 관측지점,진해,35.1386,128.6948,Beach/NIFS·badatime,Y,Y
+59,South Korea,부산 해운대 관측지점,해운대,35.15,129.22,Beach/NIFS·badatime,Y,Y
+60,South Korea,부산항 관측지점,부산,35.0975,129.0462,Beach/NIFS·badatime,Y,Y
+61,South Korea,울산 관측지점,울산,35.48,129.5,Beach/NIFS·badatime,Y,Y
+62,South Korea,포항 관측지점,포항,36.0172,129.4878,Beach/NIFS·badatime,Y,Y
+63,South Korea,영덕 38 난파선,영덕 38 난파선,36.5713,129.4403,Beach/NIFS·badatime,Y,Y
+64,South Korea,울진 죽변항 1km,울진 죽변항 1km,37.05682,129.44332,Beach/NIFS·badatime,Y,Y
+65,South Korea,후포 관측지점,후포,36.677,129.52,Beach/NIFS·badatime,Y,Y
+66,South Korea,울릉도 저동 관측지점,울릉도,37.4813,130.9109,Beach/NIFS·badatime,Y,Y
+67,South Korea,울릉도 쌍정초,쌍정초,37.5565,130.939556,Beach/NIFS·badatime,Y,Y
+68,South Korea,독도 관측지점,독도,37.242,131.868,Beach/NIFS·badatime,Y,Y
+69,South Korea,울릉도 쌍정초,쌍정초,37.5565,130.939556,Beach/NIFS·badatime,Y,Y
+70,South Korea,주문진 관측지점,주문진,37.8934,128.8315,Beach/NIFS·badatime,Y,Y
+71,South Korea,동해항 관측지점,동해항,37.507,129.135,Beach/NIFS·badatime,Y,Y
+72,South Korea,묵호 관측지점,묵호,37.55,129.115,Beach/NIFS·badatime,Y,Y
+73,South Korea,백령도 관측지점,백령도,37.9731,124.6321,Beach/NIFS·badatime,Y,Y
+74,South Korea,대청도 관측지점,대청도,37.8271,124.7161,Beach/NIFS·badatime,Y,Y
+75,South Korea,태안 관측지점,태안,36.787,126.13,Beach/NIFS·badatime,Y,Y
+76,South Korea,제주항 관측지점,제주항,33.529,126.532,Beach/NIFS·badatime,Y,Y
+77,South Korea,성산포 관측지점,성산포,33.474,126.927,Beach/NIFS·badatime,Y,Y
+78,South Korea,모슬포 관측지점,모슬포,33.213,126.251,Beach/NIFS·badatime,Y,Y
+79,South Korea,추자도 관측지점,추자도,33.964,126.301,Beach/NIFS·badatime,Y,Y
+80,South Korea,이어도 관측지점,이어도,32.123,125.182,Beach/NIFS·badatime,Y,Y
+81,Bahrain,Half Moon Bay Beach (Persian Gulf),Half Moon Bay (PG),26.162,50.041,ROPME,Y,Y
+82,United States,Hanauma Bay Beach (Hawaii),Hanauma Bay,21.269,-157.694,NOAA/PacIOOS,Y,Y
+83,Brazil,Copacabana Beach (Rio de Janeiro),코파카바나,-22.9719,-43.1813,Beach/INMET,Y,Y
+84,Brazil,Ipanema Beach (Rio de Janeiro),이파네마,-22.9885,-43.2036,Beach/INMET,Y,Y
+85,Brazil,Praia da Pipa (Brazil),피파 비치,-6.229,-35.037,Beach/INMET,Y,Y
+86,France,"Promenade des Anglais (Nice, France)",니스 해변,43.6937,7.2652,Beach/Météo-France,Y,Y
+87,Croatia,"Zlatni Rat (Bol, Croatia)",즐라트니 라트,43.255,16.635,Beach/DHMZ,Y,Y
+88,Greece,"Navagio Beach (Zakynthos, Greece)",나바지오,37.8601,20.6238,Beach/HNMS,Y,Y
+89,Portugal,"Praia da Marinha (Algarve, Portugal)",마리냐 해변,37.0891,-8.4123,Beach/IPMA,Y,Y
+90,Spain,Playa de las Catedrales (Spain),카테드랄 해변,43.5615,-7.19,Beach/AEMET,Y,Y
+91,South Africa,Camps Bay Beach (Cape Town),캠스베이,-33.9557,18.3747,Beach/SAWS,Y,Y
+92,Seychelles,Anse Source d'Argent (Seychelles),앙스 소스다르장,-4.371,55.826,Beach/SMA,Y,Y
+93,Tanzania,"Nungwi Beach (Zanzibar, Tanzania)",능위 해변,-5.7228,39.2963,Beach/TMA,Y,Y
+94,Egypt,Ras Mohammed / Sharm El Sheikh (Red Sea),샤름 엘 셰이크,27.735,34.265,Beach/EMA,Y,Y
+95,Australia,"Bondi Beach (Sydney, Australia)",본다이 비치,-33.8923,151.2779,Beach/BOM,Y,Y
+96,Australia,"Whitehaven Beach (Whitsundays, Australia)",화이트헤이븐,-20.2812,149.0393,Beach/BOM,Y,Y
+97,United States,"Waikiki Beach (Oahu, Hawaii)",와이키키,21.276,-157.827,NOAA/PacIOOS,Y,Y
+98,French Polynesia,Matira Beach (Bora Bora),마티라 비치,-16.539,-151.751,Beach/Météo-France PF,Y,Y
+99,Fiji,Natadola Beach (Fiji),나타돌라,-18.198,177.377,Beach/FMS,Y,Y
+100,Thailand,"Maya Bay (Ko Phi Phi, Thailand)",마야 베이,7.6777,98.7708,Beach/TMD,Y,Y
+101,Philippines,"White Beach (Boracay, Philippines)",보라카이,11.9653,121.9208,Beach/PAGASA,Y,Y
+102,Indonesia,"Kuta Beach (Bali, Indonesia)",쿠타 비치,-8.7173,115.1678,Beach/BMKG,Y,Y
+103,Singapore,"Siloso Beach (Sentosa, Singapore)",실로소 비치,1.249,103.81,Beach/MSS,Y,Y
+104,Japan,"Manza Beach (Okinawa, Japan)",만자 비치,26.50601,127.85738,Beach/JMA,Y,Y
+105,Japan,"Emerald Beach (Motobu, Okinawa, Japan)",에메랄드비치,26.69256,127.87004,Beach/JMA,Y,Y
+106,Japan,"Kabira Bay (Ishigaki, Japan)",카비라만,24.457,124.173,Beach/JMA,Y,Y
+107,Japan,"Yonaha Maehama Beach (Miyako, Japan)",요나하마에하마,24.7325,125.267,Beach/JMA,Y,Y
+108,Japan,"Shirahama Beach (Wakayama, Japan)",시라하마,33.677,135.336,Beach/JMA,Y,Y
+109,Japan,"Shonan / Enoshima Beach (Kanagawa, Japan)",쇼난/에노시마,35.3019,139.4783,Beach/JMA,Y,Y
+110,Japan,"Kawana (Izu Peninsula, Japan)",이즈반도,34.897,139.113,Beach/JMA,Y,Y
+111,Japan,"Chirihama Beach (Ishikawa, Japan)",치리하마,36.86,136.755,Beach/JMA,Y,Y
+112,Japan,"Amakusa (Kumamoto, Japan)",아마쿠사,32.53,130,Beach/JMA,Y,Y
+113,Turks and Caicos Islands,Grace Bay (Turks & Caicos),그레이스 베이,21.7995,-72.1755,Beach/local,Y,Y
+114,Cayman Islands,Seven Mile Beach (Grand Cayman),세븐마일 비치,19.345,-81.383,Beach/CIMWS,Y,Y
+115,Cuba,Varadero Beach (Cuba),바라데로,23.1587,-81.2461,Beach/INSMET,Y,Y
+116,Palau,Rock Islands (Palau),팔라우,7.283,134.478,Beach/local,Y,Y
+117,Maldives,Male Atoll (Maldives),몰디브,4.1801,73.5119,Beach/Met Maldives,Y,Y
+118,United States,"South Beach (Miami, USA)",마이애미 사우스비치,25.7817,-80.1272,NOAA/local,Y,Y
+119,United States,"Myrtle Beach (South Carolina, USA)",머틀비치,33.6908,-78.8779,NOAA/local,Y,Y
+120,United States,Cape Cod National Seashore (USA),케이프 코드,41.8914,-69.9614,NOAA/local,Y,Y
+121,Mexico,Tulum Beach (Mexico),툴룸,20.211,-87.429,Beach/SMN,Y,Y
+122,Mexico,Cancún Beach (Mexico),칸쿤,21.06,-86.772,Beach/SMN,Y,Y
+123,Canada,"Tofino (Vancouver Island, Canada)",토피노,49.1551,-125.9051,Beach/ECCC,Y,Y
+124,Uruguay,Punta del Este (Uruguay),푼타델에스테,-34.96,-54.951,Beach/INUMET,Y,Y
+125,Argentina,Mar del Plata (Argentina),마르델플라타,-38.0057,-57.537,Beach/SMN-AR,Y,Y
+126,Chile,Viña del Mar (Chile),비냐델마르,-33.0163,-71.5601,Beach/DMC,Y,Y
+127,Colombia,Cartagena Beach (Colombia),카르타헤나,10.4199,-75.5498,Beach/IDEAM,Y,Y
+128,Ecuador,Montañita (Ecuador),몬타니타,-1.826,-80.765,Beach/INAMHI,Y,Y
+129,Ecuador,"Tortuga Bay (Galápagos, Ecuador)",갈라파고스,-0.7572,-90.3127,Beach/INAMHI,Y,Y
+130,Italy,Amalfi Coast Beach (Italy),아말피,40.6329,14.6038,Beach/local,Y,Y
+131,Spain,Costa del Sol / Marbella (Spain),마르베야,36.5055,-4.8853,Beach/AEMET,Y,Y
+132,Spain,"Ses Salines Beach (Ibiza, Spain)",이비자,38.87,1.386,Beach/AEMET,Y,Y
+133,Greece,"Kamari Beach (Santorini, Greece)",산토리니,36.3696,25.4821,Beach/HNMS,Y,Y
+134,Malta,Mellieħa Bay (Malta),몰타,35.968,14.362,Beach/local,Y,Y
+135,Cyprus,Nissi Beach (Cyprus),키프로스,34.9876,33.9708,Beach/DOM-CY,Y,Y
+136,Turkey,Kaş Beach (Turkey),카쉬,36.1978,29.6389,Beach/MGM,Y,Y
+137,Montenegro,Sveti Stefan Beach (Montenegro),몬테네그로,42.255,18.892,Beach/local,Y,Y
+138,Israel,Tel Aviv Beach (Israel),텔아비브,32.083,34.766,Beach/IMS,Y,Y
+139,Morocco,Agadir Beach (Morocco),아가디르,30.4163,-9.6075,Beach/DMN,Y,Y
+140,Ghana,"Labadi Beach (Accra, Ghana)",라바디,5.556,-0.153,Beach/GMet,Y,Y
+141,Kenya,"Diani Beach (Mombasa, Kenya)",디아니,-4.2799,39.5956,Beach/KMD,Y,Y
+142,South Africa,"Umhlanga Rocks (Durban, South Africa)",움흘랑가,-29.7277,31.0898,Beach/SAWS,Y,Y
+143,Mauritius,Belle Mare Beach (Mauritius),모리셔스,-20.1897,57.7752,Beach/MMS,Y,Y
+144,Egypt,"Hurghada Beach (Red Sea, Egypt)",후르가다,27.2631,33.8112,Beach/EMA,Y,Y
+145,Vietnam,Nha Trang Beach (Vietnam),냐짱,12.2383,109.1984,Beach/NCHMF,Y,Y
+146,Vietnam,"My Khe Beach (Da Nang, Vietnam)",다낭,16.0546,108.2493,Beach/NCHMF,Y,Y
+147,India,"Baga Beach (Goa, India)",고아,15.556,73.751,Beach/IMD,Y,Y
+148,Sri Lanka,Unawatuna Beach (Sri Lanka),우나와투나,6.0087,80.249,Beach/DoM,Y,Y
+149,India,"Radhanagar Beach (Andaman, India)",안다만,11.598,92.947,Beach/IMD,Y,Y
+150,China,"Yalong Bay (Sanya, China)",싼야,18.2313,109.5573,Beach/CMA,Y,Y
+151,Taiwan,Kenting Beach (Taiwan),컨딩,21.9431,120.7954,Beach/CWA,Y,Y
+152,New Zealand,Bay of Islands (New Zealand),베이오브아일랜즈,-35.263,174.106,Beach/MetService,Y,Y
+153,Vanuatu,Champagne Beach (Vanuatu),바누아투,-15.233,167.1699,Beach/VMGD,Y,Y
+154,New Caledonia,"Anse Vata (Nouméa, New Caledonia)",누메아,-22.286,166.4437,Beach/Météo-France NC,Y,Y
+155,Aruba,Eagle Beach (Aruba),아루바,12.5634,-70.0538,Beach/local,Y,Y
+156,Bahamas,"Cable Beach (Nassau, Bahamas)",바하마,25.0769,-77.4015,Beach/local,Y,Y
+157,Jamaica,Negril Beach (Jamaica),네그릴,18.263,-78.348,Beach/local,Y,Y
+158,Puerto Rico,"Flamenco Beach (Culebra, Puerto Rico)",쿨레브라,18.3307,-65.3139,NOAA/local,Y,Y
+159,Barbados,Accra Beach (Barbados),바베이도스,13.075,-59.616,Beach/local,Y,Y
+160,Russia,Sochi Beach (Russia),소치,43.5824,39.7166,Beach/Roshydromet,Y,Y
+161,United States,"Key West Beach (Florida, USA)",키웨스트,24.5612,-81.7815,NOAA/NDBC,Y,Y
+162,United States,"Virginia Beach (Virginia, USA)",버지니아비치,36.8464,-75.9715,NOAA/NDBC,Y,Y
+163,United States,"Cape Hatteras (Outer Banks, USA)",케이프해터러스,35.2484,-75.5226,NOAA/NDBC,Y,Y
+164,United States,"Newport Beach (California, USA)",뉴포트비치,33.6061,-117.9293,NOAA/SCCOOS,Y,Y
+165,Mexico,Puerto Vallarta Beach (Mexico),푸에르토바야르타,20.6402,-105.2386,Beach/SMN,Y,Y
+166,Mexico,Cabo San Lucas Beach (Mexico),카보산루카스,22.8849,-109.9102,Beach/SMN,Y,Y
+167,Mexico,Cozumel Beach (Mexico),코수멜,20.5,-86.968,Beach/SMN,Y,Y
+168,Vietnam,Phu Quoc Beach (Vietnam),푸꾸옥,10.18,103.95,Beach/NCHMF,Y,Y
+169,Vietnam,Ha Long Bay (Vietnam),하롱베이,20.91,107.184,Beach/NCHMF,Y,Y
+170,Philippines,"El Nido Beach (Palawan, Philippines)",엘니도,11.185,119.392,Beach/PAGASA,Y,Y
+171,Philippines,"Mactan Island (Cebu, Philippines)",막탄섬,10.3205,123.9959,Beach/PAGASA,Y,Y
+172,Indonesia,Gili Trawangan (Indonesia),길리트라왕안,-8.3482,116.0438,Beach/BMKG,Y,Y
+173,Indonesia,Raja Ampat (Indonesia),라자암팟,-0.2426,130.5181,Beach/BMKG,Y,Y
+174,Malaysia,Port Klang Beach (Malaysia),포트클랑,2.999,101.3897,Beach/MetMalaysia,Y,Y
+175,Malaysia,Langkawi Beach (Malaysia),랑카위,6.29,99.712,Beach/MetMalaysia,Y,Y
+176,Malaysia,Malacca Beach (Malaysia),말라카,2.17,102.24,Beach/MetMalaysia,Y,Y
+177,Spain,Barcelona Beach (Spain),바르셀로나,41.375,2.192,Beach/AEMET,Y,Y
+178,Croatia,Dubrovnik Beach (Croatia),두브로브니크,42.64,18.106,Beach/local,Y,Y
+179,Greece,Mykonos Beach (Greece),미코노스,37.4459,25.3253,Beach/HNMS,Y,Y
+180,Italy,"Taormina Beach (Sicily, Italy)",타오르미나,37.847,15.289,Beach/local,Y,Y
+181,Turkey,Antalya Beach (Turkey),안탈리아,36.8843,30.6998,Beach/MGM,Y,Y
+182,Egypt,Alexandria Beach (Egypt),알렉산드리아,31.2122,29.9142,Beach/EMA,Y,Y
+183,Egypt,"Dahab Beach (Red Sea, Egypt)",다합,28.5117,34.5174,Beach/EMA,Y,Y
+184,Japan,"Naha Beach (Okinawa, Japan)",나하,26.22629,127.64688,Beach/JMA,Y,Y
+185,Japan,"Shimoda Beach (Izu, Japan)",시모다,34.673,138.9499,Beach/JMA,Y,Y
+186,Taiwan,Green Island (Taiwan),뤼다오,22.6772,121.4932,Beach/CWA,Y,Y
+187,Taiwan,Xiaoliuqiu (Taiwan),샤오류추,22.3558,120.3753,Beach/CWA,Y,Y
+188,Thailand,"Patong Beach (Phuket, Thailand)",파통비치,7.8964,98.2944,Beach/TMD,Y,Y
+189,Thailand,"Railay Beach (Krabi, Thailand)",라일레이,8.01,98.837,Beach/TMD,Y,Y
+190,France,Saint-Tropez Beach (France),생트로페,43.272,6.638,Beach/local,Y,Y
+191,Italy,"Positano Beach (Amalfi, Italy)",포지타노,40.6264,14.4853,Beach/local,Y,Y
+192,Italy,Lido di Venezia (Italy),리도디베네치아,45.408,12.3729,Beach/local,Y,Y
+193,Australia,"Surfers Paradise (Gold Coast, Australia)",서퍼스파라다이스,-28.003,153.4328,Beach/BOM,Y,Y
+194,Seychelles,Anse Source d'Argent (Seychelles),앙스소스다르장,-4.371,55.826,Beach/local,Y,Y
+195,South Africa,"Clifton Beach (Cape Town, South Africa)",클리프턴비치,-33.951,18.377,Beach/SAWS,Y,Y
+196,Indonesia,"Seminyak Beach (Bali, Indonesia)",스미냑,-8.6944,115.1582,Beach/BMKG,Y,Y
+197,Mexico,Playa del Carmen (Mexico),플라야델카르멘,20.6254,-87.0701,Beach/SMN,Y,Y
+198,Bahamas,"Pink Sands Beach (Harbour Island, Bahamas)",핑크샌즈비치,25.5076,-76.6384,Beach/local,Y,Y
+199,Mexico,"Socorro Island (Revillagigedo, Mexico)",소코로,18.7194,-110.9495,Beach/SMN,Y,Y
+200,United Kingdom,"National Oceanography Centre (Southampton, UK)",사우샘프턴 NOC,50.8824,-1.3922,Institute/NOC,Y,Y
+201,United Kingdom,Plymouth Marine Laboratory (UK),플리머스,50.363,-4.1407,Institute/PML,Y,Y
+202,Norway,"Institute of Marine Research (Bergen, Norway)",베르겐 IMR,60.3962,5.3225,Institute/Havforskningsinstituttet,Y,Y
+203,Germany,"Alfred Wegener Institute (Bremerhaven, Germany)",브레머하펜 AWI,53.5386,8.5756,Institute/AWI,Y,Y
+204,France,"IFREMER (Brest, France)",브레스트 IFREMER,48.3799,-4.489,Institute/IFREMER,Y,Y
+205,Netherlands,NIOZ Royal Netherlands Institute for Sea Research (Texel),텍셀 NIOZ,53.002,4.789,Institute/NIOZ,Y,Y
+206,Spain,"IEO Instituto Español de Oceanografía (Vigo, Spain)",비고 IEO,42.2428,-8.7213,Institute/IEO,Y,Y
+207,Portugal,IPMA Instituto Português do Mar e da Atmosfera (Lisbon),리스본 IPMA,38.706,-9.135,Institute/IPMA,Y,Y
+208,India,"National Institute of Oceanography (Goa, India)",고아 NIO,15.452,73.805,Institute/NIO,Y,Y
+209,China,"Institute of Oceanology, CAS (Qingdao, China)",칭다오 IOCAS,36.0603,120.3819,Institute/IOCAS,Y,Y
+210,Russia,"Pacific Oceanological Institute (Vladivostok, Russia)",블라디보스토크 POI,43.1123,131.885,Institute/POI RAS,Y,Y
+211,Canada,"Bedford Institute of Oceanography (Dartmouth, Canada)",베드퍼드,44.674,-63.64,Institute/BIO,Y,Y
+212,Brazil,"Instituto Oceanográfico (Santos, Brazil)",산투스 해양연구소,-23.9726,-46.3348,Institute/IO-USP,Y,Y
+213,South Africa,"Oceanographic Research Institute (Durban, South Africa)",더반 ORI,-29.8652,31.0471,Institute/ORI,Y,Y
+214,New Zealand,"NIWA (Wellington, New Zealand)",웰링턴 NIWA,-41.2866,174.78,Institute/NIWA,Y,Y
+215,Chile,"SHOA Servicio Hidrográfico y Oceanográfico (Valparaíso, Chile)",발파라이소 SHOA,-33.036,-71.627,Institute/SHOA,Y,Y
+216,Peru,IMARPE Instituto del Mar del Perú (Callao),카야오 IMARPE,-12.0545,-77.1474,Institute/IMARPE,Y,Y
+217,Kenya,Kenya Marine and Fisheries Research Institute (Mombasa),몸바사 KMFRI,-4.043,39.658,Institute/KMFRI,Y,Y
+218,Nigeria,Nigerian Institute for Oceanography and Marine Research (Lagos),라고스 NIOMR,6.455,3.393,Institute/NIOMR,Y,Y
+219,Turkey,"Institute of Marine Sciences (Erdemli, Turkey)",에르데믈리,36.562,34.254,Institute/IMS-METU,Y,Y
+220,Australia,"Great Barrier Reef (Cairns, Australia)",그레이트배리어리프,-16.9178,145.7767,Beach/BOM,Y,Y
+221,Australia,"Ningaloo Reef (Exmouth, Australia)",닝갈루리프,-21.93,114.1402,Beach/BOM,Y,Y
+222,Australia,"Cottesloe Beach (Perth, Australia)",코테슬로비치,-31.996,115.7502,Beach/BOM,Y,Y
+223,Australia,"Manly Beach (Sydney, Australia)",맨리비치,-33.7967,151.2893,Beach/BOM,Y,Y
+224,Australia,AIMS Australian Institute of Marine Science (Townsville),타운즈빌 AIMS,-19.255,147.06,Institute/AIMS,Y,Y
+225,Australia,"CSIRO Marine (Hobart, Tasmania)",호바트 CSIRO,-42.8836,147.3347,Institute/CSIRO,Y,Y
+226,Micronesia,Chuuk Lagoon (Micronesia),추크석호,7.412,151.79,Beach/local,Y,Y
+227,Micronesia,Pohnpei (Micronesia),포나페,6.99,158.24,Beach/local,Y,Y
+228,Northern Mariana Islands,Micro Beach (Saipan),사이판 미크로비치,15.214,145.7,Beach/local,Y,Y
+229,Northern Mariana Islands,Banzai Cliff Diving Area (Saipan),반자이클리프,15.245,145.751,Beach/local,Y,Y
+230,Indonesia,"Komodo National Park (Labuan Bajo, Indonesia)",코모도,-8.536,119.615,Beach/BMKG,Y,Y
+231,Indonesia,Wakatobi (Indonesia),와카토비,-5.478,123.749,Beach/BMKG,Y,Y
+232,Indonesia,"Bunaken (Manado, Indonesia)",부나켄,1.6196,124.759,Beach/BMKG,Y,Y
+233,Egypt,Marsa Alam (Egypt),마르사알람,25.0727,34.8982,Beach/EMA,Y,Y
+234,Egypt,Ras Mohammed National Park (Egypt),라스모하메드,27.73,34.25,Beach/EMA,Y,Y
+235,Turkey,Bodrum (Turkey),보드룸,37.0341,27.4287,Beach/MGM,Y,Y
+236,Turkey,"Ölüdeniz (Fethiye, Turkey)",욀루데니즈,36.548,29.117,Beach/MGM,Y,Y
+237,Northern Mariana Islands,Tinian Island (Northern Mariana Islands),티니안섬,14.9878,145.6083,Beach/local,Y,Y
+238,Northern Mariana Islands,Challenger Deep (Mariana Trench),챌린저해연,11.35,142.2,Beach/NOAA,Y,Y
+239,Guam,Tumon Bay (Guam),투몬베이,13.5134,144.8021,Beach/NOAA,Y,Y
+240,Norway (Svalbard),"Ny-Ålesund (Svalbard, Arctic)",니올레순(북극),78.9237,11.9508,Institute/Arctic,Y,Y
+241,Antarctica,McMurdo Station (Antarctica),맥머도(남극),-77.8456,166.6545,Institute/Antarctic,Y,Y
+242,Philippines,"Panglao Island (Bohol, Philippines)",보홀 팡라오,9.5762,123.7447,Beach/PAGASA,Y,Y
+243,Philippines,"Moalboal (Cebu, Philippines)",모알보알,9.94,123.36,Beach/PAGASA,Y,Y
+244,Philippines,"Coron (Palawan, Philippines)",코론,11.9978,120.1987,Beach/PAGASA,Y,Y
+245,Philippines,Siargao Island (Philippines),시아르가오,9.812,126.172,Beach/PAGASA,Y,Y
+246,Philippines,"Anilao (Batangas, Philippines)",아닐라오,13.75,120.9,Beach/PAGASA,Y,Y
+247,United States,"Long Beach (California, USA)",롱비치,33.7623,-118.1802,NOAA/SCCOOS,Y,Y
+248,United States,"Huntington Beach (California, USA)",헌팅턴비치,33.6531,-118.0013,NOAA/SCCOOS,Y,Y
+249,United States,"Morro Bay (California, USA)",모로베이,35.3651,-120.8543,NOAA/SCCOOS,Y,Y
+250,South Korea,고성 화진포 관측지점,고성,38.3924,128.4905,Beach/NIFS·badatime,Y,Y
+251,United States,"Homer (Kachemak Bay, Alaska)",호머(알래스카),59.6381,-151.5506,Beach/NOAA,Y,Y
+252,Indonesia,"Triton Bay (West Papua, Indonesia)",트리톤베이,-3.65,133.6923,Beach/BMKG,Y,Y
+253,South Korea,제주 문섬 다이빙포인트,문섬,33.22763,126.56726,Beach/KHOA,Y,Y
+254,South Korea,제주 섶섬 다이빙포인트,섶섬,33.2327,126.5974,Beach/KHOA,Y,Y

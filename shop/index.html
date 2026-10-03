@@ -44,6 +44,15 @@
   .link { word-break: break-all; font-size: 13px; background: var(--bg); border: 1px dashed rgba(255,176,0,.5); border-radius: 9px; padding: 10px 12px; margin: 8px 0; }
   .hp { position: absolute; left: -9999px; }
   .lang { font-size: 12px; }
+  .per.on { color: var(--text); border-color: rgba(255,176,0,.6); }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .kpi { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .kpi b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; } .kpi span { font-size: 11.5px; color: var(--muted); }
+  table.st { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.st th { text-align: right; font-weight: 600; color: var(--muted); font-size: 11.5px; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  table.st th:first-child, table.st td:first-child { text-align: left; }
+  table.st td { text-align: right; padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  table.st td small { display: block; color: var(--dim); font-size: 11px; }
 </style>
 </head>
 <body>
@@ -53,6 +62,17 @@
   <p class="lead" data-k="lead"></p>
 
   <div id="statusBox" class="status" style="display:none"></div>
+
+  <!-- [ADD] 샵 실적: 포인트별 조회 · 바로가기 노출 · 버튼 클릭 -->
+  <div id="statsCard" class="card" style="display:none">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 style="margin:0;flex:1" data-k="statsTitle"></h2>
+      <button class="btn ghost per" data-days="30">30</button><button class="btn ghost per" data-days="90">90</button><button class="btn ghost per" data-days="365">365</button>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <table class="st" id="statsTable"></table>
+    <p class="hint" id="statsNote"></p>
+  </div>
 
   <div id="done" class="card" style="display:none">
     <h2 data-k="doneTitle"></h2>
@@ -147,6 +167,9 @@ const T = {
     lostNoMail: '지금은 메일 발송이 준비되지 않았어요. 운영자에게 문의해 주세요.',
     e_need_name_spots: '샵 이름과 다이빙 포인트를 하나 이상 넣어주세요.', e_need_contact: '공개 연락처를 하나 이상(올바른 형식으로) 넣어주세요.',
     e_need_email: '담당자 이메일을 확인해 주세요.', e_need_agree: '공개 동의에 체크해 주세요.', e_too_many: '잠시 후 다시 시도해 주세요.', e_default: '보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+    statsTitle: '우리 샵 실적', thShort: ['조회', '노출', '클릭'], statDays: (n) => `최근 ${n}일`, stViews: '포인트 조회', stImp: '바로가기 노출', stClicks: '연락 버튼 클릭', stSpot: '포인트', stOther: '포인트 정보 없음(이전 기록)',
+    statsNote: (from) => `${from}부터 집계. 포인트 조회 = 사이트에서 그 포인트를 연 횟수(다이빙샵 탭에 샵이 보임), 바로가기 노출 = 아래 정보 줄에 우리 샵이 나온 횟수, 클릭 = 전화·카톡 등 버튼을 누른 횟수. 개인정보는 모으지 않아요.`,
+    kinds: { tel: '전화', kakao: '카톡', whatsapp: 'WhatsApp', instagram: '인스타', web: '웹', map: '지도', all: '전체 보기' },
     other: 'English'
   },
   en: {
@@ -176,12 +199,16 @@ const T = {
     lostNoMail: 'Email is not set up yet. Please contact us.',
     e_need_name_spots: 'Add a shop name and at least one dive spot.', e_need_contact: 'Add at least one valid public contact.',
     e_need_email: 'Check your contact email.', e_need_agree: 'Please tick the consent box.', e_too_many: 'Please try again later.', e_default: 'Could not send. Please try again later.',
+    statsTitle: 'Your shop stats', thShort: ['Views', 'Shown', 'Clicks'], statDays: (n) => `Last ${n} days`, stViews: 'Spot views', stImp: 'Shortcut shown', stClicks: 'Contact clicks', stSpot: 'Spot', stOther: 'No spot info (older records)',
+    statsNote: (from) => `Counting since ${from}. Spot views = times the spot was opened (your shop appears in the Dive shops tab). Shortcut shown = times your shop appeared in the bottom bar. Clicks = taps on call, Kakao and other buttons. No personal data is collected.`,
+    kinds: { tel: 'Call', kakao: 'Kakao', whatsapp: 'WhatsApp', instagram: 'Instagram', web: 'Web', map: 'Map', all: 'See all' },
     other: '한국어'
   }
 };
 let lang = (() => { try { return localStorage.getItem('otemp.lang') || (navigator.language || '').slice(0, 2); } catch (_) { return 'ko'; } })() === 'ko' ? 'ko' : 'en';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+window.addEventListener('hashchange', () => location.reload()); // 같은 페이지에서 수정 링크를 열어도 다시 읽기
 const token = (() => { const m = location.hash.match(/t=([\w-]{10,100})/); return m ? m[1] : ''; })();
 let editStatus = '', expires = '';
 
@@ -194,6 +221,7 @@ function applyLang() {
   if (token) { $('title').textContent = L.titleEdit; document.querySelector('.lead').textContent = L.leadEdit; $('submitBtn').textContent = L.submitEdit; $('agreeRow').style.display = 'none'; }
   document.title = (token ? L.titleEdit : L.title) + ' · otemp.app';
   showStatus();
+  renderStats();
 }
 $('langBtn').onclick = (e) => { e.preventDefault(); lang = lang === 'ko' ? 'en' : 'ko'; applyLang(); };
 
@@ -274,6 +302,26 @@ $('lostForm').onsubmit = async (e) => {
   const j = await post('resend', { email: e.target.email.value }).catch(() => ({}));
   $('lostMsg').className = 'msg ok'; $('lostMsg').textContent = j.mail === false ? T[lang].lostNoMail : T[lang].lostOk;
 };
+let stats = null, statDays = 30;
+function renderStats() {
+  const L = T[lang];
+  if (!stats) { $('statsCard').style.display = 'none'; return; }
+  $('statsCard').style.display = '';
+  document.querySelectorAll('.per').forEach(b => { b.classList.toggle('on', +b.dataset.days === statDays); b.textContent = L.statDays(+b.dataset.days); });
+  const sum = (r) => Object.values(r.clicks).reduce((a, b) => a + b, 0);
+  const tot = stats.rows.reduce((a, r) => ({ v: a.v + r.views, i: a.i + r.imp, c: a.c + sum(r) }), { v: 0, i: 0, c: 0 });
+  $('kpis').innerHTML = [[tot.v, L.stViews], [tot.i, L.stImp], [tot.c, L.stClicks]].map(([n, l]) => `<div class="kpi"><b>${n.toLocaleString()}</b><span>${esc(l)}</span></div>`).join('');
+  $('statsTable').innerHTML = `<tr><th>${esc(L.stSpot)}</th><th>${esc(L.thShort[0])}</th><th>${esc(L.thShort[1])}</th><th>${esc(L.thShort[2])}</th></tr>` +
+    stats.rows.map(r => `<tr><td>${r.no ? esc(spotName(r.no)) : esc(L.stOther)}</td><td>${r.no ? r.views.toLocaleString() : '–'}</td><td>${r.no ? r.imp.toLocaleString() : '–'}</td>
+      <td>${sum(r).toLocaleString()}${sum(r) ? `<small>${Object.entries(r.clicks).map(([k, n]) => `${esc(L.kinds[k] || k)} ${n}`).join(' · ')}</small>` : ''}</td></tr>`).join('');
+  $('statsNote').textContent = stats.from ? L.statsNote(stats.from) : '';
+}
+document.querySelectorAll('.per').forEach(b => b.onclick = async () => {
+  statDays = +b.dataset.days;
+  const j = await post('me', { t: token, days: statDays }).catch(() => ({}));
+  if (j.ok) { stats = j.stats; renderStats(); }
+});
+
 function showStatus() {
   const L = T[lang], box = $('statusBox');
   const map = { pending_new: ['pending', L.stPendingNew], pending_edit: ['pending', L.stPendingEdit], live: ['live', L.stLive + (expires ? L.expires(expires) : '')], hidden: ['', L.stHidden], bad: ['', L.badLink] };
@@ -291,6 +339,7 @@ function showStatus() {
     const j = await post('me', { t: token }).catch(() => ({}));
     if (!j.ok) { editStatus = 'bad'; form.style.display = 'none'; showStatus(); return; }
     editStatus = j.status; expires = j.expires || ''; fill(j.data || {}, j.email); showStatus();
+    stats = j.stats || null; renderStats();
   }
 })();
 </script>

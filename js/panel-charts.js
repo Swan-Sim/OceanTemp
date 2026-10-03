@@ -839,7 +839,7 @@
         openSheet(); // [ADD] 시트 모드(가로 화면)에서는 정점을 누르면 패널이 바로 올라옴
         // [ADD] 접속 통계 - 사람이 직접 고른 정점만 "많이 본 정점"으로 셉니다
         if (/^https?:$/.test(location.protocol) && navigator.sendBeacon) {
-          try { navigator.sendBeacon(`/api/track?e=station&s=${encodeURIComponent(stationDisplayName(st))}`); } catch (_) {}
+          try { navigator.sendBeacon(`/api/track?e=station&s=${encodeURIComponent(stationDisplayName(st))}${st.no ? `&n=${st.no}` : ''}`); } catch (_) {}
         }
       }
       const isHotspot = maxTempStation && maxTempStation.id === st.id;

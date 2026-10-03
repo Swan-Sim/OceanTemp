@@ -18,6 +18,9 @@ module.exports = async function handler(req, res) {
     } else if (q.e === 'station' && q.s) {
       const name = String(q.s).slice(0, 120);
       cmds.push(['HINCRBY', `st:${day}`, name, 1]);
+      // [ADD] 정점 번호별 조회 수(샵 실적 화면용)
+      const n = parseInt(q.n, 10);
+      if (n > 0 && n < 100000) cmds.push(['HINCRBY', `sv:${day}`, String(n), 1], ['EXPIRE', `sv:${day}`, String(800 * 86400)]);
     } else {
       const country = req.headers['x-vercel-ip-country'] || '??';
       let city = req.headers['x-vercel-ip-city'] || '';

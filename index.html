@@ -53,12 +53,23 @@
         </div>
       </div>
 
-      <div class="hud-overlay">
-        <div class="color-legend">
-          <span id="legend-min">0°C</span>
-          <div class="legend-bar"></div>
-          <span id="legend-max">32°C+</span>
+      <!-- [CHANGE] "오른쪽 버튼이 너무 많아" - 위쪽 한 줄: [현위치] [색상표 + °C/°F] [돋보기].
+           색상표는 지구본에서만 보이고(상세 지도로 확대하면 숨김), °C/°F 버튼은 계속 보여요. -->
+      <div class="top-bar">
+        <button class="ctrl-btn top-btn" onclick="locateUser()" title="내 위치로" id="btn-locate">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+        </button>
+        <div class="hud-overlay">
+          <div class="color-legend">
+            <span id="legend-min" class="lg-part">0°C</span>
+            <div class="legend-bar lg-part"></div>
+            <span id="legend-max" class="lg-part">32°C+</span>
+            <button class="unit-btn" onclick="toggleTempUnit()" id="btn-reset" title="°C / °F">°C</button>
+          </div>
         </div>
+        <button class="ctrl-btn top-btn" id="btn-search-toggle" onclick="toggleSearchPanel()" title="검색">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20.5 20.5"/></svg>
+        </button>
       </div>
 
       <!-- [ADD] "검색창에서 항구명 입력하면 확대된 화면으로 전환" 요청 반영 -
@@ -92,9 +103,6 @@
       </div>
 
       <div class="map-controls">
-        <button class="ctrl-btn" id="btn-search-toggle" onclick="toggleSearchPanel()" title="검색">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20.5 20.5"/></svg>
-        </button>
         <button class="ctrl-btn" onclick="zoomIn()">+</button>
         <div class="zoom-slider-wrap" id="zoom-gauge-wrap">
           <div class="zoom-track">
@@ -103,14 +111,10 @@
           </div>
         </div>
         <button class="ctrl-btn" onclick="zoomOut()">−</button>
-        <button class="ctrl-btn" onclick="locateUser()" title="내 위치로" id="btn-locate">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
-        </button>
         <button class="ctrl-btn" onclick="toggleMoonTide()" title="달·조석 격자 켜기/끄기" id="btn-moon">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M14.5 2.5a9.5 9.5 0 1 0 7 15.9A8 8 0 0 1 14.5 2.5z"/></svg>
         </button>
         <button class="ctrl-btn" onclick="toggleFullscreen()" title="전체화면" style="font-size: 13px;" id="btn-fullscreen">⛶</button>
-        <button class="ctrl-btn" onclick="toggleTempUnit()" style="font-size: 12px; font-weight:700;" id="btn-reset">°C</button>
         <!-- [ADD] 다이빙 포인트(정점) 등록 요청 - 상세 지도에서 누르면 지금 지도 가운데 좌표를 넘겨줘요 -->
         <a class="ctrl-btn" id="btn-spot-add" href="/spot/" target="_blank" rel="noopener" title="다이빙 포인트 등록" onclick="this.href = (typeof isDetailMode !== 'undefined' && isDetailMode && typeof leafletMap !== 'undefined' && leafletMap) ? '/spot/?lat=' + leafletMap.getCenter().lat.toFixed(5) + '&lon=' + leafletMap.getCenter().lng.toFixed(5) : '/spot/'">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><path d="M12 7.5v5M9.5 10h5"/></svg>

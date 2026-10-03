@@ -84,10 +84,18 @@
       const s = list.find(x => x.paid) || list[0];
       const quick = shopLinks(s).filter(([k]) => k === 'tel' || k === 'kakao' || k === 'whatsapp').slice(0, 2);
       el.classList.add('has-shop');
-      el.innerHTML = `<span class="foot-txt">${shopEsc(footText)}</span><span class="shop-q">` +
+      // [CHANGE] 제휴 샵 바로가기를 왼쪽에 먼저, 정점 정보는 오른쪽(남는 폭만큼, 넘치면 …)
+      el.innerHTML = `<span class="shop-q">` +
         `<span class="shop-badge">${shopEsc(t.shopPartner || '제휴')}</span><span class="shop-qn">${shopEsc(s.name)}</span>` +
         quick.map(([k, href]) => `<a class="shop-ic${k === 'tel' ? ' call' : ''}" ${linkAttrs(s, k, href)} aria-label="${k}">${SHOP_ICON[k]}</a>`).join('') +
-        `<button type="button" class="shop-all" data-shop="${shopEsc(s.id)}" data-shop-k="all">${shopEsc((t.shopAll || ((n) => `전체 ${n}곳 ›`))(list.length))}</button></span>`;
+        `<button type="button" class="shop-all" data-shop="${shopEsc(s.id)}" data-shop-k="all">${shopEsc((t.shopAll || ((n) => `전체 ${n}곳 ›`))(list.length))}</button></span>` +
+        `<span class="foot-txt">${shopEsc(footText)}</span>`;
+      // [ADD] 바로가기 노출 수(정점을 직접 연 경우, 정점마다 한 번)
+      const st = selectedStation;
+      if (st && st._userPicked && st._impFor !== st._shopOrder && /^https?:$/.test(location.protocol)) {
+        st._impFor = st._shopOrder;
+        try { navigator.sendBeacon(`/api/shops?svc=imp&id=${encodeURIComponent(s.id)}&no=${st.no}`); } catch (_) {}
+      }
     }
 
     // 버튼 누름: 클릭 수 올리기, "전체 ›"는 샵 탭으로
@@ -96,7 +104,8 @@
       if (!a) return;
       const k = a.getAttribute('data-shop-k'), id = a.getAttribute('data-shop');
       if (/^https?:$/.test(location.protocol)) {
-        const u = `/api/shops?svc=click&id=${encodeURIComponent(id)}&k=${k}`;
+        const no = selectedStation && selectedStation.no ? `&no=${selectedStation.no}` : '';
+        const u = `/api/shops?svc=click&id=${encodeURIComponent(id)}&k=${k}${no}`;
         try { navigator.sendBeacon ? navigator.sendBeacon(u) : fetch(u, { keepalive: true }); } catch (_) {}
       }
       if (k === 'all') setMode('shop');

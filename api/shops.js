@@ -36,15 +36,51 @@ async function lookupToken(t) {
   return { kind, id, hash: S.sha(t) };
 }
 
+// [ADD] 샵 실적: 최근 N일, 이 샵이 걸린 포인트별 [포인트 조회 · 바로가기 노출 · 버튼 클릭(종류별)]
+async function shopStats(s, days) {
+  const id = String(s.id), spots = s.spots || [];
+  const dates = [];
+  const since = s.created ? new Date(s.created).toISOString().slice(0, 10) : '';
+  for (let i = 0; i < days; i++) { const d = new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10); if (since && d < since) break; dates.push(d); }
+  const cmds = [];
+  dates.forEach(d => { cmds.push(['HMGET', `sv:${d}`, ...spots.map(String)]); cmds.push(['HGETALL', `si:${d}`], ['HGETALL', `sc:${d}`]); });
+  const out = cmds.length ? await R(...cmds) : [];
+  const rows = Object.fromEntries(spots.map(n => [n, { no: n, views: 0, imp: 0, clicks: {} }]));
+  const other = { no: 0, views: 0, imp: 0, clicks: {} }; // 포인트 정보 없이 기록된 예전 클릭
+  for (let i = 0; i < dates.length; i++) {
+    const sv = out[i * 3] || [], si = out[i * 3 + 1] || [], sc = out[i * 3 + 2] || [];
+    spots.forEach((n, j) => { rows[n].views += +sv[j] || 0; });
+    for (let k = 0; k < si.length; k += 2) { const [sid, no] = si[k].split('|'); if (sid === id && rows[no]) rows[no].imp += +si[k + 1] || 0; }
+    for (let k = 0; k < sc.length; k += 2) {
+      const [sid, kind, no] = sc[k].split('|'); if (sid !== id) continue;
+      const r = (no && rows[no]) || other; r.clicks[kind] = (r.clicks[kind] || 0) + (+sc[k + 1] || 0);
+    }
+  }
+  const list = Object.values(rows);
+  if (Object.keys(other.clicks).length) list.push(other);
+  return { days, from: dates[dates.length - 1] || '', rows: list };
+}
+
 module.exports = async function handler(req, res) {
   const q = req.query || {};
   const svc = String(q.svc || '');
   try {
     if (svc === 'click') {
-      const id = String(q.id || ''), k = String(q.k || '');
+      const id = String(q.id || ''), k = String(q.k || ''), no = parseInt(q.no, 10);
       if (/^[\w-]{1,20}$/.test(id) && KINDS.has(k)) {
         const day = new Date().toISOString().slice(0, 10);
-        try { await R(['HINCRBY', `sc:${day}`, `${id}|${k}`, 1], ['EXPIRE', `sc:${day}`, String(800 * 86400)]); } catch (_) {}
+        const field = no > 0 && no < 100000 ? `${id}|${k}|${no}` : `${id}|${k}`; // [CHANGE] 어느 포인트에서 눌렀는지도
+        try { await R(['HINCRBY', `sc:${day}`, field, 1], ['EXPIRE', `sc:${day}`, String(800 * 86400)]); } catch (_) {}
+      }
+      res.setHeader('Cache-Control', 'no-store'); return res.status(204).end();
+    }
+
+    // [ADD] 아래 정보 줄 바로가기에 이 샵이 보인 횟수
+    if (svc === 'imp') {
+      const id = String(q.id || ''), no = parseInt(q.no, 10);
+      if (/^[\w-]{1,20}$/.test(id) && no > 0 && no < 100000) {
+        const day = new Date().toISOString().slice(0, 10);
+        try { await R(['HINCRBY', `si:${day}`, `${id}|${no}`, 1], ['EXPIRE', `si:${day}`, String(800 * 86400)]); } catch (_) {}
       }
       res.setHeader('Cache-Control', 'no-store'); return res.status(204).end();
     }
@@ -88,8 +124,11 @@ module.exports = async function handler(req, res) {
       const [raw, pend] = await R(['HGET', K.shops, tk.id], ['HGET', K.req, 'e' + tk.id]);
       if (!raw) return send(res, 404, { ok: false, error: 'bad_link' });
       const s = JSON.parse(raw), p = pend ? JSON.parse(pend) : null;
+      const days = [30, 90, 365].includes(+bodyOf(req).days) ? +bodyOf(req).days : 30;
+      let stats = null;
+      try { stats = await shopStats(s, days); } catch (_) {}
       return send(res, 200, { ok: true, status: p ? 'pending_edit' : (S.isLive(s) ? 'live' : 'hidden'),
-        data: p ? p.data : S.shopFields(s), email: (p && p.email) || s.email || '', live: S.publicShop(s), expires: s.expires || '', plan: s.plan || 'free' });
+        data: p ? p.data : S.shopFields(s), email: (p && p.email) || s.email || '', live: S.publicShop(s), expires: s.expires || '', plan: s.plan || 'free', stats });
     }
 
     if (svc === 'edit' && req.method === 'POST') {

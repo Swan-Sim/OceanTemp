@@ -49,7 +49,7 @@
       const get = (r, n) => { const i = col(n); return i >= 0 && r[i] != null ? String(r[i]).trim() : ''; };
       const spots = [];
       rows.slice(1).forEach((r, idx) => {
-        const name = get(r, 'name');
+        const name = cleanSpotName(get(r, 'name'));
         const lat = parseFloat(get(r, 'lat')), lon = parseFloat(get(r, 'lon'));
         if (!name) return;
         if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180)) {
@@ -80,6 +80,16 @@
       } finally { clearTimeout(timer); }
     }
 
+    // [ADD] "다이빙 포인트는 🤿 아이콘이 있으니 '다이빙포인트'라는 말은 사족" - 이름 끝·괄호의 군더더기를 빼요
+    //   "제주 문섬 다이빙포인트" → "제주 문섬", "하고수동해변 (다이빙)" → "하고수동해변", "Banzai Cliff Diving Area (Saipan)" → "Banzai Cliff (Saipan)"
+    function cleanSpotName(n) {
+      const out = String(n || '')
+        .replace(/\s*\((다이빙|다이빙\s*포인트|diving|dive)\)/gi, '')
+        .replace(/\s*(다이빙\s*포인트|다이빙\s*스팟|diving\s*(area|site|spot|point)|dive\s*(site|spot|point))(?=\s*(\(|$))/gi, '')
+        .replace(/\s{2,}/g, ' ').trim();
+      return out || String(n || '').trim();
+    }
+
     // [ADD] /spot/ 에서 등록 요청 → /admin 에서 승인된 포인트(번호가 시트와 겹치지 않음)
     async function addUserSpots(spots) {
       if (!/^https?:$/.test(location.protocol)) return;
@@ -88,7 +98,7 @@
         const have = new Set(spots.map(s => s.no).filter(Boolean));
         (j.spots || []).forEach(s => {
           if (have.has(s.no) || !Number.isFinite(+s.lat) || !Number.isFinite(+s.lon)) return;
-          spots.push({ country: s.country || '', name: s.name, shortName: s.label || s.name, lat: +s.lat, lon: +s.lon, depth: true, net: 'Beach/user', no: s.no });
+          spots.push({ country: s.country || '', name: cleanSpotName(s.name), shortName: cleanSpotName(s.label || s.name), lat: +s.lat, lon: +s.lon, depth: true, net: 'Beach/user', no: s.no });
         });
       } catch (e) { console.warn('[stations] 사용자 등록 포인트 읽기 실패:', e.message); }
     }

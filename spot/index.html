@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>다이빙 포인트 등록 · otemp.app</title>
+<title>포인트 등록 · otemp.app</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <!-- [ADD] 새 다이빙 포인트(정점) 등록 요청 페이지. 위성 지도에서 바다 위 정확한 자리를 눌러 고르면,
      운영자가 /admin 에서 확인 후 번호를 붙여 사이트에 추가해요. -->
@@ -60,9 +60,9 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const T = {
-  ko: { title: '다이빙 포인트 등록', lead: '사이트에 없는 다이빙 포인트를 알려주세요. 운영자가 확인한 뒤 추가해요. 수온·파도·시야는 위성·관측 자료라서 꼭 바다 위 자리를 골라주세요.',
+  ko: { title: '포인트 등록', lead: '사이트에 없는 포인트를 알려주세요. 운영자가 확인한 뒤 추가해요. 수온·파도·시야는 위성·관측 자료라서 꼭 바다 위 자리를 골라주세요.',
     pos: '위치', me: '내 위치', posHint: '위성 지도에서 실제로 들어가는 바다 위 자리를 누르세요(확대해서 정확하게). 숫자를 직접 넣어도 돼요.',
-    name: '포인트 이름', namePh: '예: 제주 문섬 다이빙포인트', label: '짧은 이름(지도 표시)', labelPh: '예: 문섬', country: '나라', countryPh: '예: South Korea',
+    name: '포인트 이름', namePh: '예: 제주 문섬', label: '짧은 이름(지도 표시)', labelPh: '예: 문섬', country: '나라', countryPh: '예: South Korea',
     note: '설명', notePh: '수심, 입수 방법, 특징 등', email: '이메일(선택)', emailHint: '추가되면 알려드릴 수 있어요. 공개되지 않아요.',
     submit: '등록 요청 보내기', sending: '보내는 중…', ok: '요청을 보냈어요. 확인 후 사이트에 추가돼요. 고마워요!',
     e_need_name_pos: '이름과 지도 위치를 넣어주세요.', e_too_many: '잠시 후 다시 시도해 주세요.', e_default: '보내지 못했어요. 잠시 후 다시 시도해 주세요.', other: 'English' },

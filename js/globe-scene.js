@@ -12,20 +12,25 @@ function latLonToSpherePos(lat, lon, radius) {
     // 가야 함" 두 요청을 하나의 공용 함수로 처리합니다. selected=true면 해변이든
     // NOAA 격자 정점이든 동일한 스타일(큰 원 + 두꺼운 주황 테두리 + 큰 라벨)로
     // 그려지고, labelOnLeft로 라벨을 점의 왼쪽/오른쪽 중 어디에 그릴지 정합니다.
+    // [CHANGE] "정점명은 45도 기울이자 - 제주처럼 나란히 있으면 겹쳐서 안 보여"
+    // 이름표를 점에서 45도 위쪽으로 비스듬히 붙여요. 오른쪽 반구는 오른쪽 위(↗),
+    // 왼쪽 반구는 왼쪽 위(↖)로 뻗어서 라벨이 지구 바깥쪽을 향하는 규칙은 그대로예요.
+    // 캔버스가 정사각형이 되면서 투명한 빈 곳이 넓어져, 클릭은 점·이름표 위만 인정해요(hit).
+    const MARKER_CANVAS = 260, MARKER_PAD = 26, MARKER_UNIT = 0.047; // 월드 단위/픽셀(예전 340px=16과 같은 비율)
     function drawMarkerTexture(station, opts) {
       const selected = !!opts.selected;
       const labelOnLeft = !!opts.labelOnLeft;
       const label = opts.label;
 
       const canvas = document.createElement('canvas');
-      canvas.width = 340;
-      canvas.height = 64;
+      canvas.width = MARKER_CANVAS;
+      canvas.height = MARKER_CANVAS;
       const ctx = canvas.getContext('2d');
 
       const colorRGB = getTempColor(station.curTemp);
-      const dotY = 32;
+      const dotY = canvas.height - MARKER_PAD;
       const dotR = selected ? 16 : 10;
-      const dotX = labelOnLeft ? (canvas.width - 26) : 26;
+      const dotX = labelOnLeft ? (canvas.width - MARKER_PAD) : MARKER_PAD;
       const borderColor = selected ? '#f97316' : '#ffffff';
       const borderWidth = selected ? 4 : 2;
 
@@ -47,36 +52,47 @@ function latLonToSpherePos(lat, lon, radius) {
       ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
       ctx.stroke();
 
+      // 이름표 상자(회전 좌표계 기준: 점에서 gap만큼 떨어져 길이 boxW, 높이 boxH)
+      let box = null;
       if (label) {
         ctx.font = `bold ${selected ? 26 : 22}px -apple-system, BlinkMacSystemFont, sans-serif`;
-        const textWidth = Math.min(ctx.measureText(label).width, canvas.width - dotR * 2 - 40);
-        const boxH = selected ? 40 : 36;
-        const boxY = dotY - boxH / 2;
-        const boxX = labelOnLeft ? (dotX - dotR - 14 - (textWidth + 18)) : (dotX + dotR + 14);
-
-        // [FIX] "텍스트가 너무 투명해서 안 보여" - 지난번에 라벨 재질에
-        // transparent:true를 제대로 켰더니, 원래 코드에 있던 낮은
-        // 배경 불투명도(0.72 / 0.28)가 이제야 의도대로 적용되면서
-        // 오히려 뒤 배경이 너무 비쳐 보여 글씨가 묻혔어요. 불투명도를 올렸습니다.
+        const gap = dotR + 8;
+        const maxLen = (canvas.height - MARKER_PAD - 18) / Math.SQRT1_2 - gap; // 캔버스 안에 들어가는 대각선 길이
+        const textWidth = Math.min(ctx.measureText(label).width, maxLen - 18);
+        const boxW = textWidth + 18, boxH = selected ? 40 : 36;
+        // 오른쪽: -45도(↗), 왼쪽: +45도로 돌리고 음수 쪽(↖)에 그려서 글자가 뒤집히지 않게
+        const ang = labelOnLeft ? Math.PI / 4 : -Math.PI / 4;
+        const bx = labelOnLeft ? -(gap + boxW) : gap;
+        box = { ang, bx, boxW, boxH };
+        ctx.save();
+        ctx.translate(dotX, dotY);
+        ctx.rotate(ang);
         ctx.fillStyle = selected ? 'rgba(249, 115, 22, 0.55)' : 'rgba(15, 23, 42, 0.92)';
         ctx.strokeStyle = selected ? '#f97316' : 'rgba(255, 255, 255, 0.45)';
         ctx.lineWidth = selected ? 2 : 1.5;
-
         ctx.beginPath();
-        ctx.roundRect(boxX, boxY, textWidth + 18, boxH, 6);
+        ctx.roundRect(bx, -boxH / 2, boxW, boxH, 6);
         ctx.fill();
         ctx.stroke();
-
-        ctx.fillStyle = '#f8fafc';
-        ctx.save();
         ctx.beginPath();
-        ctx.rect(boxX, boxY, textWidth + 18, boxH);
+        ctx.rect(bx, -boxH / 2, boxW, boxH);
         ctx.clip();
-        ctx.fillText(label, boxX + 9, dotY + (selected ? 9 : 7));
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillText(label, bx + 9, selected ? 9 : 7);
         ctx.restore();
       }
 
-      return { texture: new THREE.CanvasTexture(canvas), dotX, dotY, canvasW: canvas.width, canvasH: canvas.height };
+      // 클릭 판정: uv(0~1) → 캔버스 좌표 → 점 근처이거나 이름표 상자 안이면 true
+      const hit = (u, v) => {
+        const px = u * canvas.width - dotX, py = (1 - v) * canvas.height - dotY;
+        if (Math.hypot(px, py) <= dotR + 12) return true;
+        if (!box) return false;
+        const c = Math.cos(-box.ang), s = Math.sin(-box.ang);
+        const rx = px * c - py * s, ry = px * s + py * c; // 상자 좌표계로 되돌림
+        return rx >= box.bx - 4 && rx <= box.bx + box.boxW + 4 && Math.abs(ry) <= box.boxH / 2 + 4;
+      };
+
+      return { texture: new THREE.CanvasTexture(canvas), dotX, dotY, canvasW: canvas.width, canvasH: canvas.height, hit };
     }
 
     function createBeachSprite(station) {
@@ -92,12 +108,12 @@ function latLonToSpherePos(lat, lon, radius) {
       // depthWrite:false로 고쳐서 실제로 보이는 부분만 영향을 주게 했습니다.
       const material = new THREE.SpriteMaterial({ map: rightVariant.texture, transparent: true, depthTest: true, depthWrite: false });
       const sprite = new THREE.Sprite(material);
-      sprite.userData.baseScale = [16, 3.01]; // [FIX] 캔버스 비율(340:64)에 맞춤 - 세로로 늘어져 보이던 버그
+      sprite.userData.baseScale = [MARKER_CANVAS * MARKER_UNIT, MARKER_CANVAS * MARKER_UNIT]; // [CHANGE] 정사각형 캔버스(45도 이름표)
       sprite.userData.stationId = station.id;
       sprite.userData.rightVariant = rightVariant;
       sprite.userData.leftVariant = leftVariant;
       sprite.userData.labelOnLeft = false;
-      sprite.scale.set(16, 4, 1);
+      sprite.scale.set(MARKER_CANVAS * MARKER_UNIT, MARKER_CANVAS * MARKER_UNIT, 1);
 
       // [FIX] 기준점을 캔버스 정중앙이 아니라 점(dot)의 실제 좌표로 이동
       sprite.center.set(rightVariant.dotX / rightVariant.canvasW, 1 - rightVariant.dotY / rightVariant.canvasH);
@@ -230,7 +246,7 @@ function getCurrentCenterLatLng() {
     function createSelectionMarker() {
       const material = new THREE.SpriteMaterial({ transparent: true, depthTest: true, depthWrite: false });
       const sprite = new THREE.Sprite(material);
-      sprite.userData.baseScale = [16, 3.01]; // [FIX] 캔버스 비율(340:64)에 맞춤
+      sprite.userData.baseScale = [MARKER_CANVAS * MARKER_UNIT, MARKER_CANVAS * MARKER_UNIT]; // [CHANGE] 정사각형 캔버스(45도 이름표)
       sprite.visible = false;
       return sprite;
     }
@@ -1219,6 +1235,9 @@ function getCurrentCenterLatLng() {
               console.log('[calibration] clicked texture UV =', hit.uv.x.toFixed(4), hit.uv.y.toFixed(4));
             }
             if (hit.object.stationData) {
+              // [ADD] 비스듬한 이름표 캔버스의 투명한 빈 곳은 클릭으로 치지 않음(뒤의 정점·지구로 넘어감)
+              const ud = hit.object.userData, vv = ud && (ud.labelOnLeft ? ud.leftVariant : ud.rightVariant);
+              if (hit.uv && vv && vv.hit && !vv.hit(hit.uv.x, hit.uv.y)) continue;
               selectStation(hit.object.stationData);
               matched = true;
               break;

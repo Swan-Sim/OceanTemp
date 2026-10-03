@@ -421,8 +421,8 @@ function page({ lang, title, desc, canonical, alternates, jsonld, body, base }) 
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><meta name="description" content="${esc(desc)}">
 <link rel="canonical" href="${base}${canonical}">${alt}
-<meta property="og:type" content="website"><meta property="og:site_name" content="otemp"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${base}${canonical}">
-<meta name="twitter:card" content="summary"><meta name="theme-color" content="#070B14">
+<meta property="og:type" content="website"><meta property="og:site_name" content="otemp"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${base}${canonical}"><meta property="og:image" content="${base}/og.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${base}/og.jpg"><meta name="theme-color" content="#070B14">
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ''}
 <style>${CSS}</style></head><body><div class="wrap">${body}</div><div id="toast"></div></body></html>`;
 }

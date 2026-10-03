@@ -174,5 +174,6 @@
     }
 
     function getFinalBootLocation() {
-      return __bootManualChoice || __bootAutoChoice || computeRotationForLatLon(35, -175);
+      // [CHANGE] 위치 공유를 안 했을 때 기본 화면: 태평양 한가운데 → 공유 이미지(og.jpg)와 같은 동아시아·서태평양(북위 18°, 동경 132°)
+      return __bootManualChoice || __bootAutoChoice || computeRotationForLatLon(18, 132);
     }

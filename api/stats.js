@@ -22,6 +22,11 @@ module.exports = async function handler(req, res) {
     await new Promise(r => setTimeout(r, 600)); // 무작위 대입 속도 늦추기
     return res.status(401).json({ error: 'unauthorized' });
   }
+  // [ADD] 샵·정점 관리(승인/거절/수정) - POST /api/stats?svc=...
+  if ((req.query || {}).svc) {
+    try { return await require('./_admin')(req, res); }
+    catch (e) { return res.status(500).json({ error: String(e.message || e) }); }
+  }
   try {
     const days = Math.max(1, Math.min(90, parseInt((req.query || {}).days, 10) || 14));
     // 시간대 변환 때문에 앞뒤로 하루씩 더 가져옵니다(화면에서 내 시간대로 다시 나눔)

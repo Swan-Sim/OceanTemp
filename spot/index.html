@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>다이빙 포인트 등록 · otemp.app</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<!-- [ADD] 새 다이빙 포인트(정점) 등록 요청 페이지. 위성 지도에서 바다 위 정확한 자리를 눌러 고르면,
+     운영자가 /admin 에서 확인 후 번호를 붙여 사이트에 추가해요. -->
+<style>
+  :root { --bg:#070B14; --bg2:#0B1120; --line:rgba(255,255,255,.1); --text:rgba(255,255,255,.92); --muted:#8A94A6; --dim:#5B6474; --accent:#FFB000; --ok:#34D399; --err:#FB7185; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
+  .top { display: flex; justify-content: space-between; } .top a { font-size: 13px; text-decoration: none; color: var(--muted); }
+  h1 { font-size: 21px; margin: 10px 0 4px; } .lead { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 0 0 16px; }
+  .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  #map { height: 360px; border-radius: 10px; border: 1px solid var(--line); }
+  .pos { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .pos input { width: 130px; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 5px; } label b { color: var(--accent); }
+  input, textarea { width: 100%; font: inherit; font-size: 15px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; }
+  textarea { min-height: 70px; } .hint { font-size: 11.5px; color: var(--dim); margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; } @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+  .btn { font: inherit; font-size: 15px; font-weight: 700; padding: 12px 18px; border-radius: 10px; border: 1px solid rgba(255,176,0,.6); background: rgba(255,176,0,.16); color: #ffd27a; cursor: pointer; }
+  .btn.ghost { background: transparent; border-color: var(--line); color: var(--muted); font-size: 13px; padding: 7px 12px; font-weight: 600; }
+  .msg { font-size: 13px; margin-top: 10px; } .msg.err { color: var(--err); } .msg.ok { color: var(--ok); }
+  .hp { position: absolute; left: -9999px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="/">← otemp.app</a><a href="#" id="langBtn"></a></div>
+  <h1 data-k="title"></h1>
+  <p class="lead" data-k="lead"></p>
+  <form id="f" novalidate>
+    <div class="card">
+      <div id="map"></div>
+      <div class="pos"><span data-k="pos"></span>
+        <input name="lat" id="lat" inputmode="decimal" placeholder="lat"><input name="lon" id="lon" inputmode="decimal" placeholder="lon">
+        <button class="btn ghost" type="button" id="meBtn" data-k="me"></button></div>
+      <div class="hint" data-k="posHint"></div>
+    </div>
+    <div class="card">
+      <label><span data-k="name"></span> <b>*</b></label><input name="name" maxlength="80" data-ph="namePh">
+      <div class="grid">
+        <div><label data-k="label"></label><input name="label" maxlength="30" data-ph="labelPh"></div>
+        <div><label data-k="country"></label><input name="country" maxlength="40" data-ph="countryPh"></div>
+      </div>
+      <label data-k="note"></label><textarea name="note" maxlength="300" data-ph="notePh"></textarea>
+      <label data-k="email"></label><input name="email" type="email" autocomplete="email">
+      <div class="hint" data-k="emailHint"></div>
+      <input class="hp" name="website2" tabindex="-1" autocomplete="off">
+    </div>
+    <button class="btn" type="submit" id="submitBtn" data-k="submit"></button>
+    <div class="msg" id="msg"></div>
+  </form>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const T = {
+  ko: { title: '다이빙 포인트 등록', lead: '사이트에 없는 다이빙 포인트를 알려주세요. 운영자가 확인한 뒤 추가해요. 수온·파도·시야는 위성·관측 자료라서 꼭 바다 위 자리를 골라주세요.',
+    pos: '위치', me: '내 위치', posHint: '위성 지도에서 실제로 들어가는 바다 위 자리를 누르세요(확대해서 정확하게). 숫자를 직접 넣어도 돼요.',
+    name: '포인트 이름', namePh: '예: 제주 문섬 다이빙포인트', label: '짧은 이름(지도 표시)', labelPh: '예: 문섬', country: '나라', countryPh: '예: South Korea',
+    note: '설명', notePh: '수심, 입수 방법, 특징 등', email: '이메일(선택)', emailHint: '추가되면 알려드릴 수 있어요. 공개되지 않아요.',
+    submit: '등록 요청 보내기', sending: '보내는 중…', ok: '요청을 보냈어요. 확인 후 사이트에 추가돼요. 고마워요!',
+    e_need_name_pos: '이름과 지도 위치를 넣어주세요.', e_too_many: '잠시 후 다시 시도해 주세요.', e_default: '보내지 못했어요. 잠시 후 다시 시도해 주세요.', other: 'English' },
+  en: { title: 'Suggest a dive spot', lead: 'Tell us about a dive spot that is missing. We add it after review. Pick a point on the water, since temperature, waves and visibility come from satellite and sea observations.',
+    pos: 'Position', me: 'My location', posHint: 'Tap the exact spot on the water where you dive (zoom in). You can also type coordinates.',
+    name: 'Spot name', namePh: 'e.g. Moonseom, Jeju', label: 'Short name (map label)', labelPh: 'e.g. Moonseom', country: 'Country', countryPh: 'e.g. South Korea',
+    note: 'Notes', notePh: 'Depth, entry, highlights…', email: 'Email (optional)', emailHint: 'So we can tell you when it is added. Not shown publicly.',
+    submit: 'Send suggestion', sending: 'Sending…', ok: 'Sent! We will add it after review. Thank you!',
+    e_need_name_pos: 'Add a name and a position on the map.', e_too_many: 'Please try again later.', e_default: 'Could not send. Please try again later.', other: '한국어' }
+};
+let lang = (() => { try { return localStorage.getItem('otemp.lang') || (navigator.language || '').slice(0, 2); } catch (_) { return 'ko'; } })() === 'ko' ? 'ko' : 'en';
+const $ = (id) => document.getElementById(id);
+function applyLang() {
+  const L = T[lang]; document.documentElement.lang = lang; document.title = L.title + ' · otemp.app';
+  document.querySelectorAll('[data-k]').forEach(el => { const v = L[el.dataset.k]; if (typeof v === 'string') el.textContent = v; });
+  document.querySelectorAll('[data-ph]').forEach(el => { el.placeholder = L[el.dataset.ph] || ''; });
+  $('langBtn').textContent = L.other;
+}
+$('langBtn').onclick = (e) => { e.preventDefault(); lang = lang === 'ko' ? 'en' : 'ko'; applyLang(); };
+applyLang();
+
+const qs = new URLSearchParams(location.search);
+const lat0 = parseFloat(qs.get('lat')), lon0 = parseFloat(qs.get('lon'));
+const has0 = Number.isFinite(lat0) && Number.isFinite(lon0);
+const map = L.map('map', { attributionControl: true }).setView(has0 ? [lat0, lon0] : [33.3, 126.5], has0 ? 15 : 6);
+map.attributionControl.setPrefix(false);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' }).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Labels © Esri' }).addTo(map);
+let pin = null;
+function setPos(la, lo, move) {
+  la = +(+la).toFixed(5); lo = +(L.Util.wrapNum(+lo, [-180, 180], true)).toFixed(5);
+  $('lat').value = la; $('lon').value = lo;
+  if (!pin) pin = L.circleMarker([la, lo], { radius: 8, color: '#fff', weight: 2.5, fillColor: '#ef4444', fillOpacity: 1 }).addTo(map);
+  pin.setLatLng([la, lo]); if (move) map.setView([la, lo], Math.max(map.getZoom(), 14));
+}
+if (has0) setPos(lat0, lon0);
+map.on('click', (e) => setPos(e.latlng.lat, e.latlng.lng));
+['lat', 'lon'].forEach(id => $(id).onchange = () => { const a = parseFloat($('lat').value), b = parseFloat($('lon').value); if (Number.isFinite(a) && Number.isFinite(b)) setPos(a, b, true); });
+$('meBtn').onclick = () => navigator.geolocation && navigator.geolocation.getCurrentPosition(p => setPos(p.coords.latitude, p.coords.longitude, true), () => {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+
+$('f').onsubmit = async (e) => {
+  e.preventDefault();
+  const L = T[lang], btn = $('submitBtn'), msg = $('msg');
+  const body = Object.fromEntries(new FormData(e.target).entries());
+  btn.disabled = true; btn.textContent = L.sending; msg.textContent = '';
+  let j = {};
+  try { const r = await fetch('/api/shops?svc=spot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); j = await r.json(); } catch (_) {}
+  btn.disabled = false; btn.textContent = L.submit;
+  if (!j.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + j.error] || L.e_default; return; }
+  msg.className = 'msg ok'; msg.textContent = L.ok; e.target.reset(); if (pin) { map.removeLayer(pin); pin = null; }
+};
+</script>
+</body>
+</html>

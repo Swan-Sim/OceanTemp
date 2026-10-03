@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Ocean Temp · 접속 통계</title>
+<title>Ocean Temp · 관리</title>
 <!-- [ADD] "도메인/admin으로 접속하면 패스워드 묻고 날짜별 통계" 요청 반영.
      데이터는 /api/stats(비밀번호 필요)에서 받아오고, 시간은 이 브라우저의
      시간대로 바꿔서 보여줍니다(서버에는 UTC 기준으로 저장). -->
@@ -32,12 +32,31 @@
   td { padding: 6px 4px; border-bottom: 1px solid var(--line); } td.n { text-align: right; color: var(--muted); width: 70px; }
   .hbar { height: 4px; background: rgba(56,189,248,.6); border-radius: 2px; margin-top: 3px; }
   .err { color: #FB7185; font-size: 13px; margin-top: 8px; }
-  @media (max-width: 640px) { .grid2, .kpis { grid-template-columns: 1fr; } }
+  .nav { display: flex; gap: 6px; margin-bottom: 14px; align-items: center; }
+  .nav button.on { color: var(--text); border-color: rgba(255,176,0,.6); background: rgba(255,176,0,.12); }
+  .badge { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 8px; background: #FB7185; color: #fff; font-size: 11px; line-height: 16px; }
+  .badge:empty { display: none; }
+  .req { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .req .h { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; font-weight: 700; }
+  .tag { white-space: nowrap; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; border: 1px solid rgba(255,176,0,.5); color: var(--accent); }
+  .tag.edit { border-color: rgba(56,189,248,.5); color: #7dd3fc; } .tag.off { border-color: var(--line); color: var(--muted); }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 3px 10px; font-size: 12.5px; margin: 8px 0; } .kv div:nth-child(odd) { color: var(--muted); }
+  .kv .old { color: var(--muted); text-decoration: line-through; margin-right: 6px; } .kv .new { color: #7dd3fc; }
+  .muted { color: var(--muted); font-size: 12px; } .hint { color: var(--muted); font-size: 11.5px; margin-top: 8px; line-height: 1.6; }
+  input.f, select.f, textarea.f { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 13px; }
+  .ed { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; align-items: center; font-size: 12.5px; border: 1px solid rgba(255,176,0,.4); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .ed label { color: var(--muted); } .ed input, .ed select { width: 100%; }
+  .linkbox { word-break: break-all; font-size: 12px; background: var(--bg); border: 1px dashed rgba(255,176,0,.5); border-radius: 8px; padding: 8px; margin-top: 8px; }
+  #importUrl { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  td.act { white-space: nowrap; text-align: right; } td.act button { padding: 3px 9px; font-size: 12px; }
+  @media (max-width: 640px) { #shopList tr, #spotList tr { display: block; border-bottom: 1px solid var(--line); padding: 6px 0; } #shopList td, #spotList td { display: block; border: none; } td.act { text-align: left; }
+    .ed { grid-template-columns: 1fr; }  .grid2, .kpis { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Ocean Temp · 접속 통계</h1>
+  <h1>Ocean Temp · 관리</h1>
   <div class="sub" id="tzNote"></div>
 
   <div class="card" id="login">
@@ -50,10 +69,31 @@
   </div>
 
   <div id="dash" style="display:none">
+    <!-- [ADD] 관리 메뉴: 통계 | 샵 | 정점 -->
+    <div class="nav">
+      <button data-sec="stats" class="on">통계</button>
+      <button data-sec="shops">샵 <span class="badge" id="bShops"></span></button>
+      <button data-sec="spots">정점 <span class="badge" id="bSpots"></span></button>
+      <span style="flex:1"></span><button id="logout">로그아웃</button>
+    </div>
+    <div id="secShops" class="sec" style="display:none">
+      <div class="card"><h2>승인 대기 (새 등록 · 수정 요청)</h2><div id="shopReqs"></div></div>
+      <div class="card"><h2>등록된 샵</h2>
+        <div class="row" style="margin-bottom:10px"><button class="primary" id="shopNew">＋ 직접 추가</button>
+          <span style="flex:1"></span><input id="importUrl" placeholder="구글 시트 링크(보기 공유)에서 가져오기" style="width:280px"><button id="importBtn">가져오기</button></div>
+        <div id="shopEditor"></div>
+        <div id="shopList"></div>
+        <div class="hint">· 무료(지인) 샵은 만료일을 비워두면 계속 보여요. 유료 샵은 만료일이 지나면 자동으로 숨겨져요(날짜만 늘리면 다시 보임).<br>· "수정 링크"를 누르면 새 링크가 만들어지고 예전 링크는 끊겨요. 샵에 카톡 등으로 보내주세요.</div>
+      </div>
+    </div>
+    <div id="secSpots" class="sec" style="display:none">
+      <div class="card"><h2>승인 대기 (새 포인트)</h2><div id="spotReqs"></div><div class="hint">승인하면 구글 시트·기존 등록 포인트와 겹치지 않는 다음 번호가 자동으로 붙어요. 이름·좌표는 승인 전에 고칠 수 있어요.</div></div>
+      <div class="card"><h2>사용자 등록 포인트 (시트 밖)</h2><div id="spotList"></div></div>
+    </div>
+    <div id="secStats" class="sec">
     <div class="row" style="margin-bottom:14px">
       <button data-days="7">7일</button><button data-days="14" class="on">14일</button>
       <button data-days="30">30일</button><button data-days="90">90일</button>
-      <span style="flex:1"></span><button id="logout">로그아웃</button>
     </div>
     <div class="card kpis">
       <div class="kpi"><div class="v" id="kTotal">–</div><div class="l">기간 전체 방문</div></div>
@@ -68,6 +108,7 @@
     </div>
     <div class="card"><h2>많이 본 정점 (클릭 수)</h2><table id="stations"></table></div>
     <div class="card"><h2>다이빙샵 연락 버튼 클릭</h2><table id="shops"></table></div>
+    </div>
   </div>
 </div>
 
@@ -91,6 +132,7 @@
     if (!r.ok) return showLogin(j.error || '불러오지 못했어요');
     $('login').style.display = 'none'; $('dash').style.display = '';
     render(j.data);
+    loadMgmt();
   }
 
   function showLogin(msg) { $('login').style.display = ''; $('dash').style.display = 'none'; $('err').textContent = msg || ''; }
@@ -149,6 +191,133 @@
     document.querySelectorAll('[data-days]').forEach(x => x.classList.toggle('on', x === b));
     load();
   }));
+  // ───────── [ADD] 샵·정점 관리 ─────────
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  async function api(svc, body) {
+    const r = await fetch(`/api/stats?svc=${svc}`, { method: 'POST', headers: { 'x-admin-password': getPw(), 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    let j = {}; try { j = await r.json(); } catch (_) {}
+    if (!r.ok || !j.ok) { alertMsg(j.error || ('HTTP ' + r.status)); throw new Error(j.error || r.status); }
+    return j;
+  }
+  function alertMsg(m) { const d = document.createElement('div'); d.className = 'err'; d.textContent = '오류: ' + m; document.querySelector('.nav').after(d); setTimeout(() => d.remove(), 5000); }
+  function showSec(name) {
+    document.querySelectorAll('[data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === name));
+    $('secStats').style.display = name === 'stats' ? '' : 'none';
+    $('secShops').style.display = name === 'shops' ? '' : 'none';
+    $('secSpots').style.display = name === 'spots' ? '' : 'none';
+    if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+    if (name !== 'stats' && window.__mgLoaded) loadMgmt(); // 탭을 열 때마다 최신 요청으로
+  }
+  document.querySelectorAll('[data-sec]').forEach(b => b.addEventListener('click', () => showSec(b.dataset.sec)));
+  const secFromHash = () => showSec(['shops', 'spots'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'stats');
+  window.addEventListener('hashchange', secFromHash);
+  secFromHash();
+
+  // 정점 번호 → 이름(구글 시트 + 사용자 등록)
+  let spotNames = {};
+  const SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
+  fetch(SHEET).then(r => r.text()).then(text => {
+    const lines = text.split(/\r?\n/), head = lines.shift().split(',').map(h => h.trim().toLowerCase());
+    const iNo = head.indexOf('no'), iLabel = head.indexOf('label');
+    lines.forEach(l => { const m = l.match(/^(\d+),/); if (!m || iNo !== 0) return; const cells = l.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(c => c.replace(/,$/, '').replace(/^"|"$/g, '')); spotNames[+cells[iNo]] = cells[iLabel] || cells[2]; });
+    if (mg) renderMgmt();
+  }).catch(() => {});
+  const spotsText = (arr) => (arr || []).map(n => `${esc(spotNames[n] || '')}#${n}`).join(', ');
+
+  let mg = null, editing = null, lastLink = null;
+  async function loadMgmt() { try { mg = await api('list'); window.__mgLoaded = true; renderMgmt(); } catch (_) {} }
+  const FIELDS = [['name', '샵 이름'], ['spots', '포인트 번호'], ['phone', '전화'], ['kakao', '카카오'], ['whatsapp', 'WhatsApp'], ['instagram', '인스타'], ['web', '웹'], ['address', '주소'], ['lang', '언어'], ['note', '소개']];
+  const val = (d, k) => k === 'spots' ? spotsText(d.spots) : esc(d[k] || '');
+  const plus1y = () => { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return d.toISOString().slice(0, 10); };
+  const fmtT = (t) => t ? new Date(t).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+
+  function renderMgmt() {
+    if (!mg) return;
+    (mg.spots || []).forEach(s => { spotNames[s.no] = s.label || s.name; });
+    const shopById = Object.fromEntries((mg.shops || []).map(s => [String(s.id), s]));
+    $('bShops').textContent = mg.reqs.length || ''; $('bSpots').textContent = mg.spotreqs.length || '';
+    // 샵 요청
+    $('shopReqs').innerHTML = mg.reqs.length ? mg.reqs.sort((a, b) => a.at - b.at).map(r => {
+      const old = r.type === 'edit' ? shopById[String(r.shopId)] : null;
+      const rows = FIELDS.map(([k, label]) => {
+        const nv = val(r.data, k), ov = old ? val(old, k) : '';
+        if (!nv && !ov) return '';
+        return `<div>${label}</div><div>${old && ov !== nv ? `<span class="old">${ov || '(없음)'}</span><span class="new">${nv || '(삭제)'}</span>` : nv}</div>`;
+      }).join('');
+      return `<div class="req" data-req="${esc(r.id)}">
+        <div class="h"><span class="tag ${r.type === 'edit' ? 'edit' : ''}">${r.type === 'edit' ? '수정 요청' : '새 등록'}</span>${esc(r.data.name)}<span class="muted">${fmtT(r.at)} · ${esc(r.email)}</span></div>
+        <div class="kv">${rows}${r.memo ? `<div>남긴 말</div><div>${esc(r.memo)}</div>` : ''}</div>
+        <div class="actions">${r.type === 'new' ? `<select class="f" data-plan><option value="free">무료(지인)</option><option value="paid">유료</option></select>
+          <input class="f" type="date" data-exp title="만료일(비우면 무기한)"> ` : ''}
+          <button class="primary" data-act="approve">승인</button><button data-act="reject">거절</button></div></div>`;
+    }).join('') : '<div class="muted">대기 중인 요청이 없어요</div>';
+    $('shopReqs').querySelectorAll('select[data-plan]').forEach(sel => sel.onchange = () => { const e = sel.parentElement.querySelector('[data-exp]'); if (sel.value === 'paid' && !e.value) e.value = plus1y(); });
+    // 등록된 샵
+    const today = new Date().toISOString().slice(0, 10);
+    $('shopList').innerHTML = mg.shops.length ? `<table>${mg.shops.sort((a, b) => +a.id - +b.id).map(s => `<tr data-id="${esc(s.id)}">
+      <td><b>${esc(s.name)}</b> <span class="tag ${s.plan === 'paid' ? '' : 'off'}">${s.plan === 'paid' ? '유료' : '무료'}</span>
+        ${!s.live ? `<span class="tag off">${s.show === false ? '숨김' : '만료'}</span>` : ''}
+        <div class="muted">${spotsText(s.spots)}${s.expires ? ` · ~${esc(s.expires)}${s.expires < today ? ' (지남)' : ''}` : ''} · ${esc(s.email || '이메일 없음')} · 확인 ${esc(s.checked || '')}</div>
+        ${lastLink && lastLink.id === String(s.id) ? `<div class="linkbox">${esc(lastLink.url)}${lastLink.mailed ? ' (메일로도 보냈어요)' : ''}</div>` : ''}</td>
+      <td class="act"><button data-act="edit">수정</button> <button data-act="link">수정 링크</button> <button data-act="del">삭제</button></td></tr>`).join('')}</table>` : '<div class="muted">아직 등록된 샵이 없어요</div>';
+    // 정점 요청
+    $('spotReqs').innerHTML = mg.spotreqs.length ? mg.spotreqs.sort((a, b) => a.at - b.at).map(r => `<div class="req" data-sreq="${esc(r.id)}">
+      <div class="h"><span class="tag">새 포인트</span>${esc(r.data.name)}<span class="muted">${fmtT(r.at)}${r.email ? ' · ' + esc(r.email) : ''}</span></div>
+      <div class="ed" style="border-color:var(--line);margin-top:8px">
+        <label>이름</label><input class="f" data-k="name" value="${esc(r.data.name)}">
+        <label>짧은 이름</label><input class="f" data-k="label" value="${esc(r.data.label)}">
+        <label>나라</label><input class="f" data-k="country" value="${esc(r.data.country)}">
+        <label>위도, 경도</label><div class="row"><input class="f" data-k="lat" value="${esc(r.data.lat)}" style="width:120px"><input class="f" data-k="lon" value="${esc(r.data.lon)}" style="width:120px">
+          <a href="/spot/?lat=${encodeURIComponent(r.data.lat)}&lon=${encodeURIComponent(r.data.lon)}" target="_blank" rel="noopener">위성 지도에서 보기</a></div>
+        ${r.data.note ? `<label>설명</label><div>${esc(r.data.note)}</div>` : ''}
+      </div>
+      <div class="actions"><button class="primary" data-act="sapprove">승인 (번호 자동)</button><button data-act="sreject">거절</button></div></div>`).join('') : '<div class="muted">대기 중인 요청이 없어요</div>';
+    $('spotList').innerHTML = (mg.spots || []).length ? `<table>${mg.spots.sort((a, b) => a.no - b.no).map(s => `<tr data-no="${s.no}">
+      <td><b>#${s.no} ${esc(s.name)}</b> ${s.show === false ? '<span class="tag off">숨김</span>' : ''}<div class="muted">${esc(s.label)} · ${esc(s.country)} · ${s.lat}, ${s.lon}</div></td>
+      <td class="act"><button data-act="stoggle">${s.show === false ? '보이기' : '숨기기'}</button> <button data-act="sdel">삭제</button></td></tr>`).join('')}</table>` : '<div class="muted">아직 없어요 (구글 시트 정점은 시트에서 관리)</div>';
+    renderEditor();
+  }
+
+  function renderEditor() {
+    if (!editing) { $('shopEditor').innerHTML = ''; return; }
+    const s = editing;
+    const inp = (k, v, ph) => `<input class="f" data-k="${k}" value="${esc(v)}" placeholder="${esc(ph || '')}">`;
+    $('shopEditor').innerHTML = `<div class="ed">
+      ${FIELDS.map(([k, label]) => `<label>${label}</label>${inp(k, k === 'spots' ? (s.spots || []).join(';') : s[k] || '', k === 'spots' ? '253;254 (번호, 세미콜론)' : '')}`).join('')}
+      <label>이메일(비공개)</label>${inp('email', s.email)}
+      <label>요금제</label><select class="f" data-k="plan"><option value="free"${s.plan !== 'paid' ? ' selected' : ''}>무료(지인)</option><option value="paid"${s.plan === 'paid' ? ' selected' : ''}>유료</option></select>
+      <label>만료일</label><input class="f" type="date" data-k="expires" value="${esc(s.expires || '')}">
+      <label>보이기</label><select class="f" data-k="show"><option value="1"${s.show !== false ? ' selected' : ''}>보이기</option><option value="0"${s.show === false ? ' selected' : ''}>숨기기</option></select>
+      <label>확인 날짜</label>${inp('checked', s.checked, 'YYYY-MM')}
+      <span></span><div class="row"><button class="primary" data-act="esave">저장</button><button data-act="ecancel">취소</button></div></div>`;
+  }
+  const readEd = (root) => { const o = {}; root.querySelectorAll('[data-k]').forEach(el => { o[el.dataset.k] = el.value; }); return o; };
+
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const act = b.dataset.act, req = b.closest('[data-req]'), sreq = b.closest('[data-sreq]'), tr = b.closest('tr');
+    try {
+      if (act === 'approve') { await api('shopApprove', { reqId: req.dataset.req, plan: (req.querySelector('[data-plan]') || {}).value, expires: (req.querySelector('[data-exp]') || {}).value }); }
+      else if (act === 'reject') { if (!confirm('이 요청을 거절할까요? (요청 내용은 지워져요)')) return; await api('shopReject', { reqId: req.dataset.req }); }
+      else if (act === 'edit') { editing = Object.assign({}, mg.shops.find(s => String(s.id) === tr.dataset.id)); renderEditor(); $('shopEditor').scrollIntoView({ behavior: 'smooth' }); return; }
+      else if (act === 'ecancel') { editing = null; renderEditor(); return; }
+      else if (act === 'esave') { const o = readEd($('shopEditor')); o.show = o.show === '1'; if (editing.id) o.id = editing.id; await api('shopSave', o); editing = null; }
+      else if (act === 'link') { const s = mg.shops.find(x => String(x.id) === tr.dataset.id);
+        if (!confirm(`${s.name}의 새 수정 링크를 만들까요? 예전 링크는 더 이상 안 돼요.`)) return;
+        const j = await api('shopLink', { id: tr.dataset.id, mail: !!s.email && confirm('등록 이메일로도 보낼까요? (메일 설정이 되어 있을 때)') });
+        lastLink = { id: tr.dataset.id, url: j.url, mailed: j.mailed }; try { await navigator.clipboard.writeText(j.url); } catch (_) {} }
+      else if (act === 'del') { if (!confirm('이 샵을 삭제할까요? 되돌릴 수 없어요. (잠시 내리려면 수정 → 숨기기)')) return; await api('shopDelete', { id: tr.dataset.id }); }
+      else if (act === 'sapprove') { const j = await api('spotApprove', { reqId: sreq.dataset.sreq, data: readEd(sreq) }); alert(`#${j.no} 번호로 추가했어요. 몇 분 안에 사이트에 보여요.`); }
+      else if (act === 'sreject') { if (!confirm('이 포인트 요청을 거절할까요?')) return; await api('spotReject', { reqId: sreq.dataset.sreq }); }
+      else if (act === 'stoggle') { const s = mg.spots.find(x => String(x.no) === tr.dataset.no); await api('spotSave', { ...s, show: s.show === false }); }
+      else if (act === 'sdel') { if (!confirm('이 포인트를 삭제할까요? 이 번호에 연결된 샵 표시도 사라져요.')) return; await api('spotDelete', { no: tr.dataset.no }); }
+      else return;
+      await loadMgmt();
+    } catch (_) {}
+  });
+  $('shopNew').onclick = () => { editing = { plan: 'free', show: true, spots: [] }; renderEditor(); };
+  $('importBtn').onclick = async () => { const url = $('importUrl').value.trim(); if (!url) return; try { const j = await api('shopImport', { url }); alert(`${j.added}곳 가져옴, ${j.skipped}곳 건너뜀(이미 있는 이름 등)`); $('importUrl').value = ''; await loadMgmt(); } catch (_) {} };
+
   load();
 </script>
 </body>

@@ -43,6 +43,11 @@ async function loadStations() {
     if (/^n/i.test((r[idx.show] || '').trim())) continue;
     out.push({ name: (r[idx.name] || '').trim(), lat, lon });
   }
+  // [ADD] 승인된 사용자 등록 포인트도 미리 받아두기
+  try {
+    const j = await (await fetch(`${SITE}/api/shops?svc=spots`, { signal: AbortSignal.timeout(15000) })).json();
+    (j.spots || []).forEach(s => { if (Number.isFinite(+s.lat) && Number.isFinite(+s.lon)) out.push({ name: s.name, lat: +s.lat, lon: +s.lon }); });
+  } catch (_) {}
   return out;
 }
 

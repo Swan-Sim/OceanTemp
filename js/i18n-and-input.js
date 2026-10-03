@@ -20,7 +20,7 @@
         infoCoord: (net, lat, lon) => `${net} | 위도: ${lat.toFixed(3)}°, 경도: ${lon.toFixed(3)}°`,
         tabForecast: "연간 추이",
         prevAvg: (n) => `지난 ${n}년 같은 날 실측 평균`, prevRange: (n) => `지난 ${n}년 범위(최저~최고)`,
-        tabDepth: "수심 프로파일", tabShop: "다이빙샵", shopPartner: "제휴", shopPartnerOnly: "제휴 샵만 보여요", shopMayChange: "정보가 바뀌었을 수 있어요", shopCall: "전화", shopKakao: "카톡", shopInsta: "인스타", shopWeb: "웹", shopAll: (n) => n > 1 ? `전체 ${n}곳 ›` : "자세히 ›", shopChecked: (d) => `확인 ${d}`,
+        tabDepth: "수심 프로파일", tabShop: "다이빙샵", shopPartner: "제휴", shopPartnerOnly: "제휴 샵만 보여요", shopMayChange: "정보가 바뀌었을 수 있어요", shopCall: "전화", shopKakao: "카톡", shopInsta: "인스타", shopWeb: "웹", shopAll: (n) => n > 1 ? `전체 ${n}곳 ›` : "자세히 ›", shopChecked: (d) => `확인 ${d}`, shopRegister: "샵 등록하기", shopEmpty: "아직 이 포인트에 등록된 제휴 샵이 없어요.", spotRegister: "다이빙 포인트 등록", spotHere: "이 위치로 포인트 등록",
         chartPast: "평년(계절 추정)",
         chartActual: "실측값(과거)",
         chartFuture: "추정값(오늘~연말)",
@@ -101,7 +101,7 @@
         infoCoord: (net, lat, lon) => `${net} | Lat: ${lat.toFixed(3)}°, Lon: ${lon.toFixed(3)}°`,
         tabForecast: "Yearly trend",
         prevAvg: (n) => `Past ${n}-yr observed avg (same dates)`, prevRange: (n) => `Past ${n}-yr range (min-max)`,
-        tabDepth: "Depth profile", tabShop: "Dive shops", shopPartner: "Partner", shopPartnerOnly: "Partner shops only", shopMayChange: "Details may have changed", shopCall: "Call", shopKakao: "KakaoTalk", shopInsta: "Instagram", shopWeb: "Web", shopAll: (n) => n > 1 ? `All ${n} ›` : "More ›", shopChecked: (d) => `Checked ${d}`,
+        tabDepth: "Depth profile", tabShop: "Dive shops", shopPartner: "Partner", shopPartnerOnly: "Partner shops only", shopMayChange: "Details may have changed", shopCall: "Call", shopKakao: "KakaoTalk", shopInsta: "Instagram", shopWeb: "Web", shopAll: (n) => n > 1 ? `All ${n} ›` : "More ›", shopChecked: (d) => `Checked ${d}`, shopRegister: "Register your shop", shopEmpty: "No partner shops for this spot yet.", spotRegister: "Suggest a dive spot", spotHere: "Suggest a spot here",
         chartPast: "Seasonal Estimate",
         chartActual: "Actual (past)",
         chartFuture: "Projected (Today–Dec)",
@@ -179,6 +179,7 @@
     document.getElementById('btn-ts').innerText = t.tabForecast;
     document.getElementById('btn-dp').innerText = t.tabDepth;
     document.getElementById('btn-now').innerText = t.tabNow;
+    { const b = document.getElementById('btn-spot-add'); if (b) b.title = t.spotRegister; }
     if (typeof updateShopUI === 'function' && typeof selectedStation !== 'undefined' && selectedStation) updateShopUI(selectedStation);
     document.getElementById('btn-locate').title = t.locateTitle;
     document.getElementById('btn-fullscreen').title = t.fullscreenTitle;

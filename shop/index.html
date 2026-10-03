@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>다이빙샵 등록 · otemp.app</title>
+<!-- [ADD] 다이빙샵 등록 / 수정 페이지.
+     - 등록: 정보를 보내면 바로 "수정 전용 링크"를 보여주고(이메일로도 보냄), 관리자 승인 후 사이트에 보여요.
+     - 수정: 수정 링크(#t=…)로 열면 내 샵 정보가 채워지고, 고친 내용은 관리자 승인 후 반영돼요.
+     - 링크를 잃어버리면 등록한 이메일로 새 링크를 받을 수 있어요(예전 링크는 더 이상 안 됨). -->
+<style>
+  :root { --bg:#070B14; --bg2:#0B1120; --line:rgba(255,255,255,.1); --text:rgba(255,255,255,.92); --muted:#8A94A6; --dim:#5B6474; --accent:#FFB000; --ok:#34D399; --err:#FB7185; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 60px; }
+  a { color: var(--accent); }
+  .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .top a { font-size: 13px; text-decoration: none; color: var(--muted); }
+  h1 { font-size: 21px; margin: 6px 0 4px; } .lead { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 0 0 18px; }
+  .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 14px; margin: 0 0 12px; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 5px; } label b { color: var(--accent); font-weight: 600; }
+  input, textarea, select { width: 100%; font: inherit; font-size: 15px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; }
+  input:focus, textarea:focus { outline: none; border-color: rgba(255,176,0,.6); }
+  textarea { min-height: 70px; resize: vertical; }
+  .hint { font-size: 11.5px; color: var(--dim); margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; } @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 5px 6px 5px 10px; border-radius: 999px; background: rgba(255,176,0,.12); border: 1px solid rgba(255,176,0,.4); }
+  .chip button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 3px; }
+  .sugg { border: 1px solid var(--line); border-radius: 9px; margin-top: 4px; max-height: 220px; overflow: auto; display: none; }
+  .sugg div { padding: 8px 12px; font-size: 14px; cursor: pointer; border-bottom: 1px solid var(--line); } .sugg div:hover { background: rgba(255,255,255,.05); }
+  .sugg small { color: var(--dim); margin-left: 6px; }
+  .agree { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 14px; }
+  .agree input { width: auto; margin-top: 3px; }
+  .btn { display: inline-block; font: inherit; font-size: 15px; font-weight: 700; padding: 12px 18px; border-radius: 10px; border: 1px solid rgba(255,176,0,.6); background: rgba(255,176,0,.16); color: #ffd27a; cursor: pointer; }
+  .btn.ghost { background: transparent; border-color: var(--line); color: var(--muted); font-weight: 600; font-size: 13px; padding: 8px 12px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .msg { font-size: 13px; margin-top: 10px; } .msg.err { color: var(--err); } .msg.ok { color: var(--ok); }
+  .status { font-size: 13px; padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; border: 1px solid var(--line); }
+  .status.pending { border-color: rgba(255,176,0,.4); color: #ffd27a; } .status.live { border-color: rgba(52,211,153,.4); color: var(--ok); }
+  .link { word-break: break-all; font-size: 13px; background: var(--bg); border: 1px dashed rgba(255,176,0,.5); border-radius: 9px; padding: 10px 12px; margin: 8px 0; }
+  .hp { position: absolute; left: -9999px; }
+  .lang { font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="/">← otemp.app</a><a href="#" class="lang" id="langBtn">English</a></div>
+  <h1 id="title" data-k="title"></h1>
+  <p class="lead" data-k="lead"></p>
+
+  <div id="statusBox" class="status" style="display:none"></div>
+
+  <div id="done" class="card" style="display:none">
+    <h2 data-k="doneTitle"></h2>
+    <p class="lead" style="margin:0" data-k="doneText"></p>
+    <div class="link" id="doneLink"></div>
+    <button class="btn ghost" id="copyBtn" type="button" data-k="copy"></button>
+    <p class="hint" data-k="doneMail"></p>
+  </div>
+
+  <form id="f" autocomplete="on" novalidate>
+    <div class="card">
+      <h2 data-k="secShop"></h2>
+      <label><span data-k="name"></span> <b>*</b></label>
+      <input name="name" maxlength="60" required>
+      <label><span data-k="spots"></span> <b>*</b></label>
+      <input id="spotSearch" data-ph="spotsPh" autocomplete="off">
+      <div class="sugg" id="sugg"></div>
+      <div class="chips" id="chips"></div>
+      <div class="hint" data-k="spotsHint"></div>
+      <label data-k="address"></label>
+      <input name="address" maxlength="160">
+      <div class="grid">
+        <div><label data-k="lang"></label><input name="lang" maxlength="40" data-ph="langPh"></div>
+        <div><label data-k="note"></label><input name="note" maxlength="120" data-ph="notePh"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 data-k="secContact"></h2>
+      <div class="hint" style="margin-top:-6px" data-k="contactHint"></div>
+      <div class="grid">
+        <div><label data-k="phone"></label><input name="phone" inputmode="tel" data-ph="phonePh"></div>
+        <div><label data-k="kakao"></label><input name="kakao" data-ph="kakaoPh"></div>
+        <div><label>WhatsApp</label><input name="whatsapp" data-ph="waPh"></div>
+        <div><label data-k="instagram"></label><input name="instagram" data-ph="igPh"></div>
+      </div>
+      <label data-k="web"></label><input name="web" data-ph="webPh">
+    </div>
+
+    <div class="card">
+      <h2 data-k="secPrivate"></h2>
+      <label><span data-k="email"></span> <b>*</b></label>
+      <input name="email" type="email" autocomplete="email" required>
+      <div class="hint" data-k="emailHint"></div>
+      <label data-k="memo"></label>
+      <textarea name="memo" maxlength="500" data-ph="memoPh"></textarea>
+      <input class="hp" name="website2" tabindex="-1" autocomplete="off">
+      <div class="agree" id="agreeRow"><input type="checkbox" name="agree" id="agree"><label for="agree" style="margin:0" data-k="agree"></label></div>
+    </div>
+
+    <button class="btn" id="submitBtn" type="submit" data-k="submit"></button>
+    <div class="msg" id="msg"></div>
+  </form>
+
+  <div class="card" id="lostCard" style="margin-top:22px">
+    <h2 data-k="lostTitle"></h2>
+    <p class="lead" style="margin:0 0 6px" data-k="lostText"></p>
+    <form id="lostForm" class="grid" style="align-items:end">
+      <input name="email" type="email" data-ph="email" autocomplete="email">
+      <button class="btn ghost" type="submit" data-k="lostBtn"></button>
+    </form>
+    <div class="msg" id="lostMsg"></div>
+  </div>
+</div>
+
+<script>
+const T = {
+  ko: {
+    title: '다이빙샵 등록', titleEdit: '다이빙샵 정보 수정',
+    lead: 'otemp.app 다이빙 포인트 화면에 샵 연락처가 "제휴 샵"으로 보여요. 보내주신 정보는 운영자가 확인한 뒤 올라가요.',
+    leadEdit: '고친 내용은 운영자가 확인한 뒤 사이트에 반영돼요. 그 전까지는 지금 정보가 그대로 보여요.',
+    secShop: '샵 정보', name: '샵 이름', spots: '다니는 다이빙 포인트', spotsPh: '포인트 이름으로 찾기 (예: 문섬)',
+    spotsHint: '여러 곳을 고를 수 있어요. 찾는 포인트가 없으면 아래 "남길 말"에 적어주세요.',
+    address: '주소', lang: '가능한 언어', langPh: '한국어 · English', note: '한 줄 소개', notePh: '보트 다이빙 · 체험 다이빙 · 나이트록스',
+    secContact: '공개 연락처', contactHint: '사이트에 그대로 보여요. 하나 이상 적어주세요. 개인 휴대폰 번호보다 샵 대표번호를 권해요.',
+    phone: '전화', phonePh: '+82-64-000-0000', kakao: '카카오톡 채널 링크', kakaoPh: 'https://pf.kakao.com/...', waPh: '+82 10 0000 0000',
+    instagram: '인스타그램', igPh: '@아이디', web: '웹사이트', webPh: 'https://...',
+    secPrivate: '운영자에게만 보이는 정보', email: '담당자 이메일', emailHint: '사이트에 공개되지 않아요. 수정 링크와 안내를 이 주소로 보내요.',
+    memo: '운영자에게 남길 말', memoPh: '추가하고 싶은 포인트, 문의 등',
+    agree: '입력한 샵 이름·연락처·소개가 otemp.app에 "제휴" 표시와 함께 공개되는 데 동의하고, 정보가 정확함을 확인합니다.',
+    submit: '등록 요청 보내기', submitEdit: '수정 요청 보내기', sending: '보내는 중…',
+    doneTitle: '등록 요청을 받았어요', doneText: '운영자 확인 후 사이트에 보여요. 아래 링크로 언제든 정보를 고칠 수 있어요. 비밀번호 역할을 하니 다른 사람에게 알려주지 마세요.',
+    doneMail: '같은 링크를 이메일로도 보냈어요(메일 설정이 되어 있을 때). 즐겨찾기나 카톡 나에게 보내기로 저장해 두세요.', copy: '링크 복사', copied: '복사됨 ✓',
+    editSaved: '수정 요청을 보냈어요. 운영자 확인 후 반영돼요.',
+    stPendingNew: '등록 요청을 운영자가 확인하고 있어요. 그동안에도 내용을 고칠 수 있어요.',
+    stPendingEdit: '보낸 수정 요청을 운영자가 확인하고 있어요. 아래는 수정 요청한 내용이에요.',
+    stLive: '사이트에 보이고 있어요.', stHidden: '지금은 사이트에 보이지 않아요(기간 만료 또는 숨김). 연장은 운영자에게 문의해 주세요.',
+    expires: (d) => ` 게시 기간: ${d}까지`,
+    badLink: '수정 링크가 맞지 않거나 새 링크로 바뀌었어요. 아래에서 이메일로 새 링크를 받아주세요.',
+    lostTitle: '수정 링크를 잃어버렸나요?', lostText: '등록할 때 적은 이메일로 새 수정 링크를 보내드려요. 예전 링크는 더 이상 쓸 수 없게 돼요.',
+    lostBtn: '새 링크 받기', lostOk: '등록된 이메일이면 새 링크를 보냈어요. 메일함(스팸함 포함)을 확인해 주세요.',
+    lostNoMail: '지금은 메일 발송이 준비되지 않았어요. 운영자에게 문의해 주세요.',
+    e_need_name_spots: '샵 이름과 다이빙 포인트를 하나 이상 넣어주세요.', e_need_contact: '공개 연락처를 하나 이상(올바른 형식으로) 넣어주세요.',
+    e_need_email: '담당자 이메일을 확인해 주세요.', e_need_agree: '공개 동의에 체크해 주세요.', e_too_many: '잠시 후 다시 시도해 주세요.', e_default: '보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+    other: 'English'
+  },
+  en: {
+    title: 'Register your dive shop', titleEdit: 'Edit your dive shop',
+    lead: 'Your contacts appear as a "Partner" shop on otemp.app dive spots. We review every submission before it goes live.',
+    leadEdit: 'Changes go live after review. Until then, the current details stay on the site.',
+    secShop: 'Shop', name: 'Shop name', spots: 'Dive spots you visit', spotsPh: 'Search spots (e.g. Moonseom)',
+    spotsHint: 'Pick as many as you like. Missing a spot? Tell us in the message below.',
+    address: 'Address', lang: 'Languages', langPh: 'English · 한국어', note: 'One-line intro', notePh: 'Boat dives · Discover scuba · Nitrox',
+    secContact: 'Public contacts', contactHint: 'Shown on the site as-is. Add at least one. A shop number is better than a personal phone.',
+    phone: 'Phone', phonePh: '+82-64-000-0000', kakao: 'KakaoTalk channel link', kakaoPh: 'https://pf.kakao.com/...', waPh: '+82 10 0000 0000',
+    instagram: 'Instagram', igPh: '@handle', web: 'Website', webPh: 'https://...',
+    secPrivate: 'Only visible to us', email: 'Contact email', emailHint: 'Not shown on the site. We send your edit link here.',
+    memo: 'Message to us', memoPh: 'Spots to add, questions…',
+    agree: 'I agree that the shop name, contacts and intro will be shown publicly on otemp.app with a "Partner" label, and confirm they are accurate.',
+    submit: 'Send registration', submitEdit: 'Send changes', sending: 'Sending…',
+    doneTitle: 'Registration received', doneText: 'It goes live after review. Use the link below to edit anytime. It works like a password, so keep it private.',
+    doneMail: 'We also emailed this link (when mail is set up). Bookmark it.', copy: 'Copy link', copied: 'Copied ✓',
+    editSaved: 'Changes sent. They go live after review.',
+    stPendingNew: 'Your registration is under review. You can still edit it.',
+    stPendingEdit: 'Your changes are under review. Below are the changes you sent.',
+    stLive: 'Your shop is live.', stHidden: 'Your shop is not shown right now (expired or hidden). Contact us to extend.',
+    expires: (d) => ` Listed until ${d}.`,
+    badLink: 'This edit link is invalid or was replaced. Get a new link by email below.',
+    lostTitle: 'Lost your edit link?', lostText: 'We will email a new edit link to the address you registered with. Old links will stop working.',
+    lostBtn: 'Get a new link', lostOk: 'If that email is registered, a new link is on its way. Check your inbox (and spam).',
+    lostNoMail: 'Email is not set up yet. Please contact us.',
+    e_need_name_spots: 'Add a shop name and at least one dive spot.', e_need_contact: 'Add at least one valid public contact.',
+    e_need_email: 'Check your contact email.', e_need_agree: 'Please tick the consent box.', e_too_many: 'Please try again later.', e_default: 'Could not send. Please try again later.',
+    other: '한국어'
+  }
+};
+let lang = (() => { try { return localStorage.getItem('otemp.lang') || (navigator.language || '').slice(0, 2); } catch (_) { return 'ko'; } })() === 'ko' ? 'ko' : 'en';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const token = (() => { const m = location.hash.match(/t=([\w-]{10,100})/); return m ? m[1] : ''; })();
+let editStatus = '', expires = '';
+
+function applyLang() {
+  const L = T[lang];
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-k]').forEach(el => { const v = L[el.dataset.k]; if (typeof v === 'string') el.textContent = v; });
+  document.querySelectorAll('[data-ph]').forEach(el => { const v = L[el.dataset.ph]; if (typeof v === 'string') el.placeholder = v; });
+  $('langBtn').textContent = L.other;
+  if (token) { $('title').textContent = L.titleEdit; document.querySelector('.lead').textContent = L.leadEdit; $('submitBtn').textContent = L.submitEdit; $('agreeRow').style.display = 'none'; }
+  document.title = (token ? L.titleEdit : L.title) + ' · otemp.app';
+  showStatus();
+}
+$('langBtn').onclick = (e) => { e.preventDefault(); lang = lang === 'ko' ? 'en' : 'ko'; applyLang(); };
+
+// ── 다이빙 포인트 고르기(구글 시트 정점 + 승인된 사용자 정점) ──
+const SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
+let spots = [], picked = [];
+function parseCsv(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) { const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true; else if (ch === ',') { row.push(cur); cur = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; } else cur += ch; }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim()));
+}
+async function loadSpots() {
+  try {
+    let text = await fetch(SHEET).then(r => r.ok ? r.text() : '').catch(() => '');
+    if (!/\bno\b/i.test(text.split('\n')[0] || '')) text = await fetch('/data/stations.csv').then(r => r.text());
+    const [head, ...rows] = parseCsv(text);
+    const ix = Object.fromEntries(head.map((h, i) => [h.trim().toLowerCase(), i]));
+    spots = rows.filter(r => !/^n/i.test(ix.show != null ? (r[ix.show] || '') : ''))
+      .map(r => ({ no: parseInt(r[ix.no], 10), name: (r[ix.name] || '').trim(), label: (r[ix.label] || '').trim(), country: (r[ix.country] || '').trim() }))
+      .filter(s => s.no && s.name);
+    const ex = await fetch('/api/shops?svc=spots').then(r => r.json()).catch(() => ({}));
+    (ex.spots || []).forEach(s => { if (!spots.some(x => x.no === s.no)) spots.push({ no: s.no, name: s.name, label: s.label, country: s.country }); });
+  } catch (e) { console.warn(e); }
+  renderChips();
+}
+const spotName = (no) => { const s = spots.find(x => x.no === no); return s ? (s.label || s.name) : `#${no}`; };
+function renderChips() {
+  $('chips').innerHTML = picked.map(no => `<span class="chip">${esc(spotName(no))}<button type="button" data-rm="${no}" aria-label="remove">×</button></span>`).join('');
+}
+$('chips').onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { picked = picked.filter(n => n !== +b.dataset.rm); renderChips(); } };
+$('spotSearch').oninput = () => {
+  const q = $('spotSearch').value.trim().toLowerCase();
+  const box = $('sugg');
+  if (!q) { box.style.display = 'none'; return; }
+  const hits = spots.filter(s => !picked.includes(s.no) && (`${s.name} ${s.label} ${s.country}`).toLowerCase().includes(q)).slice(0, 12);
+  box.innerHTML = hits.map(s => `<div data-no="${s.no}">${esc(s.label || s.name)}<small>${esc(s.name !== s.label ? s.name : '')} ${esc(s.country)}</small></div>`).join('');
+  box.style.display = hits.length ? 'block' : 'none';
+};
+$('sugg').onclick = (e) => { const d = e.target.closest('[data-no]'); if (!d) return; picked.push(+d.dataset.no); renderChips(); $('spotSearch').value = ''; $('sugg').style.display = 'none'; $('spotSearch').focus(); };
+
+// ── 보내기 ──
+const form = $('f');
+function formData() {
+  const o = Object.fromEntries(new FormData(form).entries());
+  o.spots = picked; o.agree = $('agree').checked || !!token; if (token) o.t = token;
+  return o;
+}
+function fill(d, email) {
+  ['name', 'address', 'lang', 'note', 'phone', 'kakao', 'whatsapp', 'instagram', 'web'].forEach(k => { if (form[k]) form[k].value = d[k] || ''; });
+  if (d.instagram) form.instagram.value = d.instagram.replace('https://www.instagram.com/', '@');
+  form.email.value = email || '';
+  picked = (d.spots || []).slice(); renderChips();
+}
+async function post(svc, body) {
+  const r = await fetch(`/api/shops?svc=${svc}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  let j = {}; try { j = await r.json(); } catch (_) {}
+  return { status: r.status, ...j };
+}
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  const L = T[lang], btn = $('submitBtn'), msg = $('msg');
+  msg.className = 'msg'; msg.textContent = '';
+  btn.disabled = true; btn.textContent = L.sending;
+  const j = await post(token ? 'edit' : 'register', formData()).catch(() => ({}));
+  btn.disabled = false; btn.textContent = token ? L.submitEdit : L.submit;
+  if (!j.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + j.error] || L.e_default; return; }
+  if (token) { editStatus = j.status; showStatus(); msg.className = 'msg ok'; msg.textContent = L.editSaved; return; }
+  form.style.display = 'none'; $('lostCard').style.display = 'none';
+  $('done').style.display = ''; $('doneLink').textContent = j.url; window.scrollTo(0, 0);
+};
+$('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText($('doneLink').textContent); $('copyBtn').textContent = T[lang].copied; } catch (_) {} };
+$('lostForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const j = await post('resend', { email: e.target.email.value }).catch(() => ({}));
+  $('lostMsg').className = 'msg ok'; $('lostMsg').textContent = j.mail === false ? T[lang].lostNoMail : T[lang].lostOk;
+};
+function showStatus() {
+  const L = T[lang], box = $('statusBox');
+  const map = { pending_new: ['pending', L.stPendingNew], pending_edit: ['pending', L.stPendingEdit], live: ['live', L.stLive + (expires ? L.expires(expires) : '')], hidden: ['', L.stHidden], bad: ['', L.badLink] };
+  const s = map[editStatus];
+  box.style.display = s ? '' : 'none';
+  if (s) { box.className = 'status ' + s[0]; box.textContent = s[1]; }
+}
+
+(async () => {
+  applyLang();
+  await loadSpots();
+  const pre = parseInt(new URLSearchParams(location.search).get('spot'), 10);
+  if (!token && pre && !picked.includes(pre)) { picked.push(pre); renderChips(); }
+  if (token) {
+    const j = await post('me', { t: token }).catch(() => ({}));
+    if (!j.ok) { editStatus = 'bad'; form.style.display = 'none'; showStatus(); return; }
+    editStatus = j.status; expires = j.expires || ''; fill(j.data || {}, j.email); showStatus();
+  }
+})();
+</script>
+</body>
+</html>

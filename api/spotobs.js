@@ -42,8 +42,10 @@ async function loadSpots(base) {
   if (!text) return [];
   const [head, ...rows] = parseCsv(text);
   const idx = Object.fromEntries(head.map((h, i) => [h.trim().toLowerCase(), i]));
-  return rows.map(r => ({ lat: parseFloat(r[idx.lat]), lon: parseFloat(r[idx.lon]), show: (r[idx.show] || '').trim() }))
-    .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon) && !/^n/i.test(s.show));
+  const list = rows.map(r => ({ lat: parseFloat(r[idx.lat]), lon: parseFloat(r[idx.lon]), show: (r[idx.show] || '').trim() }));
+  // [ADD] 승인된 사용자 등록 포인트도 함께
+  try { const [{ result }] = await redisPipeline([['HVALS', 'spots:extra']]); (result || []).forEach(v => { try { const s = JSON.parse(v); if (s.show !== false) list.push({ lat: +s.lat, lon: +s.lon, show: 'Y' }); } catch (_) {} }); } catch (_) {}
+  return list.filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon) && !/^n/i.test(s.show));
 }
 
 const km = (a, b, c, d) => { const R = 6371, r = Math.PI / 180, x = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };

@@ -80,6 +80,19 @@
       } finally { clearTimeout(timer); }
     }
 
+    // [ADD] /spot/ 에서 등록 요청 → /admin 에서 승인된 포인트(번호가 시트와 겹치지 않음)
+    async function addUserSpots(spots) {
+      if (!/^https?:$/.test(location.protocol)) return;
+      try {
+        const j = JSON.parse(await fetchTextWithTimeout('/api/shops?svc=spots', 4000));
+        const have = new Set(spots.map(s => s.no).filter(Boolean));
+        (j.spots || []).forEach(s => {
+          if (have.has(s.no) || !Number.isFinite(+s.lat) || !Number.isFinite(+s.lon)) return;
+          spots.push({ country: s.country || '', name: s.name, shortName: s.label || s.name, lat: +s.lat, lon: +s.lon, depth: true, net: 'Beach/user', no: s.no });
+        });
+      } catch (e) { console.warn('[stations] 사용자 등록 포인트 읽기 실패:', e.message); }
+    }
+
     async function loadBeachSpots() {
       const sources = [];
       if (STATION_SHEET_CSV_URL) sources.push(['Google Sheet', STATION_SHEET_CSV_URL]);
@@ -87,6 +100,7 @@
       for (const [label, url] of sources) {
         try {
           const spots = csvToSpots(await fetchTextWithTimeout(url, 6000), label);
+          if (spots.length) await addUserSpots(spots); // [ADD] 관리자가 승인한 사용자 등록 포인트도 더함
           if (spots.length) {
             console.info(`[stations] ${label}에서 정점 ${spots.length}곳을 읽었어요`);
             return spots;

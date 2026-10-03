@@ -40,11 +40,12 @@
       if (st && reshuffle) st._shopOrder = null;
       const btn = document.getElementById('btn-shop');
       const n = shopsFor(st).length;
+      const beach = !!(st && st.isBeach && st.no);
       if (btn) {
-        btn.style.display = n ? '' : 'none';
-        btn.innerHTML = `${shopEsc(t.tabShop || '다이빙샵')}<span class="tab-n">${n}</span>`;
+        btn.style.display = beach ? '' : 'none'; // [CHANGE] 해변 정점이면 항상 보임 - 샵이 없으면 "샵 등록" 안내
+        btn.innerHTML = `${shopEsc(t.tabShop || '다이빙샵')}${n ? `<span class="tab-n">${n}</span>` : ''}`;
       }
-      if (!n && activeMode === 'shop') setMode('now');
+      if (!beach && activeMode === 'shop') setMode('now');
     }
 
     function shopLinks(s) {
@@ -61,13 +62,16 @@
     // A. 다이빙샵 탭
     function renderShopTab(box) {
       const list = shopsFor(selectedStation);
+      const reg = `<a class="shop-reg" href="/shop/?spot=${encodeURIComponent(selectedStation && selectedStation.no || '')}" target="_blank" rel="noopener">＋ ${shopEsc(t.shopRegister || '샵 등록하기')}</a>`;
+      if (!list.length) { box.innerHTML = `<div class="shop-empty"><p>${shopEsc(t.shopEmpty || '아직 이 포인트에 등록된 제휴 샵이 없어요.')}</p>${reg}</div>`; return; }
       box.innerHTML = `<div class="shop-note"><span>${shopEsc(t.shopPartnerOnly || '제휴 샵만 보여요')}</span><i>${shopEsc(t.shopMayChange || '정보가 바뀌었을 수 있어요')}</i></div>` +
         list.map(s => `<div class="shop-card">
           <div class="shop-top"><span class="shop-name">${shopEsc(s.name)}</span><span class="shop-badge">${shopEsc(t.shopPartner || '제휴')}</span>${s.lang ? `<span class="shop-lang">${shopEsc(s.lang)}</span>` : ''}</div>
           ${s.note ? `<div class="shop-desc">${shopEsc(s.note)}</div>` : ''}
+          ${s.address ? `<a class="shop-addr" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}" data-shop="${shopEsc(s.id)}" data-shop-k="map" target="_blank" rel="noopener">${shopEsc(s.address)}</a>` : ''}
           <div class="shop-btns">${shopLinks(s).map(([k, href, label]) => `<a class="shop-btn${k === 'tel' ? ' call' : ''}" ${linkAttrs(s, k, href)}>${SHOP_ICON[k]}<span>${shopEsc(label)}</span></a>`).join('')}</div>
           ${s.checked ? `<div class="shop-chk">${shopEsc((t.shopChecked || ((d) => `확인 ${d}`))(s.checked))}</div>` : ''}
-        </div>`).join('');
+        </div>`).join('') + `<div class="shop-foot">${reg}</div>`;
     }
 
     // B. 맨 아래 정보 줄: 왼쪽 정점 정보 + 오른쪽 샵 바로가기(샵 탭에선 안 보임)

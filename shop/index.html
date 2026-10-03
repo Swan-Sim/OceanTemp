@@ -87,7 +87,7 @@
       <h2 data-k="secShop"></h2>
       <label><span data-k="name"></span> <b>*</b></label>
       <input name="name" maxlength="60" required>
-      <label><span data-k="spots"></span> <b>*</b></label>
+      <label><span data-k="spots"></span> <b>*</b> <span id="spotCount" style="color:var(--dim)"></span></label>
       <input id="spotSearch" data-ph="spotsPh" autocomplete="off">
       <div class="sugg" id="sugg"></div>
       <div class="chips" id="chips"></div>
@@ -145,7 +145,7 @@ const T = {
     lead: 'otemp.app 다이빙 포인트 화면에 샵 연락처가 "제휴 샵"으로 보여요. 보내주신 정보는 운영자가 확인한 뒤 올라가요.',
     leadEdit: '고친 내용은 운영자가 확인한 뒤 사이트에 반영돼요. 그 전까지는 지금 정보가 그대로 보여요.',
     secShop: '샵 정보', name: '샵 이름', spots: '다니는 다이빙 포인트', spotsPh: '포인트 이름으로 찾기 (예: 문섬)',
-    spotsHint: '여러 곳을 고를 수 있어요. 찾는 포인트가 없으면 아래 "남길 말"에 적어주세요.',
+    spotsHint: '5곳까지 고를 수 있어요. 찾는 포인트가 없으면 아래 "남길 말"에 적어주세요.', spotsFull: '5곳을 모두 골랐어요 (빼려면 ×)',
     address: '주소', lang: '가능한 언어', langPh: '한국어 · English', note: '한 줄 소개', notePh: '보트 다이빙 · 체험 다이빙 · 나이트록스',
     secContact: '공개 연락처', contactHint: '사이트에 그대로 보여요. 하나 이상 적어주세요. 개인 휴대폰 번호보다 샵 대표번호를 권해요.',
     phone: '전화', phonePh: '+82-64-000-0000', kakao: '카카오톡 채널 링크', kakaoPh: 'https://pf.kakao.com/...', waPh: '+82 10 0000 0000',
@@ -160,7 +160,7 @@ const T = {
     stPendingNew: '등록 요청을 운영자가 확인하고 있어요. 그동안에도 내용을 고칠 수 있어요.',
     stPendingEdit: '보낸 수정 요청을 운영자가 확인하고 있어요. 아래는 수정 요청한 내용이에요.',
     stLive: '사이트에 보이고 있어요.', stHidden: '지금은 사이트에 보이지 않아요(기간 만료 또는 숨김). 연장은 운영자에게 문의해 주세요.',
-    expires: (d) => ` 게시 기간: ${d}까지`,
+    expires: (d) => ` 게시 기간: ${d}까지`, plans: { trial: '무료(제한)', friend: '무료', free: '무료', paid: '유료' },
     badLink: '수정 링크가 맞지 않거나 새 링크로 바뀌었어요. 아래에서 이메일로 새 링크를 받아주세요.',
     lostTitle: '수정 링크를 잃어버렸나요?', lostText: '등록할 때 적은 이메일로 새 수정 링크를 보내드려요. 예전 링크는 더 이상 쓸 수 없게 돼요.',
     lostBtn: '새 링크 받기', lostOk: '등록된 이메일이면 새 링크를 보냈어요. 메일함(스팸함 포함)을 확인해 주세요.',
@@ -177,7 +177,7 @@ const T = {
     lead: 'Your contacts appear as a "Partner" shop on otemp.app dive spots. We review every submission before it goes live.',
     leadEdit: 'Changes go live after review. Until then, the current details stay on the site.',
     secShop: 'Shop', name: 'Shop name', spots: 'Dive spots you visit', spotsPh: 'Search spots (e.g. Moonseom)',
-    spotsHint: 'Pick as many as you like. Missing a spot? Tell us in the message below.',
+    spotsHint: 'Pick up to 5. Missing a spot? Tell us in the message below.', spotsFull: 'All 5 picked (tap × to remove)',
     address: 'Address', lang: 'Languages', langPh: 'English · 한국어', note: 'One-line intro', notePh: 'Boat dives · Discover scuba · Nitrox',
     secContact: 'Public contacts', contactHint: 'Shown on the site as-is. Add at least one. A shop number is better than a personal phone.',
     phone: 'Phone', phonePh: '+82-64-000-0000', kakao: 'KakaoTalk channel link', kakaoPh: 'https://pf.kakao.com/...', waPh: '+82 10 0000 0000',
@@ -192,7 +192,7 @@ const T = {
     stPendingNew: 'Your registration is under review. You can still edit it.',
     stPendingEdit: 'Your changes are under review. Below are the changes you sent.',
     stLive: 'Your shop is live.', stHidden: 'Your shop is not shown right now (expired or hidden). Contact us to extend.',
-    expires: (d) => ` Listed until ${d}.`,
+    expires: (d) => ` Listed until ${d}.`, plans: { trial: 'Free trial', friend: 'Free', free: 'Free', paid: 'Paid' },
     badLink: 'This edit link is invalid or was replaced. Get a new link by email below.',
     lostTitle: 'Lost your edit link?', lostText: 'We will email a new edit link to the address you registered with. Old links will stop working.',
     lostBtn: 'Get a new link', lostOk: 'If that email is registered, a new link is on its way. Check your inbox (and spam).',
@@ -210,7 +210,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 window.addEventListener('hashchange', () => location.reload()); // 같은 페이지에서 수정 링크를 열어도 다시 읽기
 const token = (() => { const m = location.hash.match(/t=([\w-]{10,100})/); return m ? m[1] : ''; })();
-let editStatus = '', expires = '';
+let editStatus = '', expires = '', plan = '';
 
 function applyLang() {
   const L = T[lang];
@@ -252,7 +252,11 @@ async function loadSpots() {
   renderChips();
 }
 const spotName = (no) => { const s = spots.find(x => x.no === no); return s ? (s.label || s.name) : `#${no}`; };
+const MAX_SPOTS = 5;
 function renderChips() {
+  $('spotSearch').disabled = picked.length >= MAX_SPOTS;
+  $('spotSearch').placeholder = picked.length >= MAX_SPOTS ? T[lang].spotsFull : T[lang].spotsPh;
+  $('spotCount').textContent = `${picked.length} / ${MAX_SPOTS}`;
   $('chips').innerHTML = picked.map(no => `<span class="chip">${esc(spotName(no))}<button type="button" data-rm="${no}" aria-label="remove">×</button></span>`).join('');
 }
 $('chips').onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { picked = picked.filter(n => n !== +b.dataset.rm); renderChips(); } };
@@ -264,7 +268,9 @@ $('spotSearch').oninput = () => {
   box.innerHTML = hits.map(s => `<div data-no="${s.no}">${esc(s.label || s.name)}<small>${esc(s.name !== s.label ? s.name : '')} ${esc(s.country)}</small></div>`).join('');
   box.style.display = hits.length ? 'block' : 'none';
 };
-$('sugg').onclick = (e) => { const d = e.target.closest('[data-no]'); if (!d) return; picked.push(+d.dataset.no); renderChips(); $('spotSearch').value = ''; $('sugg').style.display = 'none'; $('spotSearch').focus(); };
+$('sugg').onclick = (e) => { const d = e.target.closest('[data-no]'); if (!d) return;
+  if (picked.length >= MAX_SPOTS) { $('spotSearch').value = ''; $('sugg').style.display = 'none'; return; } // [ADD] 5곳까지
+  picked.push(+d.dataset.no); renderChips(); $('spotSearch').value = ''; $('sugg').style.display = 'none'; $('spotSearch').focus(); };
 
 // ── 보내기 ──
 const form = $('f');
@@ -324,7 +330,7 @@ document.querySelectorAll('.per').forEach(b => b.onclick = async () => {
 
 function showStatus() {
   const L = T[lang], box = $('statusBox');
-  const map = { pending_new: ['pending', L.stPendingNew], pending_edit: ['pending', L.stPendingEdit], live: ['live', L.stLive + (expires ? L.expires(expires) : '')], hidden: ['', L.stHidden], bad: ['', L.badLink] };
+  const map = { pending_new: ['pending', L.stPendingNew], pending_edit: ['pending', L.stPendingEdit], live: ['live', L.stLive + (plan ? ` [${L.plans[plan] || plan}]` : '') + (expires ? L.expires(expires) : '')], hidden: ['', L.stHidden], bad: ['', L.badLink] };
   const s = map[editStatus];
   box.style.display = s ? '' : 'none';
   if (s) { box.className = 'status ' + s[0]; box.textContent = s[1]; }
@@ -338,7 +344,7 @@ function showStatus() {
   if (token) {
     const j = await post('me', { t: token }).catch(() => ({}));
     if (!j.ok) { editStatus = 'bad'; form.style.display = 'none'; showStatus(); return; }
-    editStatus = j.status; expires = j.expires || ''; fill(j.data || {}, j.email); showStatus();
+    editStatus = j.status; expires = j.expires || ''; plan = j.plan || ''; fill(j.data || {}, j.email); showStatus();
     stats = j.stats || null; renderStats();
   }
 })();

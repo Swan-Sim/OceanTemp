@@ -48,6 +48,11 @@
   .ed label { color: var(--muted); } .ed input, .ed select { width: 100%; }
   .linkbox { word-break: break-all; font-size: 12px; background: var(--bg); border: 1px dashed rgba(255,176,0,.5); border-radius: 8px; padding: 8px; margin-top: 8px; }
   #importUrl { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; padding: 3px 4px 3px 9px; border-radius: 999px; background: rgba(255,176,0,.12); border: 1px solid rgba(255,176,0,.4); }
+  .chip button { border: none; padding: 0 4px; font-size: 14px; }
+  .sugg { display: none; border: 1px solid var(--line); border-radius: 7px; margin-top: 4px; max-height: 200px; overflow: auto; background: var(--bg); }
+  .sugg div { padding: 6px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--line); } .sugg div:hover { background: rgba(255,255,255,.05); } .sugg small { color: var(--muted); }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   td.act { white-space: nowrap; text-align: right; } td.act button { padding: 3px 9px; font-size: 12px; }
   @media (max-width: 640px) { #shopList tr, #spotList tr { display: block; border-bottom: 1px solid var(--line); padding: 6px 0; } #shopList td, #spotList td { display: block; border: none; } td.act { text-align: left; }
@@ -81,9 +86,11 @@
       <div class="card"><h2>등록된 샵</h2>
         <div class="row" style="margin-bottom:10px"><button class="primary" id="shopNew">＋ 직접 추가</button>
           <span style="flex:1"></span><input id="importUrl" placeholder="구글 시트 링크(보기 공유)에서 가져오기" style="width:280px"><button id="importBtn">가져오기</button></div>
+        <div class="row" style="margin-bottom:10px"><button id="noMailBtn">이메일 없는 샵 수정 링크 → 내 메일로</button></div>
+        <div id="linksOut"></div>
         <div id="shopEditor"></div>
         <div id="shopList"></div>
-        <div class="hint">· 무료(지인) 샵은 만료일을 비워두면 계속 보여요. 유료 샵은 만료일이 지나면 자동으로 숨겨져요(날짜만 늘리면 다시 보임).<br>· "수정 링크"를 누르면 새 링크가 만들어지고 예전 링크는 끊겨요. 샵에 카톡 등으로 보내주세요.</div>
+        <div class="hint">· 무료(제한)·유료: 기본 1년. 만료 14일 전과 만료일에 결제 링크(PAYMENT_URL) 안내 메일이 가고(샵 이메일이 없으면 내 메일로), 만료되면 자동으로 숨겨져요. 결제 확인 후 수정에서 유료로 바꾸고 날짜를 늘리면 다시 보여요.<br>· 무료(지인): 만료일을 비워두면 계속 보여요.<br>· "수정 링크"를 누르면 새 링크가 만들어지고 예전 링크는 끊겨요. 샵에 카톡 등으로 보내주세요.</div>
       </div>
     </div>
     <div id="secSpots" class="sec" style="display:none">
@@ -214,19 +221,23 @@
   secFromHash();
 
   // 정점 번호 → 이름(구글 시트 + 사용자 등록)
-  let spotNames = {};
+  let spotNames = {}, spotAll = []; // spotAll: 검색용 [{no, name, label, country}]
   const SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
   fetch(SHEET).then(r => r.text()).then(text => {
     const lines = text.split(/\r?\n/), head = lines.shift().split(',').map(h => h.trim().toLowerCase());
-    const iNo = head.indexOf('no'), iLabel = head.indexOf('label');
-    lines.forEach(l => { const m = l.match(/^(\d+),/); if (!m || iNo !== 0) return; const cells = l.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(c => c.replace(/,$/, '').replace(/^"|"$/g, '')); spotNames[+cells[iNo]] = cells[iLabel] || cells[2]; });
+    const iNo = head.indexOf('no'), iLabel = head.indexOf('label'), iName = head.indexOf('name'), iCountry = head.indexOf('country');
+    lines.forEach(l => { const m = l.match(/^(\d+),/); if (!m || iNo !== 0) return; const cells = l.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(c => c.replace(/,$/, '').replace(/^"|"$/g, ''));
+      const no = +cells[iNo]; spotNames[no] = cells[iLabel] || cells[iName]; spotAll.push({ no, name: cells[iName] || '', label: cells[iLabel] || '', country: cells[iCountry] || '' }); });
     if (mg) renderMgmt();
   }).catch(() => {});
-  const spotsText = (arr) => (arr || []).map(n => `${esc(spotNames[n] || '')}#${n}`).join(', ');
+  const spotsText = (arr) => (arr || []).map(n => `<span title="#${n}">${esc(spotNames[n] || ('#' + n))}</span>`).join(', ');
+  const PLANS = [['trial', '무료(제한)'], ['friend', '무료(지인)'], ['paid', '유료']];
+  const planKo = (p) => ({ trial: '무료(제한)', friend: '무료(지인)', free: '무료(지인)', paid: '유료' })[p] || p;
+  const planOpts = (cur) => PLANS.map(([v, l]) => `<option value="${v}"${(cur === v || (cur === 'free' && v === 'friend')) ? ' selected' : ''}>${l}</option>`).join('');
 
   let mg = null, editing = null, lastLink = null;
   async function loadMgmt() { try { mg = await api('list'); window.__mgLoaded = true; renderMgmt(); } catch (_) {} }
-  const FIELDS = [['name', '샵 이름'], ['spots', '포인트 번호'], ['phone', '전화'], ['kakao', '카카오'], ['whatsapp', 'WhatsApp'], ['instagram', '인스타'], ['web', '웹'], ['address', '주소'], ['lang', '언어'], ['note', '소개']];
+  const FIELDS = [['name', '샵 이름'], ['spots', '포인트'], ['phone', '전화'], ['kakao', '카카오'], ['whatsapp', 'WhatsApp'], ['instagram', '인스타'], ['web', '웹'], ['address', '주소'], ['lang', '언어'], ['note', '소개']];
   const val = (d, k) => k === 'spots' ? spotsText(d.spots) : esc(d[k] || '');
   const plus1y = () => { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return d.toISOString().slice(0, 10); };
   const fmtT = (t) => t ? new Date(t).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -247,18 +258,19 @@
       return `<div class="req" data-req="${esc(r.id)}">
         <div class="h"><span class="tag ${r.type === 'edit' ? 'edit' : ''}">${r.type === 'edit' ? '수정 요청' : '새 등록'}</span>${esc(r.data.name)}<span class="muted">${fmtT(r.at)} · ${esc(r.email)}</span></div>
         <div class="kv">${rows}${r.memo ? `<div>남긴 말</div><div>${esc(r.memo)}</div>` : ''}</div>
-        <div class="actions">${r.type === 'new' ? `<select class="f" data-plan><option value="free">무료(지인)</option><option value="paid">유료</option></select>
-          <input class="f" type="date" data-exp title="만료일(비우면 무기한)"> ` : ''}
+        <div class="actions">${r.type === 'new' ? `<select class="f" data-plan>${planOpts('trial')}</select>
+          <input class="f" type="date" data-exp value="${plus1y()}" title="만료일 - 무료(제한)·유료는 1년, 무료(지인)은 비워두면 무기한"> ` : ''}
           <button class="primary" data-act="approve">승인</button><button data-act="reject">거절</button></div></div>`;
     }).join('') : '<div class="muted">대기 중인 요청이 없어요</div>';
-    $('shopReqs').querySelectorAll('select[data-plan]').forEach(sel => sel.onchange = () => { const e = sel.parentElement.querySelector('[data-exp]'); if (sel.value === 'paid' && !e.value) e.value = plus1y(); });
+    $('shopReqs').querySelectorAll('select[data-plan]').forEach(sel => sel.onchange = () => { const e = sel.parentElement.querySelector('[data-exp]'); e.value = sel.value === 'friend' ? '' : (e.value || plus1y()); });
     // 등록된 샵
     const today = new Date().toISOString().slice(0, 10);
     $('shopList').innerHTML = mg.shops.length ? `<table>${mg.shops.sort((a, b) => +a.id - +b.id).map(s => `<tr data-id="${esc(s.id)}">
-      <td><b>${esc(s.name)}</b> <span class="tag ${s.plan === 'paid' ? '' : 'off'}">${s.plan === 'paid' ? '유료' : '무료'}</span>
+      <td><b>${esc(s.name)}</b> <span class="tag ${s.plan === 'paid' ? '' : 'off'}">${planKo(s.plan)}</span>
         ${!s.live ? `<span class="tag off">${s.show === false ? '숨김' : '만료'}</span>` : ''}
         <div class="muted">${spotsText(s.spots)}${s.expires ? ` · ~${esc(s.expires)}${s.expires < today ? ' (지남)' : ''}` : ''} · ${esc(s.email || '이메일 없음')} · 확인 ${esc(s.checked || '')}</div>
-        ${lastLink && lastLink.id === String(s.id) ? `<div class="linkbox">${esc(lastLink.url)}${lastLink.mailed ? ' (메일로도 보냈어요)' : ''}</div>` : ''}</td>
+        ${s.notice && s.notice.for === s.expires ? `<div class="muted">만료 안내: ${s.notice.soon ? '14일 전 보냄' : ''}${s.notice.end ? ' · 종료 안내 보냄' : ''}</div>` : ''}
+        ${lastLink && lastLink.id === String(s.id) ? `<div class="linkbox">${esc(lastLink.url)}${lastLink.mailed ? (lastLink.toAdmin ? ' (샵 이메일이 없어 내 메일로 보냈어요)' : ' (메일로도 보냈어요)') : ''}</div>` : ''}</td>
       <td class="act"><button data-act="edit">수정</button> <button data-act="link">수정 링크</button> <button data-act="del">삭제</button></td></tr>`).join('')}</table>` : '<div class="muted">아직 등록된 샵이 없어요</div>';
     // 정점 요청
     $('spotReqs').innerHTML = mg.spotreqs.length ? mg.spotreqs.sort((a, b) => a.at - b.at).map(r => `<div class="req" data-sreq="${esc(r.id)}">
@@ -283,14 +295,33 @@
     const s = editing;
     const inp = (k, v, ph) => `<input class="f" data-k="${k}" value="${esc(v)}" placeholder="${esc(ph || '')}">`;
     $('shopEditor').innerHTML = `<div class="ed">
-      ${FIELDS.map(([k, label]) => `<label>${label}</label>${inp(k, k === 'spots' ? (s.spots || []).join(';') : s[k] || '', k === 'spots' ? '253;254 (번호, 세미콜론)' : '')}`).join('')}
+      ${FIELDS.map(([k, label]) => k === 'spots'
+        ? `<label>${label} (최대 5곳)</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div>`
+        : `<label>${label}</label>${inp(k, s[k] || '')}`).join('')}
       <label>이메일(비공개)</label>${inp('email', s.email)}
-      <label>요금제</label><select class="f" data-k="plan"><option value="free"${s.plan !== 'paid' ? ' selected' : ''}>무료(지인)</option><option value="paid"${s.plan === 'paid' ? ' selected' : ''}>유료</option></select>
-      <label>만료일</label><input class="f" type="date" data-k="expires" value="${esc(s.expires || '')}">
+      <label>요금제</label><select class="f" data-k="plan" id="edPlan">${planOpts(s.plan || 'trial')}</select>
+      <label>만료일</label><div><input class="f" type="date" data-k="expires" id="edExp" value="${esc(s.expires || (s.plan === 'friend' || s.plan === 'free' ? '' : plus1y()))}"><div class="muted">무료(제한)·유료: 만료 14일 전과 만료일에 결제 링크 안내 메일, 만료되면 자동 숨김 · 무료(지인): 비우면 무기한</div></div>
       <label>보이기</label><select class="f" data-k="show"><option value="1"${s.show !== false ? ' selected' : ''}>보이기</option><option value="0"${s.show === false ? ' selected' : ''}>숨기기</option></select>
       <label>확인 날짜</label>${inp('checked', s.checked, 'YYYY-MM')}
       <span></span><div class="row"><button class="primary" data-act="esave">저장</button><button data-act="ecancel">취소</button></div></div>`;
+    edSpots = (s.spots || []).slice();
+    renderEdChips();
+    $('edPlan').onchange = () => { const e = $('edExp'); e.value = $('edPlan').value === 'friend' ? '' : (e.value || plus1y()); };
+    $('edSpotQ').oninput = () => {
+      const q = $('edSpotQ').value.trim().toLowerCase(), box = $('edSugg');
+      if (!q) { box.style.display = 'none'; return; }
+      const all = spotAll.concat((mg.spots || []).map(x => ({ no: x.no, name: x.name, label: x.label, country: x.country })));
+      const hits = all.filter(x => !edSpots.includes(x.no) && `${x.name} ${x.label} ${x.country}`.toLowerCase().includes(q)).slice(0, 10);
+      box.innerHTML = hits.map(x => `<div data-no="${x.no}">${esc(x.label || x.name)} <small>${esc(x.name)} · ${esc(x.country)}</small></div>`).join('');
+      box.style.display = hits.length ? 'block' : 'none';
+    };
+    $('edSugg').onclick = (e) => { const d = e.target.closest('[data-no]'); if (!d) return;
+      if (edSpots.length >= 5) { alert('포인트는 5곳까지 넣을 수 있어요'); return; }
+      edSpots.push(+d.dataset.no); renderEdChips(); $('edSpotQ').value = ''; $('edSugg').style.display = 'none'; };
+    $('edChips').onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { edSpots = edSpots.filter(n => n !== +b.dataset.rm); renderEdChips(); } };
   }
+  let edSpots = [];
+  function renderEdChips() { const c = $('edChips'); if (c) c.innerHTML = edSpots.map(n => `<span class="chip" title="#${n}">${esc(spotNames[n] || '#' + n)}<button type="button" data-rm="${n}">×</button></span>`).join(''); }
   const readEd = (root) => { const o = {}; root.querySelectorAll('[data-k]').forEach(el => { o[el.dataset.k] = el.value; }); return o; };
 
   document.addEventListener('click', async (e) => {
@@ -301,11 +332,12 @@
       else if (act === 'reject') { if (!confirm('이 요청을 거절할까요? (요청 내용은 지워져요)')) return; await api('shopReject', { reqId: req.dataset.req }); }
       else if (act === 'edit') { editing = Object.assign({}, mg.shops.find(s => String(s.id) === tr.dataset.id)); renderEditor(); $('shopEditor').scrollIntoView({ behavior: 'smooth' }); return; }
       else if (act === 'ecancel') { editing = null; renderEditor(); return; }
-      else if (act === 'esave') { const o = readEd($('shopEditor')); o.show = o.show === '1'; if (editing.id) o.id = editing.id; await api('shopSave', o); editing = null; }
+      else if (act === 'esave') { const o = readEd($('shopEditor')); o.spots = edSpots; o.show = o.show === '1'; if (editing.id) o.id = editing.id;
+        const j = await api('shopSave', o); editing = null; if (j.links && j.links.length) showLinks(j.links); }
       else if (act === 'link') { const s = mg.shops.find(x => String(x.id) === tr.dataset.id);
         if (!confirm(`${s.name}의 새 수정 링크를 만들까요? 예전 링크는 더 이상 안 돼요.`)) return;
-        const j = await api('shopLink', { id: tr.dataset.id, mail: !!s.email && confirm('등록 이메일로도 보낼까요? (메일 설정이 되어 있을 때)') });
-        lastLink = { id: tr.dataset.id, url: j.url, mailed: j.mailed }; try { await navigator.clipboard.writeText(j.url); } catch (_) {} }
+        const j = await api('shopLink', { id: tr.dataset.id, mail: !!s.email && confirm('샵 이메일로도 보낼까요? (메일 설정이 되어 있을 때)') }); // 샵 이메일이 없으면 서버가 내 메일(ADMIN_EMAIL)로 보내요
+        lastLink = { id: tr.dataset.id, url: j.url, mailed: j.mailed, toAdmin: j.toAdmin }; try { await navigator.clipboard.writeText(j.url); } catch (_) {} }
       else if (act === 'del') { if (!confirm('이 샵을 삭제할까요? 되돌릴 수 없어요. (잠시 내리려면 수정 → 숨기기)')) return; await api('shopDelete', { id: tr.dataset.id }); }
       else if (act === 'sapprove') { const j = await api('spotApprove', { reqId: sreq.dataset.sreq, data: readEd(sreq) }); alert(`#${j.no} 번호로 추가했어요. 몇 분 안에 사이트에 보여요.`); }
       else if (act === 'sreject') { if (!confirm('이 포인트 요청을 거절할까요?')) return; await api('spotReject', { reqId: sreq.dataset.sreq }); }
@@ -315,8 +347,14 @@
       await loadMgmt();
     } catch (_) {}
   });
-  $('shopNew').onclick = () => { editing = { plan: 'free', show: true, spots: [] }; renderEditor(); };
-  $('importBtn').onclick = async () => { const url = $('importUrl').value.trim(); if (!url) return; try { const j = await api('shopImport', { url }); alert(`${j.added}곳 가져옴, ${j.skipped}곳 건너뜀(이미 있는 이름 등)`); $('importUrl').value = ''; await loadMgmt(); } catch (_) {} };
+  $('shopNew').onclick = () => { editing = { plan: 'trial', show: true, spots: [] }; renderEditor(); };
+  $('importBtn').onclick = async () => { const url = $('importUrl').value.trim(); if (!url) return; try { const j = await api('shopImport', { url }); alert(`${j.added}곳 가져옴, ${j.skipped}곳 건너뜀(이미 있는 이름 등)`); $('importUrl').value = ''; await loadMgmt(); if (j.links && j.links.length) showLinks(j.links); } catch (_) {} };
+  // [ADD] 이메일 없는 샵들의 수정 링크 → 내 메일 + 화면
+  $('noMailBtn').onclick = async () => { if (!confirm('이메일 없는 샵들의 수정 링크를 새로 만들어 내 메일(ADMIN_EMAIL)로 보낼까요? 예전 링크는 끊겨요.')) return;
+    try { const j = await api('linksNoEmail'); await loadMgmt(); showLinks(j.links); } catch (_) {} };
+  function showLinks(links) {
+    $('linksOut').innerHTML = links.length ? `<div class="linkbox"><b>수정 링크 (샵에 전달해 주세요, 메일 설정 시 내 메일로도 보냈어요)</b>${links.map(l => `<div style="margin-top:6px">${esc(l.name)}<br>${esc(l.url)}</div>`).join('')}</div>` : '<div class="muted">이메일 없는 샵이 없어요</div>';
+  }
 
   load();
 </script>

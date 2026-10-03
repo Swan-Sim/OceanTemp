@@ -18,5 +18,11 @@
     "api/spotobs.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/shops?svc=cron",
+      "schedule": "7 0 * * *"
+    }
+  ]
 }

@@ -39,7 +39,12 @@ function whatsapp(v) {
   const n = v.replace(/\D/g, ''); return n.length >= 6 ? `https://wa.me/${n}` : '';
 }
 const email = (v) => { v = str(v, 120).toLowerCase(); return /^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/.test(v) ? v : ''; };
-const spotList = (v) => [...new Set((Array.isArray(v) ? v : String(v || '').split(/[;,\s]+/)).map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 100000))].slice(0, 30);
+const MAX_SPOTS = 5; // [CHANGE] 샵 하나당 포인트는 5곳까지
+const spotList = (v) => [...new Set((Array.isArray(v) ? v : String(v || '').split(/[;,\s]+/)).map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 100000))].slice(0, MAX_SPOTS);
+// [ADD] 요금제: trial = 무료(제한, 1년 뒤 종료) · friend = 무료(지인, 기간 없음) · paid = 유료. 예전 'free'는 지인으로 봄
+const planOf = (v) => { v = String(v || '').toLowerCase(); return /^paid|^유료/.test(v) ? 'paid' : /^trial|제한|체험/.test(v) ? 'trial' : /^friend|^free|지인|^무료/.test(v) ? 'friend' : 'trial'; };
+const PLAN_KO = { trial: '무료(제한)', friend: '무료(지인)', paid: '유료' };
+const plusYear = (from) => { const d = from ? new Date(from) : new Date(); d.setUTCFullYear(d.getUTCFullYear() + 1); return d.toISOString().slice(0, 10); };
 const dateStr = (v) => { v = str(v, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ''; };
 
 // 샵이 직접 고칠 수 있는 칸
@@ -126,5 +131,5 @@ async function sendMail(to, subject, html) {
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
-module.exports = { K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
+module.exports = { MAX_SPOTS, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
   csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET };

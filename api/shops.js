@@ -61,6 +61,35 @@ async function shopStats(s, days) {
   return { days, from: dates[dates.length - 1] || '', rows: list };
 }
 
+// 무료(제한)·유료 샵: 만료 14일 전 / 만료 후 한 번씩 결제 링크 안내. 샵 이메일이 없으면 관리자에게.
+// 만료된 샵은 사이트에서 자동으로 숨겨지고(isLive), 관리자가 기간을 늘리면 다시 보여요.
+async function expiryNotices(base) {
+  const shops = await S.hgetallJSON(K.shops);
+  const today = new Date().toISOString().slice(0, 10);
+  const soon = new Date(Date.now() + 14 * 86400e3).toISOString().slice(0, 10);
+  const pay = process.env.PAYMENT_URL || '';
+  const sent = [];
+  for (const s of Object.values(shops)) {
+    if (s.plan === 'friend' || s.plan === 'free' || !s.expires || s.show === false) continue;
+    const n = (s.notice && s.notice.for === s.expires) ? s.notice : { for: s.expires };
+    let kind = '';
+    if (s.expires < today && !n.end) kind = 'end';
+    else if (s.expires >= today && s.expires <= soon && !n.soon) kind = 'soon';
+    if (!kind) continue;
+    const plan = S.PLAN_KO[s.plan] || s.plan;
+    const payLine = pay ? `<p>계속 노출하려면 아래에서 결제해 주세요. 결제가 확인되면 1년 연장해 드려요.<br><a href="${S.esc(pay)}">${S.esc(pay)}</a></p>` : '<p>연장을 원하시면 이 메일에 답장해 주세요.</p>';
+    const subject = kind === 'end' ? `[otemp.app] ${s.name} 게시 기간이 끝났어요` : `[otemp.app] ${s.name} 게시 기간이 ${s.expires}에 끝나요`;
+    const body = `<p>${S.esc(s.name)} (${plan}) 게시 기간: ~${s.expires}</p>${kind === 'end' ? '<p>지금은 사이트에 보이지 않아요.</p>' : ''}${payLine}<p style="color:#888">Your listing ${kind === 'end' ? 'has ended' : 'ends on ' + s.expires}. ${pay ? 'Renew here: ' + S.esc(pay) : 'Reply to renew.'}</p>`;
+    const to = s.email || process.env.ADMIN_EMAIL;
+    const ok = to ? await S.sendMail(to, subject, (s.email ? '' : `<p><b>[샵 이메일 없음 - 관리자에게 보냄]</b></p>`) + body) : false;
+    if (s.email && process.env.ADMIN_EMAIL) await S.sendMail(process.env.ADMIN_EMAIL, `[otemp] 안내 발송: ${subject}`, body);
+    // 실제로 보냈을 때만 표시(메일 설정 전이면 다음 날 다시 시도)
+    if (ok) { n[kind] = Date.now(); s.notice = n; await R(['HSET', K.shops, String(s.id), JSON.stringify(s)]); }
+    sent.push({ id: s.id, kind, mailed: ok });
+  }
+  return { sent };
+}
+
 module.exports = async function handler(req, res) {
   const q = req.query || {};
   const svc = String(q.svc || '');
@@ -73,6 +102,12 @@ module.exports = async function handler(req, res) {
         try { await R(['HINCRBY', `sc:${day}`, field, 1], ['EXPIRE', `sc:${day}`, String(800 * 86400)]); } catch (_) {}
       }
       res.setHeader('Cache-Control', 'no-store'); return res.status(204).end();
+    }
+
+    // [ADD] 매일 한 번(Vercel Cron): 게시 기간 끝나기 14일 전·끝난 날 결제 안내 메일
+    if (svc === 'cron') {
+      if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return send(res, 401, { ok: false });
+      return send(res, 200, { ok: true, ...(await expiryNotices(S.baseOf(req))) });
     }
 
     // [ADD] 아래 정보 줄 바로가기에 이 샵이 보인 횟수

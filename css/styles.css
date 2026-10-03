@@ -562,3 +562,4 @@
     .station-foot.has-shop .foot-txt { text-align: right; }
     .shop-chk { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
     .shop-report { margin-left: auto; font-size: 9.5px; color: var(--ui-dim); text-decoration: underline; text-align: right; }
+    .shop-lang { flex: 0 1 auto; min-width: 0; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

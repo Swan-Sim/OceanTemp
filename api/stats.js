@@ -17,8 +17,9 @@ function toObj(arr) { // HGETALL 결과 [k1, v1, k2, v2 ...] → { k1: v1 }
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   const pw = req.headers['x-admin-password'] || '';
-  if (!process.env.ADMIN_PASSWORD) return res.status(500).json({ error: 'ADMIN_PASSWORD 환경변수가 설정되지 않았어요' });
-  if (!safeEqual(pw, process.env.ADMIN_PASSWORD)) {
+  const S = require('./_store');
+  if (!process.env.ADMIN_PASSWORD && !(await S.adminCfg()).pwHash) return res.status(500).json({ error: 'ADMIN_PASSWORD 환경변수가 설정되지 않았어요' });
+  if (!(await S.checkAdminPw(pw))) { // [CHANGE] 관리 페이지에서 바꾼 비밀번호(있으면) 우선
     await new Promise(r => setTimeout(r, 600)); // 무작위 대입 속도 늦추기
     return res.status(401).json({ error: 'unauthorized' });
   }

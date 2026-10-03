@@ -94,10 +94,13 @@
       <div class="hint" data-k="spotsHint"></div>
       <label data-k="address"></label>
       <input name="address" maxlength="160">
-      <div class="grid">
-        <div><label data-k="lang"></label><input name="lang" maxlength="40" data-ph="langPh"></div>
-        <div><label data-k="note"></label><input name="note" maxlength="120" data-ph="notePh"></div>
-      </div>
+      <!-- [CHANGE] 가능한 언어: 목록에서 고르기(5개까지, 처음엔 브라우저 언어 + English 자동 선택) -->
+      <label><span data-k="lang"></span> <span id="langCount" style="color:var(--dim)"></span></label>
+      <select id="langAdd"></select>
+      <div class="chips" id="langChips"></div>
+      <input type="hidden" name="lang" id="langVal">
+      <label data-k="note"></label>
+      <input name="note" maxlength="120" data-ph="notePh">
     </div>
 
     <div class="card">
@@ -138,6 +141,7 @@
   </div>
 </div>
 
+<script src="/shop/lists.js"></script>
 <script>
 const T = {
   ko: {
@@ -146,7 +150,7 @@ const T = {
     leadEdit: '고친 내용은 운영자가 확인한 뒤 사이트에 반영돼요. 그 전까지는 지금 정보가 그대로 보여요.',
     secShop: '샵 정보', name: '샵 이름', spots: '다니는 포인트', spotsPh: '포인트 이름으로 찾기 (예: 문섬)',
     spotsHint: '5곳까지 고를 수 있어요. 찾는 포인트가 없으면 아래 "남길 말"에 적어주세요.', spotsFull: '5곳을 모두 골랐어요 (빼려면 ×)',
-    address: '주소', lang: '가능한 언어', langPh: '한국어 · English', note: '한 줄 소개', notePh: '보트 다이빙 · 체험 다이빙 · 나이트록스',
+    address: '주소', lang: '가능한 언어', langAdd: '+ 언어 추가', langFull: '5개까지 고를 수 있어요', note: '한 줄 소개', notePh: '보트 다이빙 · 체험 다이빙 · 나이트록스',
     secContact: '공개 연락처', contactHint: '사이트에 그대로 보여요. 하나 이상 적어주세요. 개인 휴대폰 번호보다 샵 대표번호를 권해요.',
     phone: '전화', phonePh: '+82-64-000-0000', kakao: '카카오톡 채널 링크', kakaoPh: 'https://pf.kakao.com/...', waPh: '+82 10 0000 0000',
     instagram: '인스타그램', igPh: '@아이디', web: '웹사이트', webPh: 'https://...',
@@ -179,7 +183,7 @@ const T = {
     leadEdit: 'Changes go live after review. Until then, the current details stay on the site.',
     secShop: 'Shop', name: 'Shop name', spots: 'Dive spots you visit', spotsPh: 'Search spots (e.g. Moonseom)',
     spotsHint: 'Pick up to 5. Missing a spot? Tell us in the message below.', spotsFull: 'All 5 picked (tap × to remove)',
-    address: 'Address', lang: 'Languages', langPh: 'English · 한국어', note: 'One-line intro', notePh: 'Boat dives · Discover scuba · Nitrox',
+    address: 'Address', lang: 'Languages', langAdd: '+ Add language', langFull: 'Up to 5 languages', note: 'One-line intro', notePh: 'Boat dives · Discover scuba · Nitrox',
     secContact: 'Public contacts', contactHint: 'Shown on the site as-is. Add at least one. A shop number is better than a personal phone.',
     phone: 'Phone', phonePh: '+82-64-000-0000', kakao: 'KakaoTalk channel link', kakaoPh: 'https://pf.kakao.com/...', waPh: '+82 10 0000 0000',
     instagram: 'Instagram', igPh: '@handle', web: 'Website', webPh: 'https://...',
@@ -215,8 +219,32 @@ const token = (() => { const m = location.hash.match(/t=([\w-]{10,100})/); retur
 let editStatus = '', expires = '', plan = '', termsOk = false;
 const TERMS_VERSION = '2026-10-03'; // api/_store.js · terms/index.html과 같게
 
+// ── 가능한 언어(코드로 저장: "ko,en" → 사이트에선 한국어 · English 로 표시) ──
+const MAX_LANGS = 5;
+let langs = [];
+function parseLangs(v) {
+  v = String(v || '').trim(); if (!v) return [];
+  if (/^[a-z]{2,3}(,[a-z]{2,3})*$/.test(v)) return v.split(',');
+  // 예전 글자 입력("한국어 · English")은 이름으로 코드 찾기
+  return v.split(/[·,\/|]+/).map(x => x.trim().toLowerCase()).map(x => OTLists.LANGS.find(c => [OTLists.langNative(c), OTLists.langIn(c, 'en'), OTLists.langIn(c, 'ko'), c].some(n => n.toLowerCase() === x))).filter(Boolean);
+}
+function setLangs(arr) { langs = [...new Set(arr)].slice(0, MAX_LANGS); renderLangs(); }
+function renderLangs() {
+  const L = T[lang];
+  $('langVal').value = langs.join(',');
+  $('langCount').textContent = `${langs.length} / ${MAX_LANGS}`;
+  $('langChips').innerHTML = langs.map(c => `<span class="chip">${esc(OTLists.langNative(c))}<button type="button" data-rmlang="${c}" aria-label="remove">×</button></span>`).join('');
+  const full = langs.length >= MAX_LANGS;
+  $('langAdd').disabled = full;
+  $('langAdd').innerHTML = `<option value="">${esc(full ? L.langFull : L.langAdd)}</option>` +
+    OTLists.LANGS.filter(c => !langs.includes(c)).map(c => { const nat = OTLists.langNative(c), loc = OTLists.langIn(c, lang); return `<option value="${c}">${esc(nat)}${loc.toLowerCase() !== nat.toLowerCase() ? ` (${esc(loc)})` : ''}</option>`; }).join('');
+}
+$('langAdd').onchange = () => { const c = $('langAdd').value; if (c) setLangs([...langs, c]); };
+$('langChips').onclick = (e) => { const b = e.target.closest('[data-rmlang]'); if (b) setLangs(langs.filter(c => c !== b.dataset.rmlang)); };
+
 function applyLang() {
   const L = T[lang];
+  if (typeof renderLangs === 'function' && $('langAdd')) renderLangs();
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-k]').forEach(el => { const v = L[el.dataset.k]; if (typeof v === 'string') el.textContent = v; });
   document.querySelectorAll('[data-ph]').forEach(el => { const v = L[el.dataset.ph]; if (typeof v === 'string') el.placeholder = v; });
@@ -285,7 +313,8 @@ function formData() {
   return o;
 }
 function fill(d, email) {
-  ['name', 'address', 'lang', 'note', 'phone', 'kakao', 'whatsapp', 'instagram', 'web'].forEach(k => { if (form[k]) form[k].value = d[k] || ''; });
+  setLangs(parseLangs(d.lang));
+  ['name', 'address', 'note', 'phone', 'kakao', 'whatsapp', 'instagram', 'web'].forEach(k => { if (form[k]) form[k].value = d[k] || ''; });
   if (d.instagram) form.instagram.value = d.instagram.replace('https://www.instagram.com/', '@');
   form.email.value = email || '';
   picked = (d.spots || []).slice(); renderChips();
@@ -342,6 +371,7 @@ function showStatus() {
 }
 
 (async () => {
+  if (!token) langs = [...new Set([OTLists.browserLang(), 'en'])].filter(c => OTLists.LANGS.includes(c)); // 자동 선택
   applyLang();
   await loadSpots();
   const pre = parseInt(new URLSearchParams(location.search).get('spot'), 10);

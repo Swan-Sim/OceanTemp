@@ -53,6 +53,14 @@ const PLAN_KO = { trial: '무료(제한)', friend: '무료(지인)', paid: '유�
 const plusYear = (from) => { const d = from ? new Date(from) : new Date(); d.setUTCFullYear(d.getUTCFullYear() + 1); return d.toISOString().slice(0, 10); };
 const dateStr = (v) => { v = str(v, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ''; };
 
+// [ADD] 가능한 언어: "ko,en,ja" 코드로 저장(5개까지). 예전 글자 입력("한국어 · English")은 그대로 둠
+function langList(v) {
+  v = str(v, 60);
+  const codes = v.toLowerCase().split(/[,\s]+/).filter(Boolean);
+  if (codes.length && codes.every(c => /^[a-z]{2,3}$/.test(c))) return [...new Set(codes)].slice(0, MAX_SPOTS).join(',');
+  return str(v, 40);
+}
+
 // 샵이 직접 고칠 수 있는 칸
 function shopFields(b) {
   b = b || {};
@@ -60,7 +68,7 @@ function shopFields(b) {
     name: str(b.name, 60), spots: spotList(b.spots),
     phone: phone(b.phone), kakao: httpsUrl(b.kakao), whatsapp: whatsapp(b.whatsapp),
     instagram: instagram(b.instagram), web: httpsUrl(b.web),
-    address: str(b.address, 160), lang: str(b.lang, 40), note: str(b.note, 120)
+    address: str(b.address, 160), lang: langList(b.lang), note: str(b.note, 120)
   };
 }
 const hasContact = (f) => !!(f.phone || f.kakao || f.whatsapp || f.instagram || f.web);
@@ -134,8 +142,23 @@ async function sendMail(to, subject, html) {
     return r.ok;
   } catch (_) { return false; }
 }
+// [ADD] 관리자 설정(비밀번호·이메일)을 관리 페이지에서 바꿀 수 있게 Redis에 저장(admin:cfg).
+//  - 비밀번호는 원문 대신 scrypt 해시만 저장. 한 번 바꾸면 Vercel의 ADMIN_PASSWORD는 더 이상 안 통해요.
+//  - 비밀번호를 잊으면 Upstash 콘솔에서 admin:cfg 키를 지우면 다시 ADMIN_PASSWORD로 들어갈 수 있어요.
+//  - 이메일은 여기 값이 있으면 그걸, 없으면 ADMIN_EMAIL 환경변수를 써요.
+async function adminCfg() { try { const [v] = await R(['GET', 'admin:cfg']); return v ? JSON.parse(v) : {}; } catch (_) { return {}; } }
+function hashPw(pw, salt) { salt = salt || crypto.randomBytes(16).toString('hex'); return salt + ':' + crypto.scryptSync(String(pw), salt, 32).toString('hex'); }
+function safeEq(a, b) { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); }
+async function checkAdminPw(pw) {
+  if (!pw) return false;
+  const c = await adminCfg();
+  if (c.pwHash) return safeEq(hashPw(pw, c.pwHash.split(':')[0]), c.pwHash);
+  return !!process.env.ADMIN_PASSWORD && safeEq(pw, process.env.ADMIN_PASSWORD);
+}
+async function adminEmail() { const c = await adminCfg(); return c.email || process.env.ADMIN_EMAIL || ''; }
+
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
-module.exports = { TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
+module.exports = { adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
   csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET };

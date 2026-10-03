@@ -25,7 +25,8 @@ const bodyOf = (req) => { let b = req.body; if (typeof b === 'string') { try { b
 const send = (res, code, obj) => { res.setHeader('Cache-Control', 'no-store'); res.status(code).json(obj); };
 
 async function notifyAdmin(subject, html) {
-  if (process.env.ADMIN_EMAIL) await S.sendMail(process.env.ADMIN_EMAIL, subject, html);
+  const to = await S.adminEmail(); // [CHANGE] 관리 페이지에서 바꾼 이메일 우선
+  if (to) await S.sendMail(to, subject, html);
 }
 
 async function lookupToken(t) {
@@ -68,7 +69,7 @@ async function expiryNotices(base) {
   const today = new Date().toISOString().slice(0, 10);
   const soon = new Date(Date.now() + 14 * 86400e3).toISOString().slice(0, 10);
   const pay = process.env.PAYMENT_URL || '';
-  const sent = [];
+  const sent = [], adminTo = await S.adminEmail();
   for (const s of Object.values(shops)) {
     if (s.plan === 'friend' || s.plan === 'free' || !s.expires || s.show === false) continue;
     const n = (s.notice && s.notice.for === s.expires) ? s.notice : { for: s.expires };
@@ -80,9 +81,9 @@ async function expiryNotices(base) {
     const payLine = pay ? `<p>계속 노출하려면 아래에서 결제해 주세요. 결제가 확인되면 1년 연장해 드려요.<br><a href="${S.esc(pay)}">${S.esc(pay)}</a></p>` : '<p>연장을 원하시면 이 메일에 답장해 주세요.</p>';
     const subject = kind === 'end' ? `[otemp.app] ${s.name} 게시 기간이 끝났어요` : `[otemp.app] ${s.name} 게시 기간이 ${s.expires}에 끝나요`;
     const body = `<p>${S.esc(s.name)} (${plan}) 게시 기간: ~${s.expires}</p>${kind === 'end' ? '<p>지금은 사이트에 보이지 않아요.</p>' : ''}${payLine}<p style="color:#888">Your listing ${kind === 'end' ? 'has ended' : 'ends on ' + s.expires}. ${pay ? 'Renew here: ' + S.esc(pay) : 'Reply to renew.'}</p>`;
-    const to = s.email || process.env.ADMIN_EMAIL;
+    const to = s.email || adminTo;
     const ok = to ? await S.sendMail(to, subject, (s.email ? '' : `<p><b>[샵 이메일 없음 - 관리자에게 보냄]</b></p>`) + body) : false;
-    if (s.email && process.env.ADMIN_EMAIL) await S.sendMail(process.env.ADMIN_EMAIL, `[otemp] 안내 발송: ${subject}`, body);
+    if (s.email && adminTo) await S.sendMail(adminTo, `[otemp] 안내 발송: ${subject}`, body);
     // 실제로 보냈을 때만 표시(메일 설정 전이면 다음 날 다시 시도)
     if (ok) { n[kind] = Date.now(); s.notice = n; await R(['HSET', K.shops, String(s.id), JSON.stringify(s)]); }
     sent.push({ id: s.id, kind, mailed: ok });

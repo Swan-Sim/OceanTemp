@@ -16,8 +16,9 @@ async function linksToAdmin(shops, base) {
     await R(...cmds);
     links.push({ id: String(shop.id), name: shop.name, url: S.editUrl(base, token) });
   }
-  if (links.length && process.env.ADMIN_EMAIL) {
-    await S.sendMail(process.env.ADMIN_EMAIL, `[otemp] 이메일 없는 샵 수정 링크 ${links.length}곳`,
+  const adminTo = await S.adminEmail();
+  if (links.length && adminTo) {
+    await S.sendMail(adminTo, `[otemp] 이메일 없는 샵 수정 링크 ${links.length}곳`,
       `<p>샵 이메일이 없어서 관리자에게 보내요. 각 샵에 전달해 주세요.</p>${links.map(l => `<p><b>${S.esc(l.name)}</b><br><a href="${l.url}">${l.url}</a></p>`).join('')}`);
   }
   return links;
@@ -27,6 +28,42 @@ module.exports = async function admin(req, res) {
   const svc = String(req.query.svc), b = bodyOf(req), base = S.baseOf(req);
   const ok = (o) => res.status(200).json({ ok: true, ...(o || {}) });
   const bad = (e) => res.status(400).json({ ok: false, error: e });
+
+  // [ADD] 관리자 설정: 비밀번호·알림 이메일 바꾸기
+  if (svc === 'settings') {
+    const c = await S.adminCfg();
+    return ok({ email: c.email || process.env.ADMIN_EMAIL || '', emailFrom: c.email ? 'admin' : (process.env.ADMIN_EMAIL ? 'env' : ''), pwFrom: c.pwHash ? 'admin' : 'env',
+      pwChanged: c.pwAt || 0, mail: !!process.env.RESEND_API_KEY });
+  }
+  if (svc === 'setPassword') {
+    if (!(await S.checkAdminPw(b.current))) { await new Promise(r => setTimeout(r, 600)); return bad('wrong_current'); }
+    const next = String(b.next || '');
+    if (next.length < 10) return bad('too_short');
+    if (next !== String(b.confirm || '')) return bad('mismatch');
+    const c = await S.adminCfg();
+    c.pwHash = S.hashPw(next); c.pwAt = Date.now();
+    await R(['SET', 'admin:cfg', JSON.stringify(c)]);
+    const to = await S.adminEmail();
+    if (to) await S.sendMail(to, '[otemp] 관리자 비밀번호가 바뀌었어요', `<p>${new Date().toISOString()} 관리 페이지에서 비밀번호가 바뀌었어요. 본인이 아니면 Upstash에서 admin:cfg 키를 지우고 Vercel의 ADMIN_PASSWORD를 바꿔주세요.</p>`);
+    return ok();
+  }
+  if (svc === 'setEmail') {
+    if (!(await S.checkAdminPw(b.current))) { await new Promise(r => setTimeout(r, 600)); return bad('wrong_current'); }
+    const mail = b.email ? S.email(b.email) : '';
+    if (b.email && !mail) return bad('bad_email');
+    const c = await S.adminCfg();
+    const old = c.email || process.env.ADMIN_EMAIL || '';
+    if (mail) c.email = mail; else delete c.email; // 비우면 ADMIN_EMAIL 환경변수로 돌아감
+    await R(['SET', 'admin:cfg', JSON.stringify(c)]);
+    if (old && old !== mail) await S.sendMail(old, '[otemp] 관리자 알림 이메일이 바뀌었어요', `<p>알림 이메일이 ${S.esc(mail || '(환경변수 값)')}(으)로 바뀌었어요.</p>`);
+    return ok({ email: c.email || process.env.ADMIN_EMAIL || '' });
+  }
+  if (svc === 'testMail') {
+    const to = await S.adminEmail();
+    if (!to) return bad('no_email');
+    const sent = await S.sendMail(to, '[otemp] 테스트 메일', '<p>관리 페이지에서 보낸 테스트 메일이에요. 잘 받으셨으면 알림 설정이 정상이에요.</p>');
+    return ok({ sent, to });
+  }
 
   if (svc === 'list') {
     const [shops, reqs, spots, spotreqs, reports] = await Promise.all([S.hgetallJSON(K.shops), S.hgetallJSON(K.req), S.hgetallJSON(K.spots), S.hgetallJSON(K.spotreq), S.hgetallJSON(K.reports)]);
@@ -100,7 +137,8 @@ module.exports = async function admin(req, res) {
     let mailed = false;
     if (b.mail && shop.email) mailed = await S.sendMail(shop.email, '[otemp.app] 샵 정보 수정 링크 / Your edit link', `<p>${S.esc(shop.name)} 수정 링크: <a href="${url}">${url}</a></p>`);
     // [ADD] 이메일이 없는 샵이면 관리자에게 보냄
-    if (!shop.email && process.env.ADMIN_EMAIL) mailed = await S.sendMail(process.env.ADMIN_EMAIL, `[otemp] ${shop.name} 수정 링크 (샵 이메일 없음)`, `<p>${S.esc(shop.name)} 수정 링크입니다. 샵에 전달해 주세요.</p><p><a href="${url}">${url}</a></p>`);
+    const adminTo = await S.adminEmail();
+    if (!shop.email && adminTo) mailed = await S.sendMail(adminTo, `[otemp] ${shop.name} 수정 링크 (샵 이메일 없음)`, `<p>${S.esc(shop.name)} 수정 링크입니다. 샵에 전달해 주세요.</p><p><a href="${url}">${url}</a></p>`);
     return ok({ url, mailed, toAdmin: !shop.email });
   }
   // [ADD] 이메일 없는 샵 전부: 새 수정 링크를 만들어 관리자 메일로(화면에도 보여줌)

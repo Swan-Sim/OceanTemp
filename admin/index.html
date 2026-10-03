@@ -33,6 +33,9 @@
   .hbar { height: 4px; background: rgba(56,189,248,.6); border-radius: 2px; margin-top: 3px; }
   .err { color: #FB7185; font-size: 13px; margin-top: 8px; }
   .nav { display: flex; gap: 6px; margin-bottom: 14px; align-items: center; }
+  .navlink { color: var(--muted); font-size: 13px; text-decoration: none; padding: 6px 10px; border-radius: 999px; border: 1px solid transparent; }
+  .navlink.on, .navlink:hover { color: var(--text); border-color: rgba(255,176,0,.5); }
+  code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px; }
   .nav button.on { color: var(--text); border-color: rgba(255,176,0,.6); background: rgba(255,176,0,.12); }
   .badge { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 8px; background: #FB7185; color: #fff; font-size: 11px; line-height: 16px; }
   .badge:empty { display: none; }
@@ -79,7 +82,7 @@
       <button data-sec="stats" class="on">통계</button>
       <button data-sec="shops">샵 <span class="badge" id="bShops"></span></button>
       <button data-sec="spots">정점 <span class="badge" id="bSpots"></span></button>
-      <span style="flex:1"></span><button id="logout">로그아웃</button>
+      <span style="flex:1"></span><a href="#settings" class="navlink" id="settingsLink">관리 설정</a><button id="logout">로그아웃</button>
     </div>
     <div id="secShops" class="sec" style="display:none">
       <div class="card" id="reportCard" style="display:none"><h2>이의 제기</h2><div id="shopReports"></div></div>
@@ -97,6 +100,26 @@
     <div id="secSpots" class="sec" style="display:none">
       <div class="card"><h2>승인 대기 (새 포인트)</h2><div id="spotReqs"></div><div class="hint">승인하면 구글 시트·기존 등록 포인트와 겹치지 않는 다음 번호가 자동으로 붙어요. 이름·좌표는 승인 전에 고칠 수 있어요.</div></div>
       <div class="card"><h2>사용자 등록 포인트 (시트 밖)</h2><div id="spotList"></div></div>
+    </div>
+    <!-- [ADD] 관리 설정: 알림 이메일·비밀번호 바꾸기 -->
+    <div id="secSettings" class="sec" style="display:none">
+      <div class="card"><h2>지금 설정</h2><div class="kv" id="setInfo"></div>
+        <div class="actions"><button id="testMailBtn">알림 이메일로 테스트 메일 보내기</button></div><div class="muted" id="testMailMsg"></div></div>
+      <div class="card"><h2>알림 이메일 바꾸기</h2>
+        <div class="muted" style="margin-bottom:8px">새 등록·수정 요청, 이의 제기, 이메일 없는 샵의 수정 링크, 만료 안내가 이 주소로 가요. 비우고 저장하면 Vercel의 ADMIN_EMAIL 값으로 돌아가요.</div>
+        <form id="emailForm" class="ed" style="border-color:var(--line)">
+          <label>새 이메일</label><input class="f" type="email" name="email" autocomplete="email">
+          <label>지금 비밀번호</label><input class="f" type="password" name="current" autocomplete="current-password">
+          <span></span><div><button class="primary" type="submit">이메일 저장</button></div>
+        </form><div class="muted" id="emailMsg"></div></div>
+      <div class="card"><h2>비밀번호 바꾸기</h2>
+        <div class="muted" style="margin-bottom:8px">10자 이상. 바꾸면 Vercel의 ADMIN_PASSWORD로는 더 이상 들어올 수 없어요. 잊어버리면 Upstash 콘솔(Data Browser)에서 <code>admin:cfg</code> 키를 지우면 ADMIN_PASSWORD로 다시 들어올 수 있어요.</div>
+        <form id="pwForm" class="ed" style="border-color:var(--line)">
+          <label>지금 비밀번호</label><input class="f" type="password" name="current" autocomplete="current-password">
+          <label>새 비밀번호</label><input class="f" type="password" name="next" autocomplete="new-password" minlength="10">
+          <label>새 비밀번호 확인</label><input class="f" type="password" name="confirm" autocomplete="new-password">
+          <span></span><div><button class="primary" type="submit">비밀번호 바꾸기</button></div>
+        </form><div class="muted" id="pwMsg"></div></div>
     </div>
     <div id="secStats" class="sec">
     <div class="row" style="margin-bottom:14px">
@@ -213,11 +236,14 @@
     $('secStats').style.display = name === 'stats' ? '' : 'none';
     $('secShops').style.display = name === 'shops' ? '' : 'none';
     $('secSpots').style.display = name === 'spots' ? '' : 'none';
+    $('secSettings').style.display = name === 'settings' ? '' : 'none';
+    $('settingsLink').classList.toggle('on', name === 'settings');
+    if (name === 'settings' && window.__mgLoaded) loadSettings();
     if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
-    if (name !== 'stats' && window.__mgLoaded) loadMgmt(); // 탭을 열 때마다 최신 요청으로
+    if ((name === 'shops' || name === 'spots') && window.__mgLoaded) loadMgmt(); // 탭을 열 때마다 최신 요청으로
   }
   document.querySelectorAll('[data-sec]').forEach(b => b.addEventListener('click', () => showSec(b.dataset.sec)));
-  const secFromHash = () => showSec(['shops', 'spots'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'stats');
+  const secFromHash = () => showSec(['shops', 'spots', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'stats');
   window.addEventListener('hashchange', secFromHash);
   secFromHash();
 
@@ -237,9 +263,34 @@
   const planOpts = (cur) => PLANS.map(([v, l]) => `<option value="${v}"${(cur === v || (cur === 'free' && v === 'friend')) ? ' selected' : ''}>${l}</option>`).join('');
 
   let mg = null, editing = null, lastLink = null;
-  async function loadMgmt() { try { mg = await api('list'); window.__mgLoaded = true; renderMgmt(); } catch (_) {} }
+  async function loadMgmt() { try { mg = await api('list'); window.__mgLoaded = true; renderMgmt(); if (location.hash === '#settings') loadSettings(); } catch (_) {} }
+  // ── [ADD] 관리 설정 ──
+  const ERR = { wrong_current: '지금 비밀번호가 맞지 않아요', too_short: '새 비밀번호는 10자 이상이어야 해요', mismatch: '새 비밀번호 확인이 달라요', bad_email: '이메일 형식을 확인해 주세요', no_email: '알림 이메일이 없어요' };
+  async function apiQuiet(svc, body) {
+    const r = await fetch(`/api/stats?svc=${svc}`, { method: 'POST', headers: { 'x-admin-password': getPw(), 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    let j = {}; try { j = await r.json(); } catch (_) {} return j;
+  }
+  async function loadSettings() {
+    const j = await apiQuiet('settings'); if (!j.ok) return;
+    const src = { admin: '관리 페이지에서 설정', env: 'Vercel 환경변수', '': '' };
+    $('setInfo').innerHTML = `<div>알림 이메일</div><div>${esc(j.email || '없음')} <span class="muted">${src[j.emailFrom] || ''}</span></div>
+      <div>비밀번호</div><div>${j.pwFrom === 'admin' ? `관리 페이지에서 바꿈 (${fmtT(j.pwChanged)})` : 'Vercel 환경변수 ADMIN_PASSWORD'}</div>
+      <div>메일 발송</div><div>${j.mail ? '설정됨 (Resend)' : '<span style="color:#FB7185">아직 안 됨 - RESEND_API_KEY 필요</span>'}</div>`;
+    $('emailForm').email.value = j.email || '';
+  }
+  $('emailForm').onsubmit = async (e) => { e.preventDefault(); const f = e.target;
+    const j = await apiQuiet('setEmail', { email: f.email.value.trim(), current: f.current.value }); f.current.value = '';
+    $('emailMsg').textContent = j.ok ? `저장했어요: ${j.email || '(없음)'}` : (ERR[j.error] || '저장하지 못했어요'); if (j.ok) loadSettings(); };
+  $('pwForm').onsubmit = async (e) => { e.preventDefault(); const f = e.target;
+    const j = await apiQuiet('setPassword', { current: f.current.value, next: f.next.value, confirm: f.confirm.value });
+    if (j.ok) { setPw(f.next.value); f.reset(); $('pwMsg').textContent = '바꿨어요. 다음부터 새 비밀번호로 들어오세요.'; loadSettings(); }
+    else { $('pwMsg').textContent = ERR[j.error] || '바꾸지 못했어요'; f.current.value = ''; } };
+  $('testMailBtn').onclick = async () => { const j = await apiQuiet('testMail');
+    $('testMailMsg').textContent = j.ok ? (j.sent ? `${j.to}로 보냈어요. 메일함(스팸함 포함)을 확인해 주세요.` : '보내지 못했어요 - 메일 발송(RESEND) 설정을 확인해 주세요.') : (ERR[j.error] || '실패'); };
   const FIELDS = [['name', '샵 이름'], ['spots', '포인트'], ['phone', '전화'], ['kakao', '카카오'], ['whatsapp', 'WhatsApp'], ['instagram', '인스타'], ['web', '웹'], ['address', '주소'], ['lang', '언어'], ['note', '소개']];
-  const val = (d, k) => k === 'spots' ? spotsText(d.spots) : esc(d[k] || '');
+  // [ADD] 언어 코드("ko,en") → 한국어 · English
+  const langLabel = (v) => /^[a-z]{2,3}(,[a-z]{2,3})*$/.test(v || '') ? v.split(',').map(c => { try { return new Intl.DisplayNames([c], { type: 'language' }).of(c); } catch (_) { return c; } }).join(' · ') : (v || '');
+  const val = (d, k) => k === 'spots' ? spotsText(d.spots) : k === 'lang' ? esc(langLabel(d.lang)) : esc(d[k] || '');
   const plus1y = () => { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return d.toISOString().slice(0, 10); };
   // [ADD] 유료화(2028-01-01) 전 무료(제한)는 2027-12-31까지 - api/_store.js defaultExpires와 같은 규칙
   const defExp = (plan) => plan === 'friend' ? '' : plan === 'paid' ? plus1y() : (new Date().toISOString().slice(0, 10) < '2028-01-01' ? '2027-12-31' : plus1y());
@@ -313,7 +364,7 @@
     $('shopEditor').innerHTML = `<div class="ed">
       ${FIELDS.map(([k, label]) => k === 'spots'
         ? `<label>${label} (최대 5곳)</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div>`
-        : `<label>${label}</label>${inp(k, s[k] || '')}`).join('')}
+        : `<label>${label}</label>${inp(k, s[k] || '', k === 'lang' ? '언어 코드, 최대 5개: ko,en,ja,zh,es …' : '')}`).join('')}
       <label>이메일(비공개)</label>${inp('email', s.email)}
       <label>요금제</label><select class="f" data-k="plan" id="edPlan">${planOpts(s.plan || 'trial')}</select>
       <label>만료일</label><div><input class="f" type="date" data-k="expires" id="edExp" value="${esc(s.expires || defExp(s.plan === 'free' ? 'friend' : (s.plan || 'trial')))}"><div class="muted">무료(제한)·유료: 만료 14일 전과 만료일에 결제 링크 안내 메일, 만료되면 자동 숨김 · 무료(지인): 비우면 무기한</div></div>

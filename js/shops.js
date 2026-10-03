@@ -24,6 +24,11 @@
       return shopLoad;
     }
 
+    // [ADD] 언어 코드("ko,en") → 그 언어 이름(한국어 · English). 예전 글자 입력은 그대로
+    function langLabel(v) {
+      if (!/^[a-z]{2,3}(,[a-z]{2,3})*$/.test(v || '')) return v || '';
+      return v.split(',').map(c => { try { const n = new Intl.DisplayNames([c], { type: 'language' }).of(c); return n ? n.charAt(0).toUpperCase() + n.slice(1) : c; } catch (_) { return c; } }).join(' · ');
+    }
     const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     // 이 정점의 샵(유료 섞어서 먼저 → 무료). 정점마다 한 번 정한 순서를 쓰고, 새로 열면 다시 섞음
     function shopsFor(st) {
@@ -67,7 +72,7 @@
       sendImps(list);
       box.innerHTML = `<div class="shop-note"><span>${shopEsc(t.shopPartnerOnly || '제휴 샵만 보여요')}</span><i>${shopEsc(t.shopMayChange || '정보가 바뀌었을 수 있어요')}</i></div>` +
         list.map(s => `<div class="shop-card">
-          <div class="shop-top"><span class="shop-name">${shopEsc(s.name)}</span><span class="shop-badge">${shopEsc(t.shopPartner || '제휴')}</span>${s.lang ? `<span class="shop-lang">${shopEsc(s.lang)}</span>` : ''}</div>
+          <div class="shop-top"><span class="shop-name">${shopEsc(s.name)}</span><span class="shop-badge">${shopEsc(t.shopPartner || '제휴')}</span>${s.lang ? `<span class="shop-lang">${shopEsc(langLabel(s.lang))}</span>` : ''}</div>
           ${s.note ? `<div class="shop-desc">${shopEsc(s.note)}</div>` : ''}
           ${s.address ? `<a class="shop-addr" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}" data-shop="${shopEsc(s.id)}" data-shop-k="map" target="_blank" rel="noopener">${shopEsc(s.address)}</a>` : ''}
           <div class="shop-btns">${shopLinks(s).map(([k, href, label]) => `<a class="shop-btn${k === 'tel' ? ' call' : ''}" ${linkAttrs(s, k, href)}>${SHOP_ICON[k]}<span>${shopEsc(label)}</span></a>`).join('')}</div>

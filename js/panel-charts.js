@@ -961,7 +961,8 @@
     function toggleTempUnit() {
       tempUnit = tempUnit === 'C' ? 'F' : 'C';
       const btn = document.getElementById('btn-reset');
-      if (btn) btn.innerText = '°' + tempUnit;
+      // [CHANGE] 버튼에는 "누르면 바뀔 단위"를 표시(섭씨일 땐 °F, 화씨일 땐 °C)
+      if (btn) { btn.innerText = tempUnit === 'C' ? '°F' : '°C'; btn.title = tempUnit === 'C' ? '화씨(°F)로 보기' : '섭씨(°C)로 보기'; }
 
       // [FIX] "색상바에 도씨로만 표시되는 오류" - 범례(0°C/40°C+)가 단위
       // 전환 버튼과 연결이 안 돼 있었어요. 같이 갱신합니다.

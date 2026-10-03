@@ -563,3 +563,14 @@
     .shop-chk { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
     .shop-report { margin-left: auto; font-size: 9.5px; color: var(--ui-dim); text-decoration: underline; text-align: right; }
     .shop-lang { flex: 0 1 auto; min-width: 0; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* [FIX] "현포다이브에서 '현'밖에 안 보여" - 아래 줄에서 샵 이름이 먼저 자리를 차지하고, 정점 정보 글자가 먼저 줄어들게.
+       좁은 화면(휴대폰)에서는 정점 정보 글자를 숨기고 샵 바로가기만 보여요. */
+    .station-foot.has-shop .foot-txt { flex: 1 1 0; }
+    .shop-q { flex: 0 1 auto; max-width: 100%; }
+    .shop-qn { flex: 0 1 auto; min-width: 4.5em; }
+    @media (max-width: 560px) {
+      .station-foot.has-shop .foot-txt { display: none; }
+      .station-foot.has-shop .shop-q { flex: 1 1 auto; }
+      .station-foot.has-shop .shop-all { margin-left: auto; }
+    }

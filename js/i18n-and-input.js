@@ -87,7 +87,9 @@
         visGroundShort: (name) => `실측 투명도(부산시, ${name})`,
         legendTitle: '범례', visFar: (km) => `시야 없음: 정점 좌표가 바다에서 ${km}km 떨어진 육지 안쪽이에요(좌표 확인 필요)`, legendDock: '그래프 아래로 치우기', legendUndock: '그래프 위로 다시 올리기',
         // [ADD] 근처 관측소 실측 (국립해양조사원 / NOAA)
-        obsNote: (src, pred) => `<span class="nt-obsdot"></span> 점 = 실측: ${src} · 이후 칸은 예보${pred ? ' (조석은 NOAA 예측)' : ''}`,
+        obsNote: (src, pred) => `<span class="nt-obsdot"></span> 점 = 실측: ${src} · 이후 칸은 예보${pred ? ` (조석은 ${pred === true ? 'NOAA' : pred} 예측)` : ''}`,
+        tideJmaShort: '일본 기상청 조위표',
+        tideJma: (name, km) => `조석: 일본 기상청 조위표 ${name} (${(+km).toFixed(1)}km, 出典：気象庁ホームページ) · 수온·파도는 모델 추정`,
         obsSource: (src) => `지금까지: 실측 - ${src} · 이후: 예보 모델 (Open-Meteo)`,
         obsKhoa: (name) => `국립해양조사원 ${name}`, obsKma: (name) => `기상청 ${name}`, obsBuoyWord: '부이', obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC ${id} 부이`, obsCmems: (name) => `Copernicus 해양관측 ${name}`,
         visGaugeTitle: (now, p10, p90, lastD, lastV) => `시야 추정(오늘): ${now}\n90일 통상 범위: ${p10}–${p90}\n위성 마지막 관측 ${lastD}: ${lastV}\n위성 추정값이라 실제와 다를 수 있어요`
@@ -166,7 +168,9 @@
         visGround: (name, km, v, q, a, b) => `Measured transparency (Busan city, ${name} ${km} km, approx. location, Q${q} avg ${a}–${b}): ${v}`,
         visGroundShort: (name) => `Measured transparency (Busan, ${name})`,
         legendTitle: 'Legend', visFar: (km) => `No visibility: spot coordinate is on land, ${km} km from the sea (check coordinates)`, legendDock: 'Move below the chart', legendUndock: 'Put back on the chart',
-        obsNote: (src, pred) => `<span class="nt-obsdot"></span> dot = observed: ${src} · later columns are forecast${pred ? ' (tide: NOAA prediction)' : ''}`,
+        obsNote: (src, pred) => `<span class="nt-obsdot"></span> dot = observed: ${src} · later columns are forecast${pred ? ` (tide: ${pred === true ? 'NOAA' : pred} prediction)` : ''}`,
+        tideJmaShort: 'JMA tide table',
+        tideJma: (name, km) => `Tide: Japan Meteorological Agency tide table, ${name} (${(+km).toFixed(1)} km; source: JMA) · temperature and waves are model estimates`,
         obsSource: (src) => `Up to now: observed - ${src} · later: forecast model (Open-Meteo)`,
         obsKhoa: (name) => `KHOA ${name}`, obsKma: (name) => `KMA ${name}`, obsBuoyWord: 'buoy', obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC buoy ${id}`, obsCmems: (name) => `Copernicus Marine ${name}`,
         visGaugeTitle: (now, p10, p90, lastD, lastV) => `Estimated visibility today: ${now}\n90-day typical: ${p10}–${p90}\nLast satellite obs ${lastD}: ${lastV}\nSatellite estimate; may differ from reality`

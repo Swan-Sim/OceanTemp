@@ -759,10 +759,18 @@
       if (!d || d._obs || !/^https?:$/.test(location.protocol)) return false;
       const lat = st.coords[1], lon = st.coords[0];
       let r = null;
-      if (inKoreaWaters(lat, lon)) r = await khoaObs(lat, lon, d);
+      // [ADD] 일본 정점: 기상청 조위표(공식 조석 예측)를 같이 받아요
+      const jmaP = st.country === 'Japan' ? fetchJSON(`/api/jmatide?lat=${lat}&lon=${lon}`, 25000, 0).catch(() => null) : Promise.resolve(null);
+      if (st.country === 'Japan') r = await cmemsObs(lat, lon, d).catch(() => null);
+      else if (inKoreaWaters(lat, lon)) r = await khoaObs(lat, lon, d);
       else if (inUsWaters(lat, lon)) r = await noaaObs(lat, lon, d);
       else r = await cmemsObs(lat, lon, d);
-      if (!r) { d._obs = { sources: [] }; return false; }
+      const jma = await jmaP;
+      if (!r) {
+        d._obs = { sources: [] };
+        if (jma && jma.ok) { applyJmaTide(d, jma, []); return true; }
+        return false;
+      }
       const h = r.hourly;
       d.temp = splice(d.temp, h.temp);
       d.wind = splice(d.wind, h.wind);
@@ -781,8 +789,21 @@
         spliceTideRelative(d, h.tide); // 한국: 관측소 기준면 → 평균해면 기준으로 맞춤
       }
       d._obs = { sources: r.sources };
+      if (jma && jma.ok) applyJmaTide(d, jma, h.tide);
       if (h.temp.length) st.curTemp = +h.temp[h.temp.length - 1].y.toFixed(1);
       return true;
+    }
+
+    // [ADD] 기상청 조위표로 조석 바꾸기: 실측 조위가 있으면 그 뒤부터, 없으면 표 전체를 공식 예측으로(둘 다 평균해면 기준 m)
+    function applyJmaTide(d, jma, obsTide) {
+      const obs = (obsTide || []).map(o => ({ x: o.x, y: +o.y.toFixed(2), obs: true }));
+      const last = obs.length ? obs[obs.length - 1].x : -Infinity;
+      const pred = jma.series.filter(p => p.x > last && p.x >= d.from - HOUR_MS && p.x <= d.to + HOUR_MS);
+      if (pred.length < 12) return;
+      d.tide = [...obs, ...pred];
+      d.extremes = [...recomputeExtremes(obs).filter(e => e.x < last - 2 * HOUR_MS), ...jma.hilo.filter(e => e.x > last)];
+      d._tidePred = 'jma';
+      d._tideJma = jma.station; // { code, name, dist }
     }
 
     // 표 아래 출처 문구용: "국립해양조사원 서귀포 관측소(1.1km) · NDBC 46026 부이(28km)"

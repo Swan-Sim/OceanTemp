@@ -610,7 +610,8 @@
           `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
           `<button class="nt-arrow" data-dir="1" aria-label="${t.nextDay}">${CHEVRON_SVG(1)}</button>` +
         `</div>` +
-        `<div class="nt-note">${d._obs && d._obs.sources.length ? t.obsNote(obsSourceText(d._obs.sources), !!d._tidePred) : t.tideNote}</div>`;
+        `<div class="nt-note">${d._obs && d._obs.sources.length ? t.obsNote(obsSourceText(d._obs.sources), d._tidePred === 'jma' ? t.tideJmaShort : !!d._tidePred)
+          : d._tideJma ? t.tideJma(d._tideJma.name, d._tideJma.dist) : t.tideNote}</div>`;
       const sc = box.querySelector('.nt-scroll');
       const toNow = () => Math.max(0, nowX - (sc.clientWidth - 58) / 2);
       // 같은 정점을 다시 그릴 땐(데이터 도착 등) 보던 위치 유지, 새 정점이면 "지금"으로

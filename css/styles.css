@@ -560,3 +560,5 @@
       .search-panel { top: 46px; right: 8px; }
     }
     .station-foot.has-shop .foot-txt { text-align: right; }
+    .shop-chk { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .shop-report { margin-left: auto; font-size: 9.5px; color: var(--ui-dim); text-decoration: underline; text-align: right; }

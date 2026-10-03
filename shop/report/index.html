@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>샵 정보 이의 제기 · otemp.app</title>
+<!-- [ADD] 샵 정보 이의 제기: 본인이 등록하지 않음 · 업주가 바뀜 · 정보가 틀림 · 폐업 등.
+     보낸 내용은 /admin(샵 탭 → 이의 제기)에서 운영자가 확인해요. -->
+<style>
+  :root { --bg:#070B14; --bg2:#0B1120; --line:rgba(255,255,255,.1); --text:rgba(255,255,255,.92); --muted:#8A94A6; --dim:#5B6474; --accent:#FFB000; --ok:#34D399; --err:#FB7185; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 600px; margin: 0 auto; padding: 20px 16px 60px; }
+  .top { display: flex; justify-content: space-between; font-size: 13px; } .top a { color: var(--muted); text-decoration: none; }
+  h1 { font-size: 21px; margin: 10px 0 4px; } .lead { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 0 0 16px; }
+  .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  .shop { font-size: 16px; font-weight: 700; } .shop small { display: block; color: var(--muted); font-weight: 400; font-size: 12.5px; margin-top: 2px; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 6px; } label b { color: var(--accent); }
+  .opts { display: grid; gap: 6px; } .opt { display: flex; gap: 10px; align-items: center; font-size: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+  .opt input { margin: 0; } .opt:has(input:checked) { border-color: rgba(255,176,0,.6); background: rgba(255,176,0,.08); }
+  input[type=email], textarea { width: 100%; font: inherit; font-size: 15px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; }
+  textarea { min-height: 100px; } .hint { font-size: 11.5px; color: var(--dim); margin-top: 4px; }
+  .btn { font: inherit; font-size: 15px; font-weight: 700; padding: 12px 18px; border-radius: 10px; border: 1px solid rgba(255,176,0,.6); background: rgba(255,176,0,.16); color: #ffd27a; cursor: pointer; }
+  .msg { font-size: 13px; margin-top: 10px; } .msg.err { color: var(--err); } .msg.ok { color: var(--ok); }
+  .hp { position: absolute; left: -9999px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="/">← otemp.app</a><a href="#" id="langBtn"></a></div>
+  <h1 data-k="title"></h1>
+  <p class="lead" data-k="lead"></p>
+  <div class="card"><div class="shop" id="shopBox">…</div></div>
+  <form id="f" class="card" novalidate>
+    <label><span data-k="reason"></span> <b>*</b></label>
+    <div class="opts" id="reasons"></div>
+    <label><span data-k="who"></span> <b>*</b></label>
+    <div class="opts" id="whos"></div>
+    <label><span data-k="detail"></span> <b>*</b></label>
+    <textarea name="detail" maxlength="1000" data-ph="detailPh"></textarea>
+    <label><span data-k="email"></span> <b>*</b></label>
+    <input type="email" name="email" autocomplete="email">
+    <div class="hint" data-k="emailHint"></div>
+    <input class="hp" name="website2" tabindex="-1" autocomplete="off">
+    <div style="margin-top:16px"><button class="btn" id="submitBtn" type="submit" data-k="submit"></button></div>
+    <div class="msg" id="msg"></div>
+  </form>
+</div>
+<script>
+const T = {
+  ko: { title: '샵 정보 이의 제기', lead: '이 샵 정보가 잘못됐거나, 본인이 등록하지 않았거나, 업주가 바뀌었다면 알려주세요. 운영자가 확인 후 정보 수정·게시 중단·담당자 변경을 해요.',
+    reason: '어떤 문제인가요?', who: '어떤 관계인가요?', detail: '자세한 내용', detailPh: '예: 2026년 9월에 샵을 인수했어요. 새 연락처는 …', email: '연락받을 이메일',
+    emailHint: '확인 결과와(업주인 경우) 새 수정 링크를 이 주소로 보내요. 공개되지 않아요.', submit: '이의 제기 보내기', sending: '보내는 중…',
+    ok: '접수했어요. 확인 후 이메일로 연락드릴게요.', unknown: '샵 정보를 찾지 못했어요(이미 내려갔을 수 있어요).',
+    reasons: { not_mine: '본인(우리 샵)이 등록하지 않았어요', owner_changed: '업주(운영자)가 바뀌었어요', wrong_info: '연락처·주소 등 정보가 틀려요', closed: '폐업했거나 더 이상 운영하지 않아요', other: '기타' },
+    whos: { owner: '이 샵의 업주·직원', customer: '이용자(손님)', other: '기타' },
+    e_need_fields: '문제, 관계, 자세한 내용, 이메일을 모두 넣어주세요.', e_too_many: '잠시 후 다시 시도해 주세요.', e_default: '보내지 못했어요. 잠시 후 다시 시도해 주세요.', other: 'English' },
+  en: { title: 'Report a shop listing', lead: 'Tell us if this listing is wrong, was not registered by you, or the shop has a new owner. We will review it and fix, remove, or hand it over.',
+    reason: 'What is the issue?', who: 'Who are you?', detail: 'Details', detailPh: 'e.g. I took over the shop in September 2026. New contact: …', email: 'Your email',
+    emailHint: 'We send the result (and a new edit link if you are the owner) here. Not shown publicly.', submit: 'Send report', sending: 'Sending…',
+    ok: 'Received. We will review it and email you.', unknown: 'Shop not found (it may already be removed).',
+    reasons: { not_mine: 'We did not register this', owner_changed: 'The shop has a new owner', wrong_info: 'Contact, address or other info is wrong', closed: 'Closed / no longer operating', other: 'Other' },
+    whos: { owner: 'Owner or staff of this shop', customer: 'Customer', other: 'Other' },
+    e_need_fields: 'Please fill in the issue, who you are, details and email.', e_too_many: 'Please try again later.', e_default: 'Could not send. Please try again later.', other: '한국어' }
+};
+let lang = (navigator.language || '').startsWith('ko') ? 'ko' : 'en';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const shopId = new URLSearchParams(location.search).get('id') || '';
+let shop = null;
+function apply() {
+  const L = T[lang]; document.documentElement.lang = lang; document.title = L.title + ' · otemp.app';
+  document.querySelectorAll('[data-k]').forEach(el => { const v = L[el.dataset.k]; if (typeof v === 'string') el.textContent = v; });
+  document.querySelectorAll('[data-ph]').forEach(el => { el.placeholder = L[el.dataset.ph] || ''; });
+  $('langBtn').textContent = L.other;
+  const keep = (name) => (document.querySelector(`input[name=${name}]:checked`) || {}).value;
+  const r0 = keep('reason'), w0 = keep('who');
+  $('reasons').innerHTML = Object.entries(L.reasons).map(([k, v]) => `<label class="opt"><input type="radio" name="reason" value="${k}"${k === r0 ? ' checked' : ''}>${esc(v)}</label>`).join('');
+  $('whos').innerHTML = Object.entries(L.whos).map(([k, v]) => `<label class="opt"><input type="radio" name="who" value="${k}"${k === w0 ? ' checked' : ''}>${esc(v)}</label>`).join('');
+  $('shopBox').innerHTML = shop ? `${esc(shop.name)}<small>${esc(shop.address || '')}</small>` : (shopId ? esc(L.unknown) : '');
+}
+$('langBtn').onclick = (e) => { e.preventDefault(); lang = lang === 'ko' ? 'en' : 'ko'; apply(); };
+apply();
+fetch('/api/shops').then(r => r.json()).then(j => { shop = (j.shops || []).find(s => String(s.id) === shopId) || null; apply(); }).catch(() => apply());
+$('f').onsubmit = async (e) => {
+  e.preventDefault();
+  const L = T[lang], btn = $('submitBtn'), msg = $('msg');
+  const body = Object.fromEntries(new FormData(e.target).entries()); body.id = shopId;
+  btn.disabled = true; btn.textContent = L.sending; msg.textContent = '';
+  let j = {};
+  try { const r = await fetch('/api/shops?svc=report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); j = await r.json(); } catch (_) {}
+  btn.disabled = false; btn.textContent = L.submit;
+  if (!j.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + j.error] || L.e_default; return; }
+  e.target.innerHTML = `<div class="msg ok" style="margin:0">${esc(L.ok)}</div>`;
+};
+</script>
+</body>
+</html>

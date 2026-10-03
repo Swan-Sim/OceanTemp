@@ -40,7 +40,7 @@
   .req .h { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; font-weight: 700; }
   .tag { white-space: nowrap; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; border: 1px solid rgba(255,176,0,.5); color: var(--accent); }
   .tag.edit { border-color: rgba(56,189,248,.5); color: #7dd3fc; } .tag.off { border-color: var(--line); color: var(--muted); }
-  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 3px 10px; font-size: 12.5px; margin: 8px 0; } .kv div:nth-child(odd) { color: var(--muted); }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 3px 10px; font-size: 12.5px; margin: 8px 0; } .kv div:nth-child(odd) { color: var(--muted); } .kv div { min-width: 0; overflow-wrap: anywhere; }
   .kv .old { color: var(--muted); text-decoration: line-through; margin-right: 6px; } .kv .new { color: #7dd3fc; }
   .muted { color: var(--muted); font-size: 12px; } .hint { color: var(--muted); font-size: 11.5px; margin-top: 8px; line-height: 1.6; }
   input.f, select.f, textarea.f { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 13px; }
@@ -82,6 +82,7 @@
       <span style="flex:1"></span><button id="logout">로그아웃</button>
     </div>
     <div id="secShops" class="sec" style="display:none">
+      <div class="card" id="reportCard" style="display:none"><h2>이의 제기</h2><div id="shopReports"></div></div>
       <div class="card"><h2>승인 대기 (새 등록 · 수정 요청)</h2><div id="shopReqs"></div></div>
       <div class="card"><h2>등록된 샵</h2>
         <div class="row" style="margin-bottom:10px"><button class="primary" id="shopNew">＋ 직접 추가</button>
@@ -240,13 +241,28 @@
   const FIELDS = [['name', '샵 이름'], ['spots', '포인트'], ['phone', '전화'], ['kakao', '카카오'], ['whatsapp', 'WhatsApp'], ['instagram', '인스타'], ['web', '웹'], ['address', '주소'], ['lang', '언어'], ['note', '소개']];
   const val = (d, k) => k === 'spots' ? spotsText(d.spots) : esc(d[k] || '');
   const plus1y = () => { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return d.toISOString().slice(0, 10); };
+  // [ADD] 유료화(2028-01-01) 전 무료(제한)는 2027-12-31까지 - api/_store.js defaultExpires와 같은 규칙
+  const defExp = (plan) => plan === 'friend' ? '' : plan === 'paid' ? plus1y() : (new Date().toISOString().slice(0, 10) < '2028-01-01' ? '2027-12-31' : plus1y());
   const fmtT = (t) => t ? new Date(t).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' }) : '';
 
   function renderMgmt() {
     if (!mg) return;
     (mg.spots || []).forEach(s => { spotNames[s.no] = s.label || s.name; });
     const shopById = Object.fromEntries((mg.shops || []).map(s => [String(s.id), s]));
-    $('bShops').textContent = mg.reqs.length || ''; $('bSpots').textContent = mg.spotreqs.length || '';
+    const reports = mg.reports || [];
+    $('bShops').textContent = (mg.reqs.length + reports.length) || '';
+    // [ADD] 이의 제기
+    const REASON = { not_mine: '본인이 등록하지 않음', owner_changed: '업주가 바뀜', wrong_info: '정보가 틀림', closed: '폐업', other: '기타' };
+    const WHO = { owner: '업주·직원', customer: '이용자', other: '기타' };
+    $('reportCard').style.display = reports.length ? '' : 'none';
+    $('shopReports').innerHTML = reports.sort((a, b) => a.at - b.at).map(r => {
+      const s = shopById[String(r.shopId)];
+      return `<div class="req" data-rep="${esc(r.id)}">
+        <div class="h"><span class="tag" style="border-color:rgba(251,113,133,.6);color:#FB7185">${esc(REASON[r.reason] || r.reason)}</span>${esc(s ? s.name : r.shopName)}<span class="muted">${fmtT(r.at)} · ${esc(WHO[r.who] || r.who)} · ${esc(r.email)}</span></div>
+        <div class="kv"><div>내용</div><div>${esc(r.detail)}</div>${s ? `<div>지금 담당 이메일</div><div>${esc(s.email || '없음')}</div><div>지금 연락처</div><div>${esc(s.phone || '')} ${esc(s.kakao || '')} ${esc(s.instagram || '')}</div>` : '<div>샵</div><div>이미 삭제됨</div>'}</div>
+        <div class="actions">${s ? `<button class="primary" data-act="rtransfer" title="샵 이메일을 신고자로 바꾸고 새 수정 링크를 신고자에게 보내요(예전 링크 끊김)">신고자를 새 담당자로</button><button data-act="rhide">샵 숨기기</button>` : ''}<button data-act="rdone">처리 완료</button></div>
+        ${lastLink && lastLink.rep === r.id ? `<div class="linkbox">${esc(lastLink.url)}</div>` : ''}</div>`;
+    }).join(''); $('bSpots').textContent = mg.spotreqs.length || '';
     // 샵 요청
     $('shopReqs').innerHTML = mg.reqs.length ? mg.reqs.sort((a, b) => a.at - b.at).map(r => {
       const old = r.type === 'edit' ? shopById[String(r.shopId)] : null;
@@ -259,16 +275,16 @@
         <div class="h"><span class="tag ${r.type === 'edit' ? 'edit' : ''}">${r.type === 'edit' ? '수정 요청' : '새 등록'}</span>${esc(r.data.name)}<span class="muted">${fmtT(r.at)} · ${esc(r.email)}</span></div>
         <div class="kv">${rows}${r.memo ? `<div>남긴 말</div><div>${esc(r.memo)}</div>` : ''}</div>
         <div class="actions">${r.type === 'new' ? `<select class="f" data-plan>${planOpts('trial')}</select>
-          <input class="f" type="date" data-exp value="${plus1y()}" title="만료일 - 무료(제한)·유료는 1년, 무료(지인)은 비워두면 무기한"> ` : ''}
+          <input class="f" type="date" data-exp value="${defExp('trial')}" title="만료일 - 무료(제한)·유료는 1년, 무료(지인)은 비워두면 무기한"> ` : ''}
           <button class="primary" data-act="approve">승인</button><button data-act="reject">거절</button></div></div>`;
     }).join('') : '<div class="muted">대기 중인 요청이 없어요</div>';
-    $('shopReqs').querySelectorAll('select[data-plan]').forEach(sel => sel.onchange = () => { const e = sel.parentElement.querySelector('[data-exp]'); e.value = sel.value === 'friend' ? '' : (e.value || plus1y()); });
+    $('shopReqs').querySelectorAll('select[data-plan]').forEach(sel => sel.onchange = () => { const e = sel.parentElement.querySelector('[data-exp]'); e.value = defExp(sel.value); });
     // 등록된 샵
     const today = new Date().toISOString().slice(0, 10);
     $('shopList').innerHTML = mg.shops.length ? `<table>${mg.shops.sort((a, b) => +a.id - +b.id).map(s => `<tr data-id="${esc(s.id)}">
       <td><b>${esc(s.name)}</b> <span class="tag ${s.plan === 'paid' ? '' : 'off'}">${planKo(s.plan)}</span>
         ${!s.live ? `<span class="tag off">${s.show === false ? '숨김' : '만료'}</span>` : ''}
-        <div class="muted">${spotsText(s.spots)}${s.expires ? ` · ~${esc(s.expires)}${s.expires < today ? ' (지남)' : ''}` : ''} · ${esc(s.email || '이메일 없음')} · 확인 ${esc(s.checked || '')}</div>
+        <div class="muted">${spotsText(s.spots)}${s.expires ? ` · ~${esc(s.expires)}${s.expires < today ? ' (지남)' : ''}` : ''} · ${esc(s.email || '이메일 없음')} · 확인 ${esc(s.checked || '')} · 약관 ${s.terms ? '동의 ' + esc(s.terms) : '<b style="color:#FB7185">미동의</b>'}</div>
         ${s.notice && s.notice.for === s.expires ? `<div class="muted">만료 안내: ${s.notice.soon ? '14일 전 보냄' : ''}${s.notice.end ? ' · 종료 안내 보냄' : ''}</div>` : ''}
         ${lastLink && lastLink.id === String(s.id) ? `<div class="linkbox">${esc(lastLink.url)}${lastLink.mailed ? (lastLink.toAdmin ? ' (샵 이메일이 없어 내 메일로 보냈어요)' : ' (메일로도 보냈어요)') : ''}</div>` : ''}</td>
       <td class="act"><button data-act="edit">수정</button> <button data-act="link">수정 링크</button> <button data-act="del">삭제</button></td></tr>`).join('')}</table>` : '<div class="muted">아직 등록된 샵이 없어요</div>';
@@ -300,13 +316,13 @@
         : `<label>${label}</label>${inp(k, s[k] || '')}`).join('')}
       <label>이메일(비공개)</label>${inp('email', s.email)}
       <label>요금제</label><select class="f" data-k="plan" id="edPlan">${planOpts(s.plan || 'trial')}</select>
-      <label>만료일</label><div><input class="f" type="date" data-k="expires" id="edExp" value="${esc(s.expires || (s.plan === 'friend' || s.plan === 'free' ? '' : plus1y()))}"><div class="muted">무료(제한)·유료: 만료 14일 전과 만료일에 결제 링크 안내 메일, 만료되면 자동 숨김 · 무료(지인): 비우면 무기한</div></div>
+      <label>만료일</label><div><input class="f" type="date" data-k="expires" id="edExp" value="${esc(s.expires || defExp(s.plan === 'free' ? 'friend' : (s.plan || 'trial')))}"><div class="muted">무료(제한)·유료: 만료 14일 전과 만료일에 결제 링크 안내 메일, 만료되면 자동 숨김 · 무료(지인): 비우면 무기한</div></div>
       <label>보이기</label><select class="f" data-k="show"><option value="1"${s.show !== false ? ' selected' : ''}>보이기</option><option value="0"${s.show === false ? ' selected' : ''}>숨기기</option></select>
       <label>확인 날짜</label>${inp('checked', s.checked, 'YYYY-MM')}
       <span></span><div class="row"><button class="primary" data-act="esave">저장</button><button data-act="ecancel">취소</button></div></div>`;
     edSpots = (s.spots || []).slice();
     renderEdChips();
-    $('edPlan').onchange = () => { const e = $('edExp'); e.value = $('edPlan').value === 'friend' ? '' : (e.value || plus1y()); };
+    $('edPlan').onchange = () => { $('edExp').value = defExp($('edPlan').value); };
     $('edSpotQ').oninput = () => {
       const q = $('edSpotQ').value.trim().toLowerCase(), box = $('edSugg');
       if (!q) { box.style.display = 'none'; return; }
@@ -328,7 +344,13 @@
     const b = e.target.closest('button[data-act]'); if (!b) return;
     const act = b.dataset.act, req = b.closest('[data-req]'), sreq = b.closest('[data-sreq]'), tr = b.closest('tr');
     try {
-      if (act === 'approve') { await api('shopApprove', { reqId: req.dataset.req, plan: (req.querySelector('[data-plan]') || {}).value, expires: (req.querySelector('[data-exp]') || {}).value }); }
+      const rep = b.closest('[data-rep]');
+      if (act === 'rdone') { await api('reportDone', { id: rep.dataset.rep }); }
+      else if (act === 'rhide') { if (!confirm('이 샵을 사이트에서 숨기고 이의 제기를 완료할까요? (나중에 수정 → 보이기로 되돌릴 수 있어요)')) return; await api('reportHide', { id: rep.dataset.rep }); }
+      else if (act === 'rtransfer') { if (!confirm('신고자를 이 샵의 새 담당자로 바꿀까요?\n- 샵 이메일이 신고자 이메일로 바뀌고\n- 새 수정 링크가 신고자에게 가요(예전 링크·대기 중 수정 요청은 취소)\n- 업주 확인(사업자등록증 등)을 먼저 하셨는지 확인하세요.')) return;
+        const j = await api('reportTransfer', { id: rep.dataset.rep }); try { await navigator.clipboard.writeText(j.url); } catch (_) {}
+        alert(`새 담당자에게 ${j.mailed ? '메일로 보냈어요' : '보낼 링크를 복사했어요(메일 설정 전)'}:\n${j.url}`); }
+      else if (act === 'approve') { await api('shopApprove', { reqId: req.dataset.req, plan: (req.querySelector('[data-plan]') || {}).value, expires: (req.querySelector('[data-exp]') || {}).value }); }
       else if (act === 'reject') { if (!confirm('이 요청을 거절할까요? (요청 내용은 지워져요)')) return; await api('shopReject', { reqId: req.dataset.req }); }
       else if (act === 'edit') { editing = Object.assign({}, mg.shops.find(s => String(s.id) === tr.dataset.id)); renderEditor(); $('shopEditor').scrollIntoView({ behavior: 'smooth' }); return; }
       else if (act === 'ecancel') { editing = null; renderEditor(); return; }

@@ -9,7 +9,7 @@
 const crypto = require('crypto');
 const { redisPipeline } = require('./_redis');
 
-const K = { shops: 'shops:v1', req: 'shopreq:v1', tok: 'shoptok:v1', seq: 'shops:seq', spots: 'spots:extra', spotreq: 'spotreq:v1' };
+const K = { reports: 'shoprep:v1', shops: 'shops:v1', req: 'shopreq:v1', tok: 'shoptok:v1', seq: 'shops:seq', spots: 'spots:extra', spotreq: 'spotreq:v1' };
 const STATION_SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
 
 async function R(...cmds) {
@@ -43,6 +43,12 @@ const MAX_SPOTS = 5; // [CHANGE] 샵 하나당 포인트는 5곳까지
 const spotList = (v) => [...new Set((Array.isArray(v) ? v : String(v || '').split(/[;,\s]+/)).map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 100000))].slice(0, MAX_SPOTS);
 // [ADD] 요금제: trial = 무료(제한, 1년 뒤 종료) · friend = 무료(지인, 기간 없음) · paid = 유료. 예전 'free'는 지인으로 봄
 const planOf = (v) => { v = String(v || '').toLowerCase(); return /^paid|^유료/.test(v) ? 'paid' : /^trial|제한|체험/.test(v) ? 'trial' : /^friend|^free|지인|^무료/.test(v) ? 'friend' : 'trial'; };
+// [ADD] 약관 버전(terms/index.html과 같게). 바꾸면 기존 샵은 다음 수정 때 다시 동의
+const TERMS_VERSION = '2026-10-03';
+// [ADD] 유료화는 2028-01-01부터. 그 전 무료(제한)는 2027-12-31까지, 이후엔 1년
+const PAID_START = '2028-01-01';
+const defaultExpires = (plan) => plan === 'friend' ? '' : plan === 'paid' ? plusYear()
+  : (new Date().toISOString().slice(0, 10) < PAID_START ? '2027-12-31' : plusYear());
 const PLAN_KO = { trial: '무료(제한)', friend: '무료(지인)', paid: '유료' };
 const plusYear = (from) => { const d = from ? new Date(from) : new Date(); d.setUTCFullYear(d.getUTCFullYear() + 1); return d.toISOString().slice(0, 10); };
 const dateStr = (v) => { v = str(v, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ''; };
@@ -131,5 +137,5 @@ async function sendMail(to, subject, html) {
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
-module.exports = { MAX_SPOTS, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
+module.exports = { TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
   csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET };

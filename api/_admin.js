@@ -29,9 +29,9 @@ module.exports = async function admin(req, res) {
   const bad = (e) => res.status(400).json({ ok: false, error: e });
 
   if (svc === 'list') {
-    const [shops, reqs, spots, spotreqs] = await Promise.all([S.hgetallJSON(K.shops), S.hgetallJSON(K.req), S.hgetallJSON(K.spots), S.hgetallJSON(K.spotreq)]);
+    const [shops, reqs, spots, spotreqs, reports] = await Promise.all([S.hgetallJSON(K.shops), S.hgetallJSON(K.req), S.hgetallJSON(K.spots), S.hgetallJSON(K.spotreq), S.hgetallJSON(K.reports)]);
     const strip = (s) => { const { tok, ...rest } = s; return { ...rest, live: S.isLive(s) }; };
-    return ok({ shops: Object.values(shops).map(strip), reqs: Object.values(reqs).map(({ tok, ...r }) => r), spots: Object.values(spots), spotreqs: Object.values(spotreqs) });
+    return ok({ shops: Object.values(shops).map(strip), reqs: Object.values(reqs).map(({ tok, ...r }) => r), spots: Object.values(spots), spotreqs: Object.values(spotreqs), reports: Object.values(reports) });
   }
 
   // 샵 요청 승인: 새 등록이면 번호를 주고 게시, 수정이면 기존 샵에 반영(요금제·만료일은 관리자만)
@@ -45,7 +45,7 @@ module.exports = async function admin(req, res) {
       const id = String(n);
       const plan = S.planOf(b.plan);
       // 무료(제한)·유료는 만료일을 비우면 1년 뒤로 자동
-      const shop = { id, ...data, email: rq.email, plan, expires: S.dateStr(b.expires) || (plan === 'friend' ? '' : S.plusYear()),
+      const shop = { id, ...data, email: rq.email, plan, expires: S.dateStr(b.expires) || S.defaultExpires(plan), terms: rq.terms || '', termsAt: rq.termsAt || 0,
         show: true, checked: ym(), created: Date.now(), updated: Date.now(), tok: rq.tok };
       await R(['HSET', K.shops, id, JSON.stringify(shop)], ['HSET', K.tok, rq.tok, 's:' + id], ['HDEL', K.req, rq.id]);
       await S.sendMail(rq.email, '[otemp.app] 샵이 등록됐어요 / Your shop is live',
@@ -56,6 +56,7 @@ module.exports = async function admin(req, res) {
     if (!sraw) { await R(['HDEL', K.req, rq.id]); return bad('no_shop'); }
     const shop = JSON.parse(sraw);
     Object.assign(shop, data, { email: rq.email || shop.email, checked: ym(), updated: Date.now() });
+    if (rq.terms) { shop.terms = rq.terms; shop.termsAt = rq.termsAt; }
     await R(['HSET', K.shops, String(shop.id), JSON.stringify(shop)], ['HDEL', K.req, rq.id]);
     return ok({ id: shop.id });
   }
@@ -76,7 +77,7 @@ module.exports = async function admin(req, res) {
     if (id) { const [raw] = await R(['HGET', K.shops, id]); if (!raw) return bad('no_shop'); shop = JSON.parse(raw); }
     else { const [n] = await R(['INCR', K.seq]); id = String(n); shop = { id, created: Date.now() }; }
     const plan = S.planOf(b.plan), isNew = !b.id;
-    const expires = S.dateStr(b.expires) || (plan === 'friend' ? '' : (shop.expires || S.plusYear()));
+    const expires = S.dateStr(b.expires) || (plan === 'friend' ? '' : (shop.expires || S.defaultExpires(plan)));
     if (expires !== shop.expires) shop.notice = {}; // 기간이 바뀌면 만료 안내를 다시 보낼 수 있게
     Object.assign(shop, data, { email: S.email(b.email), plan, expires,
       show: b.show !== false, checked: S.str(b.checked, 10) || shop.checked || ym(), updated: Date.now() });
@@ -107,6 +108,34 @@ module.exports = async function admin(req, res) {
     const shops = Object.values(await S.hgetallJSON(K.shops)).filter(s => !s.email);
     return ok({ links: await linksToAdmin(shops, base) });
   }
+  // [ADD] 이의 제기 처리
+  //  reportDone: 처리 완료(목록에서 지움) · reportHide: 샵 숨기고 완료
+  //  reportTransfer: 신고자를 새 담당자로(샵 이메일 변경 + 새 수정 링크를 신고자에게, 예전 링크 끊김)
+  if (svc === 'reportDone' || svc === 'reportHide' || svc === 'reportTransfer') {
+    const [raw] = await R(['HGET', K.reports, String(b.id)]);
+    if (!raw) return bad('no_report');
+    const rp = JSON.parse(raw);
+    const [sraw] = await R(['HGET', K.shops, String(rp.shopId)]);
+    let out = {};
+    if (sraw && svc !== 'reportDone') {
+      const shop = JSON.parse(sraw);
+      if (svc === 'reportHide') { shop.show = false; await R(['HSET', K.shops, String(shop.id), JSON.stringify(shop)]); }
+      if (svc === 'reportTransfer') {
+        const { token, hash } = S.newToken();
+        const cmds = [['HSET', K.tok, hash, 's:' + shop.id], ['HDEL', K.req, 'e' + shop.id]]; // 이전 담당자의 대기 중 수정 요청도 취소
+        if (shop.tok) cmds.push(['HDEL', K.tok, shop.tok]);
+        Object.assign(shop, { tok: hash, email: rp.email, terms: '', termsAt: 0, updated: Date.now() }); // 새 담당자는 약관 동의부터 다시
+        cmds.push(['HSET', K.shops, String(shop.id), JSON.stringify(shop)]);
+        await R(...cmds);
+        const url = S.editUrl(base, token);
+        const mailed = await S.sendMail(rp.email, '[otemp.app] 샵 정보 수정 링크 / Your edit link',
+          `<p>${S.esc(shop.name)} 담당자로 등록됐어요. 아래 링크에서 약관 동의 후 정보를 고칠 수 있어요(고친 내용은 확인 후 반영).</p><p><a href="${url}">${url}</a></p><hr><p>You are now the contact for this listing. Use the link above to update it.</p>`);
+        out = { url, mailed };
+      }
+    }
+    await R(['HDEL', K.reports, rp.id]);
+    return ok(out);
+  }
   if (svc === 'shopDelete') {
     const id = String(b.id);
     const [raw] = await R(['HGET', K.shops, id]);
@@ -132,7 +161,7 @@ module.exports = async function admin(req, res) {
       const [n] = await R(['INCR', K.seq]);
       const plan = S.planOf(r.plan);
       const shop = { id: String(n), ...data, email: S.email(r.email), plan,
-        expires: S.dateStr(r.expires) || (plan === 'friend' ? '' : S.plusYear()), show: !/^n/i.test(r.show || ''), checked: S.str(r.checked, 10) || ym(), created: Date.now(), updated: Date.now() };
+        expires: S.dateStr(r.expires) || S.defaultExpires(plan), show: !/^n/i.test(r.show || ''), checked: S.str(r.checked, 10) || ym(), created: Date.now(), updated: Date.now() };
       await R(['HSET', K.shops, shop.id, JSON.stringify(shop)]);
       names.add(data.name); added++; newOnes.push(shop);
     }

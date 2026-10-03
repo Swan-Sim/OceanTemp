@@ -64,17 +64,19 @@
       const list = shopsFor(selectedStation);
       const reg = `<a class="shop-reg" href="/shop/?spot=${encodeURIComponent(selectedStation && selectedStation.no || '')}" target="_blank" rel="noopener">＋ ${shopEsc(t.shopRegister || '샵 등록하기')}</a>`;
       if (!list.length) { box.innerHTML = `<div class="shop-empty"><p>${shopEsc(t.shopEmpty || '아직 이 포인트에 등록된 제휴 샵이 없어요.')}</p>${reg}</div>`; return; }
+      sendImps(list);
       box.innerHTML = `<div class="shop-note"><span>${shopEsc(t.shopPartnerOnly || '제휴 샵만 보여요')}</span><i>${shopEsc(t.shopMayChange || '정보가 바뀌었을 수 있어요')}</i></div>` +
         list.map(s => `<div class="shop-card">
           <div class="shop-top"><span class="shop-name">${shopEsc(s.name)}</span><span class="shop-badge">${shopEsc(t.shopPartner || '제휴')}</span>${s.lang ? `<span class="shop-lang">${shopEsc(s.lang)}</span>` : ''}</div>
           ${s.note ? `<div class="shop-desc">${shopEsc(s.note)}</div>` : ''}
           ${s.address ? `<a class="shop-addr" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}" data-shop="${shopEsc(s.id)}" data-shop-k="map" target="_blank" rel="noopener">${shopEsc(s.address)}</a>` : ''}
           <div class="shop-btns">${shopLinks(s).map(([k, href, label]) => `<a class="shop-btn${k === 'tel' ? ' call' : ''}" ${linkAttrs(s, k, href)}>${SHOP_ICON[k]}<span>${shopEsc(label)}</span></a>`).join('')}</div>
-          ${s.checked ? `<div class="shop-chk">${shopEsc((t.shopChecked || ((d) => `확인 ${d}`))(s.checked))}</div>` : ''}
+          <div class="shop-chk">${s.checked ? shopEsc((t.shopChecked || ((d) => `확인 ${d}`))(s.checked)) : ''}<a class="shop-report" href="/shop/report/?id=${encodeURIComponent(s.id)}" target="_blank" rel="noopener">${shopEsc(t.shopReport || '이의 제기')}</a></div>
         </div>`).join('') + `<div class="shop-foot">${reg}</div>`;
     }
 
     // B. 맨 아래 정보 줄: 왼쪽 정점 정보 + 오른쪽 샵 바로가기(샵 탭에선 안 보임)
+    // [CHANGE] 아래 정보 줄: 왼쪽에 샵 바로가기(좁은 화면을 위해 "제휴" 표시는 빼고 샵 이름만), 오른쪽에 정점 정보
     function setFootInfo(text) {
       footText = text || '';
       const el = document.getElementById('st-info');
@@ -84,18 +86,22 @@
       const s = list.find(x => x.paid) || list[0];
       const quick = shopLinks(s).filter(([k]) => k === 'tel' || k === 'kakao' || k === 'whatsapp').slice(0, 2);
       el.classList.add('has-shop');
-      // [CHANGE] 제휴 샵 바로가기를 왼쪽에 먼저, 정점 정보는 오른쪽(남는 폭만큼, 넘치면 …)
-      el.innerHTML = `<span class="shop-q">` +
-        `<span class="shop-badge">${shopEsc(t.shopPartner || '제휴')}</span><span class="shop-qn">${shopEsc(s.name)}</span>` +
+      el.innerHTML = `<span class="shop-q"><span class="shop-qn">${shopEsc(s.name)}</span>` +
         quick.map(([k, href]) => `<a class="shop-ic${k === 'tel' ? ' call' : ''}" ${linkAttrs(s, k, href)} aria-label="${k}">${SHOP_ICON[k]}</a>`).join('') +
         `<button type="button" class="shop-all" data-shop="${shopEsc(s.id)}" data-shop-k="all">${shopEsc((t.shopAll || ((n) => `전체 ${n}곳 ›`))(list.length))}</button></span>` +
         `<span class="foot-txt">${shopEsc(footText)}</span>`;
-      // [ADD] 바로가기 노출 수(정점을 직접 연 경우, 정점마다 한 번)
+      sendImps([s]);
+    }
+    // 노출 수: 정점을 직접 고를 때마다 샵별 한 번(바로가기에 보였든 다이빙샵 탭에서 봤든 한 번만)
+    function sendImps(list) {
       const st = selectedStation;
-      if (st && st._userPicked && st._impFor !== st._shopOrder && /^https?:$/.test(location.protocol)) {
-        st._impFor = st._shopOrder;
+      if (!st || !st._userPicked || !/^https?:$/.test(location.protocol)) return;
+      if (st._impFor !== st._shopOrder) { st._impFor = st._shopOrder; st._impSent = new Set(); }
+      list.forEach(s => {
+        if (st._impSent.has(s.id)) return;
+        st._impSent.add(s.id);
         try { navigator.sendBeacon(`/api/shops?svc=imp&id=${encodeURIComponent(s.id)}&no=${st.no}`); } catch (_) {}
-      }
+      });
     }
 
     // 버튼 누름: 클릭 수 올리기, "전체 ›"는 샵 탭으로

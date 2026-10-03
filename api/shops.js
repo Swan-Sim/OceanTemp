@@ -135,10 +135,10 @@ module.exports = async function handler(req, res) {
       if (!f.name || !f.spots.length) return send(res, 400, { ok: false, error: 'need_name_spots' });
       if (!S.hasContact(f)) return send(res, 400, { ok: false, error: 'need_contact' });
       if (!mail) return send(res, 400, { ok: false, error: 'need_email' });
-      if (!b.agree) return send(res, 400, { ok: false, error: 'need_agree' });
+      if (!b.agree || b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' }); // [CHANGE] 약관 동의 필수
       const id = 'n' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
       const { token, hash } = S.newToken();
-      const rq = { id, type: 'new', data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now(), tok: hash };
+      const rq = { id, type: 'new', data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now(), tok: hash, terms: S.TERMS_VERSION, termsAt: Date.now() };
       await R(['HSET', K.req, id, JSON.stringify(rq)], ['HSET', K.tok, hash, 'r:' + id]);
       const base = S.baseOf(req), url = S.editUrl(base, token);
       await notifyAdmin(`[otemp] 새 샵 등록 요청: ${f.name}`, `<p>${S.esc(f.name)} (${S.esc(mail)})</p><p><a href="${base}/admin/#shops">관리 페이지에서 확인</a></p>`);
@@ -154,7 +154,7 @@ module.exports = async function handler(req, res) {
         const [raw] = await R(['HGET', K.req, tk.id]);
         if (!raw) return send(res, 404, { ok: false, error: 'bad_link' });
         const rq = JSON.parse(raw);
-        return send(res, 200, { ok: true, status: 'pending_new', data: rq.data, email: rq.email });
+        return send(res, 200, { ok: true, status: 'pending_new', data: rq.data, email: rq.email, termsOk: rq.terms === S.TERMS_VERSION, terms: S.TERMS_VERSION });
       }
       const [raw, pend] = await R(['HGET', K.shops, tk.id], ['HGET', K.req, 'e' + tk.id]);
       if (!raw) return send(res, 404, { ok: false, error: 'bad_link' });
@@ -163,7 +163,8 @@ module.exports = async function handler(req, res) {
       let stats = null;
       try { stats = await shopStats(s, days); } catch (_) {}
       return send(res, 200, { ok: true, status: p ? 'pending_edit' : (S.isLive(s) ? 'live' : 'hidden'),
-        data: p ? p.data : S.shopFields(s), email: (p && p.email) || s.email || '', live: S.publicShop(s), expires: s.expires || '', plan: s.plan || 'free', stats });
+        data: p ? p.data : S.shopFields(s), email: (p && p.email) || s.email || '', live: S.publicShop(s), expires: s.expires || '', plan: s.plan || 'free', stats,
+        termsOk: s.terms === S.TERMS_VERSION || !!(p && p.terms === S.TERMS_VERSION), terms: S.TERMS_VERSION });
     }
 
     if (svc === 'edit' && req.method === 'POST') {
@@ -179,14 +180,19 @@ module.exports = async function handler(req, res) {
         const [raw] = await R(['HGET', K.req, tk.id]);
         if (!raw) return send(res, 404, { ok: false, error: 'bad_link' });
         const rq = JSON.parse(raw);
+        if (rq.terms !== S.TERMS_VERSION && b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' });
         Object.assign(rq, { data: f, email: mail, memo: S.str(b.memo, 500) || rq.memo, at: Date.now() });
+        if (b.terms === S.TERMS_VERSION) { rq.terms = S.TERMS_VERSION; rq.termsAt = Date.now(); }
         await R(['HSET', K.req, tk.id, JSON.stringify(rq)]);
         return send(res, 200, { ok: true, status: 'pending_new' });
       }
       const [raw] = await R(['HGET', K.shops, tk.id]);
       if (!raw) return send(res, 404, { ok: false, error: 'bad_link' });
       const s = JSON.parse(raw);
+      // [ADD] 아직 지금 약관에 동의하지 않은 샵(가져오기·관리자 추가·예전 약관)은 수정할 때 동의 받기
+      if (s.terms !== S.TERMS_VERSION && b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' });
       const rq = { id: 'e' + tk.id, type: 'edit', shopId: tk.id, data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now() };
+      if (b.terms === S.TERMS_VERSION) { rq.terms = S.TERMS_VERSION; rq.termsAt = Date.now(); }
       await R(['HSET', K.req, rq.id, JSON.stringify(rq)]);
       await notifyAdmin(`[otemp] 샵 수정 요청: ${s.name}`, `<p>${S.esc(s.name)} → ${S.esc(f.name)}</p><p><a href="${S.baseOf(req)}/admin/#shops">관리 페이지에서 확인</a></p>`);
       return send(res, 200, { ok: true, status: 'pending_edit' });
@@ -217,6 +223,23 @@ module.exports = async function handler(req, res) {
           `<p>새 수정 링크예요. 예전 링크는 더 이상 쓸 수 없어요.</p>${links.map(([n, u]) => `<p><b>${S.esc(n)}</b><br><a href="${u}">${u}</a></p>`).join('')}<hr><p>Here is your new edit link. Old links no longer work.</p>`);
       }
       return done();
+    }
+
+    // [ADD] 샵 정보 이의 제기(본인이 등록하지 않음·업주 변경·정보 틀림·폐업 등) → 관리 페이지에서 처리
+    if (svc === 'report' && req.method === 'POST') {
+      const b = bodyOf(req);
+      if (b.website2) return send(res, 200, { ok: true });
+      if (await limited(req, 'report', 5, 86400)) return send(res, 429, { ok: false, error: 'too_many' });
+      const REASONS = ['not_mine', 'owner_changed', 'wrong_info', 'closed', 'other'], WHOS = ['owner', 'customer', 'other'];
+      const shopId = S.str(b.id, 20), mail = S.email(b.email), detail = S.str(b.detail, 1000);
+      if (!REASONS.includes(b.reason) || !WHOS.includes(b.who) || !detail || !mail) return send(res, 400, { ok: false, error: 'need_fields' });
+      const [raw] = await R(['HGET', K.shops, shopId]);
+      if (!raw) return send(res, 400, { ok: false, error: 'need_fields' });
+      const shop = JSON.parse(raw);
+      const id = 'x' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+      await R(['HSET', K.reports, id, JSON.stringify({ id, shopId, shopName: shop.name, reason: b.reason, who: b.who, detail, email: mail, at: Date.now() })]);
+      await notifyAdmin(`[otemp] 샵 이의 제기: ${shop.name}`, `<p>${S.esc(shop.name)} · ${S.esc(b.reason)} · ${S.esc(b.who)}</p><p>${S.esc(detail)}</p><p>${S.esc(mail)}</p><p><a href="${S.baseOf(req)}/admin/#shops">관리 페이지에서 확인</a></p>`);
+      return send(res, 200, { ok: true });
     }
 
     if (svc === 'spot' && req.method === 'POST') {

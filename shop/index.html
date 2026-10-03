@@ -120,7 +120,7 @@
       <label data-k="memo"></label>
       <textarea name="memo" maxlength="500" data-ph="memoPh"></textarea>
       <input class="hp" name="website2" tabindex="-1" autocomplete="off">
-      <div class="agree" id="agreeRow"><input type="checkbox" name="agree" id="agree"><label for="agree" style="margin:0" data-k="agree"></label></div>
+      <div class="agree" id="agreeRow"><input type="checkbox" name="agree" id="agree"><label for="agree" style="margin:0" id="agreeLabel"></label></div>
     </div>
 
     <button class="btn" id="submitBtn" type="submit" data-k="submit"></button>
@@ -152,7 +152,8 @@ const T = {
     instagram: '인스타그램', igPh: '@아이디', web: '웹사이트', webPh: 'https://...',
     secPrivate: '운영자에게만 보이는 정보', email: '담당자 이메일', emailHint: '사이트에 공개되지 않아요. 수정 링크와 안내를 이 주소로 보내요.',
     memo: '운영자에게 남길 말', memoPh: '추가하고 싶은 포인트, 문의 등',
-    agree: '입력한 샵 이름·연락처·소개가 otemp.app에 "제휴" 표시와 함께 공개되는 데 동의하고, 정보가 정확함을 확인합니다.',
+    agree: '<a href="/terms/?lang=ko" target="_blank" rel="noopener">제휴 샵 이용약관</a>에 동의하고, 입력한 샵 이름·연락처·소개가 "제휴" 표시와 함께 공개되는 데 동의합니다. (필수)',
+    agreeAgain: '약관이 새로 생겼거나 바뀌었어요. 수정하려면 약관 동의가 필요해요.',
     submit: '등록 요청 보내기', submitEdit: '수정 요청 보내기', sending: '보내는 중…',
     doneTitle: '등록 요청을 받았어요', doneText: '운영자 확인 후 사이트에 보여요. 아래 링크로 언제든 정보를 고칠 수 있어요. 비밀번호 역할을 하니 다른 사람에게 알려주지 마세요.',
     doneMail: '같은 링크를 이메일로도 보냈어요(메일 설정이 되어 있을 때). 즐겨찾기나 카톡 나에게 보내기로 저장해 두세요.', copy: '링크 복사', copied: '복사됨 ✓',
@@ -166,9 +167,9 @@ const T = {
     lostBtn: '새 링크 받기', lostOk: '등록된 이메일이면 새 링크를 보냈어요. 메일함(스팸함 포함)을 확인해 주세요.',
     lostNoMail: '지금은 메일 발송이 준비되지 않았어요. 운영자에게 문의해 주세요.',
     e_need_name_spots: '샵 이름과 다이빙 포인트를 하나 이상 넣어주세요.', e_need_contact: '공개 연락처를 하나 이상(올바른 형식으로) 넣어주세요.',
-    e_need_email: '담당자 이메일을 확인해 주세요.', e_need_agree: '공개 동의에 체크해 주세요.', e_too_many: '잠시 후 다시 시도해 주세요.', e_default: '보내지 못했어요. 잠시 후 다시 시도해 주세요.',
-    statsTitle: '우리 샵 실적', thShort: ['조회', '노출', '클릭'], statDays: (n) => `최근 ${n}일`, stViews: '포인트 조회', stImp: '바로가기 노출', stClicks: '연락 버튼 클릭', stSpot: '포인트', stOther: '포인트 정보 없음(이전 기록)',
-    statsNote: (from) => `${from}부터 집계. 포인트 조회 = 사이트에서 그 포인트를 연 횟수(다이빙샵 탭에 샵이 보임), 바로가기 노출 = 아래 정보 줄에 우리 샵이 나온 횟수, 클릭 = 전화·카톡 등 버튼을 누른 횟수. 개인정보는 모으지 않아요.`,
+    e_need_email: '담당자 이메일을 확인해 주세요.', e_need_agree: '약관 동의에 체크해 주세요.', e_too_many: '잠시 후 다시 시도해 주세요.', e_default: '보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+    statsTitle: '우리 샵 실적', thShort: ['조회', '노출', '클릭'], statDays: (n) => `최근 ${n}일`, stViews: '포인트 조회', stImp: '노출', stClicks: '연락 버튼 클릭', stSpot: '포인트', stOther: '포인트 정보 없음(이전 기록)',
+    statsNote: (from) => `${from}부터 집계. 포인트 조회 = 사이트에서 그 포인트를 연 횟수, 노출 = 포인트를 연 사람에게 우리 샵이 보인 횟수(아래 바로가기 또는 다이빙샵 탭, 한 번 열 때 한 번), 클릭 = 전화·카톡 등 버튼을 누른 횟수. 개인정보는 모으지 않아요.`,
     kinds: { tel: '전화', kakao: '카톡', whatsapp: 'WhatsApp', instagram: '인스타', web: '웹', map: '지도', all: '전체 보기' },
     other: 'English'
   },
@@ -184,7 +185,8 @@ const T = {
     instagram: 'Instagram', igPh: '@handle', web: 'Website', webPh: 'https://...',
     secPrivate: 'Only visible to us', email: 'Contact email', emailHint: 'Not shown on the site. We send your edit link here.',
     memo: 'Message to us', memoPh: 'Spots to add, questions…',
-    agree: 'I agree that the shop name, contacts and intro will be shown publicly on otemp.app with a "Partner" label, and confirm they are accurate.',
+    agree: 'I agree to the <a href="/terms/?lang=en" target="_blank" rel="noopener">Partner Shop Terms</a> and to my shop name, contacts and intro being shown with a "Partner" label. (required)',
+    agreeAgain: 'Our terms are new or have changed. Please agree to them to save changes.',
     submit: 'Send registration', submitEdit: 'Send changes', sending: 'Sending…',
     doneTitle: 'Registration received', doneText: 'It goes live after review. Use the link below to edit anytime. It works like a password, so keep it private.',
     doneMail: 'We also emailed this link (when mail is set up). Bookmark it.', copy: 'Copy link', copied: 'Copied ✓',
@@ -198,9 +200,9 @@ const T = {
     lostBtn: 'Get a new link', lostOk: 'If that email is registered, a new link is on its way. Check your inbox (and spam).',
     lostNoMail: 'Email is not set up yet. Please contact us.',
     e_need_name_spots: 'Add a shop name and at least one dive spot.', e_need_contact: 'Add at least one valid public contact.',
-    e_need_email: 'Check your contact email.', e_need_agree: 'Please tick the consent box.', e_too_many: 'Please try again later.', e_default: 'Could not send. Please try again later.',
-    statsTitle: 'Your shop stats', thShort: ['Views', 'Shown', 'Clicks'], statDays: (n) => `Last ${n} days`, stViews: 'Spot views', stImp: 'Shortcut shown', stClicks: 'Contact clicks', stSpot: 'Spot', stOther: 'No spot info (older records)',
-    statsNote: (from) => `Counting since ${from}. Spot views = times the spot was opened (your shop appears in the Dive shops tab). Shortcut shown = times your shop appeared in the bottom bar. Clicks = taps on call, Kakao and other buttons. No personal data is collected.`,
+    e_need_email: 'Check your contact email.', e_need_agree: 'Please agree to the terms.', e_too_many: 'Please try again later.', e_default: 'Could not send. Please try again later.',
+    statsTitle: 'Your shop stats', thShort: ['Views', 'Shown', 'Clicks'], statDays: (n) => `Last ${n} days`, stViews: 'Spot views', stImp: 'Shown', stClicks: 'Contact clicks', stSpot: 'Spot', stOther: 'No spot info (older records)',
+    statsNote: (from) => `Counting since ${from}. Spot views = times the spot was opened. Shown = times your shop was shown to someone who opened the spot (bottom shortcut or Dive shops tab, once per visit). Clicks = taps on call, Kakao and other buttons. No personal data is collected.`,
     kinds: { tel: 'Call', kakao: 'Kakao', whatsapp: 'WhatsApp', instagram: 'Instagram', web: 'Web', map: 'Map', all: 'See all' },
     other: '한국어'
   }
@@ -210,7 +212,8 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 window.addEventListener('hashchange', () => location.reload()); // 같은 페이지에서 수정 링크를 열어도 다시 읽기
 const token = (() => { const m = location.hash.match(/t=([\w-]{10,100})/); return m ? m[1] : ''; })();
-let editStatus = '', expires = '', plan = '';
+let editStatus = '', expires = '', plan = '', termsOk = false;
+const TERMS_VERSION = '2026-10-03'; // api/_store.js · terms/index.html과 같게
 
 function applyLang() {
   const L = T[lang];
@@ -218,7 +221,8 @@ function applyLang() {
   document.querySelectorAll('[data-k]').forEach(el => { const v = L[el.dataset.k]; if (typeof v === 'string') el.textContent = v; });
   document.querySelectorAll('[data-ph]').forEach(el => { const v = L[el.dataset.ph]; if (typeof v === 'string') el.placeholder = v; });
   $('langBtn').textContent = L.other;
-  if (token) { $('title').textContent = L.titleEdit; document.querySelector('.lead').textContent = L.leadEdit; $('submitBtn').textContent = L.submitEdit; $('agreeRow').style.display = 'none'; }
+  $('agreeLabel').innerHTML = L.agree + (token && !termsOk ? `<br><b style="color:#ffd27a">${L.agreeAgain}</b>` : ''); // 번역 문구에 약관 링크가 들어 있어요(고정 문구)
+  if (token) { $('title').textContent = L.titleEdit; document.querySelector('.lead').textContent = L.leadEdit; $('submitBtn').textContent = L.submitEdit; $('agreeRow').style.display = termsOk ? 'none' : ''; }
   document.title = (token ? L.titleEdit : L.title) + ' · otemp.app';
   showStatus();
   renderStats();
@@ -276,7 +280,8 @@ $('sugg').onclick = (e) => { const d = e.target.closest('[data-no]'); if (!d) re
 const form = $('f');
 function formData() {
   const o = Object.fromEntries(new FormData(form).entries());
-  o.spots = picked; o.agree = $('agree').checked || !!token; if (token) o.t = token;
+  o.spots = picked; o.agree = $('agree').checked || (!!token && termsOk); if (token) o.t = token;
+  if ($('agree').checked) o.terms = TERMS_VERSION;
   return o;
 }
 function fill(d, email) {
@@ -298,7 +303,7 @@ form.onsubmit = async (e) => {
   const j = await post(token ? 'edit' : 'register', formData()).catch(() => ({}));
   btn.disabled = false; btn.textContent = token ? L.submitEdit : L.submit;
   if (!j.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + j.error] || L.e_default; return; }
-  if (token) { editStatus = j.status; showStatus(); msg.className = 'msg ok'; msg.textContent = L.editSaved; return; }
+  if (token) { editStatus = j.status; if ($('agree').checked) { termsOk = true; applyLang(); } showStatus(); msg.className = 'msg ok'; msg.textContent = L.editSaved; return; }
   form.style.display = 'none'; $('lostCard').style.display = 'none';
   $('done').style.display = ''; $('doneLink').textContent = j.url; window.scrollTo(0, 0);
 };
@@ -344,7 +349,7 @@ function showStatus() {
   if (token) {
     const j = await post('me', { t: token }).catch(() => ({}));
     if (!j.ok) { editStatus = 'bad'; form.style.display = 'none'; showStatus(); return; }
-    editStatus = j.status; expires = j.expires || ''; plan = j.plan || ''; fill(j.data || {}, j.email); showStatus();
+    editStatus = j.status; expires = j.expires || ''; plan = j.plan || ''; termsOk = !!j.termsOk; applyLang(); fill(j.data || {}, j.email); showStatus();
     stats = j.stats || null; renderStats();
   }
 })();

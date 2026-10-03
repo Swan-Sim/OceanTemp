@@ -38,16 +38,27 @@ module.exports = async function handler(req, res) {
     }
     const cmds = [];
     dates.forEach(d => {
-      cmds.push(['HGETALL', `v:h:${d}`], ['HGETALL', `v:c:${d}`], ['HGETALL', `v:ct:${d}`], ['HGETALL', `st:${d}`], ['HGETALL', `sc:${d}`]);
+      cmds.push(['HGETALL', `v:h:${d}`], ['HGETALL', `v:c:${d}`], ['HGETALL', `v:ct:${d}`], ['HGETALL', `st:${d}`], ['HGETALL', `sc:${d}`],
+        // [ADD] 봇(검색봇 s / 기타 봇 o)과 포인트 페이지(검색용 페이지) 통계
+        ['HGETALL', `b:h:${d}`], ['HGETALL', `b:c:${d}`], ['HGETALL', `b:ct:${d}`], ['HGETALL', `b:n:${d}`],
+        ['HGETALL', `pg:${d}`], ['HGETALL', `b:pn:${d}`], ['HGETALL', `sr:${d}`]);
     });
+    const N = 12;
     const out = await redisPipeline(cmds);
     const data = dates.map((d, i) => ({
       date: d,
-      hours: toObj(out[i * 5].result),
-      countries: toObj(out[i * 5 + 1].result),
-      cities: toObj(out[i * 5 + 2].result),
-      stations: toObj(out[i * 5 + 3].result),
-      shops: toObj(out[i * 5 + 4].result) // [ADD] 다이빙샵 연락 버튼 클릭 "샵id|종류"
+      hours: toObj(out[i * N].result),
+      countries: toObj(out[i * N + 1].result),
+      cities: toObj(out[i * N + 2].result),
+      stations: toObj(out[i * N + 3].result),
+      shops: toObj(out[i * N + 4].result), // [ADD] 다이빙샵 연락 버튼 클릭 "샵id|종류"
+      botHours: toObj(out[i * N + 5].result),     // "s|시" → 수
+      botCountries: toObj(out[i * N + 6].result), // "s|KR"
+      botCities: toObj(out[i * N + 7].result),    // "s|KR|Seoul"
+      botNames: toObj(out[i * N + 8].result),     // "구글" (앱·포인트 페이지 합계)
+      pages: toObj(out[i * N + 9].result),        // 포인트 페이지 사람 조회 { 번호: 수 }
+      botPages: toObj(out[i * N + 10].result),    // 포인트 페이지 봇 수집 { "s|번호": 수 }
+      search: toObj(out[i * N + 11].result)       // 검색 결과에서 들어온 사람 { google: 수 }
     }));
     res.status(200).json({ days, data });
   } catch (e) {

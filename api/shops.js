@@ -91,13 +91,14 @@ async function expiryNotices(base) {
   return { sent };
 }
 
+const { botInfo } = require('./_bots');
 module.exports = async function handler(req, res) {
   const q = req.query || {};
   const svc = String(q.svc || '');
   try {
     if (svc === 'click') {
       const id = String(q.id || ''), k = String(q.k || ''), no = parseInt(q.no, 10);
-      if (/^[\w-]{1,20}$/.test(id) && KINDS.has(k)) {
+      if (/^[\w-]{1,20}$/.test(id) && KINDS.has(k) && !botInfo(req.headers['user-agent'])) { // [CHANGE] 봇 클릭은 안 셈
         const day = new Date().toISOString().slice(0, 10);
         const field = no > 0 && no < 100000 ? `${id}|${k}|${no}` : `${id}|${k}`; // [CHANGE] 어느 포인트에서 눌렀는지도
         try { await R(['HINCRBY', `sc:${day}`, field, 1], ['EXPIRE', `sc:${day}`, String(800 * 86400)]); } catch (_) {}
@@ -114,7 +115,7 @@ module.exports = async function handler(req, res) {
     // [ADD] 아래 정보 줄 바로가기에 이 샵이 보인 횟수
     if (svc === 'imp') {
       const id = String(q.id || ''), no = parseInt(q.no, 10);
-      if (/^[\w-]{1,20}$/.test(id) && no > 0 && no < 100000) {
+      if (/^[\w-]{1,20}$/.test(id) && no > 0 && no < 100000 && !botInfo(req.headers['user-agent'])) { // [CHANGE] 봇 노출은 안 셈
         const day = new Date().toISOString().slice(0, 10);
         try { await R(['HINCRBY', `si:${day}`, `${id}|${no}`, 1], ['EXPIRE', `si:${day}`, String(800 * 86400)]); } catch (_) {}
       }

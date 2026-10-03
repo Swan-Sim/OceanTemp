@@ -24,5 +24,35 @@
       "path": "/api/shops?svc=cron",
       "schedule": "7 0 * * *"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/:lang(ko|en|ja)/s",
+      "destination": "/api/spotobs?svc=index&lang=:lang"
+    },
+    {
+      "source": "/:lang(ko|en|ja)/s/",
+      "destination": "/api/spotobs?svc=index&lang=:lang"
+    },
+    {
+      "source": "/:lang(ko|en|ja)/s/:no(\\d+)",
+      "destination": "/api/spotobs?svc=page&lang=:lang&no=:no"
+    },
+    {
+      "source": "/:lang(ko|en|ja)/s/:no(\\d+)/:slug",
+      "destination": "/api/spotobs?svc=page&lang=:lang&no=:no&slug=:slug"
+    },
+    {
+      "source": "/s/:no(\\d+)",
+      "destination": "/api/spotobs?svc=page&no=:no"
+    },
+    {
+      "source": "/s/:no(\\d+)/:slug",
+      "destination": "/api/spotobs?svc=page&no=:no&slug=:slug"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/spotobs?svc=sitemap"
+    }
   ]
 }

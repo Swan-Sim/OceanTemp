@@ -91,7 +91,10 @@
         // [FIX] "HUD 검색과 로딩 검색의 줌 정도가 달라" - 부팅 위젯에서
         // 검색으로 정점을 골랐다면, HUD 검색과 똑같이 상세지도(평면도,
         // 줌 8)로 바로 전환해서 두 검색의 결과가 일치하도록 맞췄습니다.
-        const searchedStation = getBootSearchSelectedStation();
+        // [ADD] 포인트 페이지(/ko/s/번호/...)의 "실시간 지도로 보기" → /?no=번호 로 들어오면 그 정점을 바로 열어요
+        let linkedStation = null;
+        try { const ln = parseInt(new URLSearchParams(location.search).get('no'), 10); if (ln > 0) linkedStation = stations.find(s => +s.no === ln) || null; } catch (_) {}
+        const searchedStation = getBootSearchSelectedStation() || linkedStation;
         if (searchedStation) {
           selectStation(searchedStation);
           showDetailMap(searchedStation.coords[1], searchedStation.coords[0], 8);

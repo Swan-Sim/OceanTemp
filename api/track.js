@@ -4,6 +4,8 @@
 // 요청에 붙여주는 대략적인 위치 정보(x-vercel-ip-*)를 씁니다.
 // ?e=station&s=정점명 으로 부르면 "정점 클릭 수"를 올립니다.
 const { redisPipeline } = require('./_redis');
+// [ADD] 검색봇·기타 봇은 사람 방문과 따로 셉니다(b:* 키). 봇이 누른 정점·샵 숫자는 아예 안 올려요
+const { botInfo } = require('./_bots');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -13,7 +15,18 @@ module.exports = async function handler(req, res) {
     const hour = String(now.getUTCHours());               // UTC 시(0~23)
     const q = req.query || {};
     const cmds = [];
-    if (q.e === 'donate') {
+    const bot = botInfo(req.headers['user-agent']);
+    if (bot) {
+      if (!q.e) {
+        const country = req.headers['x-vercel-ip-country'] || '??';
+        let city = req.headers['x-vercel-ip-city'] || '';
+        try { city = decodeURIComponent(city); } catch (_) {}
+        cmds.push(['HINCRBY', `b:h:${day}`, `${bot.cat}|${hour}`, 1]);
+        cmds.push(['HINCRBY', `b:c:${day}`, `${bot.cat}|${country}`, 1]);
+        cmds.push(['HINCRBY', `b:ct:${day}`, `${bot.cat}|${country}|${city || '?'}`, 1]);
+        cmds.push(['HINCRBY', `b:n:${day}`, bot.name, 1]);
+      }
+    } else if (q.e === 'donate') {
       cmds.push(['HINCRBY', `ev:${day}`, 'donate_click', 1]); // [ADD] 후원 버튼 클릭 수
     } else if (q.e === 'station' && q.s) {
       const name = String(q.s).slice(0, 120);
@@ -29,7 +42,7 @@ module.exports = async function handler(req, res) {
       cmds.push(['HINCRBY', `v:c:${day}`, country, 1]);
       cmds.push(['HINCRBY', `v:ct:${day}`, `${country}|${city || '?'}`, 1]);
     }
-    await redisPipeline(cmds);
+    if (cmds.length) await redisPipeline(cmds);
     res.status(204).end();
   } catch (e) {
     // 통계가 실패해도 사이트에는 아무 영향이 없게 조용히 끝냅니다

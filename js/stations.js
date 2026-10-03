@@ -84,6 +84,7 @@
     //   "제주 문섬 다이빙포인트" → "제주 문섬", "하고수동해변 (다이빙)" → "하고수동해변", "Banzai Cliff Diving Area (Saipan)" → "Banzai Cliff (Saipan)"
     function cleanSpotName(n) {
       const out = String(n || '')
+        .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '') // 시트에 이모지가 들어 있어도 뺌
         .replace(/\s*\((다이빙|다이빙\s*포인트|diving|dive)\)/gi, '')
         .replace(/\s*(다이빙\s*포인트|다이빙\s*스팟|diving\s*(area|site|spot|point)|dive\s*(site|spot|point))(?=\s*(\(|$))/gi, '')
         .replace(/\s{2,}/g, ' ').trim();
@@ -137,7 +138,7 @@
         }
         list.push({
           id: stationIdCounter++,
-          name: `🤿 ${s.name}`,
+          name: s.name, // [CHANGE] "이모티콘도 다 빼" - 이름 앞 🤿 제거
           label: s.shortName,
           country: s.country,
           isBeach: true,

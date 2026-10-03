@@ -843,7 +843,7 @@
         }
       }
       const isHotspot = maxTempStation && maxTempStation.id === st.id;
-      document.getElementById('st-name').innerText = `${st.name} ${isHotspot ? `🔥 [${t.hotspot}]` : ''}`;
+      document.getElementById('st-name').innerText = `${st.name}${isHotspot ? ` [${t.hotspot}]` : ''}`;
       document.getElementById('st-temp').innerText = formatTemp(st.curTemp);
 
       // [CHANGE] HUD에 정점명을 텍스트로 보여주던 것은 제거했습니다 -

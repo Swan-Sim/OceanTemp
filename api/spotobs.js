@@ -105,6 +105,7 @@ async function aimsSeries() {
   if (list.length) { try { await redisPipeline([['SET', 'aims:series', JSON.stringify({ at: Date.now(), list }), 'EX', '172800']]); } catch (_) {} }
   return list;
 }
+let aimsLastErr = null; // 진단용(키는 절대 안 담음)
 async function aimsData(id, days) {
   const key = process.env.AIMS_API_KEY;
   if (!key) return null;
@@ -118,13 +119,14 @@ async function aimsData(id, days) {
     let url = `${AIMS}/data?series_id=${id}&from_date=${from}&size=5000`;
     for (let page = 0; page < 3 && url; page++) {
       const r = await fetch(url, { signal: c.signal, headers: { 'X-API-Key': key, 'User-Agent': 'OceanTemp (otemp.app)' } });
-      if (!r.ok) break;
+      if (!r.ok) { aimsLastErr = { status: r.status, body: (await r.text()).slice(0, 200), from }; break; }
       const j = await r.json();
+      if (page === 0) aimsLastErr = { status: r.status, n: (j.results || []).length, keys: Object.keys(j), sample: (j.results || [])[0] || null };
       (j.results || []).forEach(o => { const v = +o.qc_val; if (Number.isFinite(v) && v > -2 && v < 40 && o.time) rows.push({ t: o.time, wt: +v.toFixed(2) }); });
       url = j.links && j.links.next ? j.links.next : (j.cursor ? `${AIMS}/data?series_id=${id}&from_date=${from}&size=5000&cursor=${encodeURIComponent(j.cursor)}` : null);
       if (!(j.results || []).length) break;
     }
-  } catch (_) {} finally { clearTimeout(tm); }
+  } catch (e) { aimsLastErr = { error: String(e && e.message || e) }; } finally { clearTimeout(tm); }
   rows.sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
   if (rows.length) { try { await redisPipeline([['SET', ck, JSON.stringify({ at: Date.now(), rows }), 'EX', '7200']]); } catch (_) {} }
   return rows;
@@ -231,6 +233,21 @@ module.exports = async function handler(req, res) {
   // [ADD] 포인트별 검색용 페이지·사이트맵(/ko/s/39/문섬, /sitemap.xml) - 함수 개수를 늘리지 않으려고 여기서 처리
   const svc = (req.query || {}).svc;
   if (svc === 'page' || svc === 'index' || svc === 'sitemap') return require('./_spotpage')(req, res);
+  // [임시 진단] 대만 CWA 응답 구조 보기(키·값 대신 구조와 첫 항목만): /api/spotobs?svc=cwaprobe
+  if (svc === 'cwaprobe') {
+    const key = process.env.CWA_API_KEY;
+    if (!key) return res.status(200).json({ ok: false, reason: 'no CWA_API_KEY' });
+    const shape = (o, d) => { if (d > 7) return '…'; if (Array.isArray(o)) return o.length ? [shape(o[0], d + 1), `(${o.length})`] : []; if (o && typeof o === 'object') return Object.fromEntries(Object.entries(o).slice(0, 25).map(([k, v]) => [k, shape(v, d + 1)])); return o; };
+    const ids = ['O-B0075-001', 'O-B0076-001', 'F-A0021-001'];
+    const out = {};
+    for (const id of ids) {
+      const extra = id === 'F-A0021-001' ? '&limit=1' : id === 'O-B0075-001' ? '&limit=2' : '&limit=3';
+      const j = await getJSON(`https://opendata.cwa.gov.tw/api/v1/rest/datastore/${id}?Authorization=${encodeURIComponent(key)}&format=JSON${extra}`, 20000);
+      out[id] = j ? shape(j, 0) : 'fetch failed';
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ ok: true, out });
+  }
   // [ADD] 호주 AIMS: /api/spotobs?svc=aims&lat=..&lon=..&days=7 → 가장 가까운 관측소(70km)의 수온
   if (svc === 'aims') {
     try {
@@ -241,7 +258,7 @@ module.exports = async function handler(req, res) {
       if (!st) return res.status(200).json({ ok: false, reason: 'no_station' });
       const rows = await aimsData(st.id, parseInt(req.query.days, 10) || 7);
       return res.status(200).json({ ok: !!(rows && rows.length), station: { site: st.site, subsite: st.subsite, depth: st.depth, dist: +st.dist.toFixed(1), lat: st.lat, lon: st.lon },
-        rows: rows || [], source: 'AIMS Weather Stations (CC-BY)' + (process.env.AIMS_API_KEY ? '' : ' - AIMS_API_KEY 없음') });
+        rows: rows || [], debug: req.query.debug === '1' ? aimsLastErr : undefined, source: 'AIMS Weather Stations (CC-BY)' + (process.env.AIMS_API_KEY ? '' : ' - AIMS_API_KEY 없음') });
     } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e) }); }
   }
   // [ADD] 서울 한강 측정소 시간별 수온(앱 실시간 표·추이용): /api/spotobs?svc=seoul&days=7

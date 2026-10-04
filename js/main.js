@@ -114,6 +114,10 @@
       try { fetch('/api/track', { method: 'POST', keepalive: true }).catch(() => {}); } catch (_) {}
     }
 
+    // [ADD] 앱(PWA) 서비스 워커 - 오프라인 안내 화면용(데이터는 캐시하지 않음)
+    if ('serviceWorker' in navigator && /^https:$/.test(location.protocol)) {
+      window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+    }
     window.addEventListener('DOMContentLoaded', () => {
       trackVisit();
       // [ADD] 지원하는 브라우저(주로 풀스크린 상태의 안드로이드 크롬)에서는

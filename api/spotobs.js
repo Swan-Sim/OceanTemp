@@ -171,15 +171,16 @@ async function cwaObsAll() {
 }
 // 조석 예보(향후 8일) [{ id, name, lat, lon, ev:[{ t, type, h(m, 그 지역 평균해면 기준) }] }] - 하루 저장
 async function cwaTideFc() {
-  try { const [{ result }] = await redisPipeline([['GET', 'cwa:tide']]); if (result) { const o = JSON.parse(result); if (Date.now() - o.at < 12 * 3600e3) return o.list; } } catch (_) {}
+  try { const [{ result }] = await redisPipeline([['GET', 'cwa:tide2']]); if (result) { const o = JSON.parse(result); if (Date.now() - o.at < 12 * 3600e3) return o.list; } } catch (_) {}
   const j = await cwaGet('/api/v1/rest/datastore/F-A0021-001', 40000);
   const end = Date.now() + 8 * 86400e3, start = Date.now() - 86400e3;
   const list = ((((j || {}).records || {}).TideForecasts) || []).map(x => x.Location || {}).map(l => ({
     id: l.LocationId, name: l.LocationName, lat: +l.Latitude, lon: +l.Longitude,
     ev: (((l.TimePeriods || {}).Daily) || []).flatMap(d => d.Time || []).map(e => ({ t: e.DateTime, type: /滿/.test(e.Tide) ? 'high' : /乾/.test(e.Tide) ? 'low' : '', h: nz((e.TideHeights || {}).AboveLocalMSL) }))
       .filter(e => e.type && e.h != null && Date.parse(e.t) >= start && Date.parse(e.t) <= end).map(e => ({ ...e, h: +(e.h / 100).toFixed(2) }))
+      .sort((x, y) => Date.parse(x.t) - Date.parse(y.t))
   })).filter(l => Number.isFinite(l.lat) && Number.isFinite(l.lon) && l.ev.length);
-  if (list.length) { try { await redisPipeline([['SET', 'cwa:tide', JSON.stringify({ at: Date.now(), list }), 'EX', String(2 * 86400)]]); } catch (_) {} }
+  if (list.length) { try { await redisPipeline([['SET', 'cwa:tide2', JSON.stringify({ at: Date.now(), list }), 'EX', String(2 * 86400)]]); } catch (_) {} }
   return list;
 }
 // 정점 근처: 수온·파도는 값이 있는 가장 가까운 부이/측정소(25km), 조위는 가장 가까운 조위소(25km), 예보는 가장 가까운 예보 지점(40km)

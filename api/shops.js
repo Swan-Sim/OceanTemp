@@ -123,9 +123,8 @@ module.exports = async function handler(req, res) {
     }
 
     if (svc === 'spots') {
-      const all = await S.hgetallJSON(K.spots);
-      const spots = Object.values(all).filter(s => s.show !== false).map(s => ({ no: s.no, country: s.country, name: s.name, label: s.label, lat: s.lat, lon: s.lon }));
-      S.BUILTIN_SPOTS.forEach(b => { if (!spots.some(s => +s.no === b.no)) spots.push({ ...b }); }); // [ADD] 한강 측정소 등 기본 포인트
+      // [CHANGE] 전체 포인트 목록(관리 페이지에서 관리 · 옮기기 전엔 구글 시트+사용자 등록+기본 포인트). 앱·샵·포인트 등록 페이지가 이걸 읽어요
+      const spots = (await S.allSpots(S.baseOf(req))).map(s => ({ no: s.no, country: s.country, name: s.name, label: s.label, lat: s.lat, lon: s.lon, network: s.network, depth: s.depth }));
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=86400');
       return res.status(200).json({ ok: true, spots });
     }

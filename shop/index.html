@@ -258,7 +258,6 @@ function applyLang() {
 $('langBtn').onclick = (e) => { e.preventDefault(); lang = lang === 'ko' ? 'en' : 'ko'; applyLang(); };
 
 // ── 다이빙 포인트 고르기(구글 시트 정점 + 승인된 사용자 정점) ──
-const SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
 let spots = [], picked = [];
 function parseCsv(text) {
   const rows = []; let row = [], cur = '', q = false;
@@ -270,16 +269,10 @@ function parseCsv(text) {
   return rows.filter(r => r.some(c => c.trim()));
 }
 async function loadSpots() {
+  // [CHANGE] 전체 포인트 목록은 /api/shops?svc=spots 하나로(관리 페이지에서 관리)
   try {
-    let text = await fetch(SHEET).then(r => r.ok ? r.text() : '').catch(() => '');
-    if (!/\bno\b/i.test(text.split('\n')[0] || '')) text = await fetch('/data/stations.csv').then(r => r.text());
-    const [head, ...rows] = parseCsv(text);
-    const ix = Object.fromEntries(head.map((h, i) => [h.trim().toLowerCase(), i]));
-    spots = rows.filter(r => !/^n/i.test(ix.show != null ? (r[ix.show] || '') : ''))
-      .map(r => ({ no: parseInt(r[ix.no], 10), name: (r[ix.name] || '').trim(), label: (r[ix.label] || '').trim(), country: (r[ix.country] || '').trim() }))
-      .filter(s => s.no && s.name);
     const ex = await fetch('/api/shops?svc=spots').then(r => r.json()).catch(() => ({}));
-    (ex.spots || []).forEach(s => { if (!spots.some(x => x.no === s.no)) spots.push({ no: s.no, name: s.name, label: s.label, country: s.country }); });
+    spots = (ex.spots || []).map(s => ({ no: s.no, name: s.name, label: s.label, country: s.country })).filter(s => s.no && s.name);
   } catch (e) { console.warn(e); }
   renderChips();
 }

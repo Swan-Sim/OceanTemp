@@ -105,9 +105,18 @@
     }
 
     async function loadBeachSpots() {
-      const sources = [];
-      if (STATION_SHEET_CSV_URL) sources.push(['Google Sheet', STATION_SHEET_CSV_URL]);
-      sources.push(['stations.csv', STATION_LOCAL_CSV_URL]);
+      // [CHANGE] 1순위: 관리 페이지에서 관리하는 전체 포인트(/api/shops?svc=spots). 실패하면 저장소 data/stations.csv
+      if (/^https?:$/.test(location.protocol)) {
+        try {
+          const j = JSON.parse(await fetchTextWithTimeout('/api/shops?svc=spots', 8000));
+          const spots = (j.spots || []).filter(s => s.name && Number.isFinite(+s.lat) && Number.isFinite(+s.lon)).map(s => ({
+            country: s.country || '', name: cleanSpotName(s.name), shortName: cleanSpotName(s.label || s.name), lat: +s.lat, lon: +s.lon,
+            depth: s.depth !== false, net: s.network || 'Beach/local', no: +s.no || null
+          }));
+          if (spots.length >= 10) { console.info(`[stations] 관리 목록에서 정점 ${spots.length}곳을 읽었어요`); return spots; }
+        } catch (e) { console.warn('[stations] 관리 목록 읽기 실패 - stations.csv로:', e.message); }
+      }
+      const sources = [['stations.csv', STATION_LOCAL_CSV_URL]];
       for (const [label, url] of sources) {
         try {
           const spots = csvToSpots(await fetchTextWithTimeout(url, 6000), label);

@@ -68,7 +68,36 @@ module.exports = async function admin(req, res) {
   if (svc === 'list') {
     const [shops, reqs, spots, spotreqs, reports] = await Promise.all([S.hgetallJSON(K.shops), S.hgetallJSON(K.req), S.hgetallJSON(K.spots), S.hgetallJSON(K.spotreq), S.hgetallJSON(K.reports)]);
     const strip = (s) => { const { tok, ...rest } = s; return { ...rest, live: S.isLive(s) }; };
-    return ok({ shops: Object.values(shops).map(strip), reqs: Object.values(reqs).map(({ tok, ...r }) => r), spots: Object.values(spots), spotreqs: Object.values(spotreqs), reports: Object.values(reports) });
+    // [CHANGE] 포인트: 옮긴 뒤엔 전체(숨김 포함), 옮기기 전엔 시트+사용자 등록을 합쳐 보여주고(시트 것은 수정 불가 표시)
+    const migrated = await S.spotsMigrated();
+    const spotList = migrated ? Object.values(spots) : (await S.allSpots(S.baseOf(req), { hidden: true, fresh: true })).map(s => ({ ...s, ...(spots[s.no] || { sheet: true }) }));
+    return ok({ shops: Object.values(shops).map(strip), reqs: Object.values(reqs).map(({ tok, ...r }) => r), spots: spotList, spotsMigrated: migrated, spotreqs: Object.values(spotreqs), reports: Object.values(reports) });
+  }
+  // [ADD] 구글 시트 정점을 관리 페이지(Redis)로 한 번에 옮기기 - 이미 있는 번호는 그대로 두고 없는 것만 추가
+  if (svc === 'spotsMigrate') {
+    const list = await S.legacySpots(S.baseOf(req));
+    if (list.length < 10) return bad('sheet_empty');
+    const have = await S.hgetallJSON(K.spots);
+    const cmds = [];
+    let added = 0;
+    list.forEach(s => { if (have[s.no]) return; cmds.push(['HSET', K.spots, String(s.no), JSON.stringify({ ...s, name: S.cleanName(s.name), label: S.cleanName(s.label), src: 'sheet', created: Date.now() })]); added++; });
+    // 예전 사용자 등록 포인트에도 network/depth 칸 채우기
+    Object.values(have).forEach(h => { const n = S.normSpot({ ...h, network: h.network || 'Beach/user' }); if (n) cmds.push(['HSET', K.spots, String(n.no), JSON.stringify({ ...h, ...n })]); });
+    cmds.push(['SET', S.MIGRATED_KEY, String(Date.now())], ['DEL', 'sp:list']);
+    for (let i = 0; i < cmds.length; i += 100) await R(...cmds.slice(i, i + 100));
+    S.clearSpotsMemo();
+    return ok({ added, total: list.length });
+  }
+  // [ADD] 관리자가 새 포인트를 바로 추가
+  if (svc === 'spotAdd') {
+    if (!(await S.spotsMigrated())) return bad('migrate_first');
+    const f = S.spotFields(b);
+    if (!f.name || f.lat == null || f.lon == null) return bad('need_name_latlon');
+    const no = await S.nextSpotNo(S.baseOf(req));
+    const spot = { no, ...f, network: S.str(b.network, 40) || 'Beach/local', depth: b.depth !== false, show: b.show !== false, created: Date.now() };
+    await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['DEL', 'sp:list']);
+    S.clearSpotsMemo();
+    return ok({ no });
   }
 
   // 샵 요청 승인: 새 등록이면 번호를 주고 게시, 수정이면 기존 샵에 반영(요금제·만료일은 관리자만)
@@ -216,9 +245,10 @@ module.exports = async function admin(req, res) {
     const f = S.spotFields(Object.assign({}, rq.data, b.data || {}));
     if (!f.name || f.lat == null || f.lon == null) return bad('need_name_pos');
     const extra = await S.hgetallJSON(K.spots);
-    const no = Math.max(await S.sheetMaxNo(), 0, ...Object.keys(extra).map(Number), ...S.BUILTIN_SPOTS.map(b => b.no)) + 1;
-    const spot = { no, ...f, network: 'Beach/user', show: true, email: rq.email || '', created: Date.now() };
-    await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['HDEL', K.spotreq, rq.id]);
+    const no = Math.max(await S.nextSpotNo(S.baseOf(req)), 0, ...Object.keys(extra).map(Number).map(n => n + 1));
+    const spot = { no, ...f, network: 'Beach/user', depth: true, show: true, email: rq.email || '', created: Date.now() };
+    await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['HDEL', K.spotreq, rq.id], ['DEL', 'sp:list']);
+    S.clearSpotsMemo();
     return ok({ no });
   }
   if (svc === 'spotReject') { await R(['HDEL', K.spotreq, String(b.reqId)]); return ok(); }
@@ -227,9 +257,12 @@ module.exports = async function admin(req, res) {
     const [raw] = await R(['HGET', K.spots, no]);
     if (!raw) return bad('no_spot');
     const spot = Object.assign(JSON.parse(raw), S.spotFields(Object.assign(JSON.parse(raw), b)), { show: b.show !== false });
-    await R(['HSET', K.spots, no, JSON.stringify(spot)]);
+    if (b.network !== undefined) spot.network = S.str(b.network, 40) || spot.network || 'Beach/local'; // [ADD]
+    if (b.depth !== undefined) spot.depth = b.depth !== false;
+    await R(['HSET', K.spots, no, JSON.stringify(spot)], ['DEL', 'sp:list']);
+    S.clearSpotsMemo();
     return ok();
   }
-  if (svc === 'spotDelete') { await R(['HDEL', K.spots, String(parseInt(b.no, 10))]); return ok(); }
+  if (svc === 'spotDelete') { await R(['HDEL', K.spots, String(parseInt(b.no, 10))], ['DEL', 'sp:list']); S.clearSpotsMemo(); return ok(); }
   return bad('unknown_svc');
 };

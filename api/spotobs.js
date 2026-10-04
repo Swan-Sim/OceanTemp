@@ -37,17 +37,9 @@ function parseCsv(text) {
   return rows.filter(r => r.some(c => c.trim()));
 }
 async function loadSpots(base) {
-  let text = await getText(SHEET, 8000);
-  if (!text || !/lat/i.test(text.split('\n')[0])) text = await getText(`${base}/data/stations.csv`, 8000);
-  if (!text) return [];
-  const [head, ...rows] = parseCsv(text);
-  const idx = Object.fromEntries(head.map((h, i) => [h.trim().toLowerCase(), i]));
-  const list = rows.map(r => ({ lat: parseFloat(r[idx.lat]), lon: parseFloat(r[idx.lon]), show: (r[idx.show] || '').trim() }));
-  // [ADD] 승인된 사용자 등록 포인트도 함께
-  try { const [{ result }] = await redisPipeline([['HVALS', 'spots:extra']]); (result || []).forEach(v => { try { const s = JSON.parse(v); if (s.show !== false) list.push({ lat: +s.lat, lon: +s.lon, show: 'Y' }); } catch (_) {} }); } catch (_) {}
-  // [ADD] 기본 포인트(한강 측정소)
-  require('./_store').BUILTIN_SPOTS.forEach(b => { if (!list.some(s => Math.abs(s.lat - b.lat) < 1e-4 && Math.abs(s.lon - b.lon) < 1e-4)) list.push({ lat: b.lat, lon: b.lon, show: 'Y' }); });
-  return list.filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon) && !/^n/i.test(s.show));
+  // [CHANGE] 전체 포인트 목록은 관리 페이지(Redis)에서 - 옮기기 전엔 _store가 구글 시트를 대신 읽어요
+  const list = await require('./_store').allSpots(base);
+  return list.map(s => ({ lat: s.lat, lon: s.lon, show: 'Y' }));
 }
 
 const km = (a, b, c, d) => { const R = 6371, r = Math.PI / 180, x = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };

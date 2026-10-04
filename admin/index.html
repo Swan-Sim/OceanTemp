@@ -110,8 +110,13 @@
       </div>
     </div>
     <div id="secSpots" class="sec" style="display:none">
-      <div class="card"><h2>승인 대기 (새 포인트)</h2><div id="spotReqs"></div><div class="hint">승인하면 구글 시트·기존 등록 포인트와 겹치지 않는 다음 번호가 자동으로 붙어요. 이름·좌표는 승인 전에 고칠 수 있어요.</div></div>
-      <div class="card"><h2>사용자 등록 포인트 (시트 밖)</h2><div id="spotList"></div></div>
+      <div class="card"><h2>승인 대기 (새 포인트)</h2><div id="spotReqs"></div><div class="hint">승인하면 기존 포인트와 겹치지 않는 다음 번호가 자동으로 붙어요. 이름·좌표는 승인 전에 고칠 수 있어요.</div></div>
+      <div class="card" id="migrateCard" style="display:none"><h2>구글 시트 → 관리 페이지로 옮기기</h2>
+        <p class="muted" style="margin:0 0 10px">지금은 포인트 목록을 아직 구글 시트에서 읽고 있어요. 한 번 옮기면 시트의 모든 포인트가 여기로 복사되고, 그다음부터는 <b>여기서만</b> 추가·수정·숨기기를 해요(시트는 더 안 읽어요). 이미 등록된 번호는 그대로 둬요.</p>
+        <button class="primary" id="migrateBtn">시트 포인트 전부 옮기기</button></div>
+      <div class="card"><h2>전체 포인트 <span class="muted" id="spotCount" style="font-size:12px;font-weight:400"></span></h2>
+        <div class="row" style="margin-bottom:10px"><input class="f" id="spotQ" placeholder="이름·번호·나라로 찾기" style="flex:1;min-width:180px"><button id="spotNewBtn">+ 새 포인트</button></div>
+        <div id="spotNew"></div><div id="spotList"></div></div>
     </div>
     <!-- [ADD] 관리 설정: 알림 이메일·비밀번호 바꾸기 -->
     <div id="secSettings" class="sec" style="display:none">
@@ -314,14 +319,8 @@
 
   // 정점 번호 → 이름(구글 시트 + 사용자 등록)
   let spotNames = {}, spotAll = []; // spotAll: 검색용 [{no, name, label, country}]
-  const SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
-  fetch(SHEET).then(r => r.text()).then(text => {
-    const lines = text.split(/\r?\n/), head = lines.shift().split(',').map(h => h.trim().toLowerCase());
-    const iNo = head.indexOf('no'), iLabel = head.indexOf('label'), iName = head.indexOf('name'), iCountry = head.indexOf('country'), iLat = head.indexOf('lat'), iLon = head.indexOf('lon');
-    lines.forEach(l => { const m = l.match(/^(\d+),/); if (!m || iNo !== 0) return; const cells = l.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(c => c.replace(/,$/, '').replace(/^"|"$/g, ''));
-      const no = +cells[iNo]; spotNames[no] = cells[iLabel] || cells[iName]; spotAll.push({ no, name: cells[iName] || '', label: cells[iLabel] || '', country: cells[iCountry] || '', lat: +cells[iLat], lon: +cells[iLon], code: OTLists.regionCode(cells[iCountry]) }); });
-    if (mg) renderMgmt();
-  }).catch(() => {});
+  // [CHANGE] 포인트 이름: 구글 시트 대신 전체 포인트 목록(/api/shops?svc=spots)에서
+  fetch('/api/shops?svc=spots').then(r => r.json()).then(j => { (j.spots || []).forEach(x => { spotNames[x.no] = x.label || x.name; }); if (mg) renderMgmt(); }).catch(() => {});
   const spotsText = (arr) => (arr || []).map(n => `<span title="#${n}">${esc(spotNames[n] || ('#' + n))}</span>`).join(', ');
   // [ADD] 나라 셀렉트(값은 시트와 같은 영어 이름, 보이는 이름은 한국어)
   function countrySelect(cur) {
@@ -440,11 +439,52 @@
       card.querySelectorAll('[data-k=lat], [data-k=lon]').forEach(i => i.addEventListener('input', () => pick(true)));
       pick(false);
     });
-    $('spotList').innerHTML = (mg.spots || []).length ? `<table>${mg.spots.sort((a, b) => a.no - b.no).map(s => `<tr data-no="${s.no}">
-      <td><b>#${s.no} ${esc(s.name)}</b> ${s.show === false ? '<span class="tag off">숨김</span>' : ''}<div class="muted">${esc(s.label)} · ${esc(s.country)} · ${s.lat}, ${s.lon}</div></td>
-      <td class="act"><button data-act="stoggle">${s.show === false ? '보이기' : '숨기기'}</button> <button data-act="sdel">삭제</button></td></tr>`).join('')}</table>` : '<div class="muted">아직 없어요 (구글 시트 정점은 시트에서 관리)</div>';
+    renderSpotList();
     renderEditor();
   }
+
+  // ───────── [ADD] 전체 포인트 관리(검색·수정·숨기기·삭제·새로 추가) ─────────
+  let spotQ = '', spotEdit = null, spotNewOpen = false;
+  const NETS = ['Beach/local', 'Beach/KHOA', 'Beach/NIFS·badatime', 'Beach/NOAA', 'Beach/JMA', 'Beach/user', 'River/Seoul'];
+  function spotForm(s, isNew) {
+    const nets = [...new Set([s.network || 'Beach/local', ...NETS])];
+    return `<div class="req" data-sform="${isNew ? 'new' : s.no}"><div class="grid2" style="gap:8px">
+      <label>이름<input class="f" data-k="name" value="${esc(s.name || '')}"></label>
+      <label>짧은 이름(지도 글자)<input class="f" data-k="label" value="${esc(s.label || '')}"></label>
+      <label>나라${countrySelect(s.country || '')}</label>
+      <label>자료 구분(network)<select class="f" data-k="network">${nets.map(n => `<option${n === (s.network || 'Beach/local') ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      <label>위도<input class="f" data-k="lat" value="${s.lat ?? ''}"></label>
+      <label>경도<input class="f" data-k="lon" value="${s.lon ?? ''}"></label>
+      <label><input type="checkbox" data-k="depth"${s.depth !== false ? ' checked' : ''}> 수심 프로파일 탭 보이기</label>
+      <label><input type="checkbox" data-k="show"${s.show !== false ? ' checked' : ''}> 사이트에 보이기</label></div>
+      <div class="actions" style="margin-top:8px"><button class="primary" data-act="${isNew ? 'sadd' : 'ssave'}">${isNew ? '추가 (번호 자동)' : '저장'}</button><button data-act="scancel">취소</button></div></div>`;
+  }
+  function readSpotForm(el) {
+    const o = {}; el.querySelectorAll('[data-k]').forEach(i => { o[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.value.trim(); });
+    if (o.country !== undefined) { const sel = el.querySelector('select[data-k=country]'); if (sel) o.country = sel.value; }
+    return o;
+  }
+  function renderSpotList() {
+    const all = (mg.spots || []).slice().sort((a, b) => a.no - b.no);
+    const migrated = !!mg.spotsMigrated;
+    $('migrateCard').style.display = migrated ? 'none' : '';
+    $('spotNewBtn').style.display = migrated ? '' : 'none';
+    const q = spotQ.toLowerCase();
+    const list = q ? all.filter(s => String(s.no) === q || `${s.name} ${s.label} ${s.country} ${s.network}`.toLowerCase().includes(q)) : all;
+    $('spotCount').textContent = `${all.length}곳 · 숨김 ${all.filter(s => s.show === false).length}곳${q ? ` · 찾은 것 ${list.length}곳` : ''}`;
+    $('spotNew').innerHTML = spotNewOpen ? spotForm({ show: true, depth: true }, true) : '';
+    $('spotList').innerHTML = list.length ? `<table>${list.map(s => `<tr data-no="${s.no}">
+      <td><b>#${s.no} ${esc(s.name)}</b> ${s.show === false ? '<span class="tag off">숨김</span>' : ''}${s.sheet ? ' <span class="tag off">시트</span>' : ''}${s.depth === false ? ' <span class="tag off">수심 없음</span>' : ''}
+        <div class="muted">${esc(s.label || '')} · ${esc(s.country || '나라 없음')} · ${s.lat}, ${s.lon} · ${esc(s.network || '')} · <a href="/ko/s/${s.no}" target="_blank" style="color:inherit">페이지</a></div>
+        ${spotEdit === s.no ? spotForm(s, false) : ''}</td>
+      <td class="act">${s.sheet ? '<span class="muted">옮긴 뒤 수정</span>' : `<button data-act="sedit">수정</button> <button data-act="stoggle">${s.show === false ? '보이기' : '숨기기'}</button> <button data-act="sdel">삭제</button>`}</td></tr>`).join('')}</table>` : '<div class="muted">없어요</div>';
+  }
+  $('spotQ').addEventListener('input', (e) => { spotQ = e.target.value.trim(); if (mg) renderSpotList(); });
+  $('spotNewBtn').onclick = () => { spotNewOpen = !spotNewOpen; spotEdit = null; renderSpotList(); };
+  $('migrateBtn').onclick = async () => {
+    if (!confirm('구글 시트의 포인트를 전부 관리 페이지로 옮길까요?\n옮긴 뒤부터는 시트를 고쳐도 사이트에 반영되지 않아요.')) return;
+    try { const j = await api('spotsMigrate'); alert(`${j.added}곳을 옮겼어요(시트 ${j.total}곳). 이제 여기서 관리하면 돼요.`); await loadMgmt(); } catch (_) {}
+  };
 
   function renderEditor() {
     if (!editing) { $('shopEditor').innerHTML = ''; return; }
@@ -521,6 +561,10 @@
       else if (act === 'del') { if (!confirm('이 샵을 삭제할까요? 되돌릴 수 없어요. (잠시 내리려면 수정 → 숨기기)')) return; await api('shopDelete', { id: tr.dataset.id }); }
       else if (act === 'sapprove') { const j = await api('spotApprove', { reqId: sreq.dataset.sreq, data: readEd(sreq) }); alert(`#${j.no} 번호로 추가했어요. 몇 분 안에 사이트에 보여요.`); }
       else if (act === 'sreject') { if (!confirm('이 포인트 요청을 거절할까요?')) return; await api('spotReject', { reqId: sreq.dataset.sreq }); }
+      else if (act === 'sedit') { spotEdit = spotEdit === +tr.dataset.no ? null : +tr.dataset.no; spotNewOpen = false; renderSpotList(); return; }
+      else if (act === 'scancel') { spotEdit = null; spotNewOpen = false; renderSpotList(); return; }
+      else if (act === 'ssave') { const f = b.closest('[data-sform]'); const o = readSpotForm(f); await api('spotSave', { ...o, no: f.dataset.sform }); spotEdit = null; }
+      else if (act === 'sadd') { const o = readSpotForm(b.closest('[data-sform]')); const j = await api('spotAdd', o); spotNewOpen = false; alert(`#${j.no} 번호로 추가했어요. 몇 분 안에 사이트에 보여요.`); }
       else if (act === 'stoggle') { const s = mg.spots.find(x => String(x.no) === tr.dataset.no); await api('spotSave', { ...s, show: s.show === false }); }
       else if (act === 'sdel') { if (!confirm('이 포인트를 삭제할까요? 이 번호에 연결된 샵 표시도 사라져요.')) return; await api('spotDelete', { no: tr.dataset.no }); }
       else return;

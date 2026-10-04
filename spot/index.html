@@ -115,13 +115,8 @@ function autoCountry(la, lo) {
   if (best && bd < 500 && best.code) { country = best.code; countryHow = 'map'; renderCountries(); }
 }
 country = OTLists.browserRegion(); countryHow = country ? 'browser' : ''; window.__countryReady = true; renderCountries();
-(async () => { // 알려진 포인트 목록(구글 시트 + 승인된 사용자 포인트) - 나라 자동 선택용
+(async () => { // 알려진 포인트 목록 - 나라 자동 선택용 [CHANGE] /api/shops?svc=spots 하나로
   try {
-    const text = await fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv').then(r => r.text());
-    const lines = text.split(/\r?\n/), head = lines.shift().split(',').map(h => h.trim().toLowerCase());
-    const ic = head.indexOf('country'), ila = head.indexOf('lat'), ilo = head.indexOf('lon');
-    lines.forEach(l => { const c = l.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(x => x.replace(/,$/, '').replace(/^"|"$/g, '')); const la = +c[ila], lo = +c[ilo];
-      if (Number.isFinite(la) && Number.isFinite(lo)) knownSpots.push({ lat: la, lon: lo, code: OTLists.regionCode(c[ic]) }); });
     const ex = await fetch('/api/shops?svc=spots').then(r => r.json()).catch(() => ({}));
     (ex.spots || []).forEach(s => knownSpots.push({ lat: +s.lat, lon: +s.lon, code: OTLists.regionCode(s.country) }));
     if ($('lat').value) autoCountry(+$('lat').value, +$('lon').value);

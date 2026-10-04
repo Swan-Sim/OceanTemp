@@ -88,32 +88,10 @@ let memo = null;
 async function loadStations(base) {
   if (memo && Date.now() - memo.at < 10 * 60e3) return memo.list;
   let list = null;
-  try { const [v] = await S.R(['GET', 'sp:list']); if (v) { const o = JSON.parse(v); if (Date.now() - o.at < 30 * 60e3) list = o.list; } } catch (_) {}
+  try { const [v] = await S.R(['GET', 'sp:list']); if (v) { const o = JSON.parse(v); if (Date.now() - o.at < 5 * 60e3) list = o.list; } } catch (_) {}
   if (!list) {
-    let text = await S.getText(S.STATION_SHEET, 8000);
-    if (!text || !/^\s*no\b|,name,/i.test(text)) text = await S.getText(`${base}/data/stations.csv`, 8000);
-    const rows = S.csvObjects(text || '');
-    list = [];
-    const seen = new Set();
-    rows.forEach(r => {
-      const no = parseInt(r.no, 10), lat = +r.lat, lon = +r.lon;
-      if (!(no > 0) || seen.has(no) || !Number.isFinite(lat) || !Number.isFinite(lon) || /^n/i.test(r.show || '')) return;
-      seen.add(no);
-      list.push({ no, name: cleanSpotName(r.name), label: cleanSpotName(r.label || r.name), country: r.country || '', lat, lon,
-        // 시트에 name_en / name_ja 칸을 만들면 그 언어 페이지에서 그 이름을 써요(없으면 name)
-        names: { en: cleanSpotName(r.name_en || ''), ja: cleanSpotName(r.name_ja || '') } });
-    });
-    try {
-      const extra = await S.hgetallJSON(S.K.spots);
-      Object.values(extra).forEach(s => {
-        const no = parseInt(s.no, 10);
-        if (!(no > 0) || seen.has(no) || s.show === false || !Number.isFinite(+s.lat) || !Number.isFinite(+s.lon)) return;
-        seen.add(no);
-        list.push({ no, name: cleanSpotName(s.name), label: cleanSpotName(s.label || s.name), country: s.country || '', lat: +s.lat, lon: +s.lon });
-      });
-    } catch (_) {}
-    // [ADD] 기본 포인트(한강 측정소) - 시트·사용자 포인트에 같은 번호가 없을 때만
-    S.BUILTIN_SPOTS.forEach(b => { if (seen.has(b.no)) return; seen.add(b.no); list.push({ no: b.no, name: b.name, label: b.label, country: b.country, lat: b.lat, lon: b.lon }); });
+    // [CHANGE] 관리 페이지(Redis) 전체 포인트 목록 - 옮기기 전엔 _store가 구글 시트를 대신 읽어요
+    list = (await S.allSpots(base)).map(s => ({ no: s.no, name: cleanSpotName(s.name), label: cleanSpotName(s.label || s.name), country: s.country || '', lat: s.lat, lon: s.lon }));
     list.forEach(s => { s.cc = regionCode(s.country); s.slug = slugOf(s.name); });
     // [ADD] 나라 칸이 빈 포인트(사용자 등록 등)는 300km 안 가장 가까운 포인트의 나라로 채움
     list.forEach(s => {

@@ -18,6 +18,7 @@ const BUILTIN_SPOTS = [
   { no: 267, country: 'South Korea', name: '중랑천 관측지점', label: '중랑천', lat: 37.5440, lon: 127.0230, network: 'River/Seoul' },
   { no: 268, country: 'South Korea', name: '탄천 관측지점', label: '탄천', lat: 37.5150, lon: 127.0710, network: 'River/Seoul' }
 ];
+// (아래 STATION_SHEET는 관리 페이지로 옮기기 전까지만 읽어요)
 const STATION_SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
 
 async function R(...cmds) {
@@ -133,6 +134,48 @@ async function getText(url, ms) {
   catch (_) { return null; } finally { clearTimeout(tm); }
 }
 // 구글 시트 정점 중 가장 큰 번호(새 정점 번호를 겹치지 않게)
+// ───────── [ADD] 전체 포인트 목록(관리 페이지에서 직접 관리) ─────────
+//  spots:migrated 가 있으면 → Redis spots:extra 해시 하나가 전체 목록(구글 시트 안 씀)
+//  없으면(옮기기 전) → 예전처럼 구글 시트(+저장소 data/stations.csv 대체) + 사용자 등록 + 기본 포인트
+const MIGRATED_KEY = 'spots:migrated';
+// 이름 군더더기(이모지, "다이빙포인트" 등) 빼기 - 앱 js/stations.js cleanSpotName과 같은 규칙
+function cleanName(n) {
+  const out = String(n || '').replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/\s*\((다이빙|다이빙\s*포인트|diving|dive)\)/gi, '')
+    .replace(/\s*(다이빙\s*포인트|다이빙\s*스팟|diving\s*(area|site|spot|point)|dive\s*(site|spot|point))(?=\s*(\(|$))/gi, '').replace(/\s{2,}/g, ' ').trim();
+  return out || String(n || '').trim();
+}
+const truthy = (v, def) => v === undefined || v === null || v === '' ? def : !(v === false || /^(n|no|false|0)$/i.test(String(v).trim()));
+function normSpot(o) {
+  const no = parseInt(o.no, 10), lat = +o.lat, lon = +o.lon;
+  if (!(no > 0) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return { no, country: str(o.country, 40), name: str(o.name, 80), label: str(o.label, 30) || str(o.name, 30), lat: +lat.toFixed(5), lon: +lon.toFixed(5),
+    network: str(o.network, 40) || 'Beach/local', depth: truthy(o.depth, true), show: truthy(o.show, true) };
+}
+async function legacySpots(base) {
+  let text = await getText(STATION_SHEET, 8000);
+  if ((!text || !/(^|,)lat(,|$)/im.test(text.split('\n')[0])) && base) text = await getText(`${base}/data/stations.csv`, 8000);
+  const out = new Map();
+  csvObjects(text || '').forEach(r => { const s = normSpot(r); if (s && !out.has(s.no)) out.set(s.no, s); });
+  try { Object.values(await hgetallJSON(K.spots)).forEach(r => { const s = normSpot({ ...r, network: r.network || 'Beach/user' }); if (s && !out.has(s.no)) out.set(s.no, s); }); } catch (_) {}
+  BUILTIN_SPOTS.forEach(b => { if (!out.has(b.no)) out.set(b.no, normSpot(b)); });
+  return [...out.values()];
+}
+let spotsMemo = null;
+async function allSpots(base, opts) {
+  opts = opts || {};
+  if (!opts.fresh && spotsMemo && Date.now() - spotsMemo.at < 60e3) return opts.hidden ? spotsMemo.list : spotsMemo.list.filter(s => s.show);
+  let list, migrated = false;
+  try { const [m] = await R(['GET', MIGRATED_KEY]); migrated = !!m; } catch (_) {}
+  if (migrated) list = Object.values(await hgetallJSON(K.spots)).map(normSpot).filter(Boolean);
+  else list = await legacySpots(base);
+  list.sort((a, b) => a.no - b.no);
+  spotsMemo = { at: Date.now(), list, migrated };
+  return opts.hidden ? list : list.filter(s => s.show);
+}
+async function spotsMigrated() { try { const [m] = await R(['GET', MIGRATED_KEY]); return !!m; } catch (_) { return false; } }
+async function nextSpotNo(base) { const all = await allSpots(base, { hidden: true, fresh: true }); return Math.max(0, ...all.map(s => s.no), ...BUILTIN_SPOTS.map(b => b.no)) + 1; }
+function clearSpotsMemo() { spotsMemo = null; }
+
 async function sheetMaxNo() {
   const text = await getText(STATION_SHEET, 10000);
   return Math.max(0, ...csvObjects(text).map(o => parseInt(o.no, 10) || 0));
@@ -169,4 +212,5 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
 module.exports = { adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
-  csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET, BUILTIN_SPOTS };
+  csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET, BUILTIN_SPOTS,
+  allSpots, legacySpots, normSpot, cleanName, spotsMigrated, nextSpotNo, clearSpotsMemo, MIGRATED_KEY };

@@ -628,7 +628,10 @@
       const keep = box._lastStationId === st.id && typeof box._lastScroll === 'number';
       sc.scrollLeft = keep ? box._lastScroll : toNow();
       box._lastStationId = st.id;
-      sc.addEventListener('scroll', () => { box._lastScroll = sc.scrollLeft; }, { passive: true });
+      // [ADD] 표 가운데 칸 시각 → 지도 위 바람·파도 나침반(js/wind-dial.js)
+      const dialSync = () => { if (typeof windDialSetTime !== 'function') return; const c = sc.scrollLeft + (sc.clientWidth - 58) / 2; windDialSetTime(cols[0] + (c - COLW / 2) / COLW * STEP); };
+      sc.addEventListener('scroll', () => { box._lastScroll = sc.scrollLeft; dialSync(); }, { passive: true });
+      dialSync();
       let pending = null, pendingTimer = null; // 빠르게 여러 번 눌러도 하루씩 누적되게
       box.querySelectorAll('.nt-arrow').forEach(btn => btn.addEventListener('click', () => {
         const dir = +btn.dataset.dir;

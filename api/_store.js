@@ -48,8 +48,11 @@ function whatsapp(v) {
   const n = v.replace(/\D/g, ''); return n.length >= 6 ? `https://wa.me/${n}` : '';
 }
 const email = (v) => { v = str(v, 120).toLowerCase(); return /^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/.test(v) ? v : ''; };
-const MAX_SPOTS = 5; // [CHANGE] 샵 하나당 포인트는 5곳까지
-const spotList = (v) => [...new Set((Array.isArray(v) ? v : String(v || '').split(/[;,\s]+/)).map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 100000))].slice(0, MAX_SPOTS);
+// [CHANGE] 샵 하나당 포인트: 다이브샵 10곳, 리브어보드 20곳. 언어는 5개까지
+const MAX_SPOTS = 10, MAX_SPOTS_LIVEABOARD = 20, MAX_LANGS = 5;
+const shopType = (v) => String(v || '').toLowerCase() === 'liveaboard' ? 'liveaboard' : 'shop';
+const maxSpotsFor = (type) => shopType(type) === 'liveaboard' ? MAX_SPOTS_LIVEABOARD : MAX_SPOTS;
+const spotList = (v, max = MAX_SPOTS) => [...new Set((Array.isArray(v) ? v : String(v || '').split(/[;,\s]+/)).map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 100000))].slice(0, max);
 // [ADD] 요금제: trial = 무료(제한, 1년 뒤 종료) · friend = 무료(지인, 기간 없음) · paid = 유료. 예전 'free'는 지인으로 봄
 const planOf = (v) => { v = String(v || '').toLowerCase(); return /^paid|^유료/.test(v) ? 'paid' : /^trial|제한|체험/.test(v) ? 'trial' : /^friend|^free|지인|^무료/.test(v) ? 'friend' : 'trial'; };
 // [ADD] 약관 버전(terms/index.html과 같게). 바꾸면 기존 샵은 다음 수정 때 다시 동의
@@ -66,15 +69,16 @@ const dateStr = (v) => { v = str(v, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? 
 function langList(v) {
   v = str(v, 60);
   const codes = v.toLowerCase().split(/[,\s]+/).filter(Boolean);
-  if (codes.length && codes.every(c => /^[a-z]{2,3}$/.test(c))) return [...new Set(codes)].slice(0, MAX_SPOTS).join(',');
+  if (codes.length && codes.every(c => /^[a-z]{2,3}$/.test(c))) return [...new Set(codes)].slice(0, MAX_LANGS).join(',');
   return str(v, 40);
 }
 
 // 샵이 직접 고칠 수 있는 칸
 function shopFields(b) {
   b = b || {};
+  const type = shopType(b.type);
   return {
-    name: str(b.name, 60), spots: spotList(b.spots),
+    name: str(b.name, 60), type, spots: spotList(b.spots, maxSpotsFor(type)),
     phone: phone(b.phone), kakao: httpsUrl(b.kakao), whatsapp: whatsapp(b.whatsapp),
     instagram: instagram(b.instagram), web: httpsUrl(b.web),
     address: str(b.address, 160), lang: langList(b.lang), note: str(b.note, 120)
@@ -84,7 +88,7 @@ const hasContact = (f) => !!(f.phone || f.kakao || f.whatsapp || f.instagram || 
 
 // 사이트에 보내는 칸(이메일·링크해시 등은 절대 안 보냄)
 function publicShop(s) {
-  return { id: String(s.id), spots: s.spots || [], name: s.name, phone: s.phone || '', kakao: s.kakao || '', whatsapp: s.whatsapp || '',
+  return { id: String(s.id), type: shopType(s.type), spots: s.spots || [], name: s.name, phone: s.phone || '', kakao: s.kakao || '', whatsapp: s.whatsapp || '',
     instagram: s.instagram || '', web: s.web || '', address: s.address || '', lang: s.lang || '', note: s.note || '',
     paid: s.plan === 'paid', checked: s.checked || '' };
 }
@@ -211,6 +215,6 @@ async function adminEmail() { const c = await adminCfg(); return c.email || proc
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
-module.exports = { adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
+module.exports = { adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, MAX_SPOTS_LIVEABOARD, maxSpotsFor, shopType, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
   csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET, BUILTIN_SPOTS,
   allSpots, legacySpots, normSpot, cleanName, spotsMigrated, nextSpotNo, clearSpotsMemo, MIGRATED_KEY };

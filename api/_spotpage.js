@@ -546,7 +546,7 @@ ${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, 
     if (s.instagram) b.push(['instagram', s.instagram]); if (s.web) b.push(['web', s.web]);
     return b.map(([k, u, cls]) => `<a ${cls ? `class="${cls}" ` : ''}href="${esc(u)}" data-shop="${esc(s.id)}" data-k="${k}"${k === 'tel' ? '' : ' target="_blank" rel="noopener nofollow"'}>${t.shopBtn[k]}</a>`).join('');
   };
-  const shopHtml = `<h2>${t.shopH(esc(st.name))}</h2><div class="card">${shops.length ? shops.map(s => `<div class="shop"><div class="hd"><b>${esc(s.name)}</b>${s.paid ? `<span class="tag">${t.partner}</span>` : ''}<span class="lg">${esc(shopLang(s))}</span></div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}<div class="bt">${shopBtns(s)}</div></div>`).join('') : `<p class="txt">${t.shopNone}</p>`}
+  const shopHtml = `<h2>${t.shopH(esc(st.name))}</h2><div class="card">${shops.length ? shops.map(s => `<div class="shop"><div class="hd"><b>${esc(s.name)}</b>${s.type === 'liveaboard' ? `<span class="tag">${({ ko: '리브어보드', ja: 'ライブアボード' })[lang] || 'Liveaboard'}</span>` : ''}${s.paid ? `<span class="tag">${t.partner}</span>` : ''}<span class="lg">${esc(shopLang(s))}</span></div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}<div class="bt">${shopBtns(s)}</div></div>`).join('') : `<p class="txt">${t.shopNone}</p>`}
 <p class="txt" style="font-size:12px;margin-top:8px">${t.shopAsk} <a href="/shop/?spot=${st.no}" style="color:var(--accent)">${t.shopReg}</a></p></div>`;
 
   const byNo = Object.fromEntries(all.map(s => [s.no, s]));

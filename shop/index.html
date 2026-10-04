@@ -53,6 +53,9 @@
   table.st th:first-child, table.st td:first-child { text-align: left; }
   table.st td { text-align: right; padding: 7px 4px; border-bottom: 1px solid var(--line); }
   table.st td small { display: block; color: var(--dim); font-size: 11px; }
+  .typeRow { display: flex; gap: 16px; margin: 2px 0 6px; }
+  .typeRow label { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; cursor: pointer; }
+  .typeRow input { width: auto; margin: 0; }
 </style>
 </head>
 <body>
@@ -87,6 +90,11 @@
       <h2 data-k="secShop"></h2>
       <label><span data-k="name"></span> <b>*</b></label>
       <input name="name" maxlength="60" required>
+      <label data-k="type"></label>
+      <div class="typeRow" id="typeRow">
+        <label><input type="radio" name="type" value="shop" checked> <span data-k="typeShop"></span></label>
+        <label><input type="radio" name="type" value="liveaboard"> <span data-k="typeLive"></span></label>
+      </div>
       <label><span data-k="spots"></span> <b>*</b> <span id="spotCount" style="color:var(--dim)"></span></label>
       <input id="spotSearch" data-ph="spotsPh" autocomplete="off">
       <div class="sugg" id="sugg"></div>
@@ -149,7 +157,8 @@ const T = {
     lead: 'otemp.app 포인트 화면에 샵 연락처가 "제휴 샵"으로 보여요. 보내주신 정보는 운영자가 확인한 뒤 올라가요.',
     leadEdit: '고친 내용은 운영자가 확인한 뒤 사이트에 반영돼요. 그 전까지는 지금 정보가 그대로 보여요.',
     secShop: '샵 정보', name: '샵 이름', spots: '다니는 포인트', spotsPh: '포인트 이름으로 찾기 (예: 문섬)',
-    spotsHint: '5곳까지 고를 수 있어요. 찾는 포인트가 없으면 아래 "남길 말"에 적어주세요.', spotsFull: '5곳을 모두 골랐어요 (빼려면 ×)',
+    type: '종류', typeShop: '다이브샵', typeLive: '리브어보드',
+    spotsHint: (n) => `${n}곳까지 고를 수 있어요(다이브샵 10곳, 리브어보드 20곳). 찾는 포인트가 없으면 아래 "남길 말"에 적어주세요.`, spotsFull: (n) => `${n}곳을 모두 골랐어요 (빼려면 ×)`,
     address: '주소', lang: '가능한 언어', langAdd: '+ 언어 추가', langFull: '5개까지 고를 수 있어요', note: '한 줄 소개', notePh: '보트 다이빙 · 체험 다이빙 · 나이트록스',
     secContact: '공개 연락처', contactHint: '사이트에 그대로 보여요. 하나 이상 적어주세요. 개인 휴대폰 번호보다 샵 대표번호를 권해요.',
     phone: '전화', phonePh: '+82-64-000-0000', kakao: '카카오톡 채널 링크', kakaoPh: 'https://pf.kakao.com/...', waPh: '+82 10 0000 0000',
@@ -182,7 +191,8 @@ const T = {
     lead: 'Your contacts appear as a "Partner" shop on otemp.app dive spots. We review every submission before it goes live.',
     leadEdit: 'Changes go live after review. Until then, the current details stay on the site.',
     secShop: 'Shop', name: 'Shop name', spots: 'Dive spots you visit', spotsPh: 'Search spots (e.g. Moonseom)',
-    spotsHint: 'Pick up to 5. Missing a spot? Tell us in the message below.', spotsFull: 'All 5 picked (tap × to remove)',
+    type: 'Type', typeShop: 'Dive shop', typeLive: 'Liveaboard',
+    spotsHint: (n) => `Pick up to ${n} (dive shops 10, liveaboards 20). Missing a spot? Tell us in the message below.`, spotsFull: (n) => `All ${n} picked (tap × to remove)`,
     address: 'Address', lang: 'Languages', langAdd: '+ Add language', langFull: 'Up to 5 languages', note: 'One-line intro', notePh: 'Boat dives · Discover scuba · Nitrox',
     secContact: 'Public contacts', contactHint: 'Shown on the site as-is. Add at least one. A shop number is better than a personal phone.',
     phone: 'Phone', phonePh: '+82-64-000-0000', kakao: 'KakaoTalk channel link', kakaoPh: 'https://pf.kakao.com/...', waPh: '+82 10 0000 0000',
@@ -254,6 +264,7 @@ function applyLang() {
   document.title = (token ? L.titleEdit : L.title) + ' · otemp.app';
   showStatus();
   renderStats();
+  if (typeof renderChips === 'function' && $('chips')) try { renderChips(); } catch (_) {}
 }
 $('langBtn').onclick = (e) => { e.preventDefault(); lang = lang === 'ko' ? 'en' : 'ko'; applyLang(); };
 
@@ -277,11 +288,16 @@ async function loadSpots() {
   renderChips();
 }
 const spotName = (no) => { const s = spots.find(x => x.no === no); return s ? (s.label || s.name) : `#${no}`; };
-const MAX_SPOTS = 5;
+// [CHANGE] 다이브샵 10곳, 리브어보드 20곳 (api/_store.js와 같게)
+const maxSpots = () => { const r = document.querySelector('#f input[name="type"]:checked'); return r && r.value === 'liveaboard' ? 20 : 10; };
+document.getElementById('typeRow').addEventListener('change', () => renderChips());
 function renderChips() {
+  const MAX_SPOTS = maxSpots();
+  if (picked.length > MAX_SPOTS) picked = picked.slice(0, MAX_SPOTS);
   $('spotSearch').disabled = picked.length >= MAX_SPOTS;
-  $('spotSearch').placeholder = picked.length >= MAX_SPOTS ? T[lang].spotsFull : T[lang].spotsPh;
+  $('spotSearch').placeholder = picked.length >= MAX_SPOTS ? T[lang].spotsFull(MAX_SPOTS) : T[lang].spotsPh;
   $('spotCount').textContent = `${picked.length} / ${MAX_SPOTS}`;
+  document.querySelectorAll('[data-k="spotsHint"]').forEach(el => { el.textContent = T[lang].spotsHint(MAX_SPOTS); });
   $('chips').innerHTML = picked.map(no => `<span class="chip">${esc(spotName(no))}<button type="button" data-rm="${no}" aria-label="remove">×</button></span>`).join('');
 }
 $('chips').onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { picked = picked.filter(n => n !== +b.dataset.rm); renderChips(); } };
@@ -294,7 +310,7 @@ $('spotSearch').oninput = () => {
   box.style.display = hits.length ? 'block' : 'none';
 };
 $('sugg').onclick = (e) => { const d = e.target.closest('[data-no]'); if (!d) return;
-  if (picked.length >= MAX_SPOTS) { $('spotSearch').value = ''; $('sugg').style.display = 'none'; return; } // [ADD] 5곳까지
+  if (picked.length >= maxSpots()) { $('spotSearch').value = ''; $('sugg').style.display = 'none'; return; } // [ADD] 10곳(리브어보드 20곳)까지
   picked.push(+d.dataset.no); renderChips(); $('spotSearch').value = ''; $('sugg').style.display = 'none'; $('spotSearch').focus(); };
 
 // ── 보내기 ──
@@ -307,6 +323,7 @@ function formData() {
 }
 function fill(d, email) {
   setLangs(parseLangs(d.lang));
+  { const r = form.querySelector(`input[name="type"][value="${d.type === 'liveaboard' ? 'liveaboard' : 'shop'}"]`); if (r) r.checked = true; }
   ['name', 'address', 'note', 'phone', 'kakao', 'whatsapp', 'instagram', 'web'].forEach(k => { if (form[k]) form[k].value = d[k] || ''; });
   if (d.instagram) form.instagram.value = d.instagram.replace('https://www.instagram.com/', '@');
   form.email.value = email || '';

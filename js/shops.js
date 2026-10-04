@@ -72,7 +72,7 @@
       sendImps(list);
       box.innerHTML = `<div class="shop-note"><span>${shopEsc(t.shopPartnerOnly || '제휴 샵만 보여요')}</span><i>${shopEsc(t.shopMayChange || '정보가 바뀌었을 수 있어요')}</i></div>` +
         list.map(s => `<div class="shop-card">
-          <div class="shop-top"><span class="shop-name">${shopEsc(s.name)}</span><span class="shop-badge">${shopEsc(t.shopPartner || '제휴')}</span>${s.lang ? `<span class="shop-lang">${shopEsc(langLabel(s.lang))}</span>` : ''}</div>
+          <div class="shop-top"><span class="shop-name">${shopEsc(s.name)}</span><span class="shop-badge">${shopEsc(t.shopPartner || '제휴')}</span>${s.type === 'liveaboard' ? `<span class="shop-lang">${shopEsc(t.shopLiveaboard || 'Liveaboard')}</span>` : ''}${s.lang ? `<span class="shop-lang">${shopEsc(langLabel(s.lang))}</span>` : ''}</div>
           ${s.note ? `<div class="shop-desc">${shopEsc(s.note)}</div>` : ''}
           ${s.address ? `<a class="shop-addr" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}" data-shop="${shopEsc(s.id)}" data-shop-k="map" target="_blank" rel="noopener">${shopEsc(s.address)}</a>` : ''}
           <div class="shop-btns">${shopLinks(s).map(([k, href, label]) => `<a class="shop-btn${k === 'tel' ? ' call' : ''}" ${linkAttrs(s, k, href)}>${SHOP_ICON[k]}<span>${shopEsc(label)}</span></a>`).join('')}</div>

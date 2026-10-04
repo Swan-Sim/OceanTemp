@@ -494,7 +494,8 @@
       ${FIELDS.map(([k, label]) => k === 'lang'
         ? `<label>${label} (최대 5개)</label><div><select class="f" id="edLangAdd"></select><div id="edLangChips" class="chips"></div></div>`
         : k === 'spots'
-        ? `<label>${label} (최대 5곳)</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div>`
+        ? `<label>종류</label><select class="f" data-k="type" id="edType"><option value="shop"${s.type !== 'liveaboard' ? ' selected' : ''}>다이브샵 (포인트 10곳)</option><option value="liveaboard"${s.type === 'liveaboard' ? ' selected' : ''}>리브어보드 (포인트 20곳)</option></select>
+           <label>${label}</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div>`
         : `<label>${label}</label>${inp(k, s[k] || '', k === 'lang' ? '언어 코드, 최대 5개: ko,en,ja,zh,es …' : '')}`).join('')}
       <label>이메일(비공개)</label>${inp('email', s.email)}
       <label>요금제</label><select class="f" data-k="plan" id="edPlan">${planOpts(s.plan || 'trial')}</select>
@@ -517,7 +518,7 @@
       box.style.display = hits.length ? 'block' : 'none';
     };
     $('edSugg').onclick = (e) => { const d = e.target.closest('[data-no]'); if (!d) return;
-      if (edSpots.length >= 5) { alert('포인트는 5곳까지 넣을 수 있어요'); return; }
+      { const mx = $('edType').value === 'liveaboard' ? 20 : 10; if (edSpots.length >= mx) { alert(`포인트는 ${mx}곳까지 넣을 수 있어요`); return; } }
       edSpots.push(+d.dataset.no); renderEdChips(); $('edSpotQ').value = ''; $('edSugg').style.display = 'none'; };
     $('edChips').onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { edSpots = edSpots.filter(n => n !== +b.dataset.rm); renderEdChips(); } };
   }

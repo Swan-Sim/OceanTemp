@@ -708,6 +708,27 @@
       return { hourly: toHourly(raw), sources: [{ kind: 'aims', name: `${j.station.site} ${j.station.depth}m`, dist: j.station.dist }] };
     }
 
+    // ── [ADD] 대만: 중앙기상서(CWA) 부이·조위소 48시간 실측 + 공식 조석 예보 ──
+    const inTwWaters = (lat, lon) => lat > 21.3 && lat < 26.6 && lon > 118 && lon < 122.6;
+    async function cwaObs(lat, lon, d) {
+      const j = await fetchJSON(`/api/spotobs?svc=cwa&lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}`, 40000, 0).catch(() => null);
+      if (!j || !j.ok) return null;
+      const off = Math.round((d.nowLocalMs - Date.now()) / 60000) * 60000;
+      const X = (s) => Date.parse(s) + off;
+      const okTemp = (x, v) => { if (v == null || v < 3 || v > 35) return false; const m = interpAt(d.temp, x); return m == null || Math.abs(v - m) <= 6; };
+      const raw = [];
+      const add = (st, f) => { if (st && j.rows[st.id]) j.rows[st.id].forEach(r => { const o = { x: X(r.t) }; f(o, r); raw.push(o); }); };
+      add(j.temp, (o, r) => { if (okTemp(o.x, r.wt)) o.wt = r.wt; });
+      add(j.tide, (o, r) => { if (r.tide != null) o.tide = r.tide; });
+      add(j.wind, (o, r) => { if (r.ws != null && r.wd != null) { o.ws = r.ws; o.wd = r.wd; o.gust = r.gust; } });
+      add(j.wave, (o, r) => { if (r.wv != null) { o.wv = r.wv; o.per = r.per; } });
+      const used = [j.temp, j.tide, j.wind, j.wave].filter(Boolean).filter((s, i, a) => a.findIndex(z => z.id === s.id) === i);
+      const sources = used.map(s => ({ kind: 'cwa', name: (lang === 'ko' ? s.name : (s.nameEn || s.name)), dist: s.dist }));
+      const hilo = j.forecast ? j.forecast.ev.map(e => ({ x: X(e.t), y: e.h, type: e.type })) : [];
+      if (raw.length < 6 && !hilo.length) return null;
+      return { hourly: toHourly(raw), sources, cwaHilo: hilo, cwaFc: j.forecast && { name: j.forecast.name, dist: j.forecast.dist } };
+    }
+
     // ── 미국: NOAA CO-OPS + NDBC ──
     const COOPS = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
     async function coopsGet(id, product, extra) {
@@ -804,6 +825,7 @@
       if (st.country === 'Japan') r = await cmemsObs(lat, lon, d).catch(() => null);
       else if (inKoreaWaters(lat, lon)) r = await khoaObs(lat, lon, d);
       else if (inUsWaters(lat, lon)) r = await noaaObs(lat, lon, d);
+      else if (inTwWaters(lat, lon)) r = (await cwaObs(lat, lon, d).catch(() => null)) || await cmemsObs(lat, lon, d);
       else if (inAusWaters(lat, lon)) r = (await aimsObs(lat, lon, d).catch(() => null)) || await cmemsObs(lat, lon, d);
       else r = await cmemsObs(lat, lon, d);
       const jma = await jmaP;
@@ -830,6 +852,12 @@
         spliceTideRelative(d, h.tide); // 한국: 관측소 기준면 → 평균해면 기준으로 맞춤
       }
       d._obs = { sources: r.sources };
+      // [ADD] 대만: 실측 이후의 만조·간조는 중앙기상서 공식 예보로
+      if (r.cwaHilo && r.cwaHilo.length) {
+        const lastObs = h.tide.length ? h.tide[h.tide.length - 1].x : Date.now() + (d.nowLocalMs - Date.now());
+        d.extremes = [...(d.extremes || []).filter(e => e.x <= lastObs), ...r.cwaHilo.filter(e => e.x > lastObs)];
+        d._tidePred = true;
+      }
       if (jma && jma.ok) applyJmaTide(d, jma, h.tide);
       if (h.temp.length) st.curTemp = +h.temp[h.temp.length - 1].y.toFixed(1);
       return true;
@@ -849,7 +877,7 @@
 
     // 표 아래 출처 문구용: "국립해양조사원 서귀포 관측소(1.1km) · NDBC 46026 부이(28km)"
     function obsSourceText(sources) {
-      return sources.map(s => (s.kind === 'aims' ? t.obsAims(s.name) : s.kind === 'seoul' ? t.obsSeoul(s.name) : s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'kma' ? t.obsKma(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : s.kind === 'cmems' ? t.obsCmems(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
+      return sources.map(s => (s.kind === 'cwa' ? t.obsCwa(s.name) : s.kind === 'aims' ? t.obsAims(s.name) : s.kind === 'seoul' ? t.obsSeoul(s.name) : s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'kma' ? t.obsKma(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : s.kind === 'cmems' ? t.obsCmems(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
     }
 
     // ───────── [ADD] 90일 추이: 근처 관측소 실측 수온 일평균 (한국 KHOA / 미국 NOAA CO-OPS) ─────────

@@ -155,6 +155,14 @@ async function tideFor(st, today) {
       if (ex.length) return { ex, src: 'jma', station: j.station.name, dist: j.station.dist };
     }
   }
+  if (st.cc === 'TW') { // [ADD] 대만 중앙기상서 조석 예보
+    const j = await callApi('./spotobs', { svc: 'cwa', lat: String(st.lat), lon: String(st.lon) }, 9000);
+    const f = j && j.ok && j.forecast;
+    if (f) {
+      const ex = f.ev.filter(e => String(e.t).slice(0, 10) === today).map(e => ({ t: String(e.t).slice(11, 16), h: e.h, type: e.type }));
+      if (ex.length) return { ex, src: 'cwa', station: f.name, dist: f.dist };
+    }
+  }
   if (st.cc === 'US' || st.cc === 'MP' || st.cc === 'GU' || st.cc === 'PR') {
     const list = await callApi('./noaa', { svc: 'stations' }, 8000);
     const near = list && list.ok && (list.coops || []).filter(s => s.wl).map(s => ({ ...s, d: km(st.lat, st.lon, s.lat, s.lon) })).sort((a, b) => a.d - b.d)[0];
@@ -288,7 +296,7 @@ const T = {
     period: (p) => `주기 ${p}초`, gust: (g) => `돌풍 ${g}`, dir: ['북', '북동', '동', '남동', '남', '남서', '서', '북서'], dirW: (x) => `${x}풍`,
     cta: '실시간 지도·그래프로 보기 ›', share: '공유', copied: '링크를 복사했어요',
     tideH: '오늘 물때 (만조·간조)', high: '만조', low: '간조', msl: '평균해수면 기준',
-    tideSrc: { jma: (s, d) => `출처: 일본 기상청 조위표 · ${s} (${d}km)`, coops: (s, d) => `출처: NOAA CO-OPS 조석 예보 · ${s} (${d}km)`, model: () => '출처: Open-Meteo 해수면 모델(참고용, 항구 조위표와 다를 수 있어요)' },
+    tideSrc: { cwa: (s, d) => `출처: 대만 중앙기상서 조석 예보 · ${s} (${d}km)`, jma: (s, d) => `출처: 일본 기상청 조위표 · ${s} (${d}km)`, coops: (s, d) => `출처: NOAA CO-OPS 조석 예보 · ${s} (${d}km)`, model: () => '출처: Open-Meteo 해수면 모델(참고용, 항구 조위표와 다를 수 있어요)' },
     daysH: '앞으로 3일', dayN: ['오늘', '내일', '모레'], cols: ['수온', '파고(최대)', '바람(최대)', '시야(추정)'],
     visNote: (d) => `시야는 위성 탁도(마지막 위성 자료 ${d})로 추정한 값이고, 작은 글씨는 오차 범위예요. 날이 갈수록 범위가 넓어져요.`,
     climH: '월별 평균 수온', climNote: (y, a, b) => `NOAA 위성 수온 ${a}–${b}년(${y}년) 매달 평균`,
@@ -318,7 +326,7 @@ const T = {
     period: (p) => `period ${p} s`, gust: (g) => `gusts ${g}`, dir: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], dirW: (x) => `from ${x}`,
     cta: 'Open live map & charts ›', share: 'Share', copied: 'Link copied',
     tideH: 'Tides today (high & low)', high: 'High', low: 'Low', msl: 'relative to mean sea level',
-    tideSrc: { jma: (s, d) => `Source: Japan Meteorological Agency tide tables · ${s} (${d} km)`, coops: (s, d) => `Source: NOAA CO-OPS tide predictions · ${s} (${d} km)`, model: () => 'Source: Open-Meteo sea level model (approximate; may differ from harbour tide tables)' },
+    tideSrc: { cwa: (s, d) => `Source: Taiwan Central Weather Administration tide forecast · ${s} (${d} km)`, jma: (s, d) => `Source: Japan Meteorological Agency tide tables · ${s} (${d} km)`, coops: (s, d) => `Source: NOAA CO-OPS tide predictions · ${s} (${d} km)`, model: () => 'Source: Open-Meteo sea level model (approximate; may differ from harbour tide tables)' },
     daysH: 'Next 3 days', dayN: ['Today', 'Tomorrow', 'Day after'], cols: ['Water', 'Waves (max)', 'Wind (max)', 'Visibility (est.)'],
     visNote: (d) => `Visibility is estimated from satellite water clarity (latest satellite day ${d}); the small numbers are the likely range, which widens further ahead.`,
     climH: 'Average water temperature by month', climNote: (y, a, b) => `NOAA satellite SST, ${a}–${b} (${y} years) monthly mean`,
@@ -348,7 +356,7 @@ const T = {
     period: (p) => `周期 ${p}秒`, gust: (g) => `最大瞬間 ${g}`, dir: ['北', '北東', '東', '南東', '南', '南西', '西', '北西'], dirW: (x) => `${x}の風`,
     cta: 'リアルタイム地図・グラフを見る ›', share: '共有', copied: 'リンクをコピーしました',
     tideH: '今日の潮汐（満潮・干潮）', high: '満潮', low: '干潮', msl: '平均海面基準',
-    tideSrc: { jma: (s, d) => `出典：気象庁ホームページ（潮位表）・${s}（${d}km）`, coops: (s, d) => `出典：NOAA CO-OPS 潮汐予報・${s}（${d}km）`, model: () => '出典：Open-Meteo 海面モデル（参考値・港の潮位表と異なる場合があります）' },
+    tideSrc: { cwa: (s, d) => `出典：台湾中央気象署 潮汐予報・${s}（${d}km）`, jma: (s, d) => `出典：気象庁ホームページ（潮位表）・${s}（${d}km）`, coops: (s, d) => `出典：NOAA CO-OPS 潮汐予報・${s}（${d}km）`, model: () => '出典：Open-Meteo 海面モデル（参考値・港の潮位表と異なる場合があります）' },
     daysH: 'この先3日間', dayN: ['今日', '明日', '明後日'], cols: ['水温', '波高(最大)', '風(最大)', '透明度(推定)'],
     visNote: (d) => `透明度は衛星で測った海の濁り（最新の衛星データ ${d}）からの推定値で、小さな数字は誤差の範囲です。先の日ほど範囲が広くなります。`,
     climH: '月別平均水温', climNote: (y, a, b) => `NOAA 衛星水温 ${a}–${b}年（${y}年分）の月平均`,

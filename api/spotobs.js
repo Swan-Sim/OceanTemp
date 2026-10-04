@@ -131,6 +131,69 @@ async function aimsData(id, days) {
   if (rows.length) { try { await redisPipeline([['SET', ck, JSON.stringify({ at: Date.now(), rows }), 'EX', '7200']]); } catch (_) {} }
   return rows;
 }
+// ───────── [ADD] 대만 중앙기상서(CWA) 부이·조위소 실측 + 조석 예보 ─────────
+//  키: Vercel 환경변수 CWA_API_KEY. 자료: 氣象資料開放平臺 O-B0076-001(측정소 목록), O-B0075-001(48시간 실측), F-A0021-001(1개월 조석 예보)
+const CWA = 'https://opendata.cwa.gov.tw';
+const inTw = (lat, lon) => lat > 21.3 && lat < 26.6 && lon > 118 && lon < 122.6;
+const nz = (v) => v == null || v === '' || v === 'None' || v === '-' ? null : (Number.isFinite(+v) ? +v : null);
+async function cwaGet(path, ms) {
+  const key = process.env.CWA_API_KEY;
+  if (!key) return null;
+  return getJSON(`${CWA}${path}${path.includes('?') ? '&' : '?'}Authorization=${encodeURIComponent(key)}&format=JSON`, ms || 20000);
+}
+async function cwaStations() {
+  try { const [{ result }] = await redisPipeline([['GET', 'cwa:st']]); if (result) { const o = JSON.parse(result); if (Date.now() - o.at < 7 * 86400e3) return o.list; } } catch (_) {}
+  let j = await cwaGet('/fileapi/v1/opendataapi/O-B0076-001?downloadType=WEB', 25000);
+  if (!j || !j.cwaopendata) j = await getJSON(`${CWA}/webapi/datasetExample/O-B0076-001/JSON`, 20000); // 키 파일 API가 안 되면 공개 예시(같은 형식)
+  const L = (((((j || {}).cwaopendata || {}).Resources || {}).Resource || {}).Data || {}).SeaSurfaceObs;
+  const list = ((L && L.Location) || []).map(l => l.Station || {}).map(s => ({ id: String(s.StationID), name: s.StationName, nameEn: s.StationNameEN, kind: s.StationAttribute, lat: +s.StationLatitude, lon: +s.StationLongitude }))
+    .filter(s => s.id && Number.isFinite(s.lat) && Number.isFinite(s.lon));
+  if (list.length) { try { await redisPipeline([['SET', 'cwa:st', JSON.stringify({ at: Date.now(), list }), 'EX', String(14 * 86400)]]); } catch (_) {} }
+  return list;
+}
+// 48시간 실측 { 측정소ID: [{ t(ISO+08:00), wt, tide(m), wv, per, ws, wd, gust }] } - 30분 저장
+async function cwaObsAll() {
+  try { const [{ result }] = await redisPipeline([['GET', 'cwa:obs']]); if (result) { const o = JSON.parse(result); if (Date.now() - o.at < 30 * 60e3) return o.by; } } catch (_) {}
+  const j = await cwaGet('/api/v1/rest/datastore/O-B0075-001', 30000);
+  const locs = (((j || {}).Records || {}).SeaSurfaceObs || {}).Location || [];
+  const by = {};
+  locs.forEach(l => {
+    const id = String((l.Station || {}).StationID || ''); if (!id) return;
+    const rows = (((l.StationObsTimes || {}).StationObsTime) || []).map(o => {
+      const w = o.WeatherElements || {}, a = w.PrimaryAnemometer || {};
+      const r = { t: o.DateTime, wt: nz(w.SeaTemperature), tide: nz(w.TideHeight), wv: nz(w.WaveHeight), per: nz(w.WavePeriod), ws: nz(a.WindSpeed), wd: nz(a.WindDirection), gust: nz(a.MaximumWindSpeed) };
+      return Object.values(r).filter(v => v != null).length > 1 ? r : null;
+    }).filter(Boolean).sort((x, y) => Date.parse(x.t) - Date.parse(y.t));
+    if (rows.length) by[id] = rows;
+  });
+  if (Object.keys(by).length) { try { await redisPipeline([['SET', 'cwa:obs', JSON.stringify({ at: Date.now(), by }), 'EX', '7200']]); } catch (_) {} }
+  return by;
+}
+// 조석 예보(향후 8일) [{ id, name, lat, lon, ev:[{ t, type, h(m, 그 지역 평균해면 기준) }] }] - 하루 저장
+async function cwaTideFc() {
+  try { const [{ result }] = await redisPipeline([['GET', 'cwa:tide']]); if (result) { const o = JSON.parse(result); if (Date.now() - o.at < 12 * 3600e3) return o.list; } } catch (_) {}
+  const j = await cwaGet('/api/v1/rest/datastore/F-A0021-001', 40000);
+  const end = Date.now() + 8 * 86400e3, start = Date.now() - 86400e3;
+  const list = ((((j || {}).records || {}).TideForecasts) || []).map(x => x.Location || {}).map(l => ({
+    id: l.LocationId, name: l.LocationName, lat: +l.Latitude, lon: +l.Longitude,
+    ev: (((l.TimePeriods || {}).Daily) || []).flatMap(d => d.Time || []).map(e => ({ t: e.DateTime, type: /滿/.test(e.Tide) ? 'high' : /乾/.test(e.Tide) ? 'low' : '', h: nz((e.TideHeights || {}).AboveLocalMSL) }))
+      .filter(e => e.type && e.h != null && Date.parse(e.t) >= start && Date.parse(e.t) <= end).map(e => ({ ...e, h: +(e.h / 100).toFixed(2) }))
+  })).filter(l => Number.isFinite(l.lat) && Number.isFinite(l.lon) && l.ev.length);
+  if (list.length) { try { await redisPipeline([['SET', 'cwa:tide', JSON.stringify({ at: Date.now(), list }), 'EX', String(2 * 86400)]]); } catch (_) {} }
+  return list;
+}
+// 정점 근처: 수온·파도는 값이 있는 가장 가까운 부이/측정소(25km), 조위는 가장 가까운 조위소(25km), 예보는 가장 가까운 예보 지점(40km)
+async function cwaNear(lat, lon) {
+  const [sts, by, fc] = await Promise.all([cwaStations().catch(() => []), cwaObsAll().catch(() => ({})), cwaTideFc().catch(() => [])]);
+  const cand = near(sts, lat, lon, 25).filter(s => by[s.id]);
+  const has = (s, k) => by[s.id].some(r => r[k] != null);
+  const tSt = cand.find(s => has(s, 'wt')), tdSt = cand.find(s => has(s, 'tide') && /潮位/.test(s.kind || s.name)) || cand.find(s => has(s, 'tide'));
+  const wSt = cand.find(s => has(s, 'ws')), vSt = cand.find(s => has(s, 'wv'));
+  const f = near(fc, lat, lon, 40)[0] || null;
+  const pack = (s) => s ? { id: s.id, name: s.name, nameEn: s.nameEn, dist: +s.dist.toFixed(1) } : null;
+  return { temp: pack(tSt), tide: pack(tdSt), wind: pack(wSt), wave: pack(vSt), rows: Object.fromEntries([tSt, tdSt, wSt, vSt].filter(Boolean).map(s => [s.id, by[s.id]])),
+    forecast: f ? { id: f.id, name: f.name, dist: +f.dist.toFixed(1), ev: f.ev } : null };
+}
 const inUs = (lat, lon) => (lon > -180 && lon < -60 && lat > 10 && lat < 72) || (lon > 140 && lon < 150 && lat > 10 && lat < 22);
 
 // 위성 수온 격자(지구 바다 색과 같은 것)에서 그 자리 값 - 고장 센서 거르기용
@@ -203,6 +266,10 @@ async function build(base) {
           ...near(khList, s.lat, s.lon, 40, k => k.kind === 'buoy').slice(0, 1).map(k => ({ dist: k.dist, get: () => L.khoa(k.code), src: { kind: 'khoa', name: k.name, buoy: true } })),
           ...near(kmList, s.lat, s.lon, 40).slice(0, 1).map(k => ({ dist: k.dist, get: () => L.kma(k.id), src: { kind: 'kma', name: k.name, buoy: true } }))
         ].sort((a, b) => a.dist - b.dist);
+      } else if (inTw(s.lat, s.lon) && process.env.CWA_API_KEY) {
+        const n = await cwaNear(s.lat, s.lon).catch(() => null);
+        const st = n && n.temp;
+        if (st) cands = [{ dist: st.dist, get: async () => { const r = n.rows[st.id].filter(x => x.wt != null).pop(); return r ? { t: r.wt, at: Date.parse(r.t) } : null; }, src: { kind: 'cwa', name: st.name } }];
       } else if (inAus(s.lat, s.lon) && (await aimsP).length) {
         const a = near(await aimsP, s.lat, s.lon, AIMS_KM).slice(0, 1).map(k => ({ dist: k.dist, get: () => L.aims(k.id), src: { kind: 'aims', name: `${k.site} ${k.depth}m` } }));
         const e = near(cm && cm.ok ? cm.stations : [], s.lat, s.lon, 40, k => k.p.includes('T')).slice(0, 1).map(k => ({ dist: k.dist, get: () => L.cmems(k.id), src: { kind: 'cmems', name: k.name } }));
@@ -233,24 +300,16 @@ module.exports = async function handler(req, res) {
   // [ADD] 포인트별 검색용 페이지·사이트맵(/ko/s/39/문섬, /sitemap.xml) - 함수 개수를 늘리지 않으려고 여기서 처리
   const svc = (req.query || {}).svc;
   if (svc === 'page' || svc === 'index' || svc === 'sitemap') return require('./_spotpage')(req, res);
-  // [임시 진단] 대만 CWA 응답 구조 보기(키·값 대신 구조와 첫 항목만): /api/spotobs?svc=cwaprobe
-  if (svc === 'cwaprobe') {
-    const key = process.env.CWA_API_KEY;
-    if (!key) return res.status(200).json({ ok: false, reason: 'no CWA_API_KEY' });
-    const shape = (o, d) => { if (d > 12) return '…'; if (Array.isArray(o)) return o.length ? [shape(o[0], d + 1), `(${o.length})`] : []; if (o && typeof o === 'object') return Object.fromEntries(Object.entries(o).slice(0, 25).map(([k, v]) => [k, shape(v, d + 1)])); return o; };
-    const ids = ['O-B0075-001', 'O-B0076-001', 'F-A0021-001'];
-    const out = {};
-    for (const id of ids) {
-      const extra = id === 'F-A0021-001' ? '&limit=1' : id === 'O-B0075-001' ? '&limit=2' : '&limit=3';
-      try {
-        const r = await fetch(`https://opendata.cwa.gov.tw/api/v1/rest/datastore/${id}?Authorization=${encodeURIComponent(key)}&format=JSON${extra}`, { headers: { 'User-Agent': 'OceanTemp (otemp.app)' } });
-        const txt = await r.text();
-        let j = null; try { j = JSON.parse(txt); } catch (_) {}
-        out[id] = j ? { fields: ((j.Result || j.result || {}).Fields || (j.result || {}).fields || []).map(f => f.Id || f.id), shape: shape(j.Records || j.records, 0) } : { status: r.status, text: txt.slice(0, 300) };
-      } catch (e) { out[id] = 'error ' + (e && e.message); }
-    }
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ ok: true, out });
+  // [ADD] 대만 CWA: /api/spotobs?svc=cwa&lat=..&lon=.. → 근처 부이·조위소 48시간 실측 + 조석 예보
+  if (svc === 'cwa') {
+    try {
+      const lat = +req.query.lat, lon = +req.query.lon;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(400).json({ ok: false });
+      if (!process.env.CWA_API_KEY) return res.status(200).json({ ok: false, reason: 'no_key' });
+      const n = await cwaNear(lat, lon);
+      res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
+      return res.status(200).json({ ok: !!(n.temp || n.tide || n.wind || n.wave || n.forecast), ...n, source: '中央氣象署 氣象資料開放平臺 (CWA Open Data)' });
+    } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e) }); }
   }
   // [ADD] 호주 AIMS: /api/spotobs?svc=aims&lat=..&lon=..&days=7 → 가장 가까운 관측소(70km)의 수온
   if (svc === 'aims') {

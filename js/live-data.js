@@ -543,6 +543,7 @@
       // [ADD] 부산 연안: 부산시가 직접 잰 투명도(분기 평균)를 실측 참고값으로 붙임
       try { v.ground = await groundTransparency(lat, lon); } catch (_) {}
       st._visCache = v;
+      try { if (typeof windDialUpdate === 'function') setTimeout(windDialUpdate, 0); } catch (_) {} // [ADD] 나침반 시야 칩 갱신
       return v;
     }
 

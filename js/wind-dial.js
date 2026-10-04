@@ -44,45 +44,48 @@
       return (typeof lang !== 'undefined' && lang === 'ko') ? ko[i] : en[i];
     };
 
-    function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel) {
+    function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis) {
       const R = 74, ko = typeof lang !== 'undefined' && lang === 'ko';
       let g = `<circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
         `<circle r="${R * 0.62}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 4"/>` +
         `<g fill="#e2e8f0" font-size="10" font-weight="700" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.6);stroke-width:2.5px">` +
         `<text y="${-R - 5}">N</text><text x="${R + 9}" y="4">E</text><text y="${R + 13}">S</text><text x="${-R - 9}" y="4">W</text></g>`;
-      if (w && w.dir != null && w.speed != null) {
-        const s = Math.max(0, Math.min(1, w.speed / 15));           // 0~15 m/s
-        const len = 26 + s * 40, wid = 3 + s * 6, start = R + 46, end = start - len;
+      // [CHANGE] 화살표 길이 = 값에 완전 비례(머리 삼각형은 값이 0이 아니면 항상 같은 크기로 표시, 0이면 화살표 없음)
+      //   바람 15 m/s = 60px, 파도 3 m = 60px, 흐름 1 m/s(약 2노트) = 60px, 써지 0.5 m/s = 양쪽 40px. 넘으면 그 길이에서 멈춤
+      const prop = (val, full, px) => Math.min(px, Math.max(0, val) / full * px);
+      if (w && w.dir != null && w.speed != null && w.speed > 0.05) {
+        const Ls = prop(w.speed, 15, 60), wid = 5, tip = R - 4, base = tip + 14;
         g += `<g transform="rotate(${w.dir.toFixed(0)})" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.7))">` +
-          `<line x1="0" y1="${-start}" x2="0" y2="${-end - 6}" stroke="#fbbf24" stroke-width="${wid.toFixed(1)}" stroke-linecap="round"/>` +
-          `<path d="M${-(wid + 6)} ${-end - 8} L0 ${-end + 8} L${wid + 6} ${-end - 8}Z" fill="#fbbf24"/></g>`;
+          (Ls > 0.5 ? `<line x1="0" y1="${-(base + Ls)}" x2="0" y2="${-base + 2}" stroke="#fbbf24" stroke-width="${wid}" stroke-linecap="round"/>` : '') +
+          `<path d="M-10 ${-base} L0 ${-tip} L10 ${-base}Z" fill="#fbbf24"/></g>`;
       }
       const vdir = v ? (v.waveDir != null ? v.waveDir : v.swellDir) : null;
-      if (v && v.height != null && vdir != null) {
-        const s = Math.max(0, Math.min(1, v.height / 3));           // 0~3 m
-        const amp = 3 + s * 6, sw = 2.5 + s * 3, top = R + 46, bot = top - (34 + s * 40); // [CHANGE] 바람처럼 원 밖에서 들어오게
-        let d = `M0 ${-top}`;
-        for (let y = -top, k = 0; y < -bot - 6; y += 8, k++) d += ` q${k % 2 ? -amp : amp} 4 0 8`;
+      if (v && v.height != null && v.height > 0.02 && vdir != null) {
+        const Ls = prop(v.height, 3, 60), tip = R - 2, base = tip + 13, amp = 5;
+        let d = `M0 ${-(base + Ls)}`;
+        const n = Math.max(0, Math.floor(Ls / 8));
+        for (let k = 0; k < n; k++) d += ` q${k % 2 ? -amp : amp} 4 0 8`;
+        if (Ls - n * 8 > 0.5) d += ` L0 ${-base}`;
         g += `<g transform="rotate(${vdir.toFixed(0)})" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.7))">` +
-          `<path d="${d}" fill="none" stroke="#7dd3fc" stroke-width="${sw.toFixed(1)}" stroke-linecap="round"/>` +
-          `<path d="M${-(sw + 5)} ${-bot - 8} L0 ${-bot + 6} L${sw + 5} ${-bot - 8}Z" fill="#7dd3fc"/></g>`;
+          (Ls > 0.5 ? `<path d="${d}" fill="none" stroke="#7dd3fc" stroke-width="3.5" stroke-linecap="round"/>` : '') +
+          `<path d="M-9 ${-base} L0 ${-tip} L9 ${-base}Z" fill="#7dd3fc"/></g>`;
       }
       // 흐름: 정점에서 바깥으로(흘러가는 쪽)
       const flow = (c, color, wid, dashed) => {
-        if (!c || c.speed == null || c.to == null) return '';
-        const s = Math.max(0, Math.min(1, c.speed / 1.0)), len = 16 + s * 44;
+        if (!c || c.speed == null || c.to == null || c.speed < 0.005) return '';
+        const Ls = prop(c.speed, 1.0, 60), r0 = 8, hb = r0 + Ls;
         return `<g transform="rotate(${c.to.toFixed(0)})" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.7))">` +
-          `<line x1="0" y1="-9" x2="0" y2="${-9 - len}" stroke="${color}" stroke-width="${wid}" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4"' : ''}/>` +
-          `<path d="M${-(wid + 4)} ${-9 - len + 2} L0 ${-9 - len - 10} L${wid + 4} ${-9 - len + 2}Z" fill="${color}"/></g>`;
+          (Ls > 0.5 ? `<line x1="0" y1="${-r0}" x2="0" y2="${-hb}" stroke="${color}" stroke-width="${wid}" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4"' : ''}/>` : '') +
+          `<path d="M-8 ${-hb} L0 ${-hb - 12} L8 ${-hb}Z" fill="${color}"/></g>`;
       };
       // [ADD] 써지: 파도 축을 따라 앞뒤로 흔들림 → 정점 중심 양쪽 화살표(수심 5m 세기로 길이)
       if (v && vdir != null) {
         const u5 = windDialSurge(v, 5);
-        if (u5 != null) {
-          const L = 12 + Math.min(1, u5 / 0.5) * 34, sw = 2.5;
+        if (u5 != null && u5 > 0.005) {
+          const L = prop(u5, 0.5, 40), sw = 2.5;
           g += `<g transform="rotate(${vdir.toFixed(0)})" opacity="0.95" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.7))">` +
-            `<line x1="0" y1="${-L + 6}" x2="0" y2="${L - 6}" stroke="#bae6fd" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="2 3"/>` +
-            `<path d="M-6 ${-L + 8} L0 ${-L - 2} L6 ${-L + 8}Z" fill="#bae6fd"/><path d="M-6 ${L - 8} L0 ${L + 2} L6 ${L - 8}Z" fill="#bae6fd"/></g>`;
+            (L > 0.5 ? `<line x1="0" y1="${-L}" x2="0" y2="${L}" stroke="#bae6fd" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="2 3"/>` : '') +
+            `<path d="M-6 ${-L} L0 ${-L - 10} L6 ${-L}Z" fill="#bae6fd"/><path d="M-6 ${L} L0 ${L + 10} L6 ${L}Z" fill="#bae6fd"/></g>`;
         }
       }
       g += flow(c30, '#15803d', 5, false) + flow(c5, '#4ade80', 4, false) + flow(cs, '#d9f99d', 3, true);
@@ -112,6 +115,9 @@
       const tw = Math.max(64, timeLabel.length * 9 + 22), isNowLbl = /^(지금|Now)$/.test(timeLabel);
       labels += `<g transform="translate(0 ${R + 34})"><rect x="${-tw / 2}" y="-14" width="${tw}" height="26" rx="13" fill="rgba(7,11,20,0.92)" stroke="${isNowLbl ? '#FFB000' : '#4ade80'}" stroke-width="1.5"/>` +
         `<text x="0" y="4" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${timeLabel}</text>` +
+        (vis ? (() => { const f = (x) => x >= 29.95 ? '30+' : x < 10 ? x.toFixed(1) : Math.round(x); const txt = `${ko ? '시야' : 'Vis'} ${f(vis.vis)}m`, rng = vis.lo != null ? ` ${f(vis.lo)}–${f(vis.hi)}` : '';
+          const cw = 18 + (txt.length + rng.length) * 6.6; return `<g transform="translate(${-tw / 2 - 8 - cw} -11)"><rect x="0" y="0" width="${cw}" height="22" rx="11" fill="rgba(7,11,20,0.92)" stroke="#7dd3fc" stroke-width="1.2"/>` +
+          `<text x="9" y="15" font-size="11" fill="#7dd3fc" font-weight="800">${txt}<tspan fill="#94a3b8" font-weight="600" font-size="9.5">${rng}</tspan></text></g>`; })() : '') +
         (tzLabel ? `<text x="0" y="27" font-size="9.5" fill="#cbd5e1" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.75);stroke-width:3px">${tzLabel}</text>` : '') + `</g>`;
       const W = 2 * (R + 192), H = 2 * (R + 70);
       return `<svg width="${W}" height="${H}" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="overflow:visible;pointer-events:none">${g}${labels}</svg>`;
@@ -132,7 +138,16 @@
       // [ADD] 표·나침반 시각은 그 포인트의 현지 시각 - 다른 나라에서 볼 때 헷갈리지 않게 표시
       const offH = Math.round((d.nowLocalMs - Date.now()) / 900e3) / 4;
       const tzLabel = `${ko ? '현지 시각' : 'local time'} UTC${offH >= 0 ? '+' : '−'}${Math.abs(offH)}`;
-      const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel);
+      // [ADD] 그 시각(날짜)의 시야 추정 + 범위 (앱 시야 계산의 projection, 하루 단위)
+      let vis = null;
+      const vc = st._visCache;
+      if (vc && vc.projection && vc.projection.length) {
+        const off = d.nowLocalMs - Date.now();
+        let best = null, bd = Infinity;
+        vc.projection.forEach(p => { const dd = Math.abs(p.t + off - x); if (dd < bd) { bd = dd; best = p; } });
+        if (best && bd <= 36 * 3600e3) vis = isNow && vc.now ? vc.now : best;
+      }
+      const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis);
       const size = [2 * (74 + 192), 2 * (74 + 70)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];

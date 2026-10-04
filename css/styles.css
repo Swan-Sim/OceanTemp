@@ -444,18 +444,24 @@
     .nt-vis-warn { margin-left: 3px; font-size: 10px; font-weight: 600; color: #FBBF24; opacity: .9; }
 
     /* [ADD] 범례 머리줄: 눌러서 접기/펴기, 끌어서 옮기기 (나머지 범례 글자는 그래프 터치를 막지 않게 그대로 통과) */
-    .chart-legend-overlay .lg-head { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
-      display: flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 600; color: #94A3B8; padding: 2px 4px 2px 0; margin: -2px 0 1px; }
-    .chart-legend-overlay .lg-head:active { cursor: grabbing; }
-    .chart-legend-overlay .lg-grip { opacity: .7; letter-spacing: -1px; }
+    /* 범례 전체가 손잡이: 어디든 잡고 끌기, 탭하면 접기/펴기. 머리줄은 높이를 안 차지하게 오른쪽 위 작은 아이콘 두 개로 */
+    .chart-legend-overlay { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+    .chart-legend-overlay.dragging { cursor: grabbing; opacity: .92; }
+    .chart-legend-overlay .lg-head { position: absolute; top: 3px; right: 3px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+      font-size: 9px; font-weight: 600; color: #94A3B8; line-height: 1; }
+    .chart-legend-overlay .lg-title { display: none; }
+    .chart-legend-overlay .lg-arrow { font-size: 9px; padding: 1px 2px; cursor: pointer; }
+    .chart-legend-overlay .lg-dock { padding: 2px 3px; display: inline-flex; line-height: 0; color: #CBD5E1; border: 1px solid rgba(255,255,255,0.18); border-radius: 4px; cursor: pointer; }
     .chart-legend-overlay.collapsed > :not(.lg-head) { display: none; }
-    .chart-legend-overlay.collapsed { background: rgba(7,11,20,0.82); padding: 3px 8px; }
-    .chart-legend-overlay.collapsed .lg-head { margin: 0; }
-    .chart-legend-overlay .lg-dock { margin-left: 4px; padding: 2px 4px; display: inline-flex; line-height: 0; color: #CBD5E1; border: 1px solid rgba(255,255,255,0.18); border-radius: 4px; cursor: pointer; }
+    .chart-legend-overlay.collapsed { background: rgba(7,11,20,0.82); padding: 3px 6px; }
+    .chart-legend-overlay.collapsed .lg-head { position: static; flex-direction: row; gap: 5px; }
+    .chart-legend-overlay.collapsed .lg-title { display: inline; }
     /* 그래프 밖(아래 줄)으로 치운 범례: 가로로 펼쳐서 한두 줄 */
     .chart-legend-overlay.docked { position: static; transform: none !important; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 10px;
       background: transparent !important; padding: 3px 0 0; pointer-events: auto; font-size: 9px; }
-    .chart-legend-overlay.docked .lg-head { margin: 0 2px 0 0; cursor: ns-resize; }
+    .chart-legend-overlay.docked { cursor: ns-resize; }
+    .chart-legend-overlay.docked .lg-head { position: static; flex-direction: row; gap: 5px; margin: 0 2px 0 0; }
+    .chart-legend-overlay.docked .lg-arrow { display: none; }
 
     /* [FIX] 휴대폰에서 정점명이 한 글자로 잘리던 것: 출처 글자가 먼저 줄고(…), 정점명은 최소 한글 4자(영문 8자) 정도는 남김 */
     .nt-head .nt-title { flex: 0 1 auto; min-width: 4.4em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1051,7 +1051,7 @@
         box.style.transform = `translate(${off.x}px, ${off.y}px)`;
       };
       const apply = () => {
-        box.classList.toggle('collapsed', collapsed);
+        box.classList.toggle('collapsed', collapsed && !docked);
         box.classList.toggle('docked', docked);
         const arrow = box.querySelector('.lg-head .lg-arrow');
         if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
@@ -1064,37 +1064,49 @@
         if (!box.firstElementChild || box.querySelector('.lg-head')) return;
         const head = document.createElement('div');
         head.className = 'lg-head';
-        head.innerHTML = `<span class="lg-grip">⠿</span><span>${t.legendTitle || 'Legend'}</span><span class="lg-arrow"></span><span class="lg-dock" role="button"></span>`;
+        head.innerHTML = `<span class="lg-title">${t.legendTitle || 'Legend'}</span><span class="lg-arrow" role="button"></span><span class="lg-dock" role="button"></span>`;
         box.insertBefore(head, box.firstChild);
+        if (box._lgBound) { apply(); return; }
+        box._lgBound = true;
+        // 범례 어디든 잡고 끌기(마우스·손가락). 끄는 동안 그래프 상자 안에만 머물게 해서 지구본 쪽으로 넘어가지 않게.
+        // 아래로는 조금 더(40px) 끌 수 있고, 그만큼 내려놓으면 그래프 아래 줄로 치움.
         let start = null, moved = false;
-        head.addEventListener('pointerdown', (e) => {
-          start = { x: e.clientX, y: e.clientY, ox: off.x, oy: off.y, dockBtn: !!(e.target.closest && e.target.closest('.lg-dock')) }; moved = false;
-          head.setPointerCapture(e.pointerId);
+        box.addEventListener('pointerdown', (e) => {
+          if (e.button != null && e.button > 0) return;
+          const pr = chartBox.getBoundingClientRect(), br = box.getBoundingClientRect();
+          start = { x: e.clientX, y: e.clientY, ox: off.x, oy: off.y, pr, base: { l: br.left - off.x, r: br.right - off.x, t: br.top - off.y, b: br.bottom - off.y },
+            dockBtn: !!(e.target.closest && e.target.closest('.lg-dock')) };
+          moved = false;
+          try { box.setPointerCapture(e.pointerId); } catch (_) {}
         });
-        head.addEventListener('pointermove', (e) => {
+        box.addEventListener('pointermove', (e) => {
           if (!start) return;
           const dx = e.clientX - start.x, dy = e.clientY - start.y;
           if (!moved && Math.hypot(dx, dy) < 6) return; // 살짝 누른 건 "탭"
-          moved = true;
+          moved = true; box.classList.add('dragging');
           if (docked) return; // 치운 상태에선 끌기 = 위로 올리기만(손 뗄 때 판단)
-          off = { x: start.ox + dx, y: start.oy + dy };
-          box.style.transform = `translate(${off.x}px, ${off.y}px)`;
+          const { pr, base } = start;
+          const x = Math.min(pr.right - base.r, Math.max(pr.left - base.l, start.ox + dx));
+          const y = Math.min(pr.bottom - base.b + 40, Math.max(pr.top - base.t, start.oy + dy));
+          off = { x, y };
+          box.style.transform = `translate(${x}px, ${y}px)`;
         });
         const end = (e) => {
           if (!start) return;
-          const s0 = start; start = null;
+          const s0 = start; start = null; box.classList.remove('dragging');
           if (!moved) {
             if (s0.dockBtn) return setDocked(!docked);
+            if (docked) return;
             collapsed = !collapsed; store.set('collapsed', collapsed); return apply();
           }
           if (docked) { if (e.clientY - s0.y < -30) setDocked(false); return; }
-          // 그래프 아래 끝보다 더 끌어내리면 그래프 밖(아래 줄)으로 치움
+          // 그래프 아래 끝 밖으로 20px 넘게 끌어내리면 그래프 밖(아래 줄)으로 치움
           const pr = chartBox.getBoundingClientRect(), br = box.getBoundingClientRect();
-          if (br.top > pr.bottom - 24) return setDocked(true);
+          if (br.bottom > pr.bottom + 20) return setDocked(true);
           place(); store.set('offset', off);
         };
-        head.addEventListener('pointerup', end);
-        head.addEventListener('pointercancel', () => { start = null; });
+        box.addEventListener('pointerup', end);
+        box.addEventListener('pointercancel', () => { start = null; box.classList.remove('dragging'); place(); });
         apply();
       };
       new MutationObserver(addHead).observe(box, { childList: true });

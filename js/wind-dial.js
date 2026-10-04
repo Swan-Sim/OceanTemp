@@ -51,7 +51,7 @@
         `<g fill="#e2e8f0" font-size="10" font-weight="700" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.6);stroke-width:2.5px">` +
         `<text y="${-R - 5}">N</text><text x="${R + 9}" y="4">E</text><text y="${R + 13}">S</text><text x="${-R - 9}" y="4">W</text></g>`;
       // [CHANGE] 화살표 길이 = 값에 완전 비례(머리 삼각형은 값이 0이 아니면 항상 같은 크기로 표시, 0이면 화살표 없음)
-      //   바람 15 m/s = 60px, 파도 3 m = 60px, 흐름 1 m/s(약 2노트) = 60px, 써지 0.5 m/s = 양쪽 40px. 넘으면 그 길이에서 멈춤
+      //   바람 15 m/s = 60px, 파도 3 m = 60px, 흐름 1 m/s(약 2노트) = 원 반지름 가까이, 써지 0.5 m/s = 양쪽 40px. 넘으면 그 길이에서 멈춤
       const prop = (val, full, px) => Math.min(px, Math.max(0, val) / full * px);
       if (w && w.dir != null && w.speed != null && w.speed > 0.05) {
         const Ls = prop(w.speed, 15, 60), wid = 5, tip = R - 4, base = tip + 14;
@@ -72,11 +72,12 @@
       }
       // 흐름: 정점에서 바깥으로(흘러가는 쪽)
       const flow = (c, color, wid, dashed) => {
+        // [CHANGE] 머리 끝은 나침반 원 위(흘러가는 쪽), 몸통 꼬리는 정점 쪽으로 - 값에 비례해 안쪽으로 늘어남
         if (!c || c.speed == null || c.to == null || c.speed < 0.005) return '';
-        const Ls = prop(c.speed, 1.0, 60), r0 = 8, hb = r0 + Ls;
+        const Ls = prop(c.speed, 1.0, R - 22), tip = R, hb = tip - 12;
         return `<g transform="rotate(${c.to.toFixed(0)})" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.7))">` +
-          (Ls > 0.5 ? `<line x1="0" y1="${-r0}" x2="0" y2="${-hb}" stroke="${color}" stroke-width="${wid}" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4"' : ''}/>` : '') +
-          `<path d="M-8 ${-hb} L0 ${-hb - 12} L8 ${-hb}Z" fill="${color}"/></g>`;
+          (Ls > 0.5 ? `<line x1="0" y1="${-(hb - Ls)}" x2="0" y2="${-hb}" stroke="${color}" stroke-width="${wid}" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4"' : ''}/>` : '') +
+          `<path d="M-8 ${-hb} L0 ${-tip} L8 ${-hb}Z" fill="${color}"/></g>`;
       };
       // [ADD] 써지: 파도 축을 따라 앞뒤로 흔들림 → 정점 중심 양쪽 화살표(수심 5m 세기로 길이)
       if (v && vdir != null) {

@@ -512,7 +512,10 @@
       const st = selectedStation;
       let d = st._hourlyCache;
       const hasObs = d && d._obs && d._obs.sources.length;
-      let status = statusHTML(t.statusLive, hasObs ? t.obsSource(obsSourceText(d._obs.sources)) : t.nowSource, hasObs ? srcShort(d._obs.sources) + ' · Open-Meteo' : 'Open-Meteo', st);
+      // [CHANGE] 일본 기상청 조위표를 썼으면 출처에 "JMA"도 표시
+      const jmaTxt = d && d._tidePred === 'jma' ? 'JMA · ' : '';
+      const jmaTitle = d && d._tideJma ? ' · ' + t.tideJma(d._tideJma.name, d._tideJma.dist) : '';
+      let status = statusHTML(t.statusLive, (hasObs ? t.obsSource(obsSourceText(d._obs.sources)) : t.nowSource) + jmaTitle, (hasObs ? srcShort(d._obs.sources) + ' · ' : '') + jmaTxt + 'Open-Meteo', st);
       if (!d) {
         if (st._userRequested && !st._hourlyState) ensureHourlyData(st);
         d = getEstimatedHourly(st);

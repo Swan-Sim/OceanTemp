@@ -112,18 +112,18 @@ async function aimsData(id, days) {
   days = Math.max(1, Math.min(14, days || 2));
   const ck = `aims:d:${id}:${days}`;
   try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (Date.now() - o.at < 30 * 60e3) return o.rows; } } catch (_) {}
-  const from = new Date(Date.now() - days * 86400e3).toISOString().slice(0, 19);
+  const from = new Date(Date.now() - days * 86400e3).toISOString().slice(0, 19), thru = new Date(Date.now() + 3600e3).toISOString().slice(0, 19);
   const c = new AbortController(); const tm = setTimeout(() => c.abort(), 20000);
   let rows = [];
   try {
-    let url = `${AIMS}/data?series_id=${id}&from_date=${from}&size=5000`;
+    let url = `${AIMS}/data?series_id=${id}&from_date=${from}&thru_date=${thru}&size=5000`;
     for (let page = 0; page < 3 && url; page++) {
       const r = await fetch(url, { signal: c.signal, headers: { 'X-API-Key': key, 'User-Agent': 'OceanTemp (otemp.app)' } });
       if (!r.ok) { aimsLastErr = { status: r.status, body: (await r.text()).slice(0, 200), from }; break; }
       const j = await r.json();
       if (page === 0) aimsLastErr = { status: r.status, n: (j.results || []).length, keys: Object.keys(j), sample: (j.results || [])[0] || null };
       (j.results || []).forEach(o => { const v = +o.qc_val; if (Number.isFinite(v) && v > -2 && v < 40 && o.time) rows.push({ t: o.time, wt: +v.toFixed(2) }); });
-      url = j.links && j.links.next ? j.links.next : (j.cursor ? `${AIMS}/data?series_id=${id}&from_date=${from}&size=5000&cursor=${encodeURIComponent(j.cursor)}` : null);
+      url = j.links && j.links.next ? j.links.next : (j.cursor ? `${AIMS}/data?series_id=${id}&from_date=${from}&thru_date=${thru}&size=5000&cursor=${encodeURIComponent(j.cursor)}` : null);
       if (!(j.results || []).length) break;
     }
   } catch (e) { aimsLastErr = { error: String(e && e.message || e) }; } finally { clearTimeout(tm); }
@@ -237,13 +237,17 @@ module.exports = async function handler(req, res) {
   if (svc === 'cwaprobe') {
     const key = process.env.CWA_API_KEY;
     if (!key) return res.status(200).json({ ok: false, reason: 'no CWA_API_KEY' });
-    const shape = (o, d) => { if (d > 7) return '…'; if (Array.isArray(o)) return o.length ? [shape(o[0], d + 1), `(${o.length})`] : []; if (o && typeof o === 'object') return Object.fromEntries(Object.entries(o).slice(0, 25).map(([k, v]) => [k, shape(v, d + 1)])); return o; };
+    const shape = (o, d) => { if (d > 12) return '…'; if (Array.isArray(o)) return o.length ? [shape(o[0], d + 1), `(${o.length})`] : []; if (o && typeof o === 'object') return Object.fromEntries(Object.entries(o).slice(0, 25).map(([k, v]) => [k, shape(v, d + 1)])); return o; };
     const ids = ['O-B0075-001', 'O-B0076-001', 'F-A0021-001'];
     const out = {};
     for (const id of ids) {
       const extra = id === 'F-A0021-001' ? '&limit=1' : id === 'O-B0075-001' ? '&limit=2' : '&limit=3';
-      const j = await getJSON(`https://opendata.cwa.gov.tw/api/v1/rest/datastore/${id}?Authorization=${encodeURIComponent(key)}&format=JSON${extra}`, 20000);
-      out[id] = j ? shape(j, 0) : 'fetch failed';
+      try {
+        const r = await fetch(`https://opendata.cwa.gov.tw/api/v1/rest/datastore/${id}?Authorization=${encodeURIComponent(key)}&format=JSON${extra}`, { headers: { 'User-Agent': 'OceanTemp (otemp.app)' } });
+        const txt = await r.text();
+        let j = null; try { j = JSON.parse(txt); } catch (_) {}
+        out[id] = j ? { fields: ((j.Result || j.result || {}).Fields || (j.result || {}).fields || []).map(f => f.Id || f.id), shape: shape(j.Records || j.records, 0) } : { status: r.status, text: txt.slice(0, 300) };
+      } catch (e) { out[id] = 'error ' + (e && e.message); }
     }
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({ ok: true, out });

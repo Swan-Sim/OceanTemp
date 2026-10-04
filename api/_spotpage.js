@@ -113,6 +113,12 @@ async function loadStations(base) {
       });
     } catch (_) {}
     list.forEach(s => { s.cc = regionCode(s.country); s.slug = slugOf(s.name); });
+    // [ADD] 나라 칸이 빈 포인트(사용자 등록 등)는 300km 안 가장 가까운 포인트의 나라로 채움
+    list.forEach(s => {
+      if (s.cc) return;
+      const n = list.filter(o => o.cc && o !== s).map(o => ({ o, d: km(s.lat, s.lon, o.lat, o.lon) })).sort((a, b) => a.d - b.d)[0];
+      if (n && n.d <= 300) { s.cc = n.o.cc; s.country = n.o.country; }
+    });
     list.sort((a, b) => a.no - b.no);
     if (list.length) { try { await S.R(['SET', 'sp:list', JSON.stringify({ at: Date.now(), list }), 'EX', String(86400)]); } catch (_) {} }
   }
@@ -236,7 +242,7 @@ async function build(st, all) {
   const ll = `latitude=${st.lat}&longitude=${st.lon}`;
   const [mar, wx, nearCur, visJ, obs] = await Promise.all([
     getJSON(`${MARINE}?${ll}&current=sea_surface_temperature,wave_height,wave_period&hourly=sea_surface_temperature,wave_height,wave_period,sea_level_height_msl&forecast_days=3&timezone=auto&cell_selection=sea`),
-    getJSON(`${WX}?${ll}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=wind_speed_10m,wind_gusts_10m&wind_speed_unit=ms&forecast_days=3&timezone=auto`),
+    getJSON(`${WX}?${ll}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m&hourly=wind_speed_10m,wind_gusts_10m,temperature_2m&wind_speed_unit=ms&forecast_days=3&timezone=auto`),
     near.length ? getJSON(`${MARINE}?latitude=${near.map(x => x.s.lat).join(',')}&longitude=${near.map(x => x.s.lon).join(',')}&current=sea_surface_temperature&cell_selection=sea`) : null,
     callApi('./visibility', { lat: st.lat.toFixed(3), lon: st.lon.toFixed(3), v: '3' }, 8000),
     obsNow(st)
@@ -247,16 +253,19 @@ async function build(st, all) {
   // 지금
   const mc = mar && mar.current || {}, wc = wx && wx.current || {};
   d.now = { sst: mc.sea_surface_temperature ?? null, wave: mc.wave_height ?? null, period: mc.wave_period ?? null,
-    wind: wc.wind_speed_10m ?? null, gust: wc.wind_gusts_10m ?? null, dir: wc.wind_direction_10m ?? null };
-  if (obs) d.obs = { t: obs.t, at: obs.at, name: obs.src && obs.src.name || '', dist: obs.src && obs.src.dist };
+    wind: wc.wind_speed_10m ?? null, gust: wc.wind_gusts_10m ?? null, dir: wc.wind_direction_10m ?? null, air: wc.temperature_2m ?? null };
+  if (obs) d.obs = { t: obs.t, at: obs.at, name: obs.src && obs.src.name || '', dist: obs.src && obs.src.dist, extra: obs.src && obs.src.extra || null, kind: obs.src && obs.src.kind || '' };
   // 3일 요약(현지 날짜)
   const days = {};
   const add = (times, arr, key) => (times || []).forEach((t, i) => { const v = arr && arr[i]; if (v == null) return; const k = t.slice(0, 10); (days[k] = days[k] || {}); (days[k][key] = days[k][key] || []).push(v); });
   if (mar && mar.hourly) { add(mar.hourly.time, mar.hourly.sea_surface_temperature, 'sst'); add(mar.hourly.time, mar.hourly.wave_height, 'wave'); }
-  if (wx && wx.hourly) { add(wx.hourly.time, wx.hourly.wind_speed_10m, 'wind'); add(wx.hourly.time, wx.hourly.wind_gusts_10m, 'gust'); }
+  if (wx && wx.hourly) { add(wx.hourly.time, wx.hourly.wind_speed_10m, 'wind'); add(wx.hourly.time, wx.hourly.wind_gusts_10m, 'gust'); add(wx.hourly.time, wx.hourly.temperature_2m, 'air'); }
   const avg = (a) => a && a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1) : null;
   const max = (a) => a && a.length ? +Math.max(...a).toFixed(1) : null;
-  d.days = Object.keys(days).sort().filter(k => k >= d.today).slice(0, 3).map(k => ({ date: k, sst: avg(days[k].sst), wave: max(days[k].wave), wind: max(days[k].wind), gust: max(days[k].gust) }));
+  d.days = Object.keys(days).sort().filter(k => k >= d.today).slice(0, 3).map(k => ({ date: k, sst: avg(days[k].sst), wave: max(days[k].wave), wind: max(days[k].wind), gust: max(days[k].gust),
+    airMin: days[k].air && days[k].air.length ? +Math.min(...days[k].air).toFixed(0) : null, airMax: max(days[k].air) }));
+  // [ADD] 바다 모델에 값이 하나도 없으면 강·호수 같은 내륙 물(파도·물때·위성 시야 없음)
+  d.water = d.now.sst == null && d.now.wave == null && !d.days.some(x => x.sst != null || x.wave != null) ? 'inland' : 'sea';
   // 시야
   if (visJ && visJ.ok && !(visJ.nearestSeaKm != null && visJ.nearestSeaKm > 3)) {
     const p = visProjection(visJ);
@@ -288,6 +297,10 @@ const T = {
   ko: {
     title: (n, t) => `${n} 수온·시야·파도${t != null ? ` – 오늘 ${t}°C` : ''} | otemp`,
     h1: (n) => `${n} 수온·시야·파도`,
+    titleIn: (n, t) => `${n} 수온·날씨${t != null ? ` – 오늘 ${t}°C` : ''} | otemp`, h1In: (n) => `${n} 수온·날씨`,
+    descIn: (n, c, t) => `${c ? c + ' ' : ''}${n}의 오늘 물 수온${t != null ? ` ${t}°C` : ''}, 기온과 바람, 3일 예보까지 한눈에.`,
+    aboutIn: (n, c) => `${n}${c ? `(${c})` : ''}의 물 상태를 매일 정리한 페이지예요. 수온은 가장 가까운 공공 수질 측정소의 실측값이고, 기온·바람은 예보 모델 값이에요. 강·호수는 바다용 파도·물때·위성 시야 자료가 없어서 보여주지 않아요. 입수 전에는 현지 안내를 따르세요.`,
+    trib: '근처 지천 측정소', seoulSrc: '자료: 서울특별시 한강 수질 자동측정망(서울 열린데이터광장, 공공누리 1유형)', air: '기온', colsIn: ['기온(최저~최고)', '바람(최대)', '돌풍(최대)'],
     desc: (n, c, t, v, w) => `${c ? c + ' ' : ''}${n}의 오늘 바다 수온${t != null ? ` ${t}°C` : ''}${v ? `, 시야 약 ${v}m` : ''}${w != null ? `, 파고 ${w}m` : ''}. 3일 예보, 물때(만조·간조), 월별 평균 수온과 근처 다이빙샵까지 한눈에.`,
     sub: (lat, lon) => `위도 ${lat}°, 경도 ${lon}°`, upd: (s) => `${s} 업데이트`,
     nowT: '지금 수온', vis: '시야(위성 추정)', wave: '파고', wind: '바람',
@@ -314,6 +327,10 @@ const T = {
   en: {
     title: (n, t) => `${n} Water Temperature, Visibility & Waves${t != null ? ` – ${t}°C today` : ''} | otemp`,
     h1: (n) => `${n} water temperature, visibility & waves`,
+    titleIn: (n, t) => `${n} Water Temperature & Weather${t != null ? ` – ${t}°C today` : ''} | otemp`, h1In: (n) => `${n} water temperature & weather`,
+    descIn: (n, c, t) => `Water temperature at ${n}${c ? `, ${c}` : ''} today${t != null ? `: ${t}°C (${f(t)}°F)` : ''}, plus air temperature, wind and a 3-day forecast.`,
+    aboutIn: (n, c) => `This page summarises water conditions at ${n}${c ? `, ${c}` : ''} every day. The water temperature is measured at the nearest public water-quality station; air temperature and wind come from forecast models. Rivers and lakes have no sea models for waves, tides or satellite visibility, so those are not shown. Follow local advice before you get in.`,
+    trib: 'Nearby tributary stations', seoulSrc: 'Data: Seoul Metropolitan Government Han River water-quality stations (Seoul Open Data Plaza, KOGL Type 1)', air: 'Air', colsIn: ['Air (min–max)', 'Wind (max)', 'Gusts (max)'],
     desc: (n, c, t, v, w) => `Sea water temperature at ${n}${c ? `, ${c}` : ''} today${t != null ? `: ${t}°C (${f(t)}°F)` : ''}${v ? `, visibility about ${v} m` : ''}${w != null ? `, waves ${w} m` : ''}. 3-day forecast, tide times, monthly averages and nearby dive shops.`,
     sub: (lat, lon) => `Lat ${lat}°, Lon ${lon}°`, upd: (s) => `updated ${s}`,
     nowT: 'Water temp now', vis: 'Visibility (satellite est.)', wave: 'Waves', wind: 'Wind',
@@ -340,6 +357,10 @@ const T = {
   ja: {
     title: (n, t) => `${n}の水温・透明度・波${t != null ? ` – 今日 ${t}°C` : ''} | otemp`,
     h1: (n) => `${n}の水温・透明度・波`,
+    titleIn: (n, t) => `${n}の水温・天気${t != null ? ` – 今日 ${t}°C` : ''} | otemp`, h1In: (n) => `${n}の水温・天気`,
+    descIn: (n, c, t) => `${c ? c + '・' : ''}${n}の今日の水温${t != null ? ` ${t}°C` : ''}、気温と風、3日間予報。`,
+    aboutIn: (n, c) => `${n}${c ? `（${c}）` : ''}の水の状態を毎日まとめたページです。水温は最寄りの公共水質測定所の実測値、気温と風は予報モデルの値です。川や湖には海用の波・潮汐・衛星透明度のデータがないため表示していません。入水前は現地の案内に従ってください。`,
+    trib: '近くの支流の測定所', seoulSrc: 'データ：ソウル特別市 漢江水質自動測定網（ソウル オープンデータ広場、公共ヌリ1類型）', air: '気温', colsIn: ['気温(最低~最高)', '風(最大)', '最大瞬間'],
     desc: (n, c, t, v, w) => `${c ? c + '・' : ''}${n}の今日の海水温${t != null ? ` ${t}°C` : ''}${v ? `、透明度 約${v}m` : ''}${w != null ? `、波高 ${w}m` : ''}。3日間予報、潮汐（満潮・干潮）、月別平均水温、近くのダイビングショップ。`,
     sub: (lat, lon) => `緯度 ${lat}°・経度 ${lon}°`, upd: (s) => `${s} 更新`,
     nowT: '現在の水温', vis: '透明度（衛星推定）', wave: '波高', wind: '風',
@@ -441,28 +462,34 @@ function renderSpot(lang, st0, all, d, shops, clim, base) {
   const nowT = d.obs ? r1(d.obs.t) : r1(d.now.sst);
   const today = d.days[0] || {};
   const visToday = d.vis && d.vis[d.today];
-  const title = t.title(st.name, nowT);
-  const description = t.desc(st.name, cname, nowT, visToday ? fmtVis(visToday.v) : null, r1(d.now.wave));
+  const inland = d.water === 'inland';
+  const title = inland ? t.titleIn(st.name, nowT) : t.title(st.name, nowT);
+  const description = inland ? t.descIn(st.name, cname, nowT) : t.desc(st.name, cname, nowT, visToday ? fmtVis(visToday.v) : null, r1(d.now.wave));
   const hrefs = Object.fromEntries(LANGS.map(l => [l, pathOf(l, st)]));
   const deg = (x) => x == null ? '' : t.dir[Math.round(((x % 360) + 360) % 360 / 45) % 8];
   const F = lang === 'en' ? (v) => ` <small>(${f(v)}°F)</small>` : () => '';
 
   const cards = `<div class="cards">
 <div class="c t"><div class="l">${t.nowT}</div><div class="v">${nowT ?? '–'}<small>°C</small></div><div class="s">${d.obs ? esc(t.obs(d.obs.name, d.obs.dist)) : t.model}${lang === 'en' && nowT != null ? ` · ${f(nowT)}°F` : ''}</div></div>
-<div class="c"><div class="l">${t.vis}</div><div class="v">${visToday ? fmtVis(visToday.v) : '–'}<small>m</small></div><div class="s">${visToday ? t.range(fmtVis(visToday.lo), fmtVis(visToday.hi)) : ''}</div></div>
-<div class="c"><div class="l">${t.wave}</div><div class="v">${r1(d.now.wave) ?? '–'}<small>m</small></div><div class="s">${d.now.period != null ? t.period(Math.round(d.now.period)) : ''}</div></div>
+${inland ? `<div class="c"><div class="l">${t.air}</div><div class="v">${d.now.air != null ? Math.round(d.now.air) : '–'}<small>°C</small></div><div class="s">${d.days[0] && d.days[0].airMin != null ? `${d.days[0].airMin}~${Math.round(d.days[0].airMax)}°C` : ''}</div></div>` : `<div class="c"><div class="l">${t.vis}</div><div class="v">${visToday ? fmtVis(visToday.v) : '–'}<small>m</small></div><div class="s">${visToday ? t.range(fmtVis(visToday.lo), fmtVis(visToday.hi)) : ''}</div></div>
+<div class="c"><div class="l">${t.wave}</div><div class="v">${r1(d.now.wave) ?? '–'}<small>m</small></div><div class="s">${d.now.period != null ? t.period(Math.round(d.now.period)) : ''}</div></div>`}
 <div class="c"><div class="l">${t.wind}</div><div class="v">${d.now.wind != null ? Math.round(d.now.wind) : '–'}<small>m/s</small></div><div class="s">${d.now.dir != null ? t.dirW(deg(d.now.dir)) : ''}${d.now.gust != null ? ' · ' + t.gust(Math.round(d.now.gust)) : ''}</div></div>
 </div>`;
 
   let tide = '';
-  if (d.tide && d.tide.ex.length) {
+  if (!inland && d.tide && d.tide.ex.length) {
     const sgn = (h) => (h > 0 ? '+' : h < 0 ? '−' : '') + Math.abs(h).toFixed(1) + 'm';
     tide = `<h2>${t.tideH}</h2><div class="card"><div class="tide">${d.tide.ex.slice(0, 4).map(e => `<div class="${e.type === 'high' ? 'hi' : 'lo'}">${e.type === 'high' ? t.high : t.low}<b>${e.t}</b>${sgn(e.h)}</div>`).join('')}</div>
 <p class="note">${esc(t.tideSrc[d.tide.src](d.tide.station, d.tide.dist))} · ${t.msl}</p></div>`;
   }
 
   let days = '';
-  if (d.days.length) {
+  if (d.days.length && inland) {
+    const wd = (date) => { try { return new Intl.DateTimeFormat(lang, { weekday: 'short', timeZone: 'UTC' }).format(new Date(date + 'T12:00:00Z')); } catch (_) { return ''; } };
+    days = `<h2>${t.daysH}</h2><div class="card"><table><tr><th></th>${t.colsIn.map(c => `<th>${c}</th>`).join('')}</tr>
+${d.days.map((x, i) => `<tr><td>${t.dayN[i] || x.date} <small style="display:inline">(${wd(x.date)})</small></td><td>${x.airMin != null ? `${x.airMin}~${Math.round(x.airMax)}°C` : '–'}</td><td>${x.wind != null ? Math.round(x.wind) + ' m/s' : '–'}</td><td>${x.gust != null ? Math.round(x.gust) + ' m/s' : '–'}</td></tr>`).join('')}
+</table></div>`;
+  } else if (d.days.length) {
     const wd = (date) => { try { return new Intl.DateTimeFormat(lang, { weekday: 'short', timeZone: 'UTC' }).format(new Date(date + 'T12:00:00Z')); } catch (_) { return ''; } };
     days = `<h2>${t.daysH}</h2><div class="card"><table><tr><th></th>${t.cols.map(c => `<th>${c}</th>`).join('')}</tr>
 ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.dayN[i] || x.date} <small style="display:inline">(${wd(x.date)})</small></td><td>${x.sst != null ? x.sst + '°C' : '–'}</td><td>${x.wave != null ? x.wave + 'm' : '–'}</td><td>${x.wind != null ? Math.round(x.wind) + ' m/s' : '–'}</td><td>${v ? `${fmtVis(v.v)}m<small>${fmtVis(v.lo)}–${fmtVis(v.hi)}m</small>` : '–'}</td></tr>`; }).join('')}
@@ -499,12 +526,13 @@ ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.d
 
   const body = `${header(lang, hrefs)}
 <nav class="crumb"><a href="/${lang}/s/">${t.links[1]}</a> › <a href="/${lang}/s/#${st.cc || 'xx'}">${esc(cname)}</a> › ${esc(st.name)}</nav>
-<h1>${esc(t.h1(st.name))}</h1>
+<h1>${esc(inland ? t.h1In(st.name) : t.h1(st.name))}</h1>
 <p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))} · ${t.upd(fmtDate(d.obs ? d.obs.at : d.at, t.dateFmt))}</p>
 ${cards}
+${d.obs && d.obs.kind === 'seoul' ? `<p class="note" style="margin:0 0 10px">${d.obs.extra && d.obs.extra.length ? `${t.trib}: ${d.obs.extra.map(x => `${esc(x.name)} ${x.t}°C`).join(' · ')}<br>` : ''}${t.seoulSrc}</p>` : ''}
 <div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>
 ${tide}${days}${climH}${shopHtml}${nearHtml}
-<h2>${t.aboutH(esc(st.name))}</h2><p class="txt">${esc(t.about(st.name, cname))}</p>
+<h2>${t.aboutH(esc(st.name))}</h2><p class="txt">${esc(inland ? t.aboutIn(st.name, cname) : t.about(st.name, cname))}</p>
 <div class="foot">${t.foot}<br>© otemp.app · <a href="/">${t.links[0]}</a><a href="/${lang}/s/">${t.links[1]}</a><a href="/shop/">${t.links[2]}</a><a href="/spot/">${t.links[3]}</a></div>
 <script>(function(){var no=${st.no};document.getElementById('share').onclick=function(){var u=location.href.split('#')[0];if(navigator.share){navigator.share({title:document.title,url:u}).catch(function(){})}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){var x=document.getElementById('toast');x.textContent=${JSON.stringify(t.copied)};x.style.display='block';setTimeout(function(){x.style.display='none'},1600)})}};
 var ids=[].slice.call(document.querySelectorAll('[data-shop]')).map(function(a){return a.getAttribute('data-shop')}).filter(function(v,i,a){return a.indexOf(v)===i});

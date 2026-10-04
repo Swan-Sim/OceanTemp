@@ -51,6 +51,26 @@ async function loadSpots(base) {
 const km = (a, b, c, d) => { const R = 6371, r = Math.PI / 180, x = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
 const near = (list, lat, lon, maxKm, f) => (list || []).filter(k => !f || f(k)).map(k => ({ ...k, dist: km(lat, lon, k.lat, k.lon) })).filter(k => k.dist <= maxKm).sort((a, b) => a.dist - b.dist);
 const inKorea = (lat, lon) => lat > 32 && lat < 39.5 && lon > 124 && lon < 132.5;
+// [ADD] 서울 한강(강 포인트): 서울시 한강 수질 자동측정망 실시간 수온 (서울 열린데이터광장 WPOSInformationTime, 공공누리 1유형)
+//   인증키는 Vercel 환경변수 SEOUL_API_KEY. 본류 측정소는 선유 하나라 서울 한강 포인트는 선유 값을 쓰고, 지천 값은 참고로 붙여요.
+const inSeoulHan = (lat, lon) => lat > 37.44 && lat < 37.63 && lon > 126.79 && lon < 127.2;
+const SEOUL_STN = { '선유': [37.5434, 126.8991], '안양천': [37.5370, 126.8810], '중랑천': [37.5530, 127.0450], '탄천': [37.5150, 127.0730] };
+async function seoulHan() {
+  const key = process.env.SEOUL_API_KEY;
+  if (!key) return null;
+  const j = await getJSON(`http://openapi.seoul.go.kr:8088/${encodeURIComponent(key)}/json/WPOSInformationTime/1/12/`, 15000);
+  const rows = j && j.WPOSInformationTime && j.WPOSInformationTime.row || [];
+  const out = {};
+  rows.forEach(r => {
+    const name = r.MSRSTN_NM, t = parseFloat(r.WATT);
+    if (out[name] || !Number.isFinite(t)) return;
+    const hh = String(r.HR || '').slice(0, 2), ymd = String(r.YMD || '');
+    if (!/^\d{8}$/.test(ymd)) return;
+    const at = Date.parse(`${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}T00:00:00+09:00`) + (+hh) * 3600e3;
+    out[name] = { t, at };
+  });
+  return out;
+}
 const inUs = (lat, lon) => (lon > -180 && lon < -60 && lat > 10 && lat < 72) || (lon > 140 && lon < 150 && lat > 10 && lat < 22);
 
 // 위성 수온 격자(지구 바다 색과 같은 것)에서 그 자리 값 - 고장 센서 거르기용
@@ -94,6 +114,7 @@ async function build(base) {
     getJSON(`${base}/api/cmems?svc=stations`, 40000),
     redisPipeline([['GET', 'sst:grid']]).then(r => r[0].result ? JSON.parse(JSON.parse(r[0].result).body) : null).catch(() => null)
   ]);
+  const seoulP = spots.some(s => inSeoulHan(s.lat, s.lon)) ? seoulHan().catch(() => null) : Promise.resolve(null);
   const L = makeLatest(base);
   const khList = kh && kh.ok ? kh.stations : [], kmList = km_ && km_.ok ? km_.stations : [];
   const now = Date.now();
@@ -104,6 +125,16 @@ async function build(base) {
       const s = spots[next++];
       // 후보: [거리순 관측소, 최신값 함수, 표시용 출처]
       let cands = [];
+      if (inSeoulHan(s.lat, s.lon)) {
+        const sh = await seoulP;
+        const v = sh && sh['선유'];
+        if (v && now - v.at <= MAX_AGE && v.t > -2 && v.t < 36) {
+          const [la, lo] = SEOUL_STN['선유'];
+          const extra = Object.entries(sh).filter(([n]) => n !== '선유').map(([n, x]) => ({ name: n, t: x.t }));
+          out.push({ lat: s.lat, lon: s.lon, t: +v.t.toFixed(1), at: v.at, src: { kind: 'seoul', name: '한강 선유 (서울시 수질측정소)', dist: +km(s.lat, s.lon, la, lo).toFixed(1), river: true, extra } });
+          continue;
+        }
+      }
       if (inKorea(s.lat, s.lon)) {
         cands = [
           ...near(khList, s.lat, s.lon, 25, k => k.kind !== 'buoy').slice(0, 1).map(k => ({ dist: k.dist, get: () => L.khoa(k.code), src: { kind: 'khoa', name: k.name } })),

@@ -49,3 +49,6 @@
       while (n) { left += n.offsetLeft; top += n.offsetTop; n = n.offsetParent; }
       return { left, top };
     }
+
+    // [ADD] 검색·링크로 정점을 열 때 상세 지도 확대 수준. 16 = 바다 위에서도 Esri 위성사진이 나오는 거의 최대(17~18은 먼바다에서 빈 타일이 나와요)
+    const SPOT_ZOOM = 16;

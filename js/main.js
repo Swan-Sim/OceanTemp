@@ -97,7 +97,7 @@
         const searchedStation = getBootSearchSelectedStation() || linkedStation;
         if (searchedStation) {
           selectStation(searchedStation);
-          showDetailMap(searchedStation.coords[1], searchedStation.coords[0], 8);
+          showDetailMap(searchedStation.coords[1], searchedStation.coords[0], SPOT_ZOOM);
         }
 
         // [ADD] "실데이터는 백그라운드로 천천히" - 화면이 이미 다 보이는

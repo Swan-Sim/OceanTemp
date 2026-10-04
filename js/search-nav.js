@@ -62,7 +62,7 @@
       // HUD 검색 - 결과 선택 시 그 정점을 선택하고 바로 상세지도(평면도)로 전환
       wireSearchInput(document.getElementById('search-input'), document.getElementById('search-results'), (st) => {
         selectStation(st);
-        showDetailMap(st.coords[1], st.coords[0], 8);
+        showDetailMap(st.coords[1], st.coords[0], SPOT_ZOOM); // [CHANGE] 검색하면 정점을 가장 크게(위성사진이 선명한 최대 수준)
         toggleSearchPanel();
       });
 

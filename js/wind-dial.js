@@ -2,7 +2,24 @@
     //   노란 화살표 = 바람(불어오는 쪽 → 정점, 길이·굵기 = 세기), 하늘색 물결 = 파도(들어오는 쪽 → 정점, 크기 = 파고)
     //   아래 실시간 현황 표를 좌우로 넘기면 표 가운데 시각의 값으로 바뀌어요(windDialSetTime).
     //   방향은 기상 관례대로 "오는 방향"(Open-Meteo wind_direction_10m, wave_direction, 관측소 풍향 모두 같은 기준).
+    //   [ADD] 초록 화살표 = 흐름(정점에서 "흘러가는 쪽"으로). 점선 = 수면 흐름(Copernicus 표층 합성 해류: 조류+해류+바람·파도가 미는 흐름),
+    //   실선 = 수심 15m·30m 흐름 추정 = 수면 흐름에서 바람이 끄는 몫(바람의 약 3%, 북반구는 바람 방향에서 오른쪽 30°)을 깊이에 따라 줄인 값.
+    //   모델 격자가 약 8km라 섬·곶 주변의 국지 흐름(지형 영향)은 반영되지 않아요.
     let windDialMarker = null, windDialX = null, windDialRaf = 0;
+    const KN = 0.514444;
+    // 수심 z(m) 흐름 추정: 수면 흐름 - 바람이 끄는 몫 + (그 몫이 깊이에 따라 줄고 오른쪽으로 도는 만큼, 에크만 나선·감쇠 깊이 10m)
+    function windDialCurrentAt(c, w, lat, z) {
+      if (!c) return null;
+      const r = Math.PI / 180, D = 10, sgn = lat >= 0 ? 1 : -1;
+      let u = c.speed * Math.sin(c.to * r), v = c.speed * Math.cos(c.to * r);
+      if (w && w.speed != null && w.dir != null) {
+        const ds = 0.03 * w.speed, d0 = (w.dir + 180 + sgn * 30) * r;
+        const k = Math.exp(-z / D), dz = d0 + sgn * (z / D);       // 깊을수록 약해지고 더 돌아감
+        u += -ds * Math.sin(d0) + ds * k * Math.sin(dz);
+        v += -ds * Math.cos(d0) + ds * k * Math.cos(dz);
+      }
+      return { speed: Math.hypot(u, v), to: (Math.atan2(u, v) / r + 360) % 360 };
+    }
 
     function windDialNearest(arr, x, maxGap) {
       if (!arr || !arr.length) return null;
@@ -17,7 +34,7 @@
       return (typeof lang !== 'undefined' && lang === 'ko') ? ko[i] : en[i];
     };
 
-    function windDialSVG(w, v, timeLabel) {
+    function windDialSVG(w, v, timeLabel, cs, c15, c30) {
       const R = 74, ko = typeof lang !== 'undefined' && lang === 'ko';
       let g = `<circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
         `<circle r="${R * 0.62}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 4"/>` +
@@ -33,13 +50,22 @@
       const vdir = v ? (v.waveDir != null ? v.waveDir : v.swellDir) : null;
       if (v && v.height != null && vdir != null) {
         const s = Math.max(0, Math.min(1, v.height / 3));           // 0~3 m
-        const amp = 3 + s * 6, sw = 2.5 + s * 3, top = R - 4, bot = 22;
+        const amp = 3 + s * 6, sw = 2.5 + s * 3, top = R + 46, bot = top - (34 + s * 40); // [CHANGE] 바람처럼 원 밖에서 들어오게
         let d = `M0 ${-top}`;
         for (let y = -top, k = 0; y < -bot - 6; y += 8, k++) d += ` q${k % 2 ? -amp : amp} 4 0 8`;
         g += `<g transform="rotate(${vdir.toFixed(0)})" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.7))">` +
           `<path d="${d}" fill="none" stroke="#7dd3fc" stroke-width="${sw.toFixed(1)}" stroke-linecap="round"/>` +
           `<path d="M${-(sw + 5)} ${-bot - 8} L0 ${-bot + 6} L${sw + 5} ${-bot - 8}Z" fill="#7dd3fc"/></g>`;
       }
+      // 흐름: 정점에서 바깥으로(흘러가는 쪽)
+      const flow = (c, color, wid, dashed) => {
+        if (!c || c.speed == null || c.to == null) return '';
+        const s = Math.max(0, Math.min(1, c.speed / 1.0)), len = 16 + s * 44;
+        return `<g transform="rotate(${c.to.toFixed(0)})" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.7))">` +
+          `<line x1="0" y1="-9" x2="0" y2="${-9 - len}" stroke="${color}" stroke-width="${wid}" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4"' : ''}/>` +
+          `<path d="M${-(wid + 4)} ${-9 - len + 2} L0 ${-9 - len - 10} L${wid + 4} ${-9 - len + 2}Z" fill="${color}"/></g>`;
+      };
+      g += flow(c30, '#15803d', 5, false) + flow(c15, '#4ade80', 4, false) + flow(cs, '#d9f99d', 3, true);
       const box = (x, y, color, title, big, unit, small) => `<g transform="translate(${x} ${y})">` +
         `<rect x="0" y="0" width="104" height="40" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
         `<text x="9" y="17" font-size="11" fill="${color}" font-weight="700">${title} <tspan fill="#fff" font-size="15">${big}</tspan><tspan fill="#cbd5e1" font-size="10"> ${unit}</tspan></text>` +
@@ -49,8 +75,16 @@
         `${w.dir != null ? windDialDir16(w.dir) + (ko ? '풍' : '') : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`);
       if (v && v.height != null) labels += box(R + 22, R - 10, '#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm',
         `${vdir != null ? windDialDir16(vdir) + (ko ? '쪽' : '') : ''}${v.swellPeriod != null ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`);
+      if (cs) {
+        const kn = (c) => (c.speed / KN).toFixed(1), dirTo = (c) => windDialDir16(c.to);
+        const line = (y, color, name, c) => `<text x="9" y="${y}" font-size="10.5" fill="${color}"><tspan font-weight="700">${name}</tspan> <tspan fill="#fff" font-weight="700">${kn(c)}</tspan>${ko ? '노트' : 'kn'} → ${dirTo(c)}</text>`;
+        labels += `<g transform="translate(${-R - 168} ${-34})"><rect x="0" y="0" width="146" height="${c15 ? 62 : 24}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
+          line(16, '#d9f99d', ko ? '수면' : 'Surface', cs) +
+          (c15 ? line(31, '#4ade80', ko ? '수심 15m' : '15 m', c15) + line(46, '#22c55e', ko ? '수심 30m' : '30 m', c30) +
+            `<text x="9" y="58" font-size="8.5" fill="#94a3b8">${ko ? '흐름 추정 · 지형 영향 미반영' : 'estimate · no local terrain'}</text>` : '') + `</g>`;
+      }
       labels += `<text x="0" y="${R + 30}" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.75);stroke-width:3px">${timeLabel}</text>`;
-      const W = 2 * (R + 140), H = 2 * (R + 60);
+      const W = 2 * (R + 182), H = 2 * (R + 60);
       return `<svg width="${W}" height="${H}" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="overflow:visible;pointer-events:none">${g}${labels}</svg>`;
     }
 
@@ -58,15 +92,16 @@
       const st = typeof selectedStation !== 'undefined' ? selectedStation : null;
       const map = typeof leafletMap !== 'undefined' ? leafletMap : null;
       const d = st && st._hourlyCache;
-      const show = map && typeof isDetailMode !== 'undefined' && isDetailMode && d && (d.wind.length || d.waves.length);
+      const show = map && typeof isDetailMode !== 'undefined' && isDetailMode && d && (d.wind.length || d.waves.length || (d.current || []).length);
       if (!show) { if (windDialMarker && map) { map.removeLayer(windDialMarker); } windDialMarker = null; return; }
       const x = windDialX != null && windDialX >= d.from - 3600e3 && windDialX <= d.to + 3600e3 ? windDialX : d.nowLocalMs;
       const w = windDialNearest(d.wind, x), v = windDialNearest(d.waves, x);
+      const cs = windDialNearest(d.current, x), c15 = windDialCurrentAt(cs, w, st.coords[1], 15), c30 = windDialCurrentAt(cs, w, st.coords[1], 30);
       const isNow = Math.abs(x - d.nowLocalMs) < 1.5 * 3600e3;
       const dt = new Date(x), ko = typeof lang !== 'undefined' && lang === 'ko';
       const timeLabel = isNow ? (ko ? '지금' : 'Now') : `${dt.getUTCMonth() + 1}/${dt.getUTCDate()} ${String(dt.getUTCHours()).padStart(2, '0')}:00`;
-      const html = windDialSVG(w, v, timeLabel);
-      const size = [2 * (74 + 140), 2 * (74 + 60)];
+      const html = windDialSVG(w, v, timeLabel, cs, c15, c30);
+      const size = [2 * (74 + 182), 2 * (74 + 60)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];
       if (!windDialMarker) windDialMarker = L.marker(ll, { icon, interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(map);

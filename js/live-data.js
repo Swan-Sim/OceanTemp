@@ -309,7 +309,7 @@
       // [ADD] "바람·파도도 같이" 요청 반영 - 파고/풍랑/너울은 같은 해양 API
       // 요청에 항목만 더해서(요청 수 그대로), 바람은 Open-Meteo 날씨 API에서
       // 1건 더 받아옵니다. 바람 요청이 실패해도 수온·조석·파도는 그대로 보여요.
-      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl,wave_height,wave_direction,wind_wave_height,swell_wave_height,swell_wave_period,swell_wave_direction&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
+      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl,wave_height,wave_direction,ocean_current_velocity,ocean_current_direction,wind_wave_height,swell_wave_height,swell_wave_period,swell_wave_direction&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
       const windUrl = `${WEATHER_API_BASE}?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
       const [marineSettled, windSettled] = await Promise.allSettled([fetchJSON(url), fetchJSON(windUrl)]);
       if (marineSettled.status !== 'fulfilled') throw marineSettled.reason;
@@ -327,8 +327,11 @@
       const todayStart = Math.floor(nowLocalMs / 86400000) * 86400000;
       const from = todayStart - NOW_PAST_DAYS * 86400000, to = todayStart + NOW_FORECAST_DAYS * 86400000 - 3600 * 1000;
 
-      const temp = [], tide = [], waves = [], wind = [];
+      const temp = [], tide = [], waves = [], wind = [], current = [];
       const num = (arr, i) => (arr && typeof arr[i] === 'number') ? arr[i] : null;
+      // [ADD] 수면 흐름(Copernicus 표층 합성 해류: 조류+해류+바람·파도가 미는 흐름). 방향 = 흘러가는 쪽. 단위를 m/s로
+      const curUnit = String((res.hourly_units || {}).ocean_current_velocity || 'km/h');
+      const curK = /m\/s/.test(curUnit) ? 1 : /kn/.test(curUnit) ? 0.514444 : 1 / 3.6;
       h.time.forEach((ts, i) => {
         const x = Date.parse(ts + ':00Z');
         if (x < from - 3600 * 1000 || x > to + 3600 * 1000) return;
@@ -336,6 +339,8 @@
         const sv = num(h.sea_level_height_msl, i);
         if (tv != null) temp.push({ x, y: +tv.toFixed(2) });
         if (sv != null) tide.push({ x, y: +sv.toFixed(2) });
+        const cv = num(h.ocean_current_velocity, i), cdir = num(h.ocean_current_direction, i);
+        if (cv != null && cdir != null) current.push({ x, speed: +(cv * curK).toFixed(3), to: cdir });
         const wh = num(h.wave_height, i);
         if (wh != null) waves.push({
           x, height: wh, windWave: num(h.wind_wave_height, i), swell: num(h.swell_wave_height, i),
@@ -369,7 +374,7 @@
         else if (b < a && b <= c) extremes.push({ ...tide[i], type: 'low' });
       }
 
-      const result = { temp, tide, waves, wind, extremes, nowLocalMs, from, to };
+      const result = { temp, tide, waves, wind, current, extremes, nowLocalMs, from, to };
       if (seoulSrc) { result._obs = { sources: [seoulSrc] }; result._inland = true; station.curTemp = +temp[temp.length - 1].y.toFixed(1); }
       station._hourlyCache = result;
       // [ADD] 한국·미국 정점이면 근처 관측소 실측을 뒤이어 불러와 지금까지 칸을 실측으로 바꿔요(표는 먼저 그려짐)

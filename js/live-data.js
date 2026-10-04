@@ -198,9 +198,13 @@
       const currentRes = currentSettled.status === 'fulfilled' ? currentSettled.value : null;
       const actualRes = actualSettled.status === 'fulfilled' ? actualSettled.value : null;
 
-      const currentTemp = currentRes && currentRes.current && typeof currentRes.current.sea_surface_temperature === 'number'
+      let currentTemp = currentRes && currentRes.current && typeof currentRes.current.sea_surface_temperature === 'number'
         ? currentRes.current.sea_surface_temperature
         : null;
+      if (currentTemp === null) {
+        const so = await seoulObs(lat, lon, 2).catch(() => null); // [ADD] 서울 한강: 바다 값이 없으면 측정소 최신 실측
+        if (so) currentTemp = so.rows[so.rows.length - 1].wt;
+      }
       if (currentTemp === null) throw new Error('no current SST for this station');
 
       // 시간별 값을 날짜별로 묶어서 일평균을 직접 계산합니다
@@ -347,7 +351,15 @@
           if (sp != null && dir != null) wind.push({ x, speed: sp, gust: num(wh.wind_gusts_10m, i), dir });
         });
       }
-      if (temp.length < 6 && tide.length < 6) throw new Error('no hourly data');
+      let seoulSrc = null;
+      if (temp.length < 6 && tide.length < 6) {
+        // [ADD] 서울 한강(강): 바다 모델이 없으니 측정소 실측 수온 + 바람 예보로
+        const so = await seoulObs(lat, lon, NOW_PAST_DAYS + 1).catch(() => null);
+        if (!so) throw new Error('no hourly data');
+        so.rows.forEach(r => { const x = localStrToX(r.t); if (x >= from - 3600 * 1000 && x <= to + 3600 * 1000) temp.push({ x, y: +r.wt.toFixed(2), obs: true }); });
+        if (temp.length < 3) throw new Error('no hourly data');
+        seoulSrc = { kind: 'seoul', name: so.pick.name, dist: so.pick.dist };
+      }
 
       // 만조/간조: 앞뒤 값보다 크거나(만조) 작은(간조) 지점
       const extremes = [];
@@ -358,6 +370,7 @@
       }
 
       const result = { temp, tide, waves, wind, extremes, nowLocalMs, from, to };
+      if (seoulSrc) { result._obs = { sources: [seoulSrc] }; result._inland = true; station.curTemp = +temp[temp.length - 1].y.toFixed(1); }
       station._hourlyCache = result;
       // [ADD] 한국·미국 정점이면 근처 관측소 실측을 뒤이어 불러와 지금까지 칸을 실측으로 바꿔요(표는 먼저 그려짐)
       mergeNearbyObs(station).then(ok => {
@@ -567,6 +580,21 @@
     const localStrToX = (s) => Date.parse(String(s).replace(' ', 'T') + ':00Z'); // "YYYY-MM-DD HH:MM"(현지 시각) → 표의 x
     const memo = {};
     const once = (key, fn) => (memo[key] = memo[key] || fn().catch(e => { delete memo[key]; throw e; }));
+
+    // ── [ADD] 서울 한강: 서울시 한강 수질 자동측정망(선유·안양천·중랑천·탄천) 시간별 수온 ──
+    //  /api/spotobs?svc=seoul&days=N (서버가 서울 열린데이터광장에서 받아 30분 저장). 바다 모델이 없는 강이라
+    //  수온은 이 실측만, 바람은 Open-Meteo 예보. 지천 측정소 0.7km 안이면 그 지천, 아니면 본류(선유).
+    const inSeoulHan = (lat, lon) => lat > 37.44 && lat < 37.63 && lon > 126.79 && lon < 127.2;
+    async function seoulObs(lat, lon, days) {
+      if (!/^https?:$/.test(location.protocol) || !inSeoulHan(lat, lon)) return null;
+      const j = await once('seoul-' + days, () => fetchJSON(`/api/spotobs?svc=seoul&days=${days}`, 30000, 0)).catch(() => null);
+      if (!j || !j.ok) return null;
+      let pick = null;
+      j.stations.forEach(s => { const dist = haversineKm(lat, lon, s.lat, s.lon); if (!s.main && dist <= 0.7 && (!pick || dist < pick.dist)) pick = { ...s, dist }; });
+      if (!pick) { const m = j.stations.find(s => s.main); if (!m) return null; pick = { ...m, dist: haversineKm(lat, lon, m.lat, m.lon) }; }
+      const rows = (j.rows[pick.name] || []).filter(r => Number.isFinite(r.wt) && r.wt > -3 && r.wt < 40);
+      return rows.length ? { pick, rows } : null;
+    }
 
     // 같은 시간(정시 ±30분)끼리 묶기
     function groupHourly(points) {
@@ -808,7 +836,7 @@
 
     // 표 아래 출처 문구용: "국립해양조사원 서귀포 관측소(1.1km) · NDBC 46026 부이(28km)"
     function obsSourceText(sources) {
-      return sources.map(s => (s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'kma' ? t.obsKma(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : s.kind === 'cmems' ? t.obsCmems(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
+      return sources.map(s => (s.kind === 'seoul' ? t.obsSeoul(s.name) : s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'kma' ? t.obsKma(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : s.kind === 'cmems' ? t.obsCmems(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
     }
 
     // ───────── [ADD] 90일 추이: 근처 관측소 실측 수온 일평균 (한국 KHOA / 미국 NOAA CO-OPS) ─────────
@@ -823,6 +851,15 @@
         const days = (yrs && yrs.ok && yrs.days) || null;
         return (daily.length || days) ? { daily, clim, days, source } : null;
       };
+      if (inSeoulHan(lat, lon)) {
+        const so = await seoulObs(lat, lon, 30).catch(() => null);
+        if (so) {
+          const by = {};
+          so.rows.forEach(r => { const d = r.t.slice(0, 10); (by[d] = by[d] || []).push(r.wt); });
+          const rows = Object.keys(by).sort().filter(d => by[d].length >= 12).map(d => ({ d, t: +(by[d].reduce((a, b) => a + b, 0) / by[d].length).toFixed(2) }));
+          if (rows.length) return pack({ ok: true, rows }, null, null, { kind: 'seoul', name: so.pick.name, dist: so.pick.dist });
+        }
+      }
       if (inKoreaWaters(lat, lon)) {
         const j = await once('khoa-st', () => fetchJSON('/api/khoa?svc=stations', 130000, 0));
         const p = nearestOf(j && j.ok ? j.stations : [], lat, lon, OBS_RADIUS_KM, s => s.kind !== 'buoy');

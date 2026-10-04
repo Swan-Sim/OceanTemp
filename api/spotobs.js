@@ -54,21 +54,43 @@ const inKorea = (lat, lon) => lat > 32 && lat < 39.5 && lon > 124 && lon < 132.5
 // [ADD] 서울 한강(강 포인트): 서울시 한강 수질 자동측정망 실시간 수온 (서울 열린데이터광장 WPOSInformationTime, 공공누리 1유형)
 //   인증키는 Vercel 환경변수 SEOUL_API_KEY. 본류 측정소는 선유 하나라 서울 한강 포인트는 선유 값을 쓰고, 지천 값은 참고로 붙여요.
 const inSeoulHan = (lat, lon) => lat > 37.44 && lat < 37.63 && lon > 126.79 && lon < 127.2;
-const SEOUL_STN = { '선유': [37.5434, 126.8991], '안양천': [37.5370, 126.8810], '중랑천': [37.5530, 127.0450], '탄천': [37.5150, 127.0730] };
-async function seoulHan() {
+// 측정소 위치(대략): 선유=한강 본류, 나머지=지천 하류
+const SEOUL_STN = { '선유': [37.5438, 126.8975, true], '안양천': [37.5360, 126.8830, false], '중랑천': [37.5440, 127.0230, false], '탄천': [37.5150, 127.0710, false] };
+// 최근 days일 시간별 수온 { 측정소: [{ t:'YYYY-MM-DD HH:00'(KST), wt }] } - Redis 30분 저장
+async function seoulRows(days) {
   const key = process.env.SEOUL_API_KEY;
   if (!key) return null;
-  const j = await getJSON(`http://openapi.seoul.go.kr:8088/${encodeURIComponent(key)}/json/WPOSInformationTime/1/12/`, 15000);
-  const rows = j && j.WPOSInformationTime && j.WPOSInformationTime.row || [];
+  days = Math.max(1, Math.min(30, days || 2));
+  const ck = `seoul:han:${days}`;
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (Date.now() - o.at < 30 * 60e3) return o.rows; } } catch (_) {}
+  const need = Math.ceil(days * 24 * 4 * 1.1), pages = [];
+  for (let a = 1; a <= need; a += 1000) pages.push([a, Math.min(need, a + 999)]);
+  const parts = await Promise.all(pages.map(([a, b]) => getJSON(`http://openapi.seoul.go.kr:8088/${encodeURIComponent(key)}/json/WPOSInformationTime/${a}/${b}/`, 15000)));
+  const rows = {};
+  parts.forEach(j => ((j && j.WPOSInformationTime && j.WPOSInformationTime.row) || []).forEach(r => {
+    const name = r.MSRSTN_NM, wt = parseFloat(r.WATT), ymd = String(r.YMD || ''), hh = String(r.HR || '').slice(0, 2);
+    if (!SEOUL_STN[name] || !Number.isFinite(wt) || !/^\d{8}$/.test(ymd) || !/^\d{2}$/.test(hh)) return;
+    // "24:00"은 다음 날 00:00
+    const ms = Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8), +hh);
+    const t = new Date(ms).toISOString().slice(0, 13).replace('T', ' ') + ':00';
+    (rows[name] = rows[name] || []).push({ t, wt });
+  }));
+  Object.values(rows).forEach(a => a.sort((x, y) => x.t < y.t ? -1 : 1));
+  if (Object.keys(rows).length) { try { await redisPipeline([['SET', ck, JSON.stringify({ at: Date.now(), rows }), 'EX', '7200']]); } catch (_) {} }
+  return rows;
+}
+// 정점에 쓸 측정소: 지천 측정소 0.7km 안(지천 위 정점)이면 그 지천, 아니면 한강 본류(선유)
+function seoulPick(lat, lon) {
+  let best = null;
+  Object.entries(SEOUL_STN).forEach(([n, [la, lo, main]]) => { const d = km(lat, lon, la, lo); if (!main && d <= 0.7 && (!best || d < best.d)) best = { n, d }; });
+  if (best) return best;
+  return { n: '선유', d: km(lat, lon, SEOUL_STN['선유'][0], SEOUL_STN['선유'][1]) };
+}
+async function seoulHan() {
+  const rows = await seoulRows(2);
+  if (!rows) return null;
   const out = {};
-  rows.forEach(r => {
-    const name = r.MSRSTN_NM, t = parseFloat(r.WATT);
-    if (out[name] || !Number.isFinite(t)) return;
-    const hh = String(r.HR || '').slice(0, 2), ymd = String(r.YMD || '');
-    if (!/^\d{8}$/.test(ymd)) return;
-    const at = Date.parse(`${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}T00:00:00+09:00`) + (+hh) * 3600e3;
-    out[name] = { t, at };
-  });
+  Object.entries(rows).forEach(([n, a]) => { const r = a[a.length - 1]; if (r) out[n] = { t: r.wt, at: Date.parse(r.t.replace(' ', 'T') + ':00+09:00') }; });
   return out;
 }
 const inUs = (lat, lon) => (lon > -180 && lon < -60 && lat > 10 && lat < 72) || (lon > 140 && lon < 150 && lat > 10 && lat < 22);
@@ -127,11 +149,11 @@ async function build(base) {
       let cands = [];
       if (inSeoulHan(s.lat, s.lon)) {
         const sh = await seoulP;
-        const v = sh && sh['선유'];
+        const pk = seoulPick(s.lat, s.lon);
+        const v = sh && sh[pk.n];
         if (v && now - v.at <= MAX_AGE && v.t > -2 && v.t < 36) {
-          const [la, lo] = SEOUL_STN['선유'];
-          const extra = Object.entries(sh).filter(([n]) => n !== '선유').map(([n, x]) => ({ name: n, t: x.t }));
-          out.push({ lat: s.lat, lon: s.lon, t: +v.t.toFixed(1), at: v.at, src: { kind: 'seoul', name: '한강 선유 (서울시 수질측정소)', dist: +km(s.lat, s.lon, la, lo).toFixed(1), river: true, extra } });
+          const extra = Object.entries(sh).filter(([n]) => n !== pk.n).map(([n, x]) => ({ name: n, t: x.t }));
+          out.push({ lat: s.lat, lon: s.lon, t: +v.t.toFixed(1), at: v.at, src: { kind: 'seoul', name: `${pk.n === '선유' ? '한강 선유' : pk.n} (서울시 수질측정소)`, dist: +pk.d.toFixed(1), river: true, extra } });
           continue;
         }
       }
@@ -167,6 +189,15 @@ module.exports = async function handler(req, res) {
   // [ADD] 포인트별 검색용 페이지·사이트맵(/ko/s/39/문섬, /sitemap.xml) - 함수 개수를 늘리지 않으려고 여기서 처리
   const svc = (req.query || {}).svc;
   if (svc === 'page' || svc === 'index' || svc === 'sitemap') return require('./_spotpage')(req, res);
+  // [ADD] 서울 한강 측정소 시간별 수온(앱 실시간 표·추이용): /api/spotobs?svc=seoul&days=7
+  if (svc === 'seoul') {
+    try {
+      const rows = await seoulRows(parseInt(req.query.days, 10) || 7);
+      res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
+      return res.status(200).json({ ok: !!rows && Object.keys(rows).length > 0, stations: Object.entries(SEOUL_STN).map(([name, [lat, lon, main]]) => ({ name, lat, lon, main })), rows: rows || {},
+        source: '서울특별시 한강 수질 자동측정망 (서울 열린데이터광장, 공공누리 1유형)' });
+    } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e) }); }
+  }
   const t0 = Date.now();
   const send = (body, tag) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
-<title>다이빙샵 등록 · otemp.app</title>
+<title>샵 등록 · otemp.app</title>
 <!-- [ADD] 다이빙샵 등록 / 수정 페이지.
      - 등록: 정보를 보내면 바로 "수정 전용 링크"를 보여주고(이메일로도 보냄), 관리자 승인 후 사이트에 보여요.
      - 수정: 수정 링크(#t=…)로 열면 내 샵 정보가 채워지고, 고친 내용은 관리자 승인 후 반영돼요.
@@ -145,7 +145,7 @@
 <script>
 const T = {
   ko: {
-    title: '다이빙샵 등록', titleEdit: '다이빙샵 정보 수정',
+    title: '샵 등록', titleEdit: '샵 정보 수정',
     lead: 'otemp.app 포인트 화면에 샵 연락처가 "제휴 샵"으로 보여요. 보내주신 정보는 운영자가 확인한 뒤 올라가요.',
     leadEdit: '고친 내용은 운영자가 확인한 뒤 사이트에 반영돼요. 그 전까지는 지금 정보가 그대로 보여요.',
     secShop: '샵 정보', name: '샵 이름', spots: '다니는 포인트', spotsPh: '포인트 이름으로 찾기 (예: 문섬)',
@@ -178,7 +178,7 @@ const T = {
     other: 'English'
   },
   en: {
-    title: 'Register your dive shop', titleEdit: 'Edit your dive shop',
+    title: 'Register your shop', titleEdit: 'Edit your shop',
     lead: 'Your contacts appear as a "Partner" shop on otemp.app dive spots. We review every submission before it goes live.',
     leadEdit: 'Changes go live after review. Until then, the current details stay on the site.',
     secShop: 'Shop', name: 'Shop name', spots: 'Dive spots you visit', spotsPh: 'Search spots (e.g. Moonseom)',
@@ -206,7 +206,7 @@ const T = {
     e_need_name_spots: 'Add a shop name and at least one dive spot.', e_need_contact: 'Add at least one valid public contact.',
     e_need_email: 'Check your contact email.', e_need_agree: 'Please agree to the terms.', e_too_many: 'Please try again later.', e_default: 'Could not send. Please try again later.',
     statsTitle: 'Your shop stats', thShort: ['Views', 'Shown', 'Clicks'], statDays: (n) => `Last ${n} days`, stViews: 'Spot views', stImp: 'Shown', stClicks: 'Contact clicks', stSpot: 'Spot', stOther: 'No spot info (older records)',
-    statsNote: (from) => `Counting since ${from}. Spot views = times the spot was opened. Shown = times your shop was shown to someone who opened the spot (bottom shortcut or Dive shops tab, once per visit). Clicks = taps on call, Kakao and other buttons. No personal data is collected.`,
+    statsNote: (from) => `Counting since ${from}. Spot views = times the spot was opened. Shown = times your shop was shown to someone who opened the spot (bottom shortcut or Shops tab, once per visit). Clicks = taps on call, Kakao and other buttons. No personal data is collected.`,
     kinds: { tel: 'Call', kakao: 'Kakao', whatsapp: 'WhatsApp', instagram: 'Instagram', web: 'Web', map: 'Map', all: 'See all' },
     other: '한국어'
   }

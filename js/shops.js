@@ -48,7 +48,7 @@
       const beach = !!(st && st.isBeach && st.no);
       if (btn) {
         btn.style.display = beach ? '' : 'none'; // [CHANGE] 해변 정점이면 항상 보임 - 샵이 없으면 "샵 등록" 안내
-        btn.innerHTML = `${shopEsc(t.tabShop || '다이빙샵')}${n ? `<span class="tab-n">${n}</span>` : ''}`;
+        btn.innerHTML = `${shopEsc(t.tabShop || '샵')}${n ? `<span class="tab-n">${n}</span>` : ''}`;
       }
       if (!beach && activeMode === 'shop') setMode('now');
     }

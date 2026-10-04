@@ -53,6 +53,10 @@
     {
       "source": "/sitemap.xml",
       "destination": "/api/spotobs?svc=sitemap"
+    },
+    {
+      "source": "/:name((?!(?:api|admin|shop|terms|spot|s|ko|en|ja|js|css|icons|bg|data|scripts|index|offline|_vercel)(?:/|$))[^/.]+)",
+      "destination": "/api/spotobs?svc=go&name=:name"
     }
   ]
 }

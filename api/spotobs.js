@@ -300,7 +300,7 @@ async function build(base) {
 module.exports = async function handler(req, res) {
   // [ADD] 포인트별 검색용 페이지·사이트맵(/ko/s/39/문섬, /sitemap.xml) - 함수 개수를 늘리지 않으려고 여기서 처리
   const svc = (req.query || {}).svc;
-  if (svc === 'page' || svc === 'index' || svc === 'sitemap') return require('./_spotpage')(req, res);
+  if (svc === 'page' || svc === 'index' || svc === 'sitemap' || svc === 'go') return require('./_spotpage')(req, res);
   // [ADD] 대만 CWA: /api/spotobs?svc=cwa&lat=..&lon=.. → 근처 부이·조위소 48시간 실측 + 조석 예보
   if (svc === 'cwa') {
     try {

@@ -642,6 +642,29 @@ module.exports = async function spotPage(req, res) {
     }
     const lang = pickLang(req);
     if (svc === 'index') { count(req, 'index'); return sendHtml(res, 200, renderIndex(lang, all, base)); }
+    // [ADD] 이름 바로가기: otemp.app/문섬 → 정식 주소(/ko/s/39/문섬)로. 여러 곳이면 고르는 화면, 없으면 비슷한 이름 목록
+    if (svc === 'go') {
+      const dec = (x) => { let v = String(x || ''); for (let i = 0; i < 3; i++) { try { const d = decodeURIComponent(v); if (d === v) break; v = d; } catch (_) { break; } } return v; };
+      const raw = dec(q.name).trim().slice(0, 80);
+      const key = (x) => String(x || '').normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+      const k = key(raw);
+      const t = T[lang];
+      if (!k) { res.setHeader('Location', '/'); return res.status(302).end(); }
+      const keys = (s) => [s.name, s.label, s.slug].map(key);
+      let hits = all.filter(s => keys(s).includes(k));
+      if (hits.length === 1) {
+        // 한글 이름으로 들어오면 한국어 페이지(브라우저 언어보다 우선)
+        const l = /[가-힣]/.test(raw) ? 'ko' : /[぀-ヿ]/.test(raw) ? 'ja' : lang;
+        res.setHeader('Location', pathOf(l, hits[0])); res.setHeader('Cache-Control', 'public, s-maxage=600');
+        return res.status(302).end();
+      }
+      if (!hits.length) hits = all.filter(s => keys(s).some(x => x.includes(k) || (x.length >= 2 && k.includes(x))));
+      const lst = hits.slice(0, 30).map(s => `<li><a href="${pathOf(lang, s)}" style="color:var(--accent)">${esc(s.label || s.name)}</a> <span class="txt" style="font-size:12px">${esc(s.name !== s.label ? s.name : '')} · ${esc(regionName(s.cc, lang, s.country))}</span></li>`).join('');
+      const msg = { ko: hits.length ? `"${raw}"에 해당하는 포인트` : `"${raw}" 포인트를 찾지 못했어요`, en: hits.length ? `Spots matching "${raw}"` : `No spot named "${raw}"`, ja: hits.length ? `「${raw}」のポイント` : `「${raw}」のポイントが見つかりません` }[lang];
+      const body = `${header(lang, { ko: '/ko/s/', en: '/en/s/', ja: '/ja/s/' })}<h1 style="margin-top:20px">${esc(msg)}</h1>${lst ? `<div class="card"><ul style="margin:0;padding-left:18px;line-height:2">${lst}</ul></div>` : ''}<p class="txt"><a href="/${lang}/s/" style="color:var(--accent)">${esc(t.indexTitle)}</a></p>`;
+      res.setHeader('X-Robots-Tag', 'noindex');
+      return sendHtml(res, hits.length ? 200 : 404, page({ lang, title: `${msg} | otemp`, desc: t.indexDesc, canonical: `/${lang}/s/`, body, base }));
+    }
     const no = parseInt(q.no, 10);
     const st = all.find(s => s.no === no);
     if (!st) {

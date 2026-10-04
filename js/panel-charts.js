@@ -624,10 +624,20 @@
           : d._tideJma ? t.tideJma(d._tideJma.name, d._tideJma.dist) : t.tideNote}</div>`;
       const sc = box.querySelector('.nt-scroll');
       const toNow = () => Math.max(0, nowX - (sc.clientWidth - 58) / 2);
-      // 같은 정점을 다시 그릴 땐(데이터 도착 등) 보던 위치 유지, 새 정점이면 "지금"으로
-      const keep = box._lastStationId === st.id && typeof box._lastScroll === 'number';
+      // [FIX] "한국 정점은 열면 Now가 화면 시작과 안 맞음" - 실측 자료가 늦게 와서 표를 다시 그릴 때, 처음 그릴 때의 잘못된 위치
+      //  (패널이 아직 자리 잡기 전이라 폭이 0이던 때 계산)를 그대로 유지하고 있었어요. 이제 사용자가 직접 표를 넘겼을 때만 위치를 유지하고,
+      //  아니면 다시 그릴 때마다 + 화면 배치가 끝난 뒤에 한 번 더 "지금" 칸이 가운데 오게 맞춰요.
+      if (box._lastStationId !== st.id) box._userScrolled = false;
+      const keep = box._lastStationId === st.id && box._userScrolled && typeof box._lastScroll === 'number';
       sc.scrollLeft = keep ? box._lastScroll : toNow();
       box._lastStationId = st.id;
+      const markUser = () => { box._userScrolled = true; };
+      ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(ev => sc.addEventListener(ev, markUser, { passive: true }));
+      if (!keep) {
+        const reNow = () => { if (!box._userScrolled && sc.isConnected && sc.clientWidth > 80) sc.scrollLeft = toNow(); };
+        requestAnimationFrame(reNow); setTimeout(reNow, 250); setTimeout(reNow, 900);
+        if (typeof ResizeObserver === 'function') { const ro = new ResizeObserver(reNow); ro.observe(sc); setTimeout(() => ro.disconnect(), 4000); }
+      }
       // [ADD] 표 가운데 칸 시각 → 지도 위 바람·파도 나침반(js/wind-dial.js)
       // [CHANGE] 표 가운데 칸 = 나침반 시각. 양 끝에서는 표가 더 안 밀리니 선택 칸이 끝까지 따라가게(처음·마지막 칸까지 선택 가능)
       //  선택된 칸은 초록 테두리로 표시
@@ -651,6 +661,7 @@
       let pending = null, pendingTimer = null; // 빠르게 여러 번 눌러도 하루씩 누적되게
       box.querySelectorAll('.nt-arrow').forEach(btn => btn.addEventListener('click', () => {
         const dir = +btn.dataset.dir;
+        box._userScrolled = true;
         const base = pending != null ? pending : sc.scrollLeft;
         const maxLeft = sc.scrollWidth - sc.clientWidth;
         const target = Math.max(0, Math.min(maxLeft, dir === 0 ? toNow() : base + dir * (24 / NOW_STEP_H) * COLW));

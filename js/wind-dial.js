@@ -44,7 +44,7 @@
       return (typeof lang !== 'undefined' && lang === 'ko') ? ko[i] : en[i];
     };
 
-    function windDialSVG(w, v, timeLabel, cs, c5, c30) {
+    function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel) {
       const R = 74, ko = typeof lang !== 'undefined' && lang === 'ko';
       let g = `<circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
         `<circle r="${R * 0.62}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 4"/>` +
@@ -111,8 +111,9 @@
       // [CHANGE] 시각을 잘 보이게: 원 아래 진한 알약 모양
       const tw = Math.max(64, timeLabel.length * 9 + 22), isNowLbl = /^(지금|Now)$/.test(timeLabel);
       labels += `<g transform="translate(0 ${R + 34})"><rect x="${-tw / 2}" y="-14" width="${tw}" height="26" rx="13" fill="rgba(7,11,20,0.92)" stroke="${isNowLbl ? '#FFB000' : '#4ade80'}" stroke-width="1.5"/>` +
-        `<text x="0" y="4" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${timeLabel}</text></g>`;
-      const W = 2 * (R + 192), H = 2 * (R + 60);
+        `<text x="0" y="4" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${timeLabel}</text>` +
+        (tzLabel ? `<text x="0" y="27" font-size="9.5" fill="#cbd5e1" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.75);stroke-width:3px">${tzLabel}</text>` : '') + `</g>`;
+      const W = 2 * (R + 192), H = 2 * (R + 70);
       return `<svg width="${W}" height="${H}" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="overflow:visible;pointer-events:none">${g}${labels}</svg>`;
     }
 
@@ -128,8 +129,11 @@
       const isNow = Math.abs(x - d.nowLocalMs) < 1.5 * 3600e3;
       const dt = new Date(x), ko = typeof lang !== 'undefined' && lang === 'ko';
       const timeLabel = isNow ? (ko ? '지금' : 'Now') : `${dt.getUTCMonth() + 1}/${dt.getUTCDate()} ${String(dt.getUTCHours()).padStart(2, '0')}:00`;
-      const html = windDialSVG(w, v, timeLabel, cs, c5, c30);
-      const size = [2 * (74 + 192), 2 * (74 + 60)];
+      // [ADD] 표·나침반 시각은 그 포인트의 현지 시각 - 다른 나라에서 볼 때 헷갈리지 않게 표시
+      const offH = Math.round((d.nowLocalMs - Date.now()) / 900e3) / 4;
+      const tzLabel = `${ko ? '현지 시각' : 'local time'} UTC${offH >= 0 ? '+' : '−'}${Math.abs(offH)}`;
+      const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel);
+      const size = [2 * (74 + 192), 2 * (74 + 70)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];
       if (!windDialMarker) windDialMarker = L.marker(ll, { icon, interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(map);

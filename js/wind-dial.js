@@ -75,9 +75,19 @@
           `<line x1="0" y1="-9" x2="0" y2="${-9 - len}" stroke="${color}" stroke-width="${wid}" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4"' : ''}/>` +
           `<path d="M${-(wid + 4)} ${-9 - len + 2} L0 ${-9 - len - 10} L${wid + 4} ${-9 - len + 2}Z" fill="${color}"/></g>`;
       };
+      // [ADD] 써지: 파도 축을 따라 앞뒤로 흔들림 → 정점 중심 양쪽 화살표(수심 5m 세기로 길이)
+      if (v && vdir != null) {
+        const u5 = windDialSurge(v, 5);
+        if (u5 != null) {
+          const L = 12 + Math.min(1, u5 / 0.5) * 34, sw = 2.5;
+          g += `<g transform="rotate(${vdir.toFixed(0)})" opacity="0.95" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.7))">` +
+            `<line x1="0" y1="${-L + 6}" x2="0" y2="${L - 6}" stroke="#bae6fd" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="2 3"/>` +
+            `<path d="M-6 ${-L + 8} L0 ${-L - 2} L6 ${-L + 8}Z" fill="#bae6fd"/><path d="M-6 ${L - 8} L0 ${L + 2} L6 ${L - 8}Z" fill="#bae6fd"/></g>`;
+        }
+      }
       g += flow(c30, '#15803d', 5, false) + flow(c5, '#4ade80', 4, false) + flow(cs, '#d9f99d', 3, true);
       const box = (x, y, color, title, big, unit, small, hgt) => `<g transform="translate(${x} ${y})">` +
-        `<rect x="0" y="0" width="${hgt ? 150 : 104}" height="${hgt || 40}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
+        `<rect x="0" y="0" width="${hgt ? 166 : 104}" height="${hgt || 40}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
         `<text x="9" y="17" font-size="11" fill="${color}" font-weight="700">${title} <tspan fill="#fff" font-size="15">${big}</tspan><tspan fill="#cbd5e1" font-size="10"> ${unit}</tspan></text>` +
         `<text x="9" y="32" font-size="10" fill="#cbd5e1">${small}</text></g>`;
       let labels = '';
@@ -87,7 +97,7 @@
         labels += box(R + 22, R - 10, '#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm',
           `${vdir != null ? windDialDir16(vdir) + (ko ? '쪽' : '') : ''}${v.swellPeriod != null ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`, 56);
         const s5 = windDialSurge(v, 5), s30 = windDialSurge(v, 30);
-        if (s5 != null) labels += `<text x="${R + 31}" y="${R + 36}" font-size="10" fill="#7dd3fc"><tspan font-weight="700">${ko ? '써지' : 'Surge'}</tspan> 5m <tspan fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</tspan> · 30m <tspan fill="#fff" font-weight="700">${surgeLevel(s30, ko)}</tspan></text>`;
+        if (s5 != null) labels += `<text x="${R + 31}" y="${R + 36}" font-size="10" fill="#7dd3fc"><tspan font-weight="700">↕ ${ko ? '써지' : 'Surge'}</tspan> 5m <tspan fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</tspan> · 30m <tspan fill="#fff" font-weight="700">${surgeLevel(s30, ko)}</tspan></text>`;
       }
       if (cs) {
         const kn = (c) => (c.speed / KN).toFixed(1), dirTo = (c) => windDialDir16(c.to);
@@ -102,7 +112,7 @@
       const tw = Math.max(64, timeLabel.length * 9 + 22), isNowLbl = /^(지금|Now)$/.test(timeLabel);
       labels += `<g transform="translate(0 ${R + 34})"><rect x="${-tw / 2}" y="-14" width="${tw}" height="26" rx="13" fill="rgba(7,11,20,0.92)" stroke="${isNowLbl ? '#FFB000' : '#4ade80'}" stroke-width="1.5"/>` +
         `<text x="0" y="4" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${timeLabel}</text></g>`;
-      const W = 2 * (R + 182), H = 2 * (R + 60);
+      const W = 2 * (R + 192), H = 2 * (R + 60);
       return `<svg width="${W}" height="${H}" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="overflow:visible;pointer-events:none">${g}${labels}</svg>`;
     }
 
@@ -119,7 +129,7 @@
       const dt = new Date(x), ko = typeof lang !== 'undefined' && lang === 'ko';
       const timeLabel = isNow ? (ko ? '지금' : 'Now') : `${dt.getUTCMonth() + 1}/${dt.getUTCDate()} ${String(dt.getUTCHours()).padStart(2, '0')}:00`;
       const html = windDialSVG(w, v, timeLabel, cs, c5, c30);
-      const size = [2 * (74 + 182), 2 * (74 + 60)];
+      const size = [2 * (74 + 192), 2 * (74 + 60)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];
       if (!windDialMarker) windDialMarker = L.marker(ll, { icon, interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(map);

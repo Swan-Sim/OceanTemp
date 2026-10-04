@@ -634,11 +634,14 @@
       const gridEl = box.querySelector('.nt-grid');
       const selEl = document.createElement('div'); selEl.className = 'nt-sel'; selEl.style.width = COLW + 'px'; if (gridEl) gridEl.appendChild(selEl);
       const dialSync = () => {
-        const view = sc.clientWidth - 58, maxLeft = Math.max(0, sc.scrollWidth - sc.clientWidth), s = sc.scrollLeft;
-        let p = s + view / 2;
-        if (s > maxLeft - view / 2) p += s - (maxLeft - view / 2);   // 오른쪽 끝 구간: 2배 속도로 끝 칸까지
-        if (s < view / 2) p -= view / 2 - s;                        // 왼쪽 끝 구간: 첫 칸까지
-        const idx = Math.max(0, Math.min(cols.length - 1, Math.floor(p / COLW)));
+        // [FIX] "지금" 위치를 기준으로 계산(처음 열면 반드시 지금 칸) - 표가 지금 칸을 가운데 둔 위치(toNow)에서 몇 칸 밀었는지로 정해요
+        const view = sc.clientWidth - 58, maxLeft = Math.max(0, sc.scrollWidth - sc.clientWidth), s = sc.scrollLeft, s0 = toNow();
+        const last = cols.length - 1, at = (x) => nowCol + (x - s0) / COLW;
+        const L = Math.min(view / 2, s0), Rr = Math.max(maxLeft - view / 2, s0);
+        let k = at(s);
+        if (s < L && L > 0) k = at(L) * (s / L);                                              // 왼쪽 끝 구간: 첫 칸까지
+        if (s > Rr && maxLeft > Rr) k = at(Rr) + (last - at(Rr)) * ((s - Rr) / (maxLeft - Rr)); // 오른쪽 끝 구간: 마지막 칸까지
+        const idx = Math.max(0, Math.min(cols.length - 1, Math.round(k)));
         selEl.style.left = (idx * COLW) + 'px';
         selEl.classList.toggle('is-now', idx === nowCol);
         if (typeof windDialSetTime === 'function') windDialSetTime(cols[idx]);

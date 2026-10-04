@@ -87,6 +87,48 @@ async function seoulHan() {
   Object.entries(rows).forEach(([n, a]) => { const r = a[a.length - 1]; if (r) out[n] = { t: r.wt, at: Date.parse(r.t.replace(' ', 'T') + ':00+09:00') }; });
   return out;
 }
+// ───────── [ADD] 호주 AIMS 리프 기상관측소·부이 수온(거의 실시간, 10~30분 간격) ─────────
+//  관측소 목록(/series)은 키 없이 공개, 값(/data)은 Vercel 환경변수 AIMS_API_KEY 필요. 출처: AIMS Weather Stations (doi:10.25845/5c09bf93f315d, CC-BY)
+const AIMS = 'https://api.aims.gov.au/data-v2.0/10.25845/5c09bf93f315d';
+const AIMS_KM = 70;
+const inAus = (lat, lon) => lat < -8 && lat > -45 && lon > 110 && lon < 160;
+async function aimsSeries() {
+  try { const [{ result }] = await redisPipeline([['GET', 'aims:series']]); if (result) { const o = JSON.parse(result); if (Date.now() - o.at < 86400e3) return o.list; } } catch (_) {}
+  const j = await getJSON(`${AIMS}/series?include_details=true`, 20000);
+  if (!Array.isArray(j)) return [];
+  const cut = new Date(Date.now() - 5 * 86400e3).toISOString().slice(0, 10);
+  // 수온 시리즈 중 최근까지 값이 있는 것, 관측소마다 가장 얕은 수심 하나("From teledyne" 같은 중복 센서는 뺌)
+  const by = {};
+  j.filter(x => /^water temp/i.test(x.parameter || '') && (x.time_coverage_end || '') >= cut && !/teledyne/i.test(x.series_short || x.series || ''))
+    .forEach(x => { const k = x.subsite || x.site; const d = x.depth == null ? 1 : +x.depth; if (!by[k] || d < by[k].depth) by[k] = { id: x.series_id, site: x.site, subsite: x.subsite, lat: +x.lat, lon: +x.long, depth: d }; });
+  const list = Object.values(by).filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
+  if (list.length) { try { await redisPipeline([['SET', 'aims:series', JSON.stringify({ at: Date.now(), list }), 'EX', '172800']]); } catch (_) {} }
+  return list;
+}
+async function aimsData(id, days) {
+  const key = process.env.AIMS_API_KEY;
+  if (!key) return null;
+  days = Math.max(1, Math.min(14, days || 2));
+  const ck = `aims:d:${id}:${days}`;
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (Date.now() - o.at < 30 * 60e3) return o.rows; } } catch (_) {}
+  const from = new Date(Date.now() - days * 86400e3).toISOString().slice(0, 19);
+  const c = new AbortController(); const tm = setTimeout(() => c.abort(), 20000);
+  let rows = [];
+  try {
+    let url = `${AIMS}/data?series_id=${id}&from_date=${from}&size=5000`;
+    for (let page = 0; page < 3 && url; page++) {
+      const r = await fetch(url, { signal: c.signal, headers: { 'X-API-Key': key, 'User-Agent': 'OceanTemp (otemp.app)' } });
+      if (!r.ok) break;
+      const j = await r.json();
+      (j.results || []).forEach(o => { const v = +o.qc_val; if (Number.isFinite(v) && v > -2 && v < 40 && o.time) rows.push({ t: o.time, wt: +v.toFixed(2) }); });
+      url = j.links && j.links.next ? j.links.next : (j.cursor ? `${AIMS}/data?series_id=${id}&from_date=${from}&size=5000&cursor=${encodeURIComponent(j.cursor)}` : null);
+      if (!(j.results || []).length) break;
+    }
+  } catch (_) {} finally { clearTimeout(tm); }
+  rows.sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
+  if (rows.length) { try { await redisPipeline([['SET', ck, JSON.stringify({ at: Date.now(), rows }), 'EX', '7200']]); } catch (_) {} }
+  return rows;
+}
 const inUs = (lat, lon) => (lon > -180 && lon < -60 && lat > 10 && lat < 72) || (lon > 140 && lon < 150 && lat > 10 && lat < 22);
 
 // 위성 수온 격자(지구 바다 색과 같은 것)에서 그 자리 값 - 고장 센서 거르기용
@@ -117,6 +159,7 @@ function makeLatest(base) {
       return { t: +d.v, at: Date.parse(d.t.replace(' ', 'T') + ':00Z') };
     }),
     ndbc: (id) => once('n' + id, async () => { const j = await getJSON(`${base}/api/noaa?svc=ndbc&id=${id}`, 20000); return j && j.ok ? lastOf((j.rows || []).map(r => ({ ...r, wt: r.wtmp })), r => r.t) : null; }),
+    aims: (id) => once('a' + id, async () => { const rows = await aimsData(id, 2); const r = rows && rows[rows.length - 1]; return r ? { t: r.wt, at: Date.parse(r.t) } : null; }),
     cmems: (id) => once('e' + id, async () => { const j = await getJSON(`${base}/api/cmems?svc=obs&id=${encodeURIComponent(id)}&days=2`, 40000); return j && j.ok ? lastOf(j.rows || [], r => r.t) : null; })
   };
 }
@@ -131,6 +174,7 @@ async function build(base) {
     redisPipeline([['GET', 'sst:grid']]).then(r => r[0].result ? JSON.parse(JSON.parse(r[0].result).body) : null).catch(() => null)
   ]);
   const seoulP = spots.some(s => inSeoulHan(s.lat, s.lon)) ? seoulHan().catch(() => null) : Promise.resolve(null);
+  const aimsP = spots.some(s => inAus(s.lat, s.lon)) && process.env.AIMS_API_KEY ? aimsSeries().catch(() => []) : Promise.resolve([]);
   const L = makeLatest(base);
   const khList = kh && kh.ok ? kh.stations : [], kmList = km_ && km_.ok ? km_.stations : [];
   const now = Date.now();
@@ -157,6 +201,10 @@ async function build(base) {
           ...near(khList, s.lat, s.lon, 40, k => k.kind === 'buoy').slice(0, 1).map(k => ({ dist: k.dist, get: () => L.khoa(k.code), src: { kind: 'khoa', name: k.name, buoy: true } })),
           ...near(kmList, s.lat, s.lon, 40).slice(0, 1).map(k => ({ dist: k.dist, get: () => L.kma(k.id), src: { kind: 'kma', name: k.name, buoy: true } }))
         ].sort((a, b) => a.dist - b.dist);
+      } else if (inAus(s.lat, s.lon) && (await aimsP).length) {
+        const a = near(await aimsP, s.lat, s.lon, AIMS_KM).slice(0, 1).map(k => ({ dist: k.dist, get: () => L.aims(k.id), src: { kind: 'aims', name: `${k.site} ${k.depth}m` } }));
+        const e = near(cm && cm.ok ? cm.stations : [], s.lat, s.lon, 40, k => k.p.includes('T')).slice(0, 1).map(k => ({ dist: k.dist, get: () => L.cmems(k.id), src: { kind: 'cmems', name: k.name } }));
+        cands = [...a, ...e];
       } else if (inUs(s.lat, s.lon)) {
         const c = near(nw && nw.coops, s.lat, s.lon, 25, k => k.wt).slice(0, 1).map(k => ({ dist: k.dist, get: () => L.coops(k.id), src: { kind: 'coops', name: k.name } }));
         const b = near(nw && nw.ndbc, s.lat, s.lon, 60).slice(0, 1).map(k => ({ dist: k.dist, get: () => L.ndbc(k.id), src: { kind: 'ndbc', name: k.id } }));
@@ -183,6 +231,19 @@ module.exports = async function handler(req, res) {
   // [ADD] 포인트별 검색용 페이지·사이트맵(/ko/s/39/문섬, /sitemap.xml) - 함수 개수를 늘리지 않으려고 여기서 처리
   const svc = (req.query || {}).svc;
   if (svc === 'page' || svc === 'index' || svc === 'sitemap') return require('./_spotpage')(req, res);
+  // [ADD] 호주 AIMS: /api/spotobs?svc=aims&lat=..&lon=..&days=7 → 가장 가까운 관측소(70km)의 수온
+  if (svc === 'aims') {
+    try {
+      const lat = +req.query.lat, lon = +req.query.lon;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(400).json({ ok: false });
+      const st = near(await aimsSeries(), lat, lon, AIMS_KM)[0];
+      res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
+      if (!st) return res.status(200).json({ ok: false, reason: 'no_station' });
+      const rows = await aimsData(st.id, parseInt(req.query.days, 10) || 7);
+      return res.status(200).json({ ok: !!(rows && rows.length), station: { site: st.site, subsite: st.subsite, depth: st.depth, dist: +st.dist.toFixed(1), lat: st.lat, lon: st.lon },
+        rows: rows || [], source: 'AIMS Weather Stations (CC-BY)' + (process.env.AIMS_API_KEY ? '' : ' - AIMS_API_KEY 없음') });
+    } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e) }); }
+  }
   // [ADD] 서울 한강 측정소 시간별 수온(앱 실시간 표·추이용): /api/spotobs?svc=seoul&days=7
   if (svc === 'seoul') {
     try {

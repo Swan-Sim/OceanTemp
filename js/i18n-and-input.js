@@ -91,7 +91,7 @@
         tideJmaShort: '일본 기상청 조위표',
         tideJma: (name, km) => `조석: 일본 기상청 조위표 ${name} (${(+km).toFixed(1)}km, 出典：気象庁ホームページ) · 수온·파도는 모델 추정`,
         obsSource: (src) => `지금까지: 실측 - ${src} · 이후: 예보 모델 (Open-Meteo)`,
-        obsSeoul: (name) => `서울시 한강 수질측정소 ${name}`, obsKhoa: (name) => `국립해양조사원 ${name}`, obsKma: (name) => `기상청 ${name}`, obsBuoyWord: '부이', obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC ${id} 부이`, obsCmems: (name) => `Copernicus 해양관측 ${name}`,
+        obsAims: (name) => `호주해양과학연구소(AIMS) ${name}`, obsSeoul: (name) => `서울시 한강 수질측정소 ${name}`, obsKhoa: (name) => `국립해양조사원 ${name}`, obsKma: (name) => `기상청 ${name}`, obsBuoyWord: '부이', obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC ${id} 부이`, obsCmems: (name) => `Copernicus 해양관측 ${name}`,
         visGaugeTitle: (now, p10, p90, lastD, lastV) => `시야 추정(오늘): ${now}\n90일 통상 범위: ${p10}–${p90}\n위성 마지막 관측 ${lastD}: ${lastV}\n위성 추정값이라 실제와 다를 수 있어요`
       },
       en: {
@@ -172,7 +172,7 @@
         tideJmaShort: 'JMA tide table',
         tideJma: (name, km) => `Tide: Japan Meteorological Agency tide table, ${name} (${(+km).toFixed(1)} km; source: JMA) · temperature and waves are model estimates`,
         obsSource: (src) => `Up to now: observed - ${src} · later: forecast model (Open-Meteo)`,
-        obsSeoul: (name) => `Seoul Han River station ${name}`, obsKhoa: (name) => `KHOA ${name}`, obsKma: (name) => `KMA ${name}`, obsBuoyWord: 'buoy', obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC buoy ${id}`, obsCmems: (name) => `Copernicus Marine ${name}`,
+        obsAims: (name) => `AIMS ${name}`, obsSeoul: (name) => `Seoul Han River station ${name}`, obsKhoa: (name) => `KHOA ${name}`, obsKma: (name) => `KMA ${name}`, obsBuoyWord: 'buoy', obsCoops: (name) => `NOAA ${name}`, obsNdbc: (id) => `NDBC buoy ${id}`, obsCmems: (name) => `Copernicus Marine ${name}`,
         visGaugeTitle: (now, p10, p90, lastD, lastV) => `Estimated visibility today: ${now}\n90-day typical: ${p10}–${p90}\nLast satellite obs ${lastD}: ${lastV}\nSatellite estimate; may differ from reality`
       }
     };

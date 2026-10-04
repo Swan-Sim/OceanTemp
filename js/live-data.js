@@ -696,6 +696,18 @@
       return sources.length ? { hourly: toHourly(raw), sources } : null;
     }
 
+    // ── [ADD] 호주: AIMS 리프 기상관측소·부이 수온(70km 안, 10~30분 간격) - 없으면 Copernicus ──
+    const inAusWaters = (lat, lon) => lat < -8 && lat > -45 && lon > 110 && lon < 160;
+    async function aimsObs(lat, lon, d) {
+      const j = await fetchJSON(`/api/spotobs?svc=aims&lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&days=${Math.min(7, NOW_PAST_DAYS + 1)}`, 30000, 0).catch(() => null);
+      if (!j || !j.ok || !j.rows.length) return null;
+      const off = Math.round((d.nowLocalMs - Date.now()) / 60000) * 60000; // 정점 현지 시각으로
+      const okTemp = (x, v) => { const m = interpAt(d.temp, x); return m == null || Math.abs(v - m) <= 6; };
+      const raw = j.rows.map(r => ({ x: Date.parse(r.t) + off, wt: r.wt })).filter(o => Number.isFinite(o.x) && okTemp(o.x, o.wt));
+      if (raw.length < 6) return null;
+      return { hourly: toHourly(raw), sources: [{ kind: 'aims', name: `${j.station.site} ${j.station.depth}m`, dist: j.station.dist }] };
+    }
+
     // ── 미국: NOAA CO-OPS + NDBC ──
     const COOPS = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
     async function coopsGet(id, product, extra) {
@@ -792,6 +804,7 @@
       if (st.country === 'Japan') r = await cmemsObs(lat, lon, d).catch(() => null);
       else if (inKoreaWaters(lat, lon)) r = await khoaObs(lat, lon, d);
       else if (inUsWaters(lat, lon)) r = await noaaObs(lat, lon, d);
+      else if (inAusWaters(lat, lon)) r = (await aimsObs(lat, lon, d).catch(() => null)) || await cmemsObs(lat, lon, d);
       else r = await cmemsObs(lat, lon, d);
       const jma = await jmaP;
       if (!r) {
@@ -836,7 +849,7 @@
 
     // 표 아래 출처 문구용: "국립해양조사원 서귀포 관측소(1.1km) · NDBC 46026 부이(28km)"
     function obsSourceText(sources) {
-      return sources.map(s => (s.kind === 'seoul' ? t.obsSeoul(s.name) : s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'kma' ? t.obsKma(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : s.kind === 'cmems' ? t.obsCmems(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
+      return sources.map(s => (s.kind === 'aims' ? t.obsAims(s.name) : s.kind === 'seoul' ? t.obsSeoul(s.name) : s.kind === 'khoa' ? t.obsKhoa(s.name) : s.kind === 'kma' ? t.obsKma(s.name) : s.kind === 'ndbc' ? t.obsNdbc(s.name) : s.kind === 'cmems' ? t.obsCmems(s.name) : t.obsCoops(s.name)) + ` (${s.dist.toFixed(1)}km)`).join(' · ');
     }
 
     // ───────── [ADD] 90일 추이: 근처 관측소 실측 수온 일평균 (한국 KHOA / 미국 NOAA CO-OPS) ─────────

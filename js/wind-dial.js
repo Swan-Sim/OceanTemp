@@ -71,13 +71,14 @@
           `<path d="M-9 ${-base} L0 ${-tip} L9 ${-base}Z" fill="#7dd3fc"/></g>`;
       }
       // 흐름: 정점에서 바깥으로(흘러가는 쪽)
-      const flow = (c, color, wid, dashed) => {
-        // [CHANGE] 머리 끝은 나침반 원 위(흘러가는 쪽), 몸통 꼬리는 정점 쪽으로 - 값에 비례해 안쪽으로 늘어남
+      const flow = (c, color, wid, dashed, tipR, hollow) => {
+        // [CHANGE] 머리 끝은 원 위(흘러가는 쪽), 꼬리는 정점 쪽. 약할 때도 구분되게 수면·5m·30m 머리를 원에서 조금씩 안쪽으로 엇갈리고
+        //  모양도 다르게(수면 = 속 빈 연두 삼각형, 5m = 초록, 30m = 검은빛 초록)
         if (!c || c.speed == null || c.to == null || c.speed < 0.005) return '';
-        const Ls = prop(c.speed, 1.0, R - 22), tip = R, hb = tip - 12;
-        return `<g transform="rotate(${c.to.toFixed(0)})" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.7))">` +
+        const tip = tipR, hb = tip - 12, Ls = prop(c.speed, 1.0, Math.max(10, hb - 10));
+        return `<g transform="rotate(${c.to.toFixed(0)})" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.8))">` +
           (Ls > 0.5 ? `<line x1="0" y1="${-(hb - Ls)}" x2="0" y2="${-hb}" stroke="${color}" stroke-width="${wid}" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4"' : ''}/>` : '') +
-          `<path d="M-8 ${-hb} L0 ${-tip} L8 ${-hb}Z" fill="${color}"/></g>`;
+          `<path d="M-8 ${-hb} L0 ${-tip} L8 ${-hb}Z" fill="${hollow ? 'rgba(7,11,20,.6)' : color}" stroke="${hollow ? color : 'rgba(255,255,255,.85)'}" stroke-width="${hollow ? 2 : 1.2}" stroke-linejoin="round"/></g>`;
       };
       // [ADD] 써지: 파도 축을 따라 앞뒤로 흔들림 → 정점 중심 양쪽 화살표(수심 5m 세기로 길이)
       if (v && vdir != null) {
@@ -89,7 +90,7 @@
             `<path d="M-6 ${-L} L0 ${-L - 10} L6 ${-L}Z" fill="#bae6fd"/><path d="M-6 ${L} L0 ${L + 10} L6 ${L}Z" fill="#bae6fd"/></g>`;
         }
       }
-      g += flow(c30, '#15803d', 5, false) + flow(c5, '#4ade80', 4, false) + flow(cs, '#d9f99d', 3, true);
+      g += flow(cs, '#d9f99d', 3, true, R, true) + flow(c5, '#15803d', 4, false, R - 13, false) + flow(c30, '#0a4f24', 5, false, R - 26, false); // 깊은 것이 위에 그려져 머리가 가려지지 않게
       const box = (x, y, color, title, big, unit, small, hgt) => `<g transform="translate(${x} ${y})">` +
         `<rect x="0" y="0" width="${hgt ? 166 : 104}" height="${hgt || 40}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
         `<text x="9" y="17" font-size="11" fill="${color}" font-weight="700">${title} <tspan fill="#fff" font-size="15">${big}</tspan><tspan fill="#cbd5e1" font-size="10"> ${unit}</tspan></text>` +
@@ -106,10 +107,10 @@
       if (cs) {
         const kn = (c) => (c.speed / KN).toFixed(1), dirTo = (c) => windDialDir16(c.to);
         const line = (y, color, name, c) => `<text x="9" y="${y}" font-size="10.5" fill="${color}"><tspan font-weight="700">${name}</tspan> <tspan fill="#fff" font-weight="700">${kn(c)}</tspan>${ko ? '노트' : 'kn'} → ${dirTo(c)}</text>`;
-        labels += `<g transform="translate(${-R - 168} ${-44})"><rect x="0" y="0" width="146" height="${c5 ? 78 : 40}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
+        labels += `<g transform="translate(${-R - 184} ${-44})"><rect x="0" y="0" width="162" height="${c5 ? 78 : 40}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
           `<text x="9" y="15" font-size="11" fill="#4ade80" font-weight="800">${ko ? '흐름' : 'Current'}</text>` +
-          line(31, '#d9f99d', ko ? '수면' : 'Surface', cs) +
-          (c5 ? line(46, '#4ade80', ko ? '수심 5m' : '5 m', c5) + line(61, '#22c55e', ko ? '수심 30m' : '30 m', c30) +
+          line(31, '#d9f99d', ko ? '▷ 수면' : '▷ Surface', cs) +
+          (c5 ? line(46, '#22c55e', ko ? '▶ 수심 5m' : '▶ 5 m', c5) + line(61, '#15803d', ko ? '▶ 수심 30m' : '▶ 30 m', c30) +
             `<text x="9" y="73" font-size="8.5" fill="#94a3b8">${ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'}</text>` : '') + `</g>`;
       }
       // [CHANGE] 시각을 잘 보이게: 원 아래 진한 알약 모양
@@ -120,7 +121,7 @@
           const cw = 18 + (txt.length + rng.length) * 6.6; return `<g transform="translate(${-tw / 2 - 8 - cw} -11)"><rect x="0" y="0" width="${cw}" height="22" rx="11" fill="rgba(7,11,20,0.92)" stroke="#7dd3fc" stroke-width="1.2"/>` +
           `<text x="9" y="15" font-size="11" fill="#7dd3fc" font-weight="800">${txt}<tspan fill="#94a3b8" font-weight="600" font-size="9.5">${rng}</tspan></text></g>`; })() : '') +
         (tzLabel ? `<text x="0" y="27" font-size="9.5" fill="#cbd5e1" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.75);stroke-width:3px">${tzLabel}</text>` : '') + `</g>`;
-      const W = 2 * (R + 192), H = 2 * (R + 70);
+      const W = 2 * (R + 200), H = 2 * (R + 70);
       return `<svg width="${W}" height="${H}" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="overflow:visible;pointer-events:none">${g}${labels}</svg>`;
     }
 
@@ -149,7 +150,7 @@
         if (best && bd <= 36 * 3600e3) vis = isNow && vc.now ? vc.now : best;
       }
       const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis);
-      const size = [2 * (74 + 192), 2 * (74 + 70)];
+      const size = [2 * (74 + 200), 2 * (74 + 70)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];
       if (!windDialMarker) windDialMarker = L.marker(ll, { icon, interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(map);

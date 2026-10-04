@@ -125,6 +125,7 @@ module.exports = async function handler(req, res) {
     if (svc === 'spots') {
       const all = await S.hgetallJSON(K.spots);
       const spots = Object.values(all).filter(s => s.show !== false).map(s => ({ no: s.no, country: s.country, name: s.name, label: s.label, lat: s.lat, lon: s.lon }));
+      S.BUILTIN_SPOTS.forEach(b => { if (!spots.some(s => +s.no === b.no)) spots.push({ ...b }); }); // [ADD] 한강 측정소 등 기본 포인트
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=86400');
       return res.status(200).json({ ok: true, spots });
     }

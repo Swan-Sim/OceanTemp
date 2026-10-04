@@ -112,6 +112,8 @@ async function loadStations(base) {
         list.push({ no, name: cleanSpotName(s.name), label: cleanSpotName(s.label || s.name), country: s.country || '', lat: +s.lat, lon: +s.lon });
       });
     } catch (_) {}
+    // [ADD] 기본 포인트(한강 측정소) - 시트·사용자 포인트에 같은 번호가 없을 때만
+    S.BUILTIN_SPOTS.forEach(b => { if (seen.has(b.no)) return; seen.add(b.no); list.push({ no: b.no, name: b.name, label: b.label, country: b.country, lat: b.lat, lon: b.lon }); });
     list.forEach(s => { s.cc = regionCode(s.country); s.slug = slugOf(s.name); });
     // [ADD] 나라 칸이 빈 포인트(사용자 등록 등)는 300km 안 가장 가까운 포인트의 나라로 채움
     list.forEach(s => {

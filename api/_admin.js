@@ -216,7 +216,7 @@ module.exports = async function admin(req, res) {
     const f = S.spotFields(Object.assign({}, rq.data, b.data || {}));
     if (!f.name || f.lat == null || f.lon == null) return bad('need_name_pos');
     const extra = await S.hgetallJSON(K.spots);
-    const no = Math.max(await S.sheetMaxNo(), 0, ...Object.keys(extra).map(Number)) + 1;
+    const no = Math.max(await S.sheetMaxNo(), 0, ...Object.keys(extra).map(Number), ...S.BUILTIN_SPOTS.map(b => b.no)) + 1;
     const spot = { no, ...f, network: 'Beach/user', show: true, email: rq.email || '', created: Date.now() };
     await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['HDEL', K.spotreq, rq.id]);
     return ok({ no });

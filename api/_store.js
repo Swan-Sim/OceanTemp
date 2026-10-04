@@ -10,6 +10,14 @@ const crypto = require('crypto');
 const { redisPipeline } = require('./_redis');
 
 const K = { reports: 'shoprep:v1', shops: 'shops:v1', req: 'shopreq:v1', tok: 'shoptok:v1', seq: 'shops:seq', spots: 'spots:extra', spotreq: 'spotreq:v1' };
+// [ADD] 코드에 넣어 둔 기본 포인트(구글 시트에 없어도 보임). 시트에 같은 번호가 생기면 시트 쪽이 우선.
+//   서울시 한강 수질 자동측정소 4곳 - 좌표는 하천 하류 대략 위치
+const BUILTIN_SPOTS = [
+  { no: 265, country: 'South Korea', name: '한강 선유 관측지점', label: '선유', lat: 37.5438, lon: 126.8975, network: 'River/Seoul' },
+  { no: 266, country: 'South Korea', name: '안양천 관측지점', label: '안양천', lat: 37.5360, lon: 126.8830, network: 'River/Seoul' },
+  { no: 267, country: 'South Korea', name: '중랑천 관측지점', label: '중랑천', lat: 37.5440, lon: 127.0230, network: 'River/Seoul' },
+  { no: 268, country: 'South Korea', name: '탄천 관측지점', label: '탄천', lat: 37.5150, lon: 127.0710, network: 'River/Seoul' }
+];
 const STATION_SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSN3HofGgc9HEUOIag-2EQpPnpJ9gZi2DTXLvu1t9LP3WAeAe-IYIFmJ6H_buloREnhfLsbWWRN9S9j/pub?output=csv';
 
 async function R(...cmds) {
@@ -161,4 +169,4 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
 module.exports = { adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
-  csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET };
+  csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET, BUILTIN_SPOTS };

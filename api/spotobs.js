@@ -45,6 +45,8 @@ async function loadSpots(base) {
   const list = rows.map(r => ({ lat: parseFloat(r[idx.lat]), lon: parseFloat(r[idx.lon]), show: (r[idx.show] || '').trim() }));
   // [ADD] 승인된 사용자 등록 포인트도 함께
   try { const [{ result }] = await redisPipeline([['HVALS', 'spots:extra']]); (result || []).forEach(v => { try { const s = JSON.parse(v); if (s.show !== false) list.push({ lat: +s.lat, lon: +s.lon, show: 'Y' }); } catch (_) {} }); } catch (_) {}
+  // [ADD] 기본 포인트(한강 측정소)
+  require('./_store').BUILTIN_SPOTS.forEach(b => { if (!list.some(s => Math.abs(s.lat - b.lat) < 1e-4 && Math.abs(s.lon - b.lon) < 1e-4)) list.push({ lat: b.lat, lon: b.lon, show: 'Y' }); });
   return list.filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon) && !/^n/i.test(s.show));
 }
 

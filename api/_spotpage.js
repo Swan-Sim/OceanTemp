@@ -189,6 +189,40 @@ async function fetchClimYear(lat, lon, y) {
   });
   return sum.map((s, i) => n[i] ? +(s / n[i]).toFixed(2) : null);
 }
+// ───────── [ADD] 월별 평균 시야(NOAA 위성 탁도 Kd490, 빈칸 채운 2km 일별 자료, 지난 5년 10일 간격) ─────────
+//  시야 ≈ 1.7 ÷ Kd490 (앱과 같은 식). 날짜별 반경 약 3km 픽셀 중앙값 → 달별 중앙값. 수온처럼 한 번에 1~2년씩 쌓아요.
+const KD_DS = 'https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPN20S3AkdSCIDINEOF2kmDaily.csv';
+const median = (a) => { const b = a.filter(Number.isFinite).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
+async function fetchVisYear(lat, lon, y) {
+  const r = 0.03, q = `kd_490[(${y}-01-05T12:00:00Z):10:(${y}-12-31T12:00:00Z)][0][(${(lat + r).toFixed(3)}):(${(lat - r).toFixed(3)})][(${(lon - r).toFixed(3)}):(${(lon + r).toFixed(3)})]`;
+  const text = await getText(`${KD_DS}?${encodeURIComponent(q).replace(/%3A/g, ':').replace(/%2C/g, ',')}`, 9000);
+  if (!text) return null;
+  const byDate = {};
+  text.split('\n').slice(2).forEach(line => { const c = line.split(','); if (c.length < 5) return; const v = parseFloat(c[4]); if (Number.isFinite(v) && v > 0) (byDate[c[0].slice(0, 10)] = byDate[c[0].slice(0, 10)] || []).push(v); });
+  const byMonth = Array.from({ length: 12 }, () => []);
+  Object.entries(byDate).forEach(([d, a]) => { const m = +d.slice(5, 7) - 1; const k = median(a); if (k) byMonth[m].push(Math.max(0.5, Math.min(30, 1.7 / k))); });
+  const out = byMonth.map(a => a.length ? +median(a).toFixed(1) : null);
+  return out.some(v => v != null) ? out : 'nodata';
+}
+async function climVisFor(lat, lon) {
+  const key = `clim:vis:${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  let c = { years: {}, fail: {} };
+  try { const [v] = await S.R(['GET', key]); if (v) c = JSON.parse(v); } catch (_) {}
+  c.years = c.years || {}; c.fail = c.fail || {};
+  const Y = new Date().getUTCFullYear(), want = [1, 2, 3, 4, 5].map(k => Y - k);
+  const missing = want.filter(y => !c.years[y] && !(c.fail[y] && Date.now() - c.fail[y] < 3 * 3600e3)).slice(0, 2);
+  if (missing.length) {
+    const got = await Promise.all(missing.map(y => fetchVisYear(lat, lon, y).catch(() => null)));
+    missing.forEach((y, i) => { if (got[i]) c.years[y] = got[i]; else c.fail[y] = Date.now(); });
+    try { await S.R(['SET', key, JSON.stringify(c), 'EX', String(400 * 86400)]); } catch (_) {}
+  }
+  const ys = want.filter(y => Array.isArray(c.years[y]) && c.years[y].filter(v => v != null).length >= 8);
+  if (ys.length < 2) return null;
+  const months = Array.from({ length: 12 }, (_, m) => { const v = ys.map(y => c.years[y][m]).filter(x => x != null); return v.length ? +median(v).toFixed(1) : null; });
+  if (months.filter(v => v != null).length < 9) return null;
+  return { months, years: ys.length, from: Math.min(...ys), to: Math.max(...ys) };
+}
+
 async function climFor(lat, lon) {
   const key = `clim:crw:${lat.toFixed(2)}_${lon.toFixed(2)}`;
   let c = { years: {}, fail: {} };
@@ -299,7 +333,8 @@ const T = {
     tideSrc: { cwa: (s, d) => `출처: 대만 중앙기상서 조석 예보 · ${s} (${d}km)`, jma: (s, d) => `출처: 일본 기상청 조위표 · ${s} (${d}km)`, coops: (s, d) => `출처: NOAA CO-OPS 조석 예보 · ${s} (${d}km)`, model: () => '출처: Open-Meteo 해수면 모델(참고용, 항구 조위표와 다를 수 있어요)' },
     daysH: '앞으로 3일', dayN: ['오늘', '내일', '모레'], cols: ['수온', '파고(최대)', '바람(최대)', '시야(추정)'],
     visNote: (d) => `시야는 위성 탁도(마지막 위성 자료 ${d})로 추정한 값이고, 작은 글씨는 오차 범위예요. 날이 갈수록 범위가 넓어져요.`,
-    climH: '월별 평균 수온', climNote: (y, a, b) => `NOAA 위성 수온 ${a}–${b}년(${y}년) 매달 평균`,
+    rowTemp: '수온 °C', rowVis: '시야 m', visTxt: (bm, bv, wm, wv) => `시야는 <b>${bm}(약 ${bv}m)</b>에 가장 맑고 <b>${wm}(약 ${wv}m)</b>에 가장 탁해요.`, visClimNote: (y, a, b) => `시야: NOAA 위성 탁도 ${a}–${b}년(${y}년) 달별 중앙값`,
+    climHTemp: '월별 평균 수온', climH: '월별 평균 수온·시야', climNote: (y, a, b) => `NOAA 위성 수온 ${a}–${b}년(${y}년) 매달 평균`,
     climTxt: (n, hm, hv, cm, cv) => `${n} 바다는 <b>${hm}(약 ${hv}°C)</b>에 가장 따뜻하고 <b>${cm}(약 ${cv}°C)</b>에 가장 차가워요.`,
     month: (m) => `${m + 1}월`, suit: '슈트',
     shopH: (n) => `${n} 근처 샵`, shopNone: '아직 등록된 샵이 없어요.', shopAsk: '샵을 운영하시나요?', shopReg: '샵 등록하기 ›', partner: '제휴',
@@ -329,7 +364,8 @@ const T = {
     tideSrc: { cwa: (s, d) => `Source: Taiwan Central Weather Administration tide forecast · ${s} (${d} km)`, jma: (s, d) => `Source: Japan Meteorological Agency tide tables · ${s} (${d} km)`, coops: (s, d) => `Source: NOAA CO-OPS tide predictions · ${s} (${d} km)`, model: () => 'Source: Open-Meteo sea level model (approximate; may differ from harbour tide tables)' },
     daysH: 'Next 3 days', dayN: ['Today', 'Tomorrow', 'Day after'], cols: ['Water', 'Waves (max)', 'Wind (max)', 'Visibility (est.)'],
     visNote: (d) => `Visibility is estimated from satellite water clarity (latest satellite day ${d}); the small numbers are the likely range, which widens further ahead.`,
-    climH: 'Average water temperature by month', climNote: (y, a, b) => `NOAA satellite SST, ${a}–${b} (${y} years) monthly mean`,
+    rowTemp: 'Water °C', rowVis: 'Visibility m', visTxt: (bm, bv, wm, wv) => `Visibility is usually best in <b>${bm} (about ${bv} m)</b> and lowest in <b>${wm} (about ${wv} m)</b>.`, visClimNote: (y, a, b) => `visibility: NOAA satellite turbidity ${a}–${b} (${y} years), monthly median`,
+    climHTemp: 'Average water temperature by month', climH: 'Average water temperature & visibility by month', climNote: (y, a, b) => `NOAA satellite SST, ${a}–${b} (${y} years) monthly mean`,
     climTxt: (n, hm, hv, cm, cv) => `The sea at ${n} is warmest in <b>${hm} (about ${hv}°C)</b> and coolest in <b>${cm} (about ${cv}°C)</b>.`,
     month: (m) => ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m], suit: 'Wetsuit',
     shopH: (n) => `Shops near ${n}`, shopNone: 'No shops listed yet.', shopAsk: 'Run a shop?', shopReg: 'List your shop ›', partner: 'Partner',
@@ -359,7 +395,8 @@ const T = {
     tideSrc: { cwa: (s, d) => `出典：台湾中央気象署 潮汐予報・${s}（${d}km）`, jma: (s, d) => `出典：気象庁ホームページ（潮位表）・${s}（${d}km）`, coops: (s, d) => `出典：NOAA CO-OPS 潮汐予報・${s}（${d}km）`, model: () => '出典：Open-Meteo 海面モデル（参考値・港の潮位表と異なる場合があります）' },
     daysH: 'この先3日間', dayN: ['今日', '明日', '明後日'], cols: ['水温', '波高(最大)', '風(最大)', '透明度(推定)'],
     visNote: (d) => `透明度は衛星で測った海の濁り（最新の衛星データ ${d}）からの推定値で、小さな数字は誤差の範囲です。先の日ほど範囲が広くなります。`,
-    climH: '月別平均水温', climNote: (y, a, b) => `NOAA 衛星水温 ${a}–${b}年（${y}年分）の月平均`,
+    rowTemp: '水温 °C', rowVis: '透明度 m', visTxt: (bm, bv, wm, wv) => `透明度は<b>${bm}（約${bv}m）</b>が最も良く、<b>${wm}（約${wv}m）</b>が最も低くなります。`, visClimNote: (y, a, b) => `透明度：NOAA 衛星濁度 ${a}–${b}年（${y}年分）の月中央値`,
+    climHTemp: '月別平均水温', climH: '月別平均水温・透明度', climNote: (y, a, b) => `NOAA 衛星水温 ${a}–${b}年（${y}年分）の月平均`,
     climTxt: (n, hm, hv, cm, cv) => `${n}の海は<b>${hm}（約${hv}°C）</b>が最も暖かく、<b>${cm}（約${cv}°C）</b>が最も冷たくなります。`,
     month: (m) => `${m + 1}月`, suit: 'スーツ',
     shopH: (n) => `${n}周辺のショップ`, shopNone: '登録されたショップはまだありません。', shopAsk: 'ショップを運営していますか？', shopReg: 'ショップを登録 ›', partner: '提携',
@@ -441,7 +478,7 @@ function header(lang, hrefs) {
   return `<div class="top"><a class="logo" href="/">otemp<span>.app</span></a><nav class="langs">${LANGS.map(l => `<a href="${hrefs[l]}" hreflang="${l}"${l === lang ? ' aria-current="page"' : ''}>${names[l]}</a>`).join('')}</nav></div>`;
 }
 
-function renderSpot(lang, st0, all, d, shops, clim, base) {
+function renderSpot(lang, st0, all, d, shops, clim, base, climVis) {
   const t = T[lang];
   const st = { ...st0, name: nameIn(st0, lang) };
   const cname = regionName(st.cc, lang, st.country);
@@ -488,13 +525,16 @@ ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.d
   if (clim) {
     const m = clim.months; const hi = m.indexOf(Math.max(...m)), lo = m.indexOf(Math.min(...m));
     const minV = Math.min(...m), maxV = Math.max(...m), span = Math.max(6, maxV - minV + 4), floor = minV - 2;
-    climH = `<h2>${t.climH}</h2><div class="card">
+    climH = `<h2>${climVis ? t.climH : t.climHTemp}</h2><div class="card">
 <div class="months">${m.map((v, i) => `<div class="bar" style="height:${((v - floor) / span * 100).toFixed(0)}%;background:${tempColor(v)}" title="${t.month(i)} ${v}°C"><span>${Math.round(v)}°</span></div>`).join('')}</div>
 <div class="ml">${m.map((_, i) => `<span>${t.month(i)}</span>`).join('')}</div>
 <div class="suit">${m.map(v => `<span>${suitFor(v)}</span>`).join('')}</div>
 <p class="txt">${t.climTxt(esc(st.name), t.month(hi), m[hi], t.month(lo), m[lo])}</p>
-<table style="margin-top:6px"><tr>${m.map((_, i) => `<th>${t.month(i)}</th>`).join('')}</tr><tr>${m.map(v => `<td style="font-size:11.5px">${v}</td>`).join('')}</tr></table>
-<p class="note">${t.climNote(clim.years, clim.from, clim.to)} · ${t.suit}: ${lang === 'ko' ? '참고용' : lang === 'ja' ? '目安' : 'rough guide'}</p></div>`;
+<table style="margin-top:6px"><tr><th></th>${m.map((_, i) => `<th>${t.month(i)}</th>`).join('')}</tr>
+<tr><td style="font-size:11px;color:var(--muted);white-space:nowrap">${t.rowTemp}</td>${m.map(v => `<td style="font-size:11.5px">${v}</td>`).join('')}</tr>
+${climVis ? `<tr><td style="font-size:11px;color:var(--sky);white-space:nowrap">${t.rowVis}</td>${climVis.months.map(v => `<td style="font-size:11.5px;color:var(--sky)">${v == null ? '–' : fmtVis(v)}</td>`).join('')}</tr>` : ''}</table>
+${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, i]).filter(x => x[0] != null); const b = ok.reduce((a, x) => x[0] > a[0] ? x : a), w = ok.reduce((a, x) => x[0] < a[0] ? x : a); return `<p class="txt">${t.visTxt(t.month(b[1]), fmtVis(b[0]), t.month(w[1]), fmtVis(w[0]))}</p>`; })() : ''}
+<p class="note">${t.climNote(clim.years, clim.from, clim.to)}${climVis ? ' · ' + t.visClimNote(climVis.years, climVis.from, climVis.to) : ''} · ${t.suit}: ${lang === 'ko' ? '참고용' : lang === 'ja' ? '目安' : 'rough guide'}</p></div>`;
   }
 
   const LANGN = (code) => { try { return new Intl.DisplayNames([code], { type: 'language' }).of(code); } catch (_) { return code; } };
@@ -612,18 +652,19 @@ module.exports = async function spotPage(req, res) {
     const want = pathOf(lang, st);
     const norm = (x) => { let v = String(x || ''); for (let i = 0; i < 3; i++) { try { const d = decodeURIComponent(v); if (d === v) break; v = d; } catch (_) { break; } } return v.normalize('NFC').toLowerCase(); };
     if (!q.lang || (q.slug !== undefined && norm(q.slug) !== norm(st.slug))) { res.setHeader('Location', want); res.setHeader('Cache-Control', 'no-store'); return res.status(q.lang ? 301 : 302).end(); }
-    const [d, shopsAll, clim] = await Promise.all([
+    const [d, shopsAll, clim, , climVis] = await Promise.all([
       dataFor(st, all),
       S.hgetallJSON(S.K.shops).catch(() => ({})),
       climFor(st.lat, st.lon).catch(() => null),
-      count(req, st.no)
+      count(req, st.no),
+      climVisFor(st.lat, st.lon).catch(() => null)
     ]);
     const live = Object.values(shopsAll).filter(s => S.isLive(s) && (s.spots || []).map(Number).includes(st.no)).map(S.publicShop);
     const shops = [...live.filter(s => s.paid).sort(() => Math.random() - 0.5), ...live.filter(s => !s.paid).sort(() => Math.random() - 0.5)];
-    return sendHtml(res, 200, renderSpot(lang, st, all, d, shops, clim, base));
+    return sendHtml(res, 200, renderSpot(lang, st, all, d, shops, clim, base, climVis));
   } catch (e) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(500).send('error: ' + esc(String(e && e.message || e)));
   }
 };
-module.exports._test = { loadStations, visProjection, extremesFromHourly, slugOf, regionCode, fetchClimYear };
+module.exports._test = { renderSpot, loadStations, visProjection, extremesFromHourly, slugOf, regionCode, fetchClimYear };

@@ -83,7 +83,10 @@
           (c15 ? line(31, '#4ade80', ko ? '수심 15m' : '15 m', c15) + line(46, '#22c55e', ko ? '수심 30m' : '30 m', c30) +
             `<text x="9" y="58" font-size="8.5" fill="#94a3b8">${ko ? '흐름 추정 · 지형 영향 미반영' : 'estimate · no local terrain'}</text>` : '') + `</g>`;
       }
-      labels += `<text x="0" y="${R + 30}" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.75);stroke-width:3px">${timeLabel}</text>`;
+      // [CHANGE] 시각을 잘 보이게: 원 아래 진한 알약 모양
+      const tw = Math.max(64, timeLabel.length * 9 + 22), isNowLbl = /^(지금|Now)$/.test(timeLabel);
+      labels += `<g transform="translate(0 ${R + 34})"><rect x="${-tw / 2}" y="-14" width="${tw}" height="26" rx="13" fill="rgba(7,11,20,0.92)" stroke="${isNowLbl ? '#FFB000' : '#4ade80'}" stroke-width="1.5"/>` +
+        `<text x="0" y="4" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${timeLabel}</text></g>`;
       const W = 2 * (R + 182), H = 2 * (R + 60);
       return `<svg width="${W}" height="${H}" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="overflow:visible;pointer-events:none">${g}${labels}</svg>`;
     }

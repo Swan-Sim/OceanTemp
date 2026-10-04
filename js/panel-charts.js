@@ -629,7 +629,20 @@
       sc.scrollLeft = keep ? box._lastScroll : toNow();
       box._lastStationId = st.id;
       // [ADD] 표 가운데 칸 시각 → 지도 위 바람·파도 나침반(js/wind-dial.js)
-      const dialSync = () => { if (typeof windDialSetTime !== 'function') return; const c = sc.scrollLeft + (sc.clientWidth - 58) / 2; windDialSetTime(cols[0] + (c - COLW / 2) / COLW * STEP); };
+      // [CHANGE] 표 가운데 칸 = 나침반 시각. 양 끝에서는 표가 더 안 밀리니 선택 칸이 끝까지 따라가게(처음·마지막 칸까지 선택 가능)
+      //  선택된 칸은 초록 테두리로 표시
+      const gridEl = box.querySelector('.nt-grid');
+      const selEl = document.createElement('div'); selEl.className = 'nt-sel'; selEl.style.width = COLW + 'px'; if (gridEl) gridEl.appendChild(selEl);
+      const dialSync = () => {
+        const view = sc.clientWidth - 58, maxLeft = Math.max(0, sc.scrollWidth - sc.clientWidth), s = sc.scrollLeft;
+        let p = s + view / 2;
+        if (s > maxLeft - view / 2) p += s - (maxLeft - view / 2);   // 오른쪽 끝 구간: 2배 속도로 끝 칸까지
+        if (s < view / 2) p -= view / 2 - s;                        // 왼쪽 끝 구간: 첫 칸까지
+        const idx = Math.max(0, Math.min(cols.length - 1, Math.floor(p / COLW)));
+        selEl.style.left = (idx * COLW) + 'px';
+        selEl.classList.toggle('is-now', idx === nowCol);
+        if (typeof windDialSetTime === 'function') windDialSetTime(cols[idx]);
+      };
       sc.addEventListener('scroll', () => { box._lastScroll = sc.scrollLeft; dialSync(); }, { passive: true });
       dialSync();
       let pending = null, pendingTimer = null; // 빠르게 여러 번 눌러도 하루씩 누적되게

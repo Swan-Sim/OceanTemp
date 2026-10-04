@@ -3,10 +3,20 @@
     //   아래 실시간 현황 표를 좌우로 넘기면 표 가운데 시각의 값으로 바뀌어요(windDialSetTime).
     //   방향은 기상 관례대로 "오는 방향"(Open-Meteo wind_direction_10m, wave_direction, 관측소 풍향 모두 같은 기준).
     //   [ADD] 초록 화살표 = 흐름(정점에서 "흘러가는 쪽"으로). 점선 = 수면 흐름(Copernicus 표층 합성 해류: 조류+해류+바람·파도가 미는 흐름),
-    //   실선 = 수심 15m·30m 흐름 추정 = 수면 흐름에서 바람이 끄는 몫(바람의 약 3%, 북반구는 바람 방향에서 오른쪽 30°)을 깊이에 따라 줄인 값.
+    //   실선 = 수심 5m(안전정지, 바람 영향 남음)·30m(거의 조류) 흐름 추정 = 수면 흐름에서 바람이 끄는 몫(바람의 약 3%, 북반구는 바람 방향에서 오른쪽 30°)을 깊이에 따라 줄인 값.
     //   모델 격자가 약 8km라 섬·곶 주변의 국지 흐름(지형 영향)은 반영되지 않아요.
     let windDialMarker = null, windDialX = null, windDialRaf = 0;
     const KN = 0.514444;
+    // [ADD] 써지(파도가 지나갈 때 물이 앞뒤로 흔들리는 세기) 추정: 선형 파랑 이론의 물입자 속도 u = πH/T·e^(-kz), k = ω²/g(깊은 바다 가정)
+    //  H = 유의파고, T = 파도 주기. 해안에서 파도가 휘거나 얕아지며 커지는 건 반영 안 됨 → 약함/보통/강함 세 단계로만 표시
+    function windDialSurge(v, z) {
+      if (!v || v.height == null) return null;
+      const T = v.period != null ? v.period : v.swellPeriod;
+      if (!(T > 1)) return null;
+      const w = 2 * Math.PI / T, k = w * w / 9.81;
+      return Math.PI * v.height / T * Math.exp(-k * z);   // m/s
+    }
+    const surgeLevel = (u, ko) => u == null ? '' : u < 0.12 ? (ko ? '약함' : 'weak') : u < 0.35 ? (ko ? '보통' : 'moderate') : (ko ? '강함' : 'strong');
     // 수심 z(m) 흐름 추정: 수면 흐름 - 바람이 끄는 몫 + (그 몫이 깊이에 따라 줄고 오른쪽으로 도는 만큼, 에크만 나선·감쇠 깊이 10m)
     function windDialCurrentAt(c, w, lat, z) {
       if (!c) return null;
@@ -34,7 +44,7 @@
       return (typeof lang !== 'undefined' && lang === 'ko') ? ko[i] : en[i];
     };
 
-    function windDialSVG(w, v, timeLabel, cs, c15, c30) {
+    function windDialSVG(w, v, timeLabel, cs, c5, c30) {
       const R = 74, ko = typeof lang !== 'undefined' && lang === 'ko';
       let g = `<circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
         `<circle r="${R * 0.62}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 4"/>` +
@@ -65,23 +75,28 @@
           `<line x1="0" y1="-9" x2="0" y2="${-9 - len}" stroke="${color}" stroke-width="${wid}" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4"' : ''}/>` +
           `<path d="M${-(wid + 4)} ${-9 - len + 2} L0 ${-9 - len - 10} L${wid + 4} ${-9 - len + 2}Z" fill="${color}"/></g>`;
       };
-      g += flow(c30, '#15803d', 5, false) + flow(c15, '#4ade80', 4, false) + flow(cs, '#d9f99d', 3, true);
-      const box = (x, y, color, title, big, unit, small) => `<g transform="translate(${x} ${y})">` +
-        `<rect x="0" y="0" width="104" height="40" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
+      g += flow(c30, '#15803d', 5, false) + flow(c5, '#4ade80', 4, false) + flow(cs, '#d9f99d', 3, true);
+      const box = (x, y, color, title, big, unit, small, hgt) => `<g transform="translate(${x} ${y})">` +
+        `<rect x="0" y="0" width="${hgt ? 150 : 104}" height="${hgt || 40}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
         `<text x="9" y="17" font-size="11" fill="${color}" font-weight="700">${title} <tspan fill="#fff" font-size="15">${big}</tspan><tspan fill="#cbd5e1" font-size="10"> ${unit}</tspan></text>` +
         `<text x="9" y="32" font-size="10" fill="#cbd5e1">${small}</text></g>`;
       let labels = '';
       if (w && w.speed != null) labels += box(R + 22, -R - 30, '#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s',
         `${w.dir != null ? windDialDir16(w.dir) + (ko ? '풍' : '') : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`);
-      if (v && v.height != null) labels += box(R + 22, R - 10, '#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm',
-        `${vdir != null ? windDialDir16(vdir) + (ko ? '쪽' : '') : ''}${v.swellPeriod != null ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`);
+      if (v && v.height != null) {
+        labels += box(R + 22, R - 10, '#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm',
+          `${vdir != null ? windDialDir16(vdir) + (ko ? '쪽' : '') : ''}${v.swellPeriod != null ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`, 56);
+        const s5 = windDialSurge(v, 5), s30 = windDialSurge(v, 30);
+        if (s5 != null) labels += `<text x="${R + 31}" y="${R + 36}" font-size="10" fill="#7dd3fc"><tspan font-weight="700">${ko ? '써지' : 'Surge'}</tspan> 5m <tspan fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</tspan> · 30m <tspan fill="#fff" font-weight="700">${surgeLevel(s30, ko)}</tspan></text>`;
+      }
       if (cs) {
         const kn = (c) => (c.speed / KN).toFixed(1), dirTo = (c) => windDialDir16(c.to);
         const line = (y, color, name, c) => `<text x="9" y="${y}" font-size="10.5" fill="${color}"><tspan font-weight="700">${name}</tspan> <tspan fill="#fff" font-weight="700">${kn(c)}</tspan>${ko ? '노트' : 'kn'} → ${dirTo(c)}</text>`;
-        labels += `<g transform="translate(${-R - 168} ${-34})"><rect x="0" y="0" width="146" height="${c15 ? 62 : 24}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
-          line(16, '#d9f99d', ko ? '수면' : 'Surface', cs) +
-          (c15 ? line(31, '#4ade80', ko ? '수심 15m' : '15 m', c15) + line(46, '#22c55e', ko ? '수심 30m' : '30 m', c30) +
-            `<text x="9" y="58" font-size="8.5" fill="#94a3b8">${ko ? '흐름 추정 · 지형 영향 미반영' : 'estimate · no local terrain'}</text>` : '') + `</g>`;
+        labels += `<g transform="translate(${-R - 168} ${-44})"><rect x="0" y="0" width="146" height="${c5 ? 78 : 40}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
+          `<text x="9" y="15" font-size="11" fill="#4ade80" font-weight="800">${ko ? '흐름' : 'Current'}</text>` +
+          line(31, '#d9f99d', ko ? '수면' : 'Surface', cs) +
+          (c5 ? line(46, '#4ade80', ko ? '수심 5m' : '5 m', c5) + line(61, '#22c55e', ko ? '수심 30m' : '30 m', c30) +
+            `<text x="9" y="73" font-size="8.5" fill="#94a3b8">${ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'}</text>` : '') + `</g>`;
       }
       // [CHANGE] 시각을 잘 보이게: 원 아래 진한 알약 모양
       const tw = Math.max(64, timeLabel.length * 9 + 22), isNowLbl = /^(지금|Now)$/.test(timeLabel);
@@ -99,11 +114,11 @@
       if (!show) { if (windDialMarker && map) { map.removeLayer(windDialMarker); } windDialMarker = null; return; }
       const x = windDialX != null && windDialX >= d.from - 3600e3 && windDialX <= d.to + 3600e3 ? windDialX : d.nowLocalMs;
       const w = windDialNearest(d.wind, x), v = windDialNearest(d.waves, x);
-      const cs = windDialNearest(d.current, x), c15 = windDialCurrentAt(cs, w, st.coords[1], 15), c30 = windDialCurrentAt(cs, w, st.coords[1], 30);
+      const cs = windDialNearest(d.current, x), c5 = windDialCurrentAt(cs, w, st.coords[1], 5), c30 = windDialCurrentAt(cs, w, st.coords[1], 30);
       const isNow = Math.abs(x - d.nowLocalMs) < 1.5 * 3600e3;
       const dt = new Date(x), ko = typeof lang !== 'undefined' && lang === 'ko';
       const timeLabel = isNow ? (ko ? '지금' : 'Now') : `${dt.getUTCMonth() + 1}/${dt.getUTCDate()} ${String(dt.getUTCHours()).padStart(2, '0')}:00`;
-      const html = windDialSVG(w, v, timeLabel, cs, c15, c30);
+      const html = windDialSVG(w, v, timeLabel, cs, c5, c30);
       const size = [2 * (74 + 182), 2 * (74 + 60)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];

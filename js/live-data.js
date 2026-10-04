@@ -309,7 +309,7 @@
       // [ADD] "바람·파도도 같이" 요청 반영 - 파고/풍랑/너울은 같은 해양 API
       // 요청에 항목만 더해서(요청 수 그대로), 바람은 Open-Meteo 날씨 API에서
       // 1건 더 받아옵니다. 바람 요청이 실패해도 수온·조석·파도는 그대로 보여요.
-      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl,wave_height,wave_direction,ocean_current_velocity,ocean_current_direction,wind_wave_height,swell_wave_height,swell_wave_period,swell_wave_direction&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
+      const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl,wave_height,wave_direction,wave_period,ocean_current_velocity,ocean_current_direction,wind_wave_height,swell_wave_height,swell_wave_period,swell_wave_direction&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
       const windUrl = `${WEATHER_API_BASE}?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
       const [marineSettled, windSettled] = await Promise.allSettled([fetchJSON(url), fetchJSON(windUrl)]);
       if (marineSettled.status !== 'fulfilled') throw marineSettled.reason;
@@ -344,7 +344,7 @@
         const wh = num(h.wave_height, i);
         if (wh != null) waves.push({
           x, height: wh, windWave: num(h.wind_wave_height, i), swell: num(h.swell_wave_height, i),
-          swellPeriod: num(h.swell_wave_period, i), swellDir: num(h.swell_wave_direction, i), waveDir: num(h.wave_direction, i)
+          swellPeriod: num(h.swell_wave_period, i), swellDir: num(h.swell_wave_direction, i), waveDir: num(h.wave_direction, i), period: num(h.wave_period, i)
         });
       });
       if (windRes && windRes.hourly && windRes.hourly.time) {

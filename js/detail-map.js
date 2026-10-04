@@ -8,12 +8,17 @@ function showDetailMap(o,a,n=6){if(isDetailMode=!0,document.body.classList.add("
   msg(t.locateWait||'위치 확인 중...');
   navigator.geolocation.getCurrentPosition(o=>{
     const la=o.coords.latitude,lo=o.coords.longitude,acc=Math.max(5,o.coords.accuracy||50);
-    const z=acc<60?17:acc<300?15:acc<1500?13:11;
-    showDetailMap(la,lo,z);
+    // [CHANGE] "현위치 누르면 가까운 정점을 최대로" - 내 위치에서 가장 가까운 포인트를 골라 그 포인트를 줌 SPOT_ZOOM으로 열어요(내 위치 파란 점은 그대로 표시)
+    const R=Math.PI/180,km=(a,b,c,d)=>12742*Math.asin(Math.sqrt(Math.sin((c-a)*R/2)**2+Math.cos(a*R)*Math.cos(c*R)*Math.sin((d-b)*R/2)**2));
+    let near=null,nd=Infinity;
+    (typeof stations!=='undefined'?stations:[]).forEach(s=>{if(!s.isBeach||!s.coords)return;const dd=km(la,lo,s.coords[1],s.coords[0]);if(dd<nd){nd=dd;near=s}});
+    if(near){showDetailMap(near.coords[1],near.coords[0],typeof SPOT_ZOOM==='number'?SPOT_ZOOM:16);try{selectStation(near)}catch(_){}}
+    else{const z=acc<60?17:acc<300?15:acc<1500?13:11;showDetailMap(la,lo,z)}
     if(window.__meDot){leafletMap.removeLayer(__meDot);leafletMap.removeLayer(__meAcc)}
     window.__meAcc=L.circle([la,lo],{radius:acc,color:'#3b82f6',weight:1,fillColor:'#3b82f6',fillOpacity:.12,interactive:!1}).addTo(leafletMap);
     window.__meDot=L.circleMarker([la,lo],{radius:7,color:'#fff',weight:2.5,fillColor:'#2563eb',fillOpacity:1,interactive:!1}).addTo(leafletMap);
-    msg((t.locateAcc||((a)=>`내 위치 (오차 약 ${a}m)`))(Math.round(acc)));
+    const ko=typeof lang==='undefined'||lang==='ko';
+    msg(near?(ko?`가장 가까운 포인트: ${near.name} (${nd<10?nd.toFixed(1):Math.round(nd)}km) · 내 위치 오차 약 ${Math.round(acc)}m`:`Nearest spot: ${near.name} (${nd<10?nd.toFixed(1):Math.round(nd)} km) · accuracy ~${Math.round(acc)} m`):(t.locateAcc||((a)=>`내 위치 (오차 약 ${a}m)`))(Math.round(acc)));
   },e=>{msg(e&&e.code===1?(t.locateDenied||'위치 권한이 꺼져 있어요'):(t.locateFail||'위치를 가져올 수 없어요'))},{enableHighAccuracy:!0,timeout:15000,maximumAge:0})}
 
 // [ADD] 좌표 찍기 - 위성 지도에서 원하는 곳을 우클릭(휴대폰은 길게 누르기)하면 위도·경도를 보여주고 복사.

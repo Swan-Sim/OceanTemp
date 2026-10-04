@@ -332,6 +332,13 @@
     const NOW_STEP_H = 3, NOW_COL_W = 34;
 
     // [ADD] "정점명 앞 이모티콘 빼줘" - 이름 앞의 이모지(🤿 등)를 떼고 보여줍니다.
+    // [ADD] 정점 이름을 누르면 그 포인트 상세 페이지(/ko/s/번호)로 - 번호 없는 바다 격자 정점은 그냥 글자
+    function spotPageHref(st) { return st && st.no ? `/${lang === 'ko' || lang === 'ja' ? lang : 'en'}/s/${st.no}` : ''; }
+    function titleTag(st, cls) {
+      const href = spotPageHref(st), tip = String(st.name).replace(/"/g, '&quot;');
+      return href ? `<a class="${cls} spot-link" href="${href}" target="_blank" rel="noopener" title="${tip} · ${lang === 'ko' ? '상세 페이지' : lang === 'ja' ? '詳細ページ' : 'Details page'}">${stationDisplayName(st)}</a>`
+        : `<span class="${cls}" title="${tip}">${stationDisplayName(st)}</span>`;
+    }
     function stationDisplayName(st) {
       return String(st.name).replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, '').trim();
     }
@@ -493,7 +500,7 @@
       else if (live && live.obsSource) status = statusHTML(t.statusObs, t.liveDataObs(obsSourceText([live.obsSource])), srcShort([live.obsSource]), st);
       else if (live) status = statusHTML(t.statusLive, t.liveDataOn, 'Open-Meteo', st);
       else status = `<span class="nt-est">${st._liveState === 'loading' ? t.nowLoadingShort : t.statusEst}</span>`;
-      head.innerHTML = `<span class="nt-title" title="${st.name}">${stationDisplayName(st)}</span><span class="nt-status">${visGaugeHTML(st)}${status}</span>`;
+      head.innerHTML = `${titleTag(st, 'nt-title')}<span class="nt-status">${visGaugeHTML(st)}${status}</span>`;
     }
 
     // [FIX] 모바일(iOS 등)에서 ◀ ▶ ⬆ 문자가 컬러 이모지로 바뀌어 보여서,
@@ -603,7 +610,7 @@
       // [ADD] "스크롤로 전날·다음 날로" - 좌우 스크롤 + ◀ ▶ 버튼(하루씩) +
       // 마우스 휠(세로 휠을 가로 이동으로)
       // [CHANGE] 첨부 디자인 반영 - 정점명 옆에 Live, 전날/다음날은 표 양옆 화살표
-      box.innerHTML = `<div class="nt-head"><span class="nt-title" title="${st.name}">${stationDisplayName(st)}</span>` +
+      box.innerHTML = `<div class="nt-head">${titleTag(st, 'nt-title')}` +
           `<span class="nt-status">${visGaugeHTML(st)}${status}</span></div>` +
         `<div class="nt-frame">` +
           `<button class="nt-arrow" data-dir="-1" aria-label="${t.prevDay}">${CHEVRON_SVG(-1)}</button>` +
@@ -844,7 +851,8 @@
         }
       }
       const isHotspot = maxTempStation && maxTempStation.id === st.id;
-      document.getElementById('st-name').innerText = `${st.name}${isHotspot ? ` [${t.hotspot}]` : ''}`;
+      { const el = document.getElementById('st-name'), href = spotPageHref(st), txt = `${st.name}${isHotspot ? ` [${t.hotspot}]` : ''}`;
+        if (href) { el.textContent = ''; const a = document.createElement('a'); a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.className = 'spot-link'; a.textContent = txt; el.appendChild(a); } else el.innerText = txt; }
       document.getElementById('st-temp').innerText = formatTemp(st.curTemp);
 
       // [CHANGE] HUD에 정점명을 텍스트로 보여주던 것은 제거했습니다 -

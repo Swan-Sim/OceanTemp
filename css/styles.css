@@ -574,3 +574,7 @@
       .station-foot.has-shop .shop-q { flex: 1 1 auto; }
       .station-foot.has-shop .shop-all { margin-left: auto; }
     }
+
+/* [ADD] 정점 이름 → 포인트 상세 페이지 링크 */
+a.spot-link { color: inherit; text-decoration: none; cursor: pointer; }
+a.spot-link:hover { text-decoration: underline; text-underline-offset: 3px; }

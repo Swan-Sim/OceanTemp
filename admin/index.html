@@ -76,7 +76,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Ocean Temp · 관리</h1>
+  <h1><a href="https://otemp.app/" style="color:inherit;text-decoration:none" title="사이트로 가기">Ocean Temp</a> · 관리</h1>
   <div class="sub" id="tzNote"></div>
 
   <div class="card" id="login">
@@ -474,8 +474,8 @@
     $('spotCount').textContent = `${all.length}곳 · 숨김 ${all.filter(s => s.show === false).length}곳${q ? ` · 찾은 것 ${list.length}곳` : ''}`;
     $('spotNew').innerHTML = spotNewOpen ? spotForm({ show: true, depth: true }, true) : '';
     $('spotList').innerHTML = list.length ? `<table>${list.map(s => `<tr data-no="${s.no}">
-      <td><b>#${s.no} ${esc(s.name)}</b> ${s.show === false ? '<span class="tag off">숨김</span>' : ''}${s.sheet ? ' <span class="tag off">시트</span>' : ''}${s.depth === false ? ' <span class="tag off">수심 없음</span>' : ''}
-        <div class="muted">${esc(s.label || '')} · ${esc(s.country || '나라 없음')} · ${s.lat}, ${s.lon} · ${esc(s.network || '')} · <a href="/ko/s/${s.no}" target="_blank" style="color:inherit">페이지</a></div>
+      <td><a href="/ko/s/${s.no}" target="_blank" rel="noopener" style="color:inherit" title="포인트 상세 페이지"><b>#${s.no} ${esc(s.name)}</b></a> ${s.show === false ? '<span class="tag off">숨김</span>' : ''}${s.sheet ? ' <span class="tag off">시트</span>' : ''}${s.depth === false ? ' <span class="tag off">수심 없음</span>' : ''}
+        <div class="muted">${esc(s.label || '')} · ${esc(s.country || '나라 없음')} · ${s.lat}, ${s.lon} · ${esc(s.network || '')} · <a href="/?no=${s.no}" target="_blank" style="color:inherit">지도에서 보기</a></div>
         ${spotEdit === s.no ? spotForm(s, false) : ''}</td>
       <td class="act">${s.sheet ? '<span class="muted">옮긴 뒤 수정</span>' : `<button data-act="sedit">수정</button> <button data-act="stoggle">${s.show === false ? '보이기' : '숨기기'}</button> <button data-act="sdel">삭제</button>`}</td></tr>`).join('')}</table>` : '<div class="muted">없어요</div>';
   }

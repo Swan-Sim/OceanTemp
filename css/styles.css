@@ -605,3 +605,6 @@ body:not(.detail-mode) .nt-sel { display: none; }
     #leafletMap .depth-btn.on { border-color: #38BDF8; color: #E0F2FE; background: rgba(3,105,161,0.55); }
     #leafletMap .depth-ov { pointer-events: none; image-rendering: auto; }
     #leafletMap .depth-lbl { color: #fff; font: 700 11px/14px -apple-system, sans-serif; text-align: center; white-space: nowrap; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95); pointer-events: none; }
+    /* [ADD] 지도 축척 막대(거리 가늠) - 위성사진 위에서도 보이게 흰 글자·흰 선 + 그림자 */
+    #leafletMap .leaflet-bottom.leaflet-left { bottom: 32px; }
+    #leafletMap .leaflet-control-scale-line { background: transparent; color: #fff; border: 2px solid #fff; border-top: none; font-size: 11px; font-weight: 700; line-height: 1.1; padding: 0 4px 1px; text-shadow: 0 0 3px rgba(0,0,0,.9); box-shadow: 0 1px 2px rgba(0,0,0,.5); }

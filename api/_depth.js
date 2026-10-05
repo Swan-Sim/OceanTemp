@@ -98,14 +98,20 @@ async function fromNoaa(b) {
 
 // ── GMRT(ESRI ASCII 격자, 위쪽 줄이 북쪽) ──
 async function fromGmrt(b) {
-  const t = await getText(`https://www.gmrt.org/services/GridServer?minlongitude=${b.w.toFixed(5)}&maxlongitude=${b.e.toFixed(5)}&minlatitude=${b.s.toFixed(5)}&maxlatitude=${b.n.toFixed(5)}&format=esriascii&resolution=high`, {}, 20000);
+  const q = `minlongitude=${b.w.toFixed(5)}&maxlongitude=${b.e.toFixed(5)}&minlatitude=${b.s.toFixed(5)}&maxlatitude=${b.n.toFixed(5)}&format=esriascii&resolution=high`;
+  // [ADD] topo-mask = 실제 다중빔 조사(고해상도)가 있는 칸만 값이 있음 → 나머지는 GEBCO(약 450m)를 늘린 거친 값
+  const [t, tm] = await Promise.all([getText(`https://www.gmrt.org/services/GridServer?${q}`, {}, 20000), getText(`https://www.gmrt.org/services/GridServer?${q}&layer=topo-mask`, {}, 20000).catch(() => null)]);
   const L = t.trim().split('\n'), hd = {}; let k = 0;
   for (; k < L.length && /^[a-z_]+\s/i.test(L[k]); k++) { const [a, v] = L[k].trim().split(/\s+/); hd[a.toLowerCase()] = +v; }
   const cols = hd.ncols, rows = hd.nrows, cs = hd.cellsize, nod = hd.nodata_value; if (!cols || !rows || !cs) return null;
   const vals = L.slice(k).join(' ').trim().split(/\s+/).map(Number);
   const z = new Array(rows * cols).fill(null);
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const v = vals[r * cols + c]; if (Number.isFinite(v) && v !== nod) z[(rows - 1 - r) * cols + c] = Math.round(v * 10) / 10; }
-  return { src: 'gmrt', res: Math.round(cs * 111320), grid: { la0: hd.yllcorner + cs / 2, lo0: hd.xllcorner + cs / 2, dla: cs, dlo: cs, rows, cols, z } };
+  let hiFrac = null;
+  if (tm) { const mv = tm.trim().split('\n').filter(l => !/^[a-z_]+\s/i.test(l)).join(' ').trim().split(/\s+/).map(Number); let sea = 0, hi = 0;
+    for (let i = 0; i < vals.length; i++) { if (!(vals[i] < 0) || vals[i] === nod) continue; sea++; if (Number.isFinite(mv[i]) && mv[i] !== nod) hi++; }
+    hiFrac = sea ? hi / sea : 0; }
+  return { src: 'gmrt', res: Math.round(cs * 111320), hiFrac, grid: { la0: hd.yllcorner + cs / 2, lo0: hd.xllcorner + cs / 2, dla: cs, dlo: cs, rows, cols, z } };
 }
 
 // 요약: 포인트에서 300m·1km 안 물(z<0) 칸의 최대·평균 수심, 포인트 지점 수심
@@ -158,7 +164,7 @@ async function depthTile(x, y, opt = {}) {
   x = parseInt(x, 10); y = parseInt(y, 10); const n = 2 ** DTILE_Z;
   if (!(x >= 0 && x < n && y >= 0 && y < n)) return null;
   const ck = 'dtile:v1:' + x + '_' + y;
-  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {}
+  if (!opt.fresh) { try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {} }
   const t = tileBox(x, y), lat = (t.s + t.n) / 2, lon = (t.w + t.e) / 2;
   const b = { s: t.s - DTILE_PAD, n: t.n + DTILE_PAD, w: t.w - DTILE_PAD, e: t.e + DTILE_PAD };
   const order = inKorea(lat, lon) ? [fromKhoa, fromGmrt] : inEmodnet(lat, lon) ? [fromEmodnet, fromGmrt] : [fromNoaa, fromGmrt];
@@ -167,7 +173,7 @@ async function depthTile(x, y, opt = {}) {
     try {
       const r = await fn(b); if (!r) continue;
       const g = r.grid; if (!g.z.some(v => v != null && v < 0)) { out = { ok: true, x, y, tile: t, src: r.src, empty: true }; break; } // 바다 없음
-      out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand,
+      out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse: r.src === 'gmrt' && !(r.hiFrac >= 0.5), // 거친 자료(GEBCO 수준)면 앱에서 흐리게
         grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
       break;
     } catch (e) {
@@ -204,8 +210,8 @@ function thin(pts, tol) { // 가까운 점 빼기(약 2m)
 async function depthVec(x, y) {
   x = parseInt(x, 10); y = parseInt(y, 10);
   const ck = 'dvec:v2:' + x + '_' + y;
-  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {}
-  const d = await depthTile(x, y, { noStore: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && o.coarse === undefined)) return o; } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+  const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return d;
   const t = d.tile;
   let out = { ok: true, x, y, tile: t, src: d.src, empty: true };
@@ -230,7 +236,8 @@ async function depthVec(x, y) {
     const lines = {}, lbl = [];
     const P = (r, c) => [laN - r * dla, g.lo0 + c * dlo];
     const keep = (s) => { const la = (s[0][0] + s[1][0]) / 2, lo = (s[0][1] + s[1][1]) / 2; return la >= t.s && la < t.n && lo >= t.w && lo < t.e; };
-    for (let L = 10; L <= Math.min(100, maxD); L += 10) {
+    const step = d.coarse ? 20 : 10; // 거친 자료는 20m 간격만
+    for (let L = step; L <= Math.min(100, maxD); L += step) {
       const lv = L + 0.013, segs = [];
       for (let r = 0; r < R - 1; r++) for (let c = 0; c < C - 1; c++) {
         const v = [V[r * C + c], V[r * C + c + 1], V[(r + 1) * C + c + 1], V[(r + 1) * C + c]], cn = [[r, c], [r, c + 1], [r + 1, c + 1], [r + 1, c]], pts = [];
@@ -240,12 +247,12 @@ async function depthVec(x, y) {
       if (!segs.length) continue;
       const ln = joinSegs(segs).map(l => thin(l, 1.5e-5)).filter(l => l.length >= 2);
       lines[L] = ln;
-      if (L === 30 || L === 40 || L === 60) { let n = 0; ln.forEach(l => l.forEach((p, i) => { if (i % 8 === 4 && n < 40) { lbl.push([p[0], p[1], L]); n++; } })); }
+      if (!d.coarse && (L === 30 || L === 40 || L === 60)) { let n = 0; ln.forEach(l => l.forEach((p, i) => { if (i % 8 === 4 && n < 40) { lbl.push([p[0], p[1], L]); n++; } })); }
     }
     // 좌표를 타일 안 0~4096 정수로 바꾸고 앞 점과의 차이만 적어서 크기를 4~5배 줄임(앱에서 되돌림)
     const QX = (lo) => Math.round((lo - t.w) / (t.e - t.w) * 4096), QY = (la) => Math.round((t.n - la) / (t.n - t.s) * 4096);
     const enc = (pts) => { const o = []; let px = 0, py = 0; pts.forEach((p, i) => { const x1 = QX(p[1]), y1 = QY(p[0]); if (i && x1 === px && y1 === py) return; o.push(x1 - px, y1 - py); px = x1; py = y1; }); return o; };
-    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res,
+    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse,
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
   }

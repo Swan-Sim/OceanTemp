@@ -153,7 +153,9 @@
       const size = [2 * (74 + 200), 2 * (74 + 70)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];
-      if (!windDialMarker) windDialMarker = L.marker(ll, { icon, interactive: false, keyboard: false, zIndexOffset: -1000 }).addTo(map);
+      // [CHANGE] 나침반·바람·파도·흐름 상자를 포인트 이름표보다 위 층(전용 층, 누르기는 아래로 통과)에 - 이름표에 Surge 글자가 가려지던 문제
+      if (!map.getPane('windDialPane')) { const pn = map.createPane('windDialPane'); pn.style.zIndex = 640; pn.style.pointerEvents = 'none'; }
+      if (!windDialMarker) windDialMarker = L.marker(ll, { icon, interactive: false, keyboard: false, pane: 'windDialPane' }).addTo(map);
       else { windDialMarker.setLatLng(ll); windDialMarker.setIcon(icon); }
     }
     // 표에서 부름: 표 가운데 칸의 시각(현지 시각을 UTC처럼 쓴 ms)

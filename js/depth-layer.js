@@ -5,7 +5,9 @@
     //  - 타일마다 경계 밖까지 조금 더 받아 계산한 뒤 경계에서 잘라 그려서 이음새가 안 보여요
     //  - 선과 숫자는 그림이 아니라 지도 위 선·글자라 확대해도 선명해요
     //  - 오른쪽 아래 "수심" 버튼으로 켜고 끄기(이 브라우저에 기억)
-    const DEPTH_MIN_ZOOM = 12, DTILE_Z = 13, DTILE_MAX = 80, DTILE_PAR = 4;
+    const DEPTH_MIN_ZOOM = 12, DTILE_Z = 13, DTILE_MAX = 500, DTILE_PAR = 6;
+    let dRenderer = null; // 칸이 많아도 가볍게: 등심선·띠는 캔버스 한 장에 그림
+    const dRend = () => dRenderer || (dRenderer = L.canvas({ padding: 0.5 }));
     const dTiles = new Map(); // "x_y" → { st: 'load'|'ok'|'none', grp, lbl: [[위도, 경도, 수심]] }
     let dQueue = [], dActive = 0, dLabels = null;
     let depthOn = (() => { try { return localStorage.getItem('otemp.depthLayer') !== '0'; } catch (_) { return true; } })();
@@ -26,10 +28,10 @@
     function buildTile(d) {
       if (d.v === 2) d = Object.assign({}, d, decodeTile(d));
       const layers = [];
-      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1]; layers.push(L.polygon(f.p, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: 0.3 })); });
+      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1]; layers.push(L.polygon(f.p, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: 0.3, renderer: dRend() })); });
       Object.keys(d.lines || {}).forEach(k => {
         const strong = k === '30' || k === '40' || k === '60';
-        layers.push(L.polyline(d.lines[k], { color: '#fff', weight: strong ? 1.6 : 0.8, opacity: strong ? 0.85 : 0.4, interactive: false, smoothFactor: 0.3 }));
+        layers.push(L.polyline(d.lines[k], { color: '#fff', weight: strong ? 1.6 : 0.8, opacity: strong ? 0.85 : 0.4, interactive: false, smoothFactor: 0.3, renderer: dRend() }));
       });
       return { st: 'ok', grp: L.layerGroup(layers), lbl: d.lbl || [] };
     }
@@ -69,10 +71,10 @@
       const on = depthOn && leafletMap.getZoom() >= DEPTH_MIN_ZOOM;
       dTiles.forEach(tl => { if (!tl.grp) return; const has = leafletMap.hasLayer(tl.grp); if (on && !has) tl.grp.addTo(leafletMap); else if (!on && has) leafletMap.removeLayer(tl.grp); });
       if (!on) { placeDepthLabels(); return; }
-      const b = leafletMap.getBounds().pad(0.6), x0 = tileX(b.getWest()), x1 = tileX(b.getEast()), y0 = tileY(b.getNorth()), y1 = tileY(b.getSouth());
+      const z = leafletMap.getZoom(), b = leafletMap.getBounds().pad(z >= 14 ? 0.6 : z >= 13 ? 0.3 : 0.1), x0 = tileX(b.getWest()), x1 = tileX(b.getEast()), y0 = tileY(b.getNorth()), y1 = tileY(b.getSouth());
       const want = [];
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) want.push(x + '_' + y);
-      if (want.length > 60) return; // 아주 넓은 화면은 건너뜀
+      if (want.length > 400) return; // [FIX] 예전엔 60칸 넘으면(확대 12~13) 아예 안 받아서 빈칸이 생겼어요
       const ctx = tileX(leafletMap.getCenter().lng), cty = tileY(leafletMap.getCenter().lat); // 화면 가운데 칸부터 받기
       const add = want.filter(k => !dTiles.has(k)); add.forEach(k => dTiles.set(k, { st: 'load' }));
       // 아직 시작 안 한 이전 대기 칸도 유지(안 그러면 '받는 중'으로 남아 영영 안 받아짐), 가운데 칸부터

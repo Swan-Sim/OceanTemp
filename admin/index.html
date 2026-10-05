@@ -377,7 +377,7 @@
     const REASON = { not_mine: '본인이 등록하지 않음', owner_changed: '업주가 바뀜', wrong_info: '정보가 틀림', closed: '폐업', other: '기타' };
     const WHO = { owner: '업주·직원', customer: '이용자', other: '기타' };
     $('reportCard').style.display = reports.length ? '' : 'none';
-    $('shopReports').innerHTML = reports.sort((a, b) => a.at - b.at).map(r => {
+    $('shopReports').innerHTML = reports.sort((a, b) => b.at - a.at).map(r => {
       const s = shopById[String(r.shopId)];
       return `<div class="req" data-rep="${esc(r.id)}">
         <div class="h"><span class="tag" style="border-color:rgba(251,113,133,.6);color:#FB7185">${esc(REASON[r.reason] || r.reason)}</span>${esc(s ? s.name : r.shopName)}<span class="muted">${fmtT(r.at)} · ${esc(WHO[r.who] || r.who)} · ${esc(r.email)}</span></div>
@@ -386,7 +386,7 @@
         ${lastLink && lastLink.rep === r.id ? `<div class="linkbox">${esc(lastLink.url)}</div>` : ''}</div>`;
     }).join(''); $('bSpots').textContent = mg.spotreqs.length || '';
     // 샵 요청
-    $('shopReqs').innerHTML = mg.reqs.length ? mg.reqs.sort((a, b) => a.at - b.at).map(r => {
+    $('shopReqs').innerHTML = mg.reqs.length ? mg.reqs.sort((a, b) => b.at - a.at).map(r => {
       const old = r.type === 'edit' ? shopById[String(r.shopId)] : null;
       const rows = FIELDS.map(([k, label]) => {
         const nv = val(r.data, k), ov = old ? val(old, k) : '';
@@ -403,7 +403,7 @@
     $('shopReqs').querySelectorAll('select[data-plan]').forEach(sel => sel.onchange = () => { const e = sel.parentElement.querySelector('[data-exp]'); e.value = defExp(sel.value); });
     // 등록된 샵
     const today = new Date().toISOString().slice(0, 10);
-    $('shopList').innerHTML = mg.shops.length ? `<table>${mg.shops.sort((a, b) => +a.id - +b.id).map(s => `<tr data-id="${esc(s.id)}">
+    $('shopList').innerHTML = mg.shops.length ? `<table>${mg.shops.sort((a, b) => (b.created || 0) - (a.created || 0) || +b.id - +a.id).map(s => `<tr data-id="${esc(s.id)}">
       <td><b>${esc(s.name)}</b> <span class="tag ${s.plan === 'paid' ? '' : 'off'}">${planKo(s.plan)}</span>
         ${!s.live ? `<span class="tag off">${s.show === false ? '숨김' : '만료'}</span>` : ''}
         <div class="muted">${spotsText(s.spots)}${s.expires ? ` · ~${esc(s.expires)}${s.expires < today ? ' (지남)' : ''}` : ''} · ${esc(s.email || '이메일 없음')} · 확인 ${esc(s.checked || '')} · 약관 ${s.terms ? '동의 ' + esc(s.terms) : '<b style="color:#FB7185">미동의</b>'}</div>
@@ -411,7 +411,7 @@
         ${lastLink && lastLink.id === String(s.id) ? `<div class="linkbox">${esc(lastLink.url)}${lastLink.mailed ? (lastLink.toAdmin ? ' (샵 이메일이 없어 내 메일로 보냈어요)' : ' (메일로도 보냈어요)') : ''}</div>` : ''}</td>
       <td class="act"><button data-act="edit">수정</button> <button data-act="link">수정 링크</button> <button data-act="del">삭제</button></td></tr>`).join('')}</table>` : '<div class="muted">아직 등록된 샵이 없어요</div>';
     // 정점 요청
-    $('spotReqs').innerHTML = mg.spotreqs.length ? mg.spotreqs.sort((a, b) => a.at - b.at).map(r => `<div class="req" data-sreq="${esc(r.id)}">
+    $('spotReqs').innerHTML = mg.spotreqs.length ? mg.spotreqs.sort((a, b) => b.at - a.at).map(r => `<div class="req" data-sreq="${esc(r.id)}">
       <div class="h"><span class="tag">새 포인트</span>${esc(r.data.name)}<span class="muted">${fmtT(r.at)}${r.email ? ' · ' + esc(r.email) : ''}</span></div>
       <div class="ed" style="border-color:var(--line);margin-top:8px">
         <label>이름</label><input class="f" data-k="name" value="${esc(r.data.name)}">
@@ -465,7 +465,7 @@
     return o;
   }
   function renderSpotList() {
-    const all = (mg.spots || []).slice().sort((a, b) => a.no - b.no);
+    const all = (mg.spots || []).slice().sort((a, b) => b.no - a.no); // [CHANGE] 최근 등록(번호 큰 것)이 위로
     const migrated = !!mg.spotsMigrated;
     $('migrateCard').style.display = migrated ? 'none' : '';
     $('spotNewBtn').style.display = migrated ? '' : 'none';

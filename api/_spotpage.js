@@ -500,7 +500,7 @@ function depthHtml(lang, dp) {
   // 단면: 포인트 위도를 지나는 줄(쌍선형)
   const zAt = (lat, lon) => { const fi = (lat - g.la0) / g.dla, fj = (lon - g.lo0) / g.dlo, i = Math.floor(fi), j = Math.floor(fj);
     if (i < 0 || j < 0 || i >= g.rows - 1 || j >= g.cols - 1) return null; const q = [g.z[i * g.cols + j], g.z[i * g.cols + j + 1], g.z[(i + 1) * g.cols + j], g.z[(i + 1) * g.cols + j + 1]];
-    if (q.some(v => v == null)) return null; const a = fi - i, b = fj - j; return q[0] * (1 - a) * (1 - b) + q[1] * (1 - a) * b + q[2] * a * (1 - b) + q[3] * a * b; };
+    if (q.every(v => v == null)) return null; for (let k = 0; k < 4; k++) if (q[k] == null) q[k] = 8; const a = fi - i, b = fj - j; return q[0] * (1 - a) * (1 - b) + q[1] * (1 - a) * b + q[2] * a * (1 - b) + q[3] * a * b; };
   const W = 320, H = 110, ml = 30, mb = 16, kx = 111.32 * Math.cos(dp.lat * Math.PI / 180);
   const lo0 = g.lo0, lo1 = g.lo0 + (g.cols - 1) * g.dlo, pts = [];
   for (let k = 0; k <= 120; k++) { const lon = lo0 + (lo1 - lo0) * k / 120, v = zAt(dp.lat, lon); if (v != null) pts.push([(lon - dp.lon) * kx, v]); }
@@ -509,8 +509,8 @@ function depthHtml(lang, dp) {
     const deep = Math.max(30, Math.ceil(Math.max(...pts.map(p => -p[1])) / 10) * 10), x0 = pts[0][0], x1 = pts[pts.length - 1][0];
     const X = (x) => ml + (x - x0) / (x1 - x0) * (W - ml - 4), Y = (z) => 4 + (15 - Math.min(z, 15)) / (deep + 15) * (H - mb - 8);
     const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join('');
-    const step = deep > 60 ? 30 : 10, ticks = []; for (let v = 0; v <= deep; v += step) ticks.push(v);
-    prof = `<p class="note" style="margin:10px 0 2px">${T.prof}</p><svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">
+    const step = deep > 90 ? 30 : deep > 40 ? 20 : 10, ticks = []; for (let v = 0; v <= deep; v += step) ticks.push(v);
+    prof = `<p class="note" style="margin:10px auto 2px;max-width:320px">${T.prof}</p><svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:320px;display:block;margin:0 auto">
 ${ticks.map(v => `<line x1="${ml}" x2="${W - 4}" y1="${Y(-v).toFixed(1)}" y2="${Y(-v).toFixed(1)}" stroke="rgba(255,255,255,.08)"/><text x="${ml - 4}" y="${(Y(-v) + 3).toFixed(1)}" fill="#64708A" font-size="9" text-anchor="end">${v}m</text>`).join('')}
 <path d="${line}L${X(x1).toFixed(1)},${H - mb}L${X(x0).toFixed(1)},${H - mb}Z" fill="rgba(56,189,248,.18)"/><path d="${line}" fill="none" stroke="#38BDF8" stroke-width="1.6"/>
 <line x1="${X(0).toFixed(1)}" x2="${X(0).toFixed(1)}" y1="4" y2="${H - mb}" stroke="#F43F5E"/>

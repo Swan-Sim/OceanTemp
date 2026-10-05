@@ -599,3 +599,8 @@ body:not(.detail-mode) .nt-sel { display: none; }
 #save-tip .st-x { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #8A94A6; font-size: 18px; cursor: pointer; }
 #save-tip .st-install { margin-top: 10px; width: 100%; background: rgba(255,176,0,.15); border: 1px solid rgba(255,176,0,.6); color: #ffd27a; font-weight: 700; padding: 8px; border-radius: 9px; cursor: pointer; }
 @media (max-width: 600px) { #save-tip { right: 12px; left: 12px; max-width: none; top: auto; bottom: 46%; transform: none; } }
+
+    /* [ADD] 지도 수심 레이어 켜기/끄기 버튼(js/depth-layer.js) */
+    #leafletMap .depth-btn { background: rgba(7,11,20,0.78); color: #CBD5E1; border: 1px solid rgba(255,255,255,0.22); border-radius: 14px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; margin-bottom: 6px; }
+    #leafletMap .depth-btn.on { border-color: #38BDF8; color: #E0F2FE; background: rgba(3,105,161,0.55); }
+    #leafletMap .depth-ov { pointer-events: none; image-rendering: auto; }

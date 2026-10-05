@@ -154,7 +154,7 @@ function tileBox(x, y) {
   const n = 2 ** DTILE_Z, lon = (v) => v / n * 360 - 180, lat = (v) => Math.atan(Math.sinh(Math.PI * (1 - 2 * v / n))) * 180 / Math.PI;
   return { s: lat(y + 1), n: lat(y), w: lon(x), e: lon(x + 1) };
 }
-async function depthTile(x, y) {
+async function depthTile(x, y, opt = {}) {
   x = parseInt(x, 10); y = parseInt(y, 10); const n = 2 ** DTILE_Z;
   if (!(x >= 0 && x < n && y >= 0 && y < n)) return null;
   const ck = 'dtile:v1:' + x + '_' + y;
@@ -170,10 +170,14 @@ async function depthTile(x, y) {
       out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand,
         grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
       break;
-    } catch (e) { errors.push(fn.name + ': ' + String(e && e.message || e).replace(/serviceKey=[^&\s]+/g, 'serviceKey=***').slice(0, 120)); }
+    } catch (e) {
+      errors.push(fn.name + ': ' + String(e && e.message || e).replace(/serviceKey=[^&\s]+/g, 'serviceKey=***').slice(0, 120));
+      // 국립해양조사원이 실패(하루 한도 초과·일시 오류)하면 거친 GMRT로 저장해 버리지 않고 다음에 다시 시도
+      if (fn === fromKhoa) return { ok: false, x, y, retry: true, errors };
+    }
   }
   if (!out) return { ok: false, x, y, errors };
-  try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
+  if (!opt.noStore) { try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {} }
   return out;
 }
 
@@ -199,9 +203,9 @@ function thin(pts, tol) { // 가까운 점 빼기(약 2m)
 }
 async function depthVec(x, y) {
   x = parseInt(x, 10); y = parseInt(y, 10);
-  const ck = 'dvec:v1:' + x + '_' + y;
+  const ck = 'dvec:v2:' + x + '_' + y;
   try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {}
-  const d = await depthTile(x, y);
+  const d = await depthTile(x, y, { noStore: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return d;
   const t = d.tile;
   let out = { ok: true, x, y, tile: t, src: d.src, empty: true };
@@ -238,7 +242,12 @@ async function depthVec(x, y) {
       lines[L] = ln;
       if (L === 30 || L === 40 || L === 60) { let n = 0; ln.forEach(l => l.forEach((p, i) => { if (i % 8 === 4 && n < 40) { lbl.push([p[0], p[1], L]); n++; } })); }
     }
-    out = { ok: true, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, fills, lines, lbl };
+    // 좌표를 타일 안 0~4096 정수로 바꾸고 앞 점과의 차이만 적어서 크기를 4~5배 줄임(앱에서 되돌림)
+    const QX = (lo) => Math.round((lo - t.w) / (t.e - t.w) * 4096), QY = (la) => Math.round((t.n - la) / (t.n - t.s) * 4096);
+    const enc = (pts) => { const o = []; let px = 0, py = 0; pts.forEach((p, i) => { const x1 = QX(p[1]), y1 = QY(p[0]); if (i && x1 === px && y1 === py) return; o.push(x1 - px, y1 - py); px = x1; py = y1; }); return o; };
+    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res,
+      F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
+      lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
   }
   try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
   return out;

@@ -309,7 +309,7 @@ module.exports = async function handler(req, res) {
     try {
       const D = require('./_depth'), r = await (svc === 'dvec' ? D.depthVec : D.depthTile)(req.query.x, req.query.y);
       if (!r) return res.status(400).json({ ok: false });
-      res.setHeader('Cache-Control', r.ok ? 'public, s-maxage=2592000, max-age=86400' : 's-maxage=3600');
+      res.setHeader('Cache-Control', r.ok ? 'public, s-maxage=2592000, max-age=86400' : r.retry ? 'no-store' : 's-maxage=3600');
       return res.status(200).json(r);
     } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).replace(/serviceKey=[^&\s]+/g, 'serviceKey=***') }); }
   }

@@ -15,10 +15,18 @@
     const tileY = (lat) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** DTILE_Z); };
 
     // 서버가 미리 만들어 둔 벡터(다각형·선)를 그대로 그리기만 해요 - 일러스트처럼 단색 띠가 깊을수록 겹쳐 진해짐
-    const DFILL = { 1: ['#7dd3fc', 0.16], 10: ['#38bdf8', 0.13], 20: ['#0ea5e9', 0.13], 30: ['#0284c7', 0.13], 40: ['#0369a1', 0.13], 50: ['#075985', 0.13], 60: ['#0c4a6e', 0.15], 80: ['#082f49', 0.15], 100: ['#041e33', 0.17] };
+    const DFILL = { 1: ['#7dd3fc', 0.12], 10: ['#38bdf8', 0.09], 20: ['#0ea5e9', 0.09], 30: ['#0284c7', 0.09], 40: ['#0369a1', 0.09], 50: ['#075985', 0.09], 60: ['#0c4a6e', 0.1], 80: ['#082f49', 0.1], 100: ['#041e33', 0.12] };
+    // 서버 압축 형식(v2): 좌표 = 타일 안 0~4096 정수, 앞 점과의 차이만 → [위도, 경도]로 되돌리기
+    function decodeTile(d) {
+      const t = d.tile, dec = (a) => { const o = []; let x = 0, y = 0; for (let i = 0; i < a.length; i += 2) { x += a[i]; y += a[i + 1]; o.push([t.n - y / 4096 * (t.n - t.s), t.w + x / 4096 * (t.e - t.w)]); } return o; };
+      return { fills: (d.F || []).map(([dd, polys]) => ({ d: dd, p: polys.map(poly => poly.map(dec)) })),
+        lines: Object.fromEntries(Object.entries(d.Ln || {}).map(([k, ls]) => [k, ls.map(dec)])),
+        lbl: (d.lb || []).map(([x, y, k]) => [t.n - y / 4096 * (t.n - t.s), t.w + x / 4096 * (t.e - t.w), k]) };
+    }
     function buildTile(d) {
+      if (d.v === 2) d = Object.assign({}, d, decodeTile(d));
       const layers = [];
-      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.14]; layers.push(L.polygon(f.p, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: 0.3 })); });
+      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1]; layers.push(L.polygon(f.p, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: 0.3 })); });
       Object.keys(d.lines || {}).forEach(k => {
         const strong = k === '30' || k === '40' || k === '60';
         layers.push(L.polyline(d.lines[k], { color: '#fff', weight: strong ? 1.6 : 0.8, opacity: strong ? 0.85 : 0.4, interactive: false, smoothFactor: 0.3 }));
@@ -31,7 +39,8 @@
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
         fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}`).then(r => r.json()).then(d => {
-          if (d && d.ok && !d.empty && (d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
+          if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
+          else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });
         }).catch(() => dTiles.delete(key)).finally(() => { dActive--; loadNext(); });
       }
@@ -43,9 +52,15 @@
       if (!dLabels) dLabels = L.layerGroup().addTo(leafletMap);
       dLabels.clearLayers();
       if (!depthOn || leafletMap.getZoom() < DEPTH_MIN_ZOOM) return;
-      const b = leafletMap.getBounds().pad(-0.08), c = leafletMap.getCenter(), best = {};
-      dTiles.forEach(tl => { if (tl.st !== 'ok') return; tl.lbl.forEach(p => { if (!b.contains([p[0], p[1]])) return; const dd = c.distanceTo([p[0], p[1]]); if (!best[p[2]] || dd < best[p[2]].d) best[p[2]] = { d: dd, p }; }); });
-      Object.values(best).forEach(({ p }) => dLabels.addLayer(L.marker([p[0], p[1]], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'depth-lbl', html: `${p[2]}m`, iconSize: [30, 14], iconAnchor: [15, 7] }) })));
+      // 숫자끼리 70px 안으로 겹치지 않게: 수심별 후보를 화면 가운데에서 가까운 순으로 보며 빈 자리에 하나씩
+      const b = leafletMap.getBounds().pad(-0.08), c = leafletMap.getCenter(), cand = { 30: [], 40: [], 60: [] };
+      dTiles.forEach(tl => { if (tl.st !== 'ok') return; tl.lbl.forEach(p => { if (cand[p[2]] && b.contains([p[0], p[1]])) cand[p[2]].push([c.distanceTo([p[0], p[1]]), p]); }); });
+      const placed = [];
+      [30, 40, 60].forEach(k => {
+        cand[k].sort((a, z) => a[0] - z[0]);
+        for (const [, p] of cand[k]) { const px = leafletMap.latLngToContainerPoint([p[0], p[1]]);
+          if (placed.every(q => q.distanceTo(px) > 70)) { placed.push(px); dLabels.addLayer(L.marker([p[0], p[1]], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'depth-lbl', html: `${k}m`, iconSize: [30, 14], iconAnchor: [15, 7] }) })); break; } }
+      });
     }
 
     function refreshDepthLayers() {
@@ -54,12 +69,15 @@
       const on = depthOn && leafletMap.getZoom() >= DEPTH_MIN_ZOOM;
       dTiles.forEach(tl => { if (!tl.grp) return; const has = leafletMap.hasLayer(tl.grp); if (on && !has) tl.grp.addTo(leafletMap); else if (!on && has) leafletMap.removeLayer(tl.grp); });
       if (!on) { placeDepthLabels(); return; }
-      const b = leafletMap.getBounds().pad(0.15), x0 = tileX(b.getWest()), x1 = tileX(b.getEast()), y0 = tileY(b.getNorth()), y1 = tileY(b.getSouth());
+      const b = leafletMap.getBounds().pad(0.6), x0 = tileX(b.getWest()), x1 = tileX(b.getEast()), y0 = tileY(b.getNorth()), y1 = tileY(b.getSouth());
       const want = [];
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) want.push(x + '_' + y);
-      if (want.length > 40) return; // 아주 넓은 화면은 건너뜀
-      dQueue = want.filter(k => !dTiles.has(k));
-      dQueue.forEach(k => dTiles.set(k, { st: 'load' }));
+      if (want.length > 60) return; // 아주 넓은 화면은 건너뜀
+      const ctx = tileX(leafletMap.getCenter().lng), cty = tileY(leafletMap.getCenter().lat); // 화면 가운데 칸부터 받기
+      const add = want.filter(k => !dTiles.has(k)); add.forEach(k => dTiles.set(k, { st: 'load' }));
+      // 아직 시작 안 한 이전 대기 칸도 유지(안 그러면 '받는 중'으로 남아 영영 안 받아짐), 가운데 칸부터
+      const dist = (k) => { const [x, y] = k.split('_').map(Number); return Math.hypot(x - ctx, y - cty); };
+      dQueue = [...new Set(dQueue.concat(add))].sort((a, z) => dist(a) - dist(z));
       loadNext();
       // 오래된 타일 정리(화면에서 먼 것부터)
       if (dTiles.size > DTILE_MAX) {

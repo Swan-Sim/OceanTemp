@@ -266,7 +266,7 @@ async function build(st, all) {
     getJSON(`${MARINE}?${ll}&current=sea_surface_temperature,wave_height,wave_period&hourly=sea_surface_temperature,wave_height,wave_period,sea_level_height_msl&forecast_days=3&timezone=auto&cell_selection=sea`),
     getJSON(`${WX}?${ll}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m&hourly=wind_speed_10m,wind_gusts_10m,temperature_2m&wind_speed_unit=ms&forecast_days=3&timezone=auto`),
     near.length ? getJSON(`${MARINE}?latitude=${near.map(x => x.s.lat).join(',')}&longitude=${near.map(x => x.s.lon).join(',')}&current=sea_surface_temperature&cell_selection=sea`) : null,
-    callApi('./visibility', { lat: st.lat.toFixed(3), lon: st.lon.toFixed(3), v: '3' }, 8000),
+    callApi('./visibility', { lat: st.lat.toFixed(3), lon: st.lon.toFixed(3), v: '3' }, 15000), // [CHANGE] 8초 → 15초(처음 계산하는 곳은 오래 걸려서 시야가 비던 문제)
     obsNow(st)
   ]);
   const d = { at: Date.now(), tz: (mar && mar.timezone) || (wx && wx.timezone) || 'UTC', off: (mar && mar.utc_offset_seconds) || (wx && wx.utc_offset_seconds) || 0 };
@@ -293,6 +293,7 @@ async function build(st, all) {
     const p = visProjection(visJ);
     if (p) { d.vis = {}; d.days.forEach(x => { if (p.byDate[x.date]) d.vis[x.date] = p.byDate[x.date]; }); d.visSat = p.lastSat; }
   }
+  if (d.water === 'sea' && !d.vis) d.visMissing = true;
   // 물때
   const tide = await tideFor(st, d.today);
   if (tide) d.tide = tide;
@@ -308,7 +309,7 @@ async function build(st, all) {
 
 async function dataFor(st, all) {
   const key = `sp:d:${st.no}`;
-  try { const [v] = await S.R(['GET', key]); if (v) { const o = JSON.parse(v); if (Date.now() - o.at < DATA_TTL * 1000) return o; } } catch (_) {}
+  try { const [v] = await S.R(['GET', key]); if (v) { const o = JSON.parse(v); if (Date.now() - o.at < (o.visMissing ? 600 : DATA_TTL) * 1000) return o; } } catch (_) {} // [FIX] 시야를 못 받은 저장본은 10분만 쓰고 다시 받기
   const d = await build(st, all);
   if (d.now.sst != null || d.obs) { try { await S.R(['SET', key, JSON.stringify(d), 'EX', String(DATA_TTL)]); } catch (_) {} }
   return d;

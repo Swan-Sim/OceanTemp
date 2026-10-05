@@ -653,13 +653,12 @@ module.exports = async function spotPage(req, res) {
       const keys = (s) => [s.name, s.label, s.slug].map(key);
       let hits = all.filter(s => keys(s).includes(k));
       if (hits.length === 1) {
-        // 한글 이름으로 들어오면 한국어 페이지(브라우저 언어보다 우선)
-        const l = /[가-힣]/.test(raw) ? 'ko' : /[぀-ヿ]/.test(raw) ? 'ja' : lang;
-        res.setHeader('Location', pathOf(l, hits[0])); res.setHeader('Cache-Control', 'public, s-maxage=600');
+        // [CHANGE] 상세 페이지가 아니라 지도로: 그 포인트를 지도 가운데에 가장 크게(SPOT_ZOOM) 열기 (앱의 /?no= 바로가기)
+        res.setHeader('Location', `/?no=${hits[0].no}`); res.setHeader('Cache-Control', 'public, s-maxage=600');
         return res.status(302).end();
       }
       if (!hits.length) hits = all.filter(s => keys(s).some(x => x.includes(k) || (x.length >= 2 && k.includes(x))));
-      const lst = hits.slice(0, 30).map(s => `<li><a href="${pathOf(lang, s)}" style="color:var(--accent)">${esc(s.label || s.name)}</a> <span class="txt" style="font-size:12px">${esc(s.name !== s.label ? s.name : '')} · ${esc(regionName(s.cc, lang, s.country))}</span></li>`).join('');
+      const lst = hits.slice(0, 30).map(s => `<li><a href="/?no=${s.no}" style="color:var(--accent)">${esc(s.label || s.name)}</a> <span class="txt" style="font-size:12px">${esc(s.name !== s.label ? s.name : '')} · ${esc(regionName(s.cc, lang, s.country))}</span></li>`).join('');
       const msg = { ko: hits.length ? `"${raw}"에 해당하는 포인트` : `"${raw}" 포인트를 찾지 못했어요`, en: hits.length ? `Spots matching "${raw}"` : `No spot named "${raw}"`, ja: hits.length ? `「${raw}」のポイント` : `「${raw}」のポイントが見つかりません` }[lang];
       const body = `${header(lang, { ko: '/ko/s/', en: '/en/s/', ja: '/ja/s/' })}<h1 style="margin-top:20px">${esc(msg)}</h1>${lst ? `<div class="card"><ul style="margin:0;padding-left:18px;line-height:2">${lst}</ul></div>` : ''}<p class="txt"><a href="/${lang}/s/" style="color:var(--accent)">${esc(t.indexTitle)}</a></p>`;
       res.setHeader('X-Robots-Tag', 'noindex');

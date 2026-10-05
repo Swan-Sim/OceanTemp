@@ -138,7 +138,7 @@ module.exports = async function admin(req, res) {
   // 관리자가 직접 고치기(요금제·만료일·보이기 포함). id가 없으면 새로 추가
   if (svc === 'shopSave') {
     const data = S.shopFields(b);
-    if (!data.name || !data.spots.length) return bad('need_name_spots');
+    if (!S.shopValid(data)) return bad(data.type === 'pool' ? 'need_name_loc' : 'need_name_spots');
     let shop, id = b.id ? String(b.id) : '';
     if (id) { const [raw] = await R(['HGET', K.shops, id]); if (!raw) return bad('no_shop'); shop = JSON.parse(raw); }
     else { const [n] = await R(['INCR', K.seq]); id = String(n); shop = { id, created: Date.now() }; }

@@ -404,9 +404,9 @@
     // 등록된 샵
     const today = new Date().toISOString().slice(0, 10);
     $('shopList').innerHTML = mg.shops.length ? `<table>${mg.shops.sort((a, b) => (b.created || 0) - (a.created || 0) || +b.id - +a.id).map(s => `<tr data-id="${esc(s.id)}">
-      <td><b>${esc(s.name)}</b> <span class="tag ${s.plan === 'paid' ? '' : 'off'}">${planKo(s.plan)}</span>
+      <td><b>${esc(s.name)}</b> ${s.type === 'pool' ? '<span class="tag" style="background:rgba(34,211,238,.15);color:#67e8f9">풀장</span> ' : s.type === 'liveaboard' ? '<span class="tag">리브어보드</span> ' : ''}<span class="tag ${s.plan === 'paid' ? '' : 'off'}">${planKo(s.plan)}</span>
         ${!s.live ? `<span class="tag off">${s.show === false ? '숨김' : '만료'}</span>` : ''}
-        <div class="muted">${spotsText(s.spots)}${s.expires ? ` · ~${esc(s.expires)}${s.expires < today ? ' (지남)' : ''}` : ''} · ${esc(s.email || '이메일 없음')} · 확인 ${esc(s.checked || '')} · 약관 ${s.terms ? '동의 ' + esc(s.terms) : '<b style="color:#FB7185">미동의</b>'}</div>
+        <div class="muted">${s.type === 'pool' ? `위치 ${esc(s.lat)}, ${esc(s.lon)}${s.depthMax != null ? ` · 최대 ${esc(s.depthMax)}m` : ''}` : spotsText(s.spots)}${s.expires ? ` · ~${esc(s.expires)}${s.expires < today ? ' (지남)' : ''}` : ''} · ${esc(s.email || '이메일 없음')} · 확인 ${esc(s.checked || '')} · 약관 ${s.terms ? '동의 ' + esc(s.terms) : '<b style="color:#FB7185">미동의</b>'}</div>
         ${s.notice && s.notice.for === s.expires ? `<div class="muted">만료 안내: ${s.notice.soon ? '14일 전 보냄' : ''}${s.notice.end ? ' · 종료 안내 보냄' : ''}</div>` : ''}
         ${lastLink && lastLink.id === String(s.id) ? `<div class="linkbox">${esc(lastLink.url)}${lastLink.mailed ? (lastLink.toAdmin ? ' (샵 이메일이 없어 내 메일로 보냈어요)' : ' (메일로도 보냈어요)') : ''}</div>` : ''}</td>
       <td class="act"><button data-act="edit">수정</button> <button data-act="link">수정 링크</button> <button data-act="del">삭제</button></td></tr>`).join('')}</table>` : '<div class="muted">아직 등록된 샵이 없어요</div>';
@@ -494,8 +494,16 @@
       ${FIELDS.map(([k, label]) => k === 'lang'
         ? `<label>${label} (최대 5개)</label><div><select class="f" id="edLangAdd"></select><div id="edLangChips" class="chips"></div></div>`
         : k === 'spots'
-        ? `<label>종류</label><select class="f" data-k="type" id="edType"><option value="shop"${s.type !== 'liveaboard' ? ' selected' : ''}>다이브샵 (포인트 10곳)</option><option value="liveaboard"${s.type === 'liveaboard' ? ' selected' : ''}>리브어보드 (포인트 20곳)</option></select>
-           <label>${label}</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div>`
+        ? `<label>종류</label><select class="f" data-k="type" id="edType"><option value="shop"${!['liveaboard', 'pool'].includes(s.type) ? ' selected' : ''}>다이브샵 (포인트 10곳)</option><option value="liveaboard"${s.type === 'liveaboard' ? ' selected' : ''}>리브어보드 (포인트 20곳)</option><option value="pool"${s.type === 'pool' ? ' selected' : ''}>다이빙 풀장 (지도 위치)</option></select>
+           <div id="edSpotsRow" style="display:contents"><label>${label}</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div></div>
+           <div id="edPool" style="display:contents">
+             <label>위치(위도, 경도)</label><div class="row"><input class="f" data-k="lat" value="${esc(s.lat ?? '')}" placeholder="위도 37.12345"><input class="f" data-k="lon" value="${esc(s.lon ?? '')}" placeholder="경도 127.12345"></div>
+             <label>최대 수심 · 수온</label><div class="row"><input class="f" data-k="depthMax" value="${esc(s.depthMax ?? '')}" placeholder="최대 수심 m"><input class="f" data-k="waterTemp" value="${esc(s.waterTemp ?? '')}" placeholder="수온 °C"></div>
+             <label>실내/실외 · 입장</label><div class="row"><select class="f" data-k="env">${[['', '-'], ['in', '실내'], ['out', '실외'], ['season', '계절 운영']].map(([v, n]) => `<option value="${v}"${(s.env || '') === v ? ' selected' : ''}>${n}</option>`).join('')}</select><select class="f" data-k="entry">${[['', '-'], ['open', '개인 입장 가능'], ['shop', '샵 통해서만']].map(([v, n]) => `<option value="${v}"${(s.entry || '') === v ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
+             <label>용도</label>${inp('uses', s.uses || '', 'scuba,free,edu,photo (스쿠버·프리다이빙·교육·수중촬영)')}
+             <label>운영시간</label>${inp('hours', s.hours || '', '매일 09–22시')}
+             <label>가격</label>${inp('price', s.price || '', '1회 입장 3–5만원대')}
+           </div>`
         : `<label>${label}</label>${inp(k, s[k] || '', k === 'lang' ? '언어 코드, 최대 5개: ko,en,ja,zh,es …' : '')}`).join('')}
       <label>이메일(비공개)</label>${inp('email', s.email)}
       <label>요금제</label><select class="f" data-k="plan" id="edPlan">${planOpts(s.plan || 'trial')}</select>
@@ -505,6 +513,7 @@
       <span></span><div class="row"><button class="primary" data-act="esave">저장</button><button data-act="ecancel">취소</button></div></div>`;
     edSpots = (s.spots || []).slice();
     renderEdChips();
+    { const sync = () => { const pool = $('edType').value === 'pool'; $('edSpotsRow').style.display = pool ? 'none' : 'contents'; $('edPool').style.display = pool ? 'contents' : 'none'; }; $('edType').addEventListener('change', sync); sync(); } // [ADD] 풀장이면 포인트 대신 위치·풀장 칸
     edLangs = parseLangs(s.lang); renderEdLangs();
     $('edLangAdd').onchange = () => { const c = $('edLangAdd').value; if (c && edLangs.length < 5 && !edLangs.includes(c)) edLangs.push(c); renderEdLangs(); };
     $('edLangChips').onclick = (e) => { const b = e.target.closest('[data-rmlang]'); if (b) { edLangs = edLangs.filter(c => c !== b.dataset.rmlang); renderEdLangs(); } };

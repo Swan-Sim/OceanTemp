@@ -134,7 +134,7 @@ module.exports = async function handler(req, res) {
       if (b.website2) return send(res, 200, { ok: true, token: '' }); // 스팸 봇(숨은 칸을 채움)
       if (await limited(req, 'reg', 5, 86400)) return send(res, 429, { ok: false, error: 'too_many' });
       const f = S.shopFields(b), mail = S.email(b.email);
-      if (!f.name || !f.spots.length) return send(res, 400, { ok: false, error: 'need_name_spots' });
+      if (!S.shopValid(f)) return send(res, 400, { ok: false, error: f.type === 'pool' ? 'need_name_loc' : 'need_name_spots' });
       if (!S.hasContact(f)) return send(res, 400, { ok: false, error: 'need_contact' });
       if (!mail) return send(res, 400, { ok: false, error: 'need_email' });
       if (!b.agree || b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' }); // [CHANGE] 약관 동의 필수
@@ -175,7 +175,7 @@ module.exports = async function handler(req, res) {
       const tk = await lookupToken(b.t);
       if (!tk) return send(res, 404, { ok: false, error: 'bad_link' });
       const f = S.shopFields(b), mail = S.email(b.email);
-      if (!f.name || !f.spots.length) return send(res, 400, { ok: false, error: 'need_name_spots' });
+      if (!S.shopValid(f)) return send(res, 400, { ok: false, error: f.type === 'pool' ? 'need_name_loc' : 'need_name_spots' });
       if (!S.hasContact(f)) return send(res, 400, { ok: false, error: 'need_contact' });
       if (!mail) return send(res, 400, { ok: false, error: 'need_email' });
       if (tk.kind === 'r') { // 아직 승인 전 → 대기 중인 요청을 그대로 고침

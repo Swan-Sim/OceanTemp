@@ -6,6 +6,8 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <title>샵 등록 · otemp.app</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- [ADD] 다이빙샵 등록 / 수정 페이지.
      - 등록: 정보를 보내면 바로 "수정 전용 링크"를 보여주고(이메일로도 보냄), 관리자 승인 후 사이트에 보여요.
      - 수정: 수정 링크(#t=…)로 열면 내 샵 정보가 채워지고, 고친 내용은 관리자 승인 후 반영돼요.
@@ -56,6 +58,13 @@
   .typeRow { display: flex; gap: 16px; margin: 2px 0 6px; }
   .typeRow label { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; cursor: pointer; }
   .typeRow input { width: auto; margin: 0; }
+  .typeRow { flex-wrap: wrap; }
+  #poolMap { height: 240px; border-radius: 10px; border: 1px solid var(--line); margin-top: 4px; }
+  .locRow { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+  .locRow span { flex: 1; }
+  .opts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 2px; }
+  .opts label { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; color: var(--text); cursor: pointer; }
+  .opts input { width: auto; margin: 0; }
 </style>
 </head>
 <body>
@@ -94,12 +103,34 @@
       <div class="typeRow" id="typeRow">
         <label><input type="radio" name="type" value="shop" checked> <span data-k="typeShop"></span></label>
         <label><input type="radio" name="type" value="liveaboard"> <span data-k="typeLive"></span></label>
+        <label><input type="radio" name="type" value="pool"> <span data-k="typePool"></span></label>
       </div>
+      <div id="spotBox">
       <label><span data-k="spots"></span> <b>*</b> <span id="spotCount" style="color:var(--dim)"></span></label>
       <input id="spotSearch" data-ph="spotsPh" autocomplete="off">
       <div class="sugg" id="sugg"></div>
       <div class="chips" id="chips"></div>
       <div class="hint" data-k="spotsHint"></div>
+      </div>
+      <!-- [ADD] 풀장: 지도 핀 위치 + 풀장 정보 -->
+      <div id="poolBox" style="display:none">
+        <label><span data-k="poolLoc"></span> <b>*</b></label>
+        <div id="poolMap"></div>
+        <div class="locRow"><span id="locTxt"></span><button type="button" class="btn ghost" id="myLoc" data-k="myLoc"></button></div>
+        <input type="hidden" name="lat" id="pLat"><input type="hidden" name="lon" id="pLon">
+        <div class="grid">
+          <div><label data-k="depthMax"></label><input name="depthMax" type="number" inputmode="decimal" min="0.5" max="150" step="0.1"></div>
+          <div><label data-k="waterTemp"></label><input name="waterTemp" type="number" inputmode="decimal" min="5" max="40" step="0.5"></div>
+        </div>
+        <label data-k="env"></label>
+        <div class="opts"><label><input type="radio" name="env" value="in"> <span data-k="envIn"></span></label><label><input type="radio" name="env" value="out"> <span data-k="envOut"></span></label><label><input type="radio" name="env" value="season"> <span data-k="envSeason"></span></label></div>
+        <label data-k="uses"></label>
+        <div class="opts" id="usesBox"><label><input type="checkbox" value="scuba"> <span data-k="useScuba"></span></label><label><input type="checkbox" value="free"> <span data-k="useFree"></span></label><label><input type="checkbox" value="edu"> <span data-k="useEdu"></span></label><label><input type="checkbox" value="photo"> <span data-k="usePhoto"></span></label></div>
+        <label data-k="entry"></label>
+        <div class="opts"><label><input type="radio" name="entry" value="open"> <span data-k="entryOpen"></span></label><label><input type="radio" name="entry" value="shop"> <span data-k="entryShop"></span></label></div>
+        <label data-k="hours"></label><input name="hours" maxlength="120" data-ph="hoursPh">
+        <label data-k="price"></label><input name="price" maxlength="80" data-ph="pricePh">
+      </div>
       <label data-k="address"></label>
       <input name="address" maxlength="160">
       <!-- [CHANGE] 가능한 언어: 목록에서 고르기(5개까지, 처음엔 브라우저 언어 + English 자동 선택) -->
@@ -157,7 +188,11 @@ const T = {
     lead: 'otemp.app 포인트 화면에 샵 연락처가 "제휴 샵"으로 보여요. 보내주신 정보는 운영자가 확인한 뒤 올라가요.',
     leadEdit: '고친 내용은 운영자가 확인한 뒤 사이트에 반영돼요. 그 전까지는 지금 정보가 그대로 보여요.',
     secShop: '샵 정보', name: '샵 이름', spots: '다니는 포인트', spotsPh: '포인트 이름으로 찾기 (예: 문섬)',
-    type: '종류', typeShop: '다이브샵', typeLive: '리브어보드',
+    type: '종류', typeShop: '다이브샵', typeLive: '리브어보드', typePool: '다이빙 풀장',
+    poolLoc: '위치 (지도를 눌러 핀을 찍거나 끌어서 맞추기)', myLoc: '내 위치', locNone: '아직 위치를 정하지 않았어요', depthMax: '최대 수심 (m)', waterTemp: '수온 (°C)',
+    env: '실내/실외', envIn: '실내', envOut: '실외', envSeason: '계절 운영', uses: '용도 (여러 개)', useScuba: '스쿠버', useFree: '프리다이빙', useEdu: '교육', usePhoto: '수중촬영',
+    entry: '입장', entryOpen: '개인 입장 가능', entryShop: '샵 통해서만', hours: '운영시간', hoursPh: '매일 09–22시, 월요일 휴무', price: '가격', pricePh: '1회 입장 3–5만원대',
+    e_need_name_loc: '풀장 이름과 위치(지도 핀)를 넣어주세요.',
     spotsHint: (n) => `${n}곳까지 고를 수 있어요(다이브샵 10곳, 리브어보드 20곳). 찾는 포인트가 없으면 아래 "남길 말"에 적어주세요.`, spotsFull: (n) => `${n}곳을 모두 골랐어요 (빼려면 ×)`,
     address: '주소', lang: '가능한 언어', langAdd: '+ 언어 추가', langFull: '5개까지 고를 수 있어요', note: '한 줄 소개', notePh: '보트 다이빙 · 체험 다이빙 · 나이트록스',
     secContact: '공개 연락처', contactHint: '사이트에 그대로 보여요. 하나 이상 적어주세요. 개인 휴대폰 번호보다 샵 대표번호를 권해요.',
@@ -191,7 +226,11 @@ const T = {
     lead: 'Your contacts appear as a "Partner" shop on otemp.app dive spots. We review every submission before it goes live.',
     leadEdit: 'Changes go live after review. Until then, the current details stay on the site.',
     secShop: 'Shop', name: 'Shop name', spots: 'Dive spots you visit', spotsPh: 'Search spots (e.g. Moonseom)',
-    type: 'Type', typeShop: 'Dive shop', typeLive: 'Liveaboard',
+    type: 'Type', typeShop: 'Dive shop', typeLive: 'Liveaboard', typePool: 'Dive pool',
+    poolLoc: 'Location (tap the map to drop or drag the pin)', myLoc: 'My location', locNone: 'No location yet', depthMax: 'Max depth (m)', waterTemp: 'Water temp (°C)',
+    env: 'Indoor/outdoor', envIn: 'Indoor', envOut: 'Outdoor', envSeason: 'Seasonal', uses: 'Uses (pick any)', useScuba: 'Scuba', useFree: 'Freediving', useEdu: 'Training', usePhoto: 'Underwater photo',
+    entry: 'Entry', entryOpen: 'Open to individuals', entryShop: 'Via dive shops only', hours: 'Opening hours', hoursPh: 'Daily 9am–10pm, closed Mon', price: 'Price', pricePh: 'Single entry ~US$25–40',
+    e_need_name_loc: 'Add the pool name and its location (map pin).',
     spotsHint: (n) => `Pick up to ${n} (dive shops 10, liveaboards 20). Missing a spot? Tell us in the message below.`, spotsFull: (n) => `All ${n} picked (tap × to remove)`,
     address: 'Address', lang: 'Languages', langAdd: '+ Add language', langFull: 'Up to 5 languages', note: 'One-line intro', notePh: 'Boat dives · Discover scuba · Nitrox',
     secContact: 'Public contacts', contactHint: 'Shown on the site as-is. Add at least one. A shop number is better than a personal phone.',
@@ -265,6 +304,7 @@ function applyLang() {
   showStatus();
   renderStats();
   if (typeof renderChips === 'function' && $('chips')) try { renderChips(); } catch (_) {}
+  if (typeof applyType === 'function' && $('poolBox')) try { applyType(); } catch (_) {}
 }
 $('langBtn').onclick = (e) => { e.preventDefault(); lang = lang === 'ko' ? 'en' : 'ko'; applyLang(); };
 
@@ -290,7 +330,34 @@ async function loadSpots() {
 const spotName = (no) => { const s = spots.find(x => x.no === no); return s ? (s.label || s.name) : `#${no}`; };
 // [CHANGE] 다이브샵 10곳, 리브어보드 20곳 (api/_store.js와 같게)
 const maxSpots = () => { const r = document.querySelector('#f input[name="type"]:checked'); return r && r.value === 'liveaboard' ? 20 : 10; };
-document.getElementById('typeRow').addEventListener('change', () => renderChips());
+const curType = () => { const r = document.querySelector('#f input[name="type"]:checked'); return r ? r.value : 'shop'; };
+// [ADD] 풀장이면 포인트 대신 지도 핀 + 풀장 칸
+let pMap = null, pPin = null;
+function setPin(lat, lon, pan) {
+  $('pLat').value = lat.toFixed(5); $('pLon').value = lon.toFixed(5);
+  $('locTxt').textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  if (!pMap) return;
+  if (!pPin) { pPin = L.marker([lat, lon], { draggable: true }).addTo(pMap); pPin.on('dragend', () => { const p = pPin.getLatLng(); setPin(p.lat, p.lng); }); }
+  else pPin.setLatLng([lat, lon]);
+  if (pan) pMap.setView([lat, lon], Math.max(pMap.getZoom(), 15));
+}
+function applyType() {
+  const pool = curType() === 'pool';
+  $('spotBox').style.display = pool ? 'none' : ''; $('poolBox').style.display = pool ? '' : 'none';
+  if (pool && !pMap && window.L) {
+    const la = parseFloat($('pLat').value), lo = parseFloat($('pLon').value), has = Number.isFinite(la) && Number.isFinite(lo);
+    pMap = L.map('poolMap', { attributionControl: true }).setView(has ? [la, lo] : [36.3, 127.8], has ? 15 : 6);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Imagery © Esri' }).addTo(pMap);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 }).addTo(pMap);
+    pMap.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng));
+    if (has) setPin(la, lo);
+  }
+  if (pool && pMap) setTimeout(() => pMap.invalidateSize(), 50);
+  if (!$('pLat').value) $('locTxt').textContent = T[lang].locNone;
+  const nm = document.querySelector('[data-k="name"]'); if (nm) nm.textContent = pool ? (lang === 'ko' ? '풀장 이름' : 'Pool name') : T[lang].name;
+}
+$('myLoc').onclick = () => { if (!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(p => setPin(p.coords.latitude, p.coords.longitude, true), () => {}, { enableHighAccuracy: true, timeout: 10000 }); };
+document.getElementById('typeRow').addEventListener('change', () => { renderChips(); applyType(); });
 function renderChips() {
   const MAX_SPOTS = maxSpots();
   if (picked.length > MAX_SPOTS) picked = picked.slice(0, MAX_SPOTS);
@@ -317,13 +384,18 @@ $('sugg').onclick = (e) => { const d = e.target.closest('[data-no]'); if (!d) re
 const form = $('f');
 function formData() {
   const o = Object.fromEntries(new FormData(form).entries());
-  o.spots = picked; o.agree = $('agree').checked || (!!token && termsOk); if (token) o.t = token;
+  o.spots = curType() === 'pool' ? [] : picked; o.uses = [...document.querySelectorAll('#usesBox input:checked')].map(i => i.value); o.agree = $('agree').checked || (!!token && termsOk); if (token) o.t = token;
   if ($('agree').checked) o.terms = TERMS_VERSION;
   return o;
 }
 function fill(d, email) {
   setLangs(parseLangs(d.lang));
-  { const r = form.querySelector(`input[name="type"][value="${d.type === 'liveaboard' ? 'liveaboard' : 'shop'}"]`); if (r) r.checked = true; }
+  { const r = form.querySelector(`input[name="type"][value="${['liveaboard', 'pool'].includes(d.type) ? d.type : 'shop'}"]`); if (r) r.checked = true; }
+  ['depthMax', 'waterTemp', 'hours', 'price'].forEach(k => { if (form[k]) form[k].value = d[k] ?? ''; });
+  ['env', 'entry'].forEach(k => { const r = form.querySelector(`input[name="${k}"][value="${d[k] || ''}"]`); if (r) r.checked = true; });
+  const us = String(d.uses || '').split(','); document.querySelectorAll('#usesBox input').forEach(i => { i.checked = us.includes(i.value); });
+  if (d.lat != null && d.lon != null) { $('pLat').value = d.lat; $('pLon').value = d.lon; $('locTxt').textContent = `${d.lat}, ${d.lon}`; }
+  applyType(); if (d.lat != null && d.lon != null && pMap) setPin(+d.lat, +d.lon, true);
   ['name', 'address', 'note', 'phone', 'kakao', 'whatsapp', 'instagram', 'web'].forEach(k => { if (form[k]) form[k].value = d[k] || ''; });
   if (d.instagram) form.instagram.value = d.instagram.replace('https://www.instagram.com/', '@');
   form.email.value = email || '';
@@ -386,6 +458,8 @@ function showStatus() {
   await loadSpots();
   const pre = parseInt(new URLSearchParams(location.search).get('spot'), 10);
   if (!token && pre && !picked.includes(pre)) { picked.push(pre); renderChips(); }
+  if (!token && new URLSearchParams(location.search).get('type') === 'pool') { const r = form.querySelector('input[name="type"][value="pool"]'); if (r) r.checked = true; } // /shop/?type=pool
+  applyType();
   if (token) {
     const j = await post('me', { t: token }).catch(() => ({}));
     if (!j.ok) { editStatus = 'bad'; form.style.display = 'none'; showStatus(); return; }

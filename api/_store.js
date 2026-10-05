@@ -50,8 +50,8 @@ function whatsapp(v) {
 const email = (v) => { v = str(v, 120).toLowerCase(); return /^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/.test(v) ? v : ''; };
 // [CHANGE] 샵 하나당 포인트: 다이브샵 10곳, 리브어보드 20곳. 언어는 5개까지
 const MAX_SPOTS = 10, MAX_SPOTS_LIVEABOARD = 20, MAX_LANGS = 5;
-const shopType = (v) => String(v || '').toLowerCase() === 'liveaboard' ? 'liveaboard' : 'shop';
-const maxSpotsFor = (type) => shopType(type) === 'liveaboard' ? MAX_SPOTS_LIVEABOARD : MAX_SPOTS;
+const shopType = (v) => { v = String(v || '').toLowerCase(); return v === 'liveaboard' || v === 'pool' ? v : 'shop'; }; // [ADD] pool = 다이빙 풀장
+const maxSpotsFor = (type) => shopType(type) === 'liveaboard' ? MAX_SPOTS_LIVEABOARD : shopType(type) === 'pool' ? 0 : MAX_SPOTS;
 const spotList = (v, max = MAX_SPOTS) => [...new Set((Array.isArray(v) ? v : String(v || '').split(/[;,\s]+/)).map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 100000))].slice(0, max);
 // [ADD] 요금제: trial = 무료(제한, 1년 뒤 종료) · friend = 무료(지인, 기간 없음) · paid = 유료. 예전 'free'는 지인으로 봄
 const planOf = (v) => { v = String(v || '').toLowerCase(); return /^paid|^유료/.test(v) ? 'paid' : /^trial|제한|체험/.test(v) ? 'trial' : /^friend|^free|지인|^무료/.test(v) ? 'friend' : 'trial'; };
@@ -81,16 +81,30 @@ function shopFields(b) {
     name: str(b.name, 60), type, spots: spotList(b.spots, maxSpotsFor(type)),
     phone: phone(b.phone), kakao: httpsUrl(b.kakao), whatsapp: whatsapp(b.whatsapp),
     instagram: instagram(b.instagram), web: httpsUrl(b.web),
-    address: str(b.address, 160), lang: langList(b.lang), note: str(b.note, 120)
+    address: str(b.address, 160), lang: langList(b.lang), note: str(b.note, 120),
+    ...(type === 'pool' ? poolFields(b) : {})
   };
 }
+// [ADD] 풀장 칸: 위치(지도 핀) · 최대 수심 · 수온 · 실내/실외/계절 · 용도 · 입장 방식 · 운영시간 · 가격
+const POOL_USES = ['scuba', 'free', 'edu', 'photo'];
+function poolFields(b) {
+  const num = (v, lo, hi, d) => { const n = parseFloat(v); return Number.isFinite(n) && n >= lo && n <= hi ? +n.toFixed(d) : null; };
+  const lat = num(b.lat, -90, 90, 5), lon = num(b.lon, -180, 180, 5);
+  const uses = (Array.isArray(b.uses) ? b.uses : String(b.uses || '').split(/[,\s]+/)).map(x => String(x).toLowerCase()).filter(x => POOL_USES.includes(x));
+  return { lat, lon, depthMax: num(b.depthMax, 0.5, 150, 1), waterTemp: num(b.waterTemp, 5, 40, 1),
+    env: ['in', 'out', 'season'].includes(b.env) ? b.env : '', uses: [...new Set(uses)].join(','),
+    entry: ['open', 'shop'].includes(b.entry) ? b.entry : '', hours: str(b.hours, 120), price: str(b.price, 80) };
+}
+// 등록 가능한지: 이름 + (풀장은 위치, 샵·리브어보드는 포인트 하나 이상)
+const shopValid = (f) => !!(f && f.name && (f.type === 'pool' ? f.lat != null && f.lon != null : f.spots && f.spots.length));
 const hasContact = (f) => !!(f.phone || f.kakao || f.whatsapp || f.instagram || f.web);
 
 // 사이트에 보내는 칸(이메일·링크해시 등은 절대 안 보냄)
 function publicShop(s) {
   return { id: String(s.id), type: shopType(s.type), spots: s.spots || [], name: s.name, phone: s.phone || '', kakao: s.kakao || '', whatsapp: s.whatsapp || '',
     instagram: s.instagram || '', web: s.web || '', address: s.address || '', lang: s.lang || '', note: s.note || '',
-    paid: s.plan === 'paid', checked: s.checked || '' };
+    paid: s.plan === 'paid', checked: s.checked || '',
+    ...(shopType(s.type) === 'pool' ? { lat: s.lat, lon: s.lon, depthMax: s.depthMax ?? null, waterTemp: s.waterTemp ?? null, env: s.env || '', uses: s.uses || '', entry: s.entry || '', hours: s.hours || '', price: s.price || '' } : {}) };
 }
 // 만료일: 그 날짜가 지구 어디선가 아직 그날이면 보임(UTC-12 기준 오늘)
 const todayLoose = () => new Date(Date.now() - 12 * 3600e3).toISOString().slice(0, 10);
@@ -215,6 +229,6 @@ async function adminEmail() { const c = await adminCfg(); return c.email || proc
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
-module.exports = { adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, MAX_SPOTS_LIVEABOARD, maxSpotsFor, shopType, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
+module.exports = { adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, MAX_SPOTS_LIVEABOARD, maxSpotsFor, shopType, shopValid, POOL_USES, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
   csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET, BUILTIN_SPOTS,
   allSpots, legacySpots, normSpot, cleanName, spotsMigrated, nextSpotNo, clearSpotsMemo, MIGRATED_KEY };

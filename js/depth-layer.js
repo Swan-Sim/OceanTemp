@@ -1,4 +1,5 @@
-    // [ADD] 지도(위성) 위에 수심을 "지도처럼" 이어서 깔기 - api/_depth.js 수심 타일(줌 13 격자, 한 장 약 4~5km)
+    // [ADD] 지도(위성) 위에 수심을 "지도처럼" 이어서 깔기 - api/_depth.js 수심 벡터 타일(줌 13 격자, 한 장 약 4~5km)
+    //  서버가 등심선·수심 띠를 미리 다각형/선으로 만들어 저장해 두고(180일, CDN 30일), 앱은 그리기만 해서 빠르고 확대해도 선명해요
     //  자료: 한국 국립해양조사원 150m · 유럽 EMODnet 115m · 미국 NOAA(약 90m 간격으로 뽑음) · 그 밖 GMRT
     //  - 확대 12 이상에서 화면에 걸친 타일을 받아(서버 180일 저장) 반투명 수심 색 + 10m 간격 등심선(30·40·60m 진하게) + 숫자
     //  - 타일마다 경계 밖까지 조금 더 받아 계산한 뒤 경계에서 잘라 그려서 이음새가 안 보여요
@@ -13,85 +14,24 @@
     const tileX = (lon) => Math.floor((lon + 180) / 360 * 2 ** DTILE_Z);
     const tileY = (lat) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** DTILE_Z); };
 
-    // 격자 값: 국립해양조사원은 빈 칸 = 육지(+3m), 나머지 자료는 빈 칸 = 모름(NaN)
-    const gzOf = (g, nullLand) => (i, j) => { const v = g.z[i * g.cols + j]; return v == null ? (nullLand ? 3 : NaN) : v; };
-    function gridSampler(g, nullLand) {
-      const gz = gzOf(g, nullLand);
-      return (lat, lon) => { const fi = (lat - g.la0) / g.dla, fj = (lon - g.lo0) / g.dlo; if (fi < 0 || fj < 0 || fi > g.rows - 1 || fj > g.cols - 1) return NaN;
-        const i = Math.min(g.rows - 2, Math.floor(fi)), j = Math.min(g.cols - 2, Math.floor(fj)), a = fi - i, b = fj - j;
-        return gz(i, j) * (1 - a) * (1 - b) + gz(i, j + 1) * (1 - a) * b + gz(i + 1, j) * a * (1 - b) + gz(i + 1, j + 1) * a * b; };
-    }
-
-    // 바탕 색: 타일 범위만 정확히 채운 256×256 그림(육지·모름은 투명)
-    function depthFill(d) {
-      const t = d.tile, W = 256, H = 256, sample = gridSampler(d.grid, d.nullLand);
-      const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-      const x = cv.getContext('2d'), img = x.createImageData(W, H);
-      for (let py = 0; py < H; py++) { const lat = t.n - (py + 0.5) / H * (t.n - t.s);
-        for (let px = 0; px < W; px++) { const v = sample(lat, t.w + (px + 0.5) / W * (t.e - t.w)); if (!(v < 0)) continue;
-          const k = Math.min(1, -v / 60), o = (py * W + px) * 4;
-          img.data[o] = 120 - 110 * k; img.data[o + 1] = 220 - 150 * k; img.data[o + 2] = 230 - 60 * k; img.data[o + 3] = Math.min(150, 40 + 110 * Math.min(1, -v / 8)) * (0.55 + 0.45 * k); } }
-      x.putImageData(img, 0, 0);
-      return cv.toDataURL('image/png');
-    }
-
-    // 짧은 조각들을 끝점끼리 이어 긴 선으로(지도가 아주 짧은 조각은 안 그리는 경우가 있어서)
-    function joinSegs(segs) {
-      const K = (p) => p[0].toFixed(7) + ',' + p[1].toFixed(7), ends = new Map(), used = new Uint8Array(segs.length), lines = [];
-      segs.forEach((s, i) => [0, 1].forEach(e => { const k = K(s[e]); (ends.get(k) || ends.set(k, []).get(k)).push([i, e]); }));
-      const nextFrom = (pt) => { const l = ends.get(K(pt)) || []; for (const [i, e] of l) if (!used[i]) { used[i] = 1; return segs[i][1 - e]; } return null; };
-      segs.forEach((s, i) => {
-        if (used[i]) return; used[i] = 1;
-        const line = [s[0], s[1]];
-        for (let p = nextFrom(line[line.length - 1]); p; p = nextFrom(line[line.length - 1])) line.push(p);
-        for (let p = nextFrom(line[0]); p; p = nextFrom(line[0])) line.unshift(p);
-        lines.push(line);
-      });
-      return lines;
-    }
-
-    // 등심선(마칭 스퀘어, 격자를 3배로 잘게 나눠 부드럽게). 조각 가운데가 타일 안에 있는 것만 → 이웃 타일과 겹치지 않음
-    function depthContours(d) {
-      const g = d.grid, t = d.tile, gz = gzOf(g, d.nullLand), U = 3, R = (g.rows - 1) * U + 1, C = (g.cols - 1) * U + 1, F = new Float32Array(R * C);
-      for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
-        const fi = r / U, fj = c / U, i = Math.min(g.rows - 2, Math.floor(fi)), j = Math.min(g.cols - 2, Math.floor(fj)), a = fi - i, b = fj - j;
-        F[r * C + c] = gz(i, j) * (1 - a) * (1 - b) + gz(i, j + 1) * (1 - a) * b + gz(i + 1, j) * a * (1 - b) + gz(i + 1, j + 1) * a * b;
-      }
-      const P = (r, c) => [g.la0 + r / U * g.dla, g.lo0 + c / U * g.dlo];
-      let deepest = 0; for (let k = 0; k < F.length; k++) if (F[k] < deepest) deepest = F[k];
-      const keep = (s) => { const la = (s[0][0] + s[1][0]) / 2, lo = (s[0][1] + s[1][1]) / 2; return la >= t.s && la < t.n && lo >= t.w && lo < t.e; };
-      const out = {};
-      for (let lvl = 10; lvl <= Math.min(100, -deepest); lvl += 10) {
-        const lv = -lvl + 0.013, segs = []; // 값이 정확히 -30처럼 같으면 선이 끊겨서 살짝 비켜 계산
-        for (let r = 0; r < R - 1; r++) for (let c = 0; c < C - 1; c++) {
-          const v = [F[r * C + c], F[r * C + c + 1], F[(r + 1) * C + c + 1], F[(r + 1) * C + c]];
-          if (isNaN(v[0]) || isNaN(v[1]) || isNaN(v[2]) || isNaN(v[3])) continue;
-          const cn = [[r, c], [r, c + 1], [r + 1, c + 1], [r + 1, c]], pts = [];
-          for (let e = 0; e < 4; e++) { const a = v[e], b = v[(e + 1) % 4]; if ((a - lv) * (b - lv) < 0) { const k = (lv - a) / (b - a), p = cn[e], q = cn[(e + 1) % 4]; pts.push(P(p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k)); } }
-          if (pts.length === 2) { if (keep(pts)) segs.push(pts); } else if (pts.length === 4) { [[pts[0], pts[1]], [pts[2], pts[3]]].forEach(s => { if (keep(s)) segs.push(s); }); }
-        }
-        if (segs.length) out[lvl] = joinSegs(segs);
-      }
-      return out;
-    }
-
+    // 서버가 미리 만들어 둔 벡터(다각형·선)를 그대로 그리기만 해요 - 일러스트처럼 단색 띠가 깊을수록 겹쳐 진해짐
+    const DFILL = { 1: ['#7dd3fc', 0.16], 10: ['#38bdf8', 0.13], 20: ['#0ea5e9', 0.13], 30: ['#0284c7', 0.13], 40: ['#0369a1', 0.13], 50: ['#075985', 0.13], 60: ['#0c4a6e', 0.15], 80: ['#082f49', 0.15], 100: ['#041e33', 0.17] };
     function buildTile(d) {
-      const t = d.tile, layers = [L.imageOverlay(depthFill(d), [[t.s, t.w], [t.n, t.e]], { interactive: false, className: 'depth-ov' })], lbl = [];
-      const cs = depthContours(d);
-      Object.keys(cs).forEach(k => {
+      const layers = [];
+      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.14]; layers.push(L.polygon(f.p, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: 0.3 })); });
+      Object.keys(d.lines || {}).forEach(k => {
         const strong = k === '30' || k === '40' || k === '60';
-        layers.push(L.polyline(cs[k], { color: '#fff', weight: strong ? 1.8 : 0.9, opacity: strong ? 0.9 : 0.45, interactive: false, smoothFactor: 0.5 }));
-        if (strong) cs[k].forEach(ln => ln.forEach((p, i) => { if (i % 6 === 3) lbl.push([p[0], p[1], +k]); }));
+        layers.push(L.polyline(d.lines[k], { color: '#fff', weight: strong ? 1.6 : 0.8, opacity: strong ? 0.85 : 0.4, interactive: false, smoothFactor: 0.3 }));
       });
-      return { st: 'ok', grp: L.layerGroup(layers), lbl };
+      return { st: 'ok', grp: L.layerGroup(layers), lbl: d.lbl || [] };
     }
 
     function loadNext() {
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dtile&x=${x}&y=${y}`).then(r => r.json()).then(d => {
-          if (d && d.ok && d.grid) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}`).then(r => r.json()).then(d => {
+          if (d && d.ok && !d.empty && (d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
           else dTiles.set(key, { st: 'none' });
         }).catch(() => dTiles.delete(key)).finally(() => { dActive--; loadNext(); });
       }

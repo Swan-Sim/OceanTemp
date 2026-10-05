@@ -304,10 +304,10 @@ module.exports = async function handler(req, res) {
   // [ADD] 국립해양조사원 자연과학용 수심(150m 격자): /api/spotobs?svc=depth&ymin=..&ymax=..&xmin=..&xmax=..
   //  공공데이터포털 "해양수산부 국립해양조사원_자연과학용 수심정보 조회" 활용신청 필요(KHOA_API_KEY와 같은 키). 범위는 한 변 0.2° 이하.
   //  응답: { ok, n, rows: [[위도, 경도, 수심m(양수=물 깊이)], ...] }. 같은 범위는 30일 저장.
-  // [ADD] 지도용 수심 타일(줌 13 고정): /api/spotobs?svc=dtile&x=..&y=..
-  if (svc === 'dtile') {
+  // [ADD] 지도용 수심 타일(줌 13 고정): /api/spotobs?svc=dtile&x=..&y=.. (격자) · svc=dvec (미리 계산한 다각형·등심선)
+  if (svc === 'dtile' || svc === 'dvec') {
     try {
-      const r = await require('./_depth').depthTile(req.query.x, req.query.y);
+      const D = require('./_depth'), r = await (svc === 'dvec' ? D.depthVec : D.depthTile)(req.query.x, req.query.y);
       if (!r) return res.status(400).json({ ok: false });
       res.setHeader('Cache-Control', r.ok ? 'public, s-maxage=2592000, max-age=86400' : 's-maxage=3600');
       return res.status(200).json(r);

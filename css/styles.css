@@ -604,3 +604,4 @@ body:not(.detail-mode) .nt-sel { display: none; }
     #leafletMap .depth-btn { background: rgba(7,11,20,0.78); color: #CBD5E1; border: 1px solid rgba(255,255,255,0.22); border-radius: 14px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; margin-bottom: 6px; }
     #leafletMap .depth-btn.on { border-color: #38BDF8; color: #E0F2FE; background: rgba(3,105,161,0.55); }
     #leafletMap .depth-ov { pointer-events: none; image-rendering: auto; }
+    #leafletMap .depth-lbl { color: #fff; font: 700 11px/14px -apple-system, sans-serif; text-align: center; white-space: nowrap; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95); pointer-events: none; }

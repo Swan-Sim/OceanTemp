@@ -82,19 +82,32 @@
 
     // B. 맨 아래 정보 줄: 왼쪽 정점 정보 + 오른쪽 샵 바로가기(샵 탭에선 안 보임)
     // [CHANGE] 아래 정보 줄: 왼쪽에 샵 바로가기(좁은 화면을 위해 "제휴" 표시는 빼고 샵 이름만), 오른쪽에 정점 정보
+    // [ADD] 아래 정보 줄 맨 앞에 "수심 ~64m"(포인트 300m 안 최대 수심, api/_depth.js). 포인트(해변 정점)만, 처음 열 때 한 번 받아요
+    function depthFootPrefix() {
+      const st = selectedStation;
+      if (!st || !st.isBeach || /^River/.test(st.network || '') || !/^https?:$/.test(location.protocol)) return '';
+      if (st._depthReq === undefined) {
+        st._depthReq = fetch(`/api/spotobs?svc=depth&lite=1&lat=${st.coords[1].toFixed(4)}&lon=${st.coords[0].toFixed(4)}`).then(r => r.json())
+          .then(j => { st._depth = j && j.ok && j.max300 != null ? j : null; if (st._depth && selectedStation === st) setFootInfo(footText); })
+          .catch(() => { st._depth = null; });
+      }
+      const d = st._depth; if (!d) return '';
+      return (t.depthFoot ? t.depthFoot(d.max300) : `수심 ~${d.max300}m`) + ' · ';
+    }
     function setFootInfo(text) {
       footText = text || '';
       const el = document.getElementById('st-info');
       if (!el) return;
+      text = depthFootPrefix() + footText;
       const list = activeMode === 'shop' ? [] : shopsFor(selectedStation);
-      if (!list.length) { el.classList.remove('has-shop'); el.textContent = footText; return; }
+      if (!list.length) { el.classList.remove('has-shop'); el.textContent = text; return; }
       const s = list.find(x => x.paid) || list[0];
       const quick = shopLinks(s).filter(([k]) => k === 'tel' || k === 'kakao' || k === 'whatsapp').slice(0, 2);
       el.classList.add('has-shop');
       el.innerHTML = `<span class="shop-q"><span class="shop-qn">${shopEsc(s.name)}</span>` +
         quick.map(([k, href]) => `<a class="shop-ic${k === 'tel' ? ' call' : ''}" ${linkAttrs(s, k, href)} aria-label="${k}">${SHOP_ICON[k]}</a>`).join('') +
         `<button type="button" class="shop-all" data-shop="${shopEsc(s.id)}" data-shop-k="all">${shopEsc((t.shopAll || ((n) => `전체 ${n}곳 ›`))(list.length))}</button></span>` +
-        `<span class="foot-txt">${shopEsc(footText)}</span>`;
+        `<span class="foot-txt">${shopEsc(text)}</span>`;
       sendImps([s]);
     }
     // 노출 수: 정점을 직접 고를 때마다 샵별 한 번(바로가기에 보였든 다이빙샵 탭에서 봤든 한 번만)

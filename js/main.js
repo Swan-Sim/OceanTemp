@@ -191,7 +191,41 @@
     }
     applyForcedPortrait();
 
-    window.addEventListener('resize', () => { applyForcedPortrait(); scheduleResize(150); });
+    // [FIX] "가로↔세로 전환 시 중심이 다른 곳으로 옮겨감" - 화면 크기가 바뀌기 시작할 때 보고 있던 곳(지도 중심·줌, 지구 회전)을
+    // 기억해 두고, 레이아웃이 다 자리잡은 뒤 그대로 되돌려요. (지도는 Leaflet이 크기 변화를 늦게 알아채면 왼쪽 위 기준으로 남아서 중심이 밀렸고,
+    // 지구는 방향 전환 때 세로 기울기를 0.35로 고정 리셋해서 보던 위도가 바뀌었어요)
+    let viewAnchor = null, viewAnchorTimer = null;
+    function captureViewAnchor() {
+      if (viewAnchor) return; // 연달아 오는 resize 중 첫 번째(바뀌기 전) 상태만
+      try {
+        if (typeof isDetailMode !== 'undefined' && isDetailMode && typeof leafletMap !== 'undefined' && leafletMap) {
+          const c = leafletMap.getCenter(); viewAnchor = { map: true, lat: c.lat, lng: c.lng, zoom: leafletMap.getZoom() };
+        } else if (typeof globeGroup !== 'undefined' && globeGroup) {
+          viewAnchor = { map: false, rx: globeGroup.rotation.x, ry: globeGroup.rotation.y };
+        }
+      } catch (_) {}
+    }
+    function restoreViewAnchor(final) {
+      const a = viewAnchor; if (!a) return;
+      try {
+        if (a.map && typeof leafletMap !== 'undefined' && leafletMap && isDetailMode) {
+          leafletMap.invalidateSize({ pan: false });
+          leafletMap.setView([a.lat, a.lng], a.zoom, { animate: false });
+        } else if (!a.map && typeof globeGroup !== 'undefined' && globeGroup && !isDetailMode) {
+          globeGroup.rotation.x = a.rx; globeGroup.rotation.y = a.ry;
+        }
+      } catch (_) {}
+      if (final) viewAnchor = null;
+    }
+    function onViewportResize(delay) {
+      captureViewAnchor();
+      applyForcedPortrait();
+      scheduleResize(delay);
+      if (viewAnchorTimer) clearTimeout(viewAnchorTimer);
+      setTimeout(() => restoreViewAnchor(false), delay + 30);
+      viewAnchorTimer = setTimeout(() => { viewAnchorTimer = null; syncRendererSize(); restoreViewAnchor(true); }, 700);
+    }
+    window.addEventListener('resize', () => onViewportResize(150));
 
     // [ADD] "화면 비율 바뀌면 중앙 다시 정렬해줘, 줌은 유지" 요청 반영.
     // matchMedia로 세로↔가로 전환을 정확히 감지해서(작은 리사이즈마다 매번
@@ -200,16 +234,8 @@
     // 같이 실행합니다. cameraDistance(줌)는 건드리지 않습니다.
     if (window.matchMedia) {
       const orientationQuery = window.matchMedia('(orientation: landscape)');
-      const onOrientationFlip = () => {
-        applyForcedPortrait();
-        scheduleResize(300);
-        // 안전망: 일부 기기는 방향 전환 직후 첫 측정이 아직 최종 크기가
-        // 아닐 수 있어서, 조금 더 지난 뒤 한 번 더 확실하게 재확인합니다.
-        setTimeout(() => {
-          syncRendererSize();
-          recenterGlobeVertical();
-        }, 600);
-      };
+      // [CHANGE] 세로 기울기 리셋(recenterGlobeVertical)은 보던 위치를 바꿔서 뺐어요. 기억한 위치로 되돌리기만 합니다(700ms 뒤 한 번 더).
+      const onOrientationFlip = () => onViewportResize(300);
       if (orientationQuery.addEventListener) orientationQuery.addEventListener('change', onOrientationFlip);
       else if (orientationQuery.addListener) orientationQuery.addListener(onOrientationFlip); // 구형 Safari 폴백
     }

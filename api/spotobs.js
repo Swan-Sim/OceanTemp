@@ -301,6 +301,44 @@ module.exports = async function handler(req, res) {
   // [ADD] 포인트별 검색용 페이지·사이트맵(/ko/s/39/문섬, /sitemap.xml) - 함수 개수를 늘리지 않으려고 여기서 처리
   const svc = (req.query || {}).svc;
   if (svc === 'page' || svc === 'index' || svc === 'sitemap' || svc === 'go') return require('./_spotpage')(req, res);
+  // [ADD] 국립해양조사원 자연과학용 수심(150m 격자): /api/spotobs?svc=depth&ymin=..&ymax=..&xmin=..&xmax=..
+  //  공공데이터포털 "해양수산부 국립해양조사원_자연과학용 수심정보 조회" 활용신청 필요(KHOA_API_KEY와 같은 키). 범위는 한 변 0.2° 이하.
+  //  응답: { ok, n, rows: [[위도, 경도, 수심m(양수=물 깊이)], ...] }. 같은 범위는 30일 저장.
+  if (svc === 'depth') {
+    try {
+      const q = req.query, r4 = (v) => Math.round(+v * 1e4) / 1e4;
+      const b = { ymin: r4(q.ymin), ymax: r4(q.ymax), xmin: r4(q.xmin), xmax: r4(q.xmax) };
+      if (Object.values(b).some(v => !Number.isFinite(v)) || b.ymax <= b.ymin || b.xmax <= b.xmin || b.ymax - b.ymin > 0.2 || b.xmax - b.xmin > 0.2) return res.status(400).json({ ok: false, reason: 'bbox' });
+      const key = process.env.KHOA_API_KEY;
+      if (!key) return res.status(200).json({ ok: false, reason: 'no_key' });
+      const ck = `depth:khoa:${b.ymin}_${b.ymax}_${b.xmin}_${b.xmax}`;
+      try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { res.setHeader('Cache-Control', 's-maxage=86400'); res.setHeader('Content-Type', 'application/json'); return res.status(200).send(result); } } catch (_) {}
+      const page = async (no) => {
+        const url = `https://apis.data.go.kr/1192136/waterDepth/GetWaterDepthApiService?serviceKey=${encodeURIComponent(key)}&type=json&ymin=${b.ymin}&ymax=${b.ymax}&xmin=${b.xmin}&xmax=${b.xmax}&pageNo=${no}&numOfRows=300`;
+        const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 12000);
+        try {
+          const t = await (await fetch(url, { signal: ctl.signal })).text();
+          let j; try { j = JSON.parse(t); } catch (_) { throw new Error('응답 ' + t.slice(0, 120)); }
+          const body = (j.response && j.response.body) || j.body || {}, head = (j.response && j.response.header) || j.header || {};
+          if (head.resultCode && head.resultCode !== '00') throw new Error(`${head.resultCode} ${head.resultMsg || ''}`);
+          let it = body.items && body.items.item; if (it && !Array.isArray(it)) it = [it];
+          return { total: +body.totalCount || 0, rows: (it || []).map(x => [+x.lat, +x.lot, +x.dpwt]).filter(r => r.every(Number.isFinite)) };
+        } finally { clearTimeout(tm); }
+      };
+      const first = await page(1);
+      const pages = Math.min(40, Math.ceil(first.total / 300));
+      const rows = first.rows.slice();
+      for (let p = 2; p <= pages; p += 5) {
+        const got = await Promise.all(Array.from({ length: Math.min(5, pages - p + 1) }, (_, i) => page(p + i).catch(() => ({ rows: [] }))));
+        got.forEach(g => rows.push(...g.rows));
+      }
+      const out = JSON.stringify({ ok: rows.length > 0, n: rows.length, total: first.total, bbox: b, rows, source: '국립해양조사원 자연과학용 수심정보(150m), 공공누리 제1유형' });
+      if (rows.length) { try { await redisPipeline([['SET', ck, out, 'EX', String(30 * 86400)]]); } catch (_) {} }
+      res.setHeader('Cache-Control', rows.length ? 's-maxage=86400' : 'no-store');
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(200).send(out);
+    } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).replace(/serviceKey=[^&\s]+/g, 'serviceKey=***') }); }
+  }
   // [ADD] 대만 CWA: /api/spotobs?svc=cwa&lat=..&lon=.. → 근처 부이·조위소 48시간 실측 + 조석 예보
   if (svc === 'cwa') {
     try {

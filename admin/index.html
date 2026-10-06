@@ -530,7 +530,7 @@
       box.style.display = hits.length ? 'block' : 'none';
     };
     $('edSugg').onclick = (e) => { const d = e.target.closest('[data-no]'); if (!d) return;
-      { const mx = $('edType').value === 'liveaboard' ? 20 : 10; if (edSpots.length >= mx) { alert(`포인트는 ${mx}곳까지 넣을 수 있어요`); return; } }
+      { const mx = $('edType').value === 'liveaboard' ? 40 : 20; /* api/_store.js와 같게 */ if (edSpots.length >= mx) { alert(`포인트는 ${mx}곳까지 넣을 수 있어요`); return; } }
       edSpots.push(+d.dataset.no); renderEdChips(); $('edSpotQ').value = ''; $('edSugg').style.display = 'none'; };
     $('edChips').onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { edSpots = edSpots.filter(n => n !== +b.dataset.rm); renderEdChips(); } };
   }

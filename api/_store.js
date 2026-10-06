@@ -106,6 +106,7 @@ function publicShop(s) {
   return { id: String(s.id), type: shopType(s.type), spots: s.spots || [], name: s.name, phone: s.phone || '', kakao: s.kakao || '', whatsapp: s.whatsapp || '',
     instagram: s.instagram || '', web: s.web || '', address: s.address || '', lang: s.lang || '', note: s.note || '',
     paid: s.plan === 'paid', checked: s.checked || '',
+    ...(s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : {}), // [ADD] 샵·리브어보드 위치(있으면)
     ...(shopType(s.type) === 'pool' ? { lat: s.lat, lon: s.lon, depthMax: s.depthMax ?? null, waterTemp: s.waterTemp ?? null, env: s.env || '', uses: s.uses || '', entry: s.entry || '', hours: s.hours || '', price: s.price || '' } : {}) };
 }
 // 만료일: 그 날짜가 지구 어디선가 아직 그날이면 보임(UTC-12 기준 오늘)

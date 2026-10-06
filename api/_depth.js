@@ -196,6 +196,28 @@ function coastShift(g, segs) {
   return { dx: best.dx, dy: best.dy, moved: true };
 }
 
+// [ADD] 옮길 거리는 칸(약 4km)마다 따로 정하면 이웃 칸과 어긋나서, 더 큰 구역(웹 메르카토르 줌 11, 한 변 약 18km) 하나에
+//  한 번만 정하고 그 안의 모든 칸이 같은 거리만큼 옮겨요. 구역 전체의 해안선을 다 써서 더 안정적이에요. 결과는 180일 저장.
+async function blockShift(lat, lon) {
+  const Z = 11, n = 2 ** Z, bx = Math.floor((lon + 180) / 360 * n), r = lat * Math.PI / 180, by = Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n);
+  const ck = `dshift:v1:${bx}_${by}`;
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {}
+  const LON = (v) => v / n * 360 - 180, LAT = (v) => Math.atan(Math.sinh(Math.PI * (1 - 2 * v / n))) * 180 / Math.PI;
+  const bb = { s: LAT(by + 1) - 0.015, n: LAT(by) + 0.015, w: LON(bx) - 0.015, e: LON(bx + 1) + 0.015 };
+  const q = `minlongitude=${bb.w.toFixed(5)}&maxlongitude=${bb.e.toFixed(5)}&minlatitude=${bb.s.toFixed(5)}&maxlatitude=${bb.n.toFixed(5)}&format=esriascii&resolution=med`;
+  const [t, segs] = await Promise.all([getText(`https://www.gmrt.org/services/GridServer?${q}`, {}, 25000), coastSegments(bb)]);
+  const L = t.trim().split('\n'), hd = {}; let k = 0;
+  for (; k < L.length && /^[a-z_]+\s/i.test(L[k]); k++) { const [a, v] = L[k].trim().split(/\s+/); hd[a.toLowerCase()] = +v; }
+  const cols = hd.ncols, rows = hd.nrows, cs = hd.cellsize, nod = hd.nodata_value; if (!cols || !rows || !cs) throw new Error('gmrt block');
+  const vals = L.slice(k).join(' ').trim().split(/\s+/).map(Number), z = new Array(rows * cols).fill(null);
+  for (let rr = 0; rr < rows; rr++) for (let c = 0; c < cols; c++) { const v = vals[rr * cols + c]; if (Number.isFinite(v) && v !== nod) z[(rows - 1 - rr) * cols + c] = v; }
+  const g = { la0: hd.yllcorner + cs / 2, lo0: hd.xllcorner + cs / 2, dla: cs, dlo: cs, rows, cols, z };
+  const res = coastShift(g, segs) || { dx: 0, dy: 0, moved: false };
+  const out = { dx: res.dx || 0, dy: res.dy || 0, moved: !!res.moved, segs: segs.length };
+  try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
+  return out;
+}
+
 // [ADD] 지도 타일(웹 메르카토르 줌 13, 한 장 약 4~5km) 단위 수심 격자 - 지도에 이어 붙여 깔기용
 //  타일 경계 밖으로 약 330m 더 받아서(겹침) 앱이 경계에서 잘라 그리면 이음새가 안 보여요. 180일 저장.
 const DTILE_Z = 13, DTILE_PAD = 0.003;
@@ -220,7 +242,10 @@ async function depthTile(x, y, opt = {}) {
       const coarse = r.src === 'gmrt' && !(r.hiFrac >= 0.5);
       let coastFixed;
       let shift = null;
-      if (coarse) { try { shift = coastShift(g, await coastSegments(bigB)); coastFixed = true; } catch (_) { coastFixed = false; } } // 거친 자료만: 해안선에 맞춰 격자 평행 이동
+      if (coarse) { // 거친 자료만: 구역(약 18km) 공통 거리만큼 격자 평행 이동
+        try { shift = await blockShift((t.s + t.n) / 2, (t.w + t.e) / 2); coastFixed = true;
+          if (shift.moved) { const kx = Math.cos((t.s + t.n) / 2 * Math.PI / 180) * 111320; g.la0 += shift.dy / 111320; g.lo0 += shift.dx / kx; } }
+        catch (_) { coastFixed = false; } }
       out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse, coastFixed, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, // 거친 자료(GEBCO 수준)면 앱에서 흐리게
         grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
       break;
@@ -258,7 +283,7 @@ function thin(pts, tol) { // 가까운 점 빼기(약 2m)
 async function depthVec(x, y) {
   x = parseInt(x, 10); y = parseInt(y, 10);
   const ck = 'dvec:v2:' + x + '_' + y;
-  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && (!('shift' in o) || !o.full))))) return o; } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && (!('shift' in o) || !o.full || !o.blk))))) return o; } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
   const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return d;
   const t = d.tile;
@@ -300,7 +325,7 @@ async function depthVec(x, y) {
     // 좌표를 타일 안 0~4096 정수로 바꾸고 앞 점과의 차이만 적어서 크기를 4~5배 줄임(앱에서 되돌림)
     const QX = (lo) => Math.round((lo - t.w) / (t.e - t.w) * 4096), QY = (la) => Math.round((t.n - la) / (t.n - t.s) * 4096);
     const enc = (pts) => { const o = []; let px = 0, py = 0; pts.forEach((p, i) => { const x1 = QX(p[1]), y1 = QY(p[0]); if (i && x1 === px && y1 === py) return; o.push(x1 - px, y1 - py); px = x1; py = y1; }); return o; };
-    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, shift: d.shift || null, full: true,
+    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, shift: d.shift || null, full: true, blk: true,
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
   }

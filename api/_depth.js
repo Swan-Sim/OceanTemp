@@ -258,7 +258,7 @@ function thin(pts, tol) { // 가까운 점 빼기(약 2m)
 async function depthVec(x, y) {
   x = parseInt(x, 10); y = parseInt(y, 10);
   const ck = 'dvec:v2:' + x + '_' + y;
-  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !('shift' in o))))) return o; } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && (!('shift' in o) || !o.full))))) return o; } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
   const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return d;
   const t = d.tile;
@@ -284,7 +284,7 @@ async function depthVec(x, y) {
     const lines = {}, lbl = [];
     const P = (r, c) => [laN - r * dla, g.lo0 + c * dlo];
     const keep = (s) => { const la = (s[0][0] + s[1][0]) / 2, lo = (s[0][1] + s[1][1]) / 2; return la >= t.s && la < t.n && lo >= t.w && lo < t.e; };
-    const step = d.coarse ? 20 : 10; // 거친 자료는 20m 간격만
+    const step = 10; // [CHANGE] 거친 자료도 10m 간격 실선으로(해안선에 맞춰 옮긴 뒤라 쓸 만함)
     for (let L = step; L <= Math.min(100, maxD); L += step) {
       const lv = L + 0.013, segs = [];
       for (let r = 0; r < R - 1; r++) for (let c = 0; c < C - 1; c++) {
@@ -295,12 +295,12 @@ async function depthVec(x, y) {
       if (!segs.length) continue;
       const ln = joinSegs(segs).map(l => thin(l, 1.5e-5)).filter(l => l.length >= 2);
       lines[L] = ln;
-      if (!d.coarse && (L === 30 || L === 40 || L === 60)) { let n = 0; ln.forEach(l => l.forEach((p, i) => { if (i % 8 === 4 && n < 40) { lbl.push([p[0], p[1], L]); n++; } })); }
+      if (L === 30 || L === 40 || L === 60) { let n = 0; ln.forEach(l => l.forEach((p, i) => { if (i % 8 === 4 && n < 40) { lbl.push([p[0], p[1], L]); n++; } })); }
     }
     // 좌표를 타일 안 0~4096 정수로 바꾸고 앞 점과의 차이만 적어서 크기를 4~5배 줄임(앱에서 되돌림)
     const QX = (lo) => Math.round((lo - t.w) / (t.e - t.w) * 4096), QY = (la) => Math.round((t.n - la) / (t.n - t.s) * 4096);
     const enc = (pts) => { const o = []; let px = 0, py = 0; pts.forEach((p, i) => { const x1 = QX(p[1]), y1 = QY(p[0]); if (i && x1 === px && y1 === py) return; o.push(x1 - px, y1 - py); px = x1; py = y1; }); return o; };
-    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, shift: d.shift || null,
+    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, shift: d.shift || null, full: true,
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
   }

@@ -28,20 +28,20 @@
     function buildTile(d) {
       if (d.v === 2) d = Object.assign({}, d, decodeTile(d));
       const layers = [];
-      const cz = d.coarse; // 거친 자료(해외 일부, GEBCO 수준 약 450m): 띠는 옅게, 선은 점선으로 흐리게, 숫자 없음
-      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1]; layers.push(L.polygon(f.p, { stroke: false, fillColor: c[0], fillOpacity: cz ? c[1] * 0.5 : c[1], interactive: false, smoothFactor: 0.3, renderer: dRend() })); });
+      const cz = d.coarse; // 거친 자료(해외 일부): 서버에서 해안선에 맞춰 평행 이동한 뒤라 다른 지역과 같은 모양으로 그림
+      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1]; layers.push(L.polygon(f.p, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: 0.3, renderer: dRend() })); });
       Object.keys(d.lines || {}).forEach(k => {
         const strong = k === '30' || k === '40' || k === '60';
-        layers.push(L.polyline(d.lines[k], cz ? { color: '#fff', weight: 0.8, opacity: 0.35, dashArray: '3 5', interactive: false, smoothFactor: 0.3, renderer: dRend() } : { color: '#fff', weight: strong ? 1.6 : 0.8, opacity: strong ? 0.85 : 0.4, interactive: false, smoothFactor: 0.3, renderer: dRend() }));
+        layers.push(L.polyline(d.lines[k], { color: '#fff', weight: strong ? 1.6 : 0.8, opacity: strong ? 0.85 : 0.4, interactive: false, smoothFactor: 0.3, renderer: dRend() }));
       });
-      return { st: 'ok', grp: L.layerGroup(layers), lbl: cz ? [] : (d.lbl || []), coarse: !!cz };
+      return { st: 'ok', grp: L.layerGroup(layers), lbl: d.lbl || [], coarse: !!cz };
     }
 
     function loadNext() {
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=5`).then(r => r.json()).then(d => {
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=6`).then(r => r.json()).then(d => {
           if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
           else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });

@@ -307,7 +307,7 @@ module.exports = async function handler(req, res) {
   // [ADD] 지도용 수심 타일(줌 13 고정): /api/spotobs?svc=dtile&x=..&y=.. (격자) · svc=dvec (미리 계산한 다각형·등심선)
   if (svc === 'dtile' || svc === 'dvec') {
     try {
-      const D = require('./_depth'), r = await (svc === 'dvec' ? D.depthVec : D.depthTile)(req.query.x, req.query.y);
+      const D = require('./_depth'), r = svc === 'dvec' ? await D.depthVec(req.query.x, req.query.y, { fill: req.query.fill === '1' }) : await D.depthTile(req.query.x, req.query.y);
       if (!r) return res.status(400).json({ ok: false });
       res.setHeader('Cache-Control', r.ok && !r.tmp ? 'public, s-maxage=2592000, max-age=86400' : r.ok ? 'public, s-maxage=600, max-age=300' : r.retry ? 'no-store' : 's-maxage=3600'); // tmp = 해외 위치 보정 실패본(잠깐만 보관 후 다시 시도)
       return res.status(200).json(r);

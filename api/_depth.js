@@ -363,6 +363,28 @@ function tileBox(x, y) {
   const n = 2 ** DTILE_Z, lon = (v) => v / n * 360 - 180, lat = (v) => Math.atan(Math.sinh(Math.PI * (1 - 2 * v / n))) * 180 / Math.PI;
   return { s: lat(y + 1), n: lat(y), w: lon(x), e: lon(x + 1) };
 }
+// [ADD] 원본 수심 격자 저장: 0.1m 정수 → 앞 칸과의 차이 → deflate 압축 → base64. 180일 보관
+//  (거친 해외 자료는 매끈해서 수 KB, 정밀 자료도 수십 KB 안팎)
+const zlib = require('zlib');
+const RAW_KEY = (x, y) => `draw:v1:${x}_${y}`, NUL = -2147483648;
+function encGrid(g) {
+  const n = g.rows * g.cols, a = new Int32Array(n); let prev = 0;
+  for (let i = 0; i < n; i++) { const v = g.z[i] == null ? NUL : Math.round(g.z[i] * 10); a[i] = v === NUL ? NUL : v - prev; if (v !== NUL) prev = v; }
+  return zlib.deflateRawSync(Buffer.from(a.buffer), { level: 9 }).toString('base64');
+}
+function decGrid(m, b64) {
+  const buf = zlib.inflateRawSync(Buffer.from(b64, 'base64')), a = new Int32Array(buf.buffer, buf.byteOffset, buf.length / 4), z = new Array(a.length); let prev = 0;
+  for (let i = 0; i < a.length; i++) { if (a[i] === NUL) { z[i] = null; continue; } prev += a[i]; z[i] = prev / 10; }
+  return { la0: m.la0, lo0: m.lo0, dla: m.dla, dlo: m.dlo, rows: m.rows, cols: m.cols, z };
+}
+async function rawSet(x, y, r) {
+  try { const g = r.grid, o = { v: 1, src: r.src, res: r.res, hiFrac: r.hiFrac, nullLand: !!r.nullLand, la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: encGrid(g), at: Date.now() };
+    await redisPipeline([['SET', RAW_KEY(x, y), JSON.stringify(o), 'EX', String(180 * 86400)]]); } catch (_) {}
+}
+async function rawGet(x, y) {
+  try { const [{ result }] = await redisPipeline([['GET', RAW_KEY(x, y)]]); if (!result) return null; const o = JSON.parse(result);
+    return { src: o.src, res: o.res, hiFrac: o.hiFrac, nullLand: o.nullLand, grid: decGrid(o, o.z), fromRaw: true }; } catch (_) { return null; }
+}
 async function depthTile(x, y, opt = {}) {
   x = parseInt(x, 10); y = parseInt(y, 10); const n = 2 ** DTILE_Z;
   if (!(x >= 0 && x < n && y >= 0 && y < n)) return null;
@@ -373,19 +395,25 @@ async function depthTile(x, y, opt = {}) {
   const bigB = { s: t.s - 0.018, n: t.n + 0.018, w: t.w - 0.018, e: t.e + 0.018 };
   const order = inKorea(lat, lon) ? [fromKhoa, fromGmrt] : inEmodnet(lat, lon) ? [fromEmodnet, fromGmrt] : [fromNoaa, fromGmrt];
   let out = null; const errors = [];
-  for (const fn of order) {
+  // [ADD] 원본 격자 저장본(raw)이 있으면 외부 서버에 다시 묻지 않고 그걸로 그려요(그리는 방식만 바꿀 때 몇 분이면 전체 다시 그리기)
+  const finish = async (r) => {
+    const g = r.grid; if (!g.z.some(v => v != null && v < 0)) return { ok: true, x, y, tile: t, src: r.src, empty: true }; // 바다 없음
+    const coarse = r.src === 'gmrt' && !(r.hiFrac >= 0.5);
+    let coastFixed, shift = null, fixErr;
+    if (coarse) { // 거친 자료만: 칸별 해안선 기준 이동량을 부드럽게 이어서 위치만 옮기기
+      try { const sh = await warpByShiftField(g, x, y); coastFixed = true; shift = sh ? { dx: Math.round(sh[0]), dy: Math.round(sh[1]), moved: !!(sh[0] || sh[1]) } : null;
+        shoreTaper(g, g._segs || []); delete g._segs; }
+      catch (e) { coastFixed = false; fixErr = String(e && e.message || e).slice(0, 100); } }
+    return { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse, coastFixed, fixErr, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, fromRaw: !!r.fromRaw,
+      grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
+  };
+  const raw = opt.noRaw ? null : await rawGet(x, y);
+  if (raw) out = await finish(raw);
+  else for (const fn of order) {
     try {
       const r = await fn(fn === fromGmrt ? bigB : b); if (!r) continue; // GMRT는 옮길 여유(약 2km)까지 넉넉히 받기
-      const g = r.grid; if (!g.z.some(v => v != null && v < 0)) { out = { ok: true, x, y, tile: t, src: r.src, empty: true }; break; } // 바다 없음
-      const coarse = r.src === 'gmrt' && !(r.hiFrac >= 0.5);
-      let coastFixed;
-      let shift = null, fixErr;
-      if (coarse) { // 거친 자료만: 칸별 해안선 기준 이동량을 부드럽게 이어서 위치만 옮기기
-        try { const sh = await warpByShiftField(g, x, y); coastFixed = true; shift = sh ? { dx: Math.round(sh[0]), dy: Math.round(sh[1]), moved: !!(sh[0] || sh[1]) } : null;
-          shoreTaper(g, g._segs || []); delete g._segs; }
-        catch (e) { coastFixed = false; fixErr = String(e && e.message || e).slice(0, 100); } }
-      out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse, coastFixed, fixErr, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, // 거친 자료(GEBCO 수준)면 앱에서 흐리게
-        grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
+      await rawSet(x, y, r); // 보정(위치 옮기기) 전에 원본 그대로 저장
+      out = await finish(r);
       break;
     } catch (e) {
       errors.push(fn.name + ': ' + String(e && e.message || e).replace(/serviceKey=[^&\s]+/g, 'serviceKey=***').slice(0, 120));
@@ -418,10 +446,12 @@ function thin(pts, tol) { // 가까운 점 빼기(약 2m)
   const out = []; for (const p of pts) { const r = [q5(p[0]), q5(p[1])], l = out[out.length - 1]; if (!l || Math.abs(l[0] - r[0]) > tol || Math.abs(l[1] - r[1]) > tol) out.push(r); }
   return out;
 }
-async function depthVec(x, y) {
+async function depthVec(x, y, opt = {}) {
   x = parseInt(x, 10); y = parseInt(y, 10);
   const ck = 'dvec:v2:' + x + '_' + y;
-  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf4))) || (!o.d150 && o.Ln && o.Ln['100']); if (!stale) return o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+  // [ADD] fill=1: 그림은 있는데 원본 격자 저장본이 없으면 한 번 다시 받아 원본을 저장(이후엔 외부 서버 없이 다시 그리기)
+  const needRaw = opt.fill ? !(await redisPipeline([['EXISTS', RAW_KEY(x, y)]]).then(r => r[0].result).catch(() => 1)) : false;
+  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf4))) || (!o.d150 && o.Ln && o.Ln['100']); if (!stale) return o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
   const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return d;
   const t = d.tile;

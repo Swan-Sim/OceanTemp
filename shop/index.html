@@ -301,6 +301,7 @@ function applyLang() {
   $('agreeLabel').innerHTML = L.agree + (token && !termsOk ? `<br><b style="color:#ffd27a">${L.agreeAgain}</b>` : ''); // 번역 문구에 약관 링크가 들어 있어요(고정 문구)
   if (token) { $('title').textContent = L.titleEdit; document.querySelector('.lead').textContent = L.leadEdit; $('submitBtn').textContent = L.submitEdit; $('agreeRow').style.display = termsOk ? 'none' : ''; }
   document.title = (token ? L.titleEdit : L.title) + ' · otemp.app';
+  if (typeof applyAdmin === 'function') applyAdmin();
   showStatus();
   renderStats();
   if (typeof renderChips === 'function' && $('chips')) try { renderChips(); } catch (_) {}
@@ -401,6 +402,20 @@ function fill(d, email) {
   form.email.value = email || '';
   picked = (d.spots || []).slice(); renderChips();
 }
+// [ADD] 관리자로 로그인된 브라우저(관리 페이지 7일 로그인)면 승인 없이 바로 게시 - 이메일·연락처·약관 동의 없어도 됨
+let adminPw = (() => { try { const o = JSON.parse(localStorage.getItem('otemp.admin') || 'null'); if (o && o.pw && o.exp > Date.now()) return o.pw; } catch (_) {} return ''; })(), adminOk = false;
+if (adminPw && !token) fetch('/api/stats?svc=settings', { headers: { 'x-admin-password': adminPw } }).then(r => { adminOk = r.ok; applyAdmin(); }).catch(() => {});
+function applyAdmin() {
+  if (!adminOk || token) return;
+  const ko = lang === 'ko';
+  $('submitBtn').textContent = ko ? '바로 등록 (관리자)' : 'Add now (admin)';
+  let bar = $('adminBar'); if (!bar) { bar = document.createElement('div'); bar.id = 'adminBar'; bar.className = 'msg ok'; bar.style.margin = '0 0 14px'; form.parentNode.insertBefore(bar, form); }
+  bar.textContent = ko ? '관리자로 로그인되어 있어요 - 승인 없이 바로 게시돼요. 이메일·연락처·약관 동의는 비워도 돼요.' : 'Signed in as admin - published right away. Email, contacts and terms are optional.';
+}
+async function adminSave() {
+  const r = await fetch('/api/stats?svc=shopSave', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw }, body: JSON.stringify(Object.assign(formData(), { show: true })) });
+  let j = {}; try { j = await r.json(); } catch (_) {} return j;
+}
 async function post(svc, body) {
   const r = await fetch(`/api/shops?svc=${svc}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   let j = {}; try { j = await r.json(); } catch (_) {}
@@ -411,6 +426,14 @@ form.onsubmit = async (e) => {
   const L = T[lang], btn = $('submitBtn'), msg = $('msg');
   msg.className = 'msg'; msg.textContent = '';
   btn.disabled = true; btn.textContent = L.sending;
+  if (adminOk && !token) { // 관리자 바로 등록
+    const a = await adminSave().catch(() => ({}));
+    btn.disabled = false; applyAdmin();
+    if (!a.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + a.error] || a.error || L.e_default; return; }
+    msg.className = 'msg ok'; msg.innerHTML = ''; msg.append((lang === 'ko' ? `#${a.id} 바로 게시했어요. ` : `Published #${a.id}. `));
+    const l = document.createElement('a'); l.href = '/admin/#shops'; l.textContent = lang === 'ko' ? '관리 페이지에서 보기' : 'Open admin'; msg.append(l);
+    form.reset(); picked = []; renderChips(); applyType(); return;
+  }
   const j = await post(token ? 'edit' : 'register', formData()).catch(() => ({}));
   btn.disabled = false; btn.textContent = token ? L.submitEdit : L.submit;
   if (!j.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + j.error] || L.e_default; return; }
@@ -458,7 +481,9 @@ function showStatus() {
   await loadSpots();
   const pre = parseInt(new URLSearchParams(location.search).get('spot'), 10);
   if (!token && pre && !picked.includes(pre)) { picked.push(pre); renderChips(); }
-  if (!token && new URLSearchParams(location.search).get('type') === 'pool') { const r = form.querySelector('input[name="type"][value="pool"]'); if (r) r.checked = true; } // /shop/?type=pool
+  { const q = new URLSearchParams(location.search), ty = q.get('type'); // /shop/?type=pool|liveaboard (&lat=..&lon=.. 풀장 위치 미리 찍기)
+    if (!token && ['pool', 'liveaboard', 'shop'].includes(ty)) { const r = form.querySelector(`input[name="type"][value="${ty}"]`); if (r) r.checked = true; }
+    const la = parseFloat(q.get('lat')), lo = parseFloat(q.get('lon')); if (!token && Number.isFinite(la) && Number.isFinite(lo)) { $('pLat').value = la.toFixed(5); $('pLon').value = lo.toFixed(5); $('locTxt').textContent = `${la.toFixed(5)}, ${lo.toFixed(5)}`; } }
   applyType();
   if (token) {
     const j = await post('me', { t: token }).catch(() => ({}));

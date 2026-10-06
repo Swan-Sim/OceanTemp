@@ -149,7 +149,14 @@ function applyAdmin() {
   if (!adminPw || !adminOk) return;
   const L = T[lang]; $('submitBtn').textContent = L.adminSubmit;
   let bar = $('adminBar'); if (!bar) { bar = document.createElement('div'); bar.id = 'adminBar'; bar.className = 'msg ok'; bar.style.margin = '0 0 14px'; $('f').parentNode.insertBefore(bar, $('f')); }
-  bar.textContent = L.adminBar;
+  bar.textContent = L.adminBar + ' ';
+  // [ADD] 관리자: 같은 위치로 샵·리브어보드·풀장도 바로 등록하러 가기
+  const here = () => { const la = parseFloat($('lat').value), lo = parseFloat($('lon').value), c = map.getCenter(); return Number.isFinite(la) && Number.isFinite(lo) ? [la, lo] : [c.lat, c.lng]; };
+  [['shop', lang === 'ko' ? '다이브샵 등록' : 'Add dive shop'], ['liveaboard', lang === 'ko' ? '리브어보드 등록' : 'Add liveaboard'], ['pool', lang === 'ko' ? '풀장 등록' : 'Add pool']].forEach(([ty, tx]) => {
+    const a = document.createElement('a'); a.textContent = tx; a.href = '#'; a.style.cssText = 'margin-left:10px;font-weight:700;color:inherit;text-decoration:underline';
+    a.onclick = (e) => { e.preventDefault(); const [la, lo] = here(); location.href = `/shop/?type=${ty}&lat=${la.toFixed(5)}&lon=${lo.toFixed(5)}`; };
+    bar.appendChild(a);
+  });
 }
 applyAdmin(); document.addEventListener('click', (e) => { if (e.target && e.target.id === 'langBtn') setTimeout(applyAdmin, 0); });
 

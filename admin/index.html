@@ -110,7 +110,12 @@
       </div>
     </div>
     <div id="secSpots" class="sec" style="display:none">
-      <div class="card"><h2>포인트 바로 등록</h2><a href="/spot/" style="display:inline-block;color:var(--text);border:1px solid rgba(255,176,0,.5);border-radius:999px;padding:6px 14px;text-decoration:none">+ 새 포인트 바로 등록</a><div class="hint">이 브라우저에서 관리자로 로그인해 두면(7일 유지, 로그아웃하면 해제) 사이트 지도의 '포인트 등록' 버튼으로 열어도 승인 없이 바로 등록되고 하루 한도도 없어요.</div></div>
+      <div class="card"><h2>포인트 바로 등록</h2><a href="/spot/" style="display:inline-block;color:var(--text);border:1px solid rgba(255,176,0,.5);border-radius:999px;padding:6px 14px;text-decoration:none">+ 새 포인트 바로 등록</a><div class="hint">이 브라우저에서 관리자로 로그인해 두면(7일 유지, 로그아웃하면 해제) 사이트 지도의 '포인트 등록' 버튼으로 열어도 승인 없이 바로 등록되고 하루 한도도 없어요.</div>
+        <details style="margin-top:12px"><summary style="cursor:pointer">여러 개 한 번에 등록</summary>
+          <textarea id="bulkSpots" class="f" rows="8" style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px" placeholder="한 줄에 하나: 이름, 위도, 경도, 짧은이름(선택), 나라(선택), 메모(선택)&#10;예) Tawala MPA (Panglao), 9.54887, 123.79789, Tawala MPA, Philippines, Reef wall"></textarea>
+          <div class="actions" style="margin-top:6px"><button class="primary" id="bulkGo" type="button">등록</button><span class="muted" id="bulkMsg" style="margin-left:8px"></span></div>
+          <div class="hint">이름이 이미 있는 포인트는 건너뛰어요. 좌표는 소수(9.54887) 형식. 쉼표가 들어간 이름은 쓰지 마세요.</div>
+        </details></div>
       <div class="card"><h2>승인 대기 (새 포인트)</h2><div id="spotReqs"></div><div class="hint">승인하면 기존 포인트와 겹치지 않는 다음 번호가 자동으로 붙어요. 이름·좌표는 승인 전에 고칠 수 있어요.</div></div>
       <div class="card" id="migrateCard" style="display:none"><h2>구글 시트 → 관리 페이지로 옮기기</h2>
         <p class="muted" style="margin:0 0 10px">지금은 포인트 목록을 아직 구글 시트에서 읽고 있어요. 한 번 옮기면 시트의 모든 포인트가 여기로 복사되고, 그다음부터는 <b>여기서만</b> 추가·수정·숨기기를 해요(시트는 더 안 읽어요). 이미 등록된 번호는 그대로 둬요.</p>
@@ -303,6 +308,25 @@
     if (!r.ok || !j.ok) { alertMsg(j.error || ('HTTP ' + r.status)); throw new Error(j.error || r.status); }
     return j;
   }
+  // [ADD] 포인트 여러 개 한 번에 바로 등록(관리자) - 줄마다 spotAdd
+  document.addEventListener('click', async (e) => {
+    if (!e.target || e.target.id !== 'bulkGo') return;
+    const btn = e.target, msg = $('bulkMsg'), lines = $('bulkSpots').value.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+    const have = new Set(((mg && mg.spots) || []).map(s => String(s.name || '').trim().toLowerCase()));
+    let ok = 0, skip = 0, bad = [];
+    btn.disabled = true;
+    for (const [i, l] of lines.entries()) {
+      const [name, la, lo, label, country, note] = l.split(',').map(x => (x || '').trim());
+      const lat = parseFloat(la), lon = parseFloat(lo);
+      if (!name || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) { bad.push(i + 1); continue; }
+      if (have.has(name.toLowerCase())) { skip++; continue; }
+      msg.textContent = `${i + 1}/${lines.length} ${name}…`;
+      try { await api('spotAdd', { name, lat, lon, label: label || '', country: country || '', note: note || '' }); ok++; have.add(name.toLowerCase()); } catch (_) { bad.push(i + 1); }
+    }
+    btn.disabled = false;
+    msg.textContent = `등록 ${ok} · 이미 있음 ${skip}` + (bad.length ? ` · 실패/형식 오류 줄: ${bad.join(', ')}` : '');
+    if (ok) loadMgmt();
+  });
   function alertMsg(m) { const d = document.createElement('div'); d.className = 'err'; d.textContent = '오류: ' + m; document.querySelector('.nav').after(d); setTimeout(() => d.remove(), 5000); }
   function showSec(name) {
     document.querySelectorAll('[data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === name));

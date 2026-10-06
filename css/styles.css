@@ -542,8 +542,10 @@
     .shop-empty p { margin: 0; }
     .cp-spot { display: block; margin-top: 6px; font-size: 11.5px; color: #b45309; font-weight: 600; text-decoration: none; }
     #btn-spot-add { display: flex; align-items: center; justify-content: center; text-decoration: none; }
-    /* [CHANGE] 상세 지도 이름표도 45도 위로 비스듬히(나란한 포인트끼리 덜 겹치게) */
-    .lf-label { transform: rotate(-45deg); transform-origin: left center; margin-left: 3px; }
+    /* [CHANGE] 상세 지도 이름표: 가로로, 자리는 js/label-layout.js가 정해요(겹치면 옆·지시선·숨김) */
+    .lf-label { position: absolute; left: 15px; top: 0; margin-left: 0; line-height: 13px; }
+    svg.lf-lead { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+    svg.lf-lead line { stroke: rgba(255,255,255,.8); stroke-width: 1; }
 
     /* [CHANGE] 위쪽 한 줄: [현위치] [색상표 + °C/°F] [돋보기]. 오른쪽 세로 버튼은 줄임 */
     .top-bar { position: absolute; top: 12px; right: 12px; z-index: 56; display: flex; align-items: center; gap: 6px; }

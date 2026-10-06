@@ -134,6 +134,8 @@ function setPos(la, lo, move) {
   pin.setLatLng([la, lo]); if (move) map.setView([la, lo], Math.max(map.getZoom(), 14));
 }
 if (has0) setPos(lat0, lon0);
+// [ADD] 미리 채우기: /spot/?lat=..&lon=..&name=..&label=..&note=.. (여러 포인트를 링크로 빠르게 등록할 때)
+['name', 'label', 'note'].forEach(k => { const v = qs.get(k); const el = document.querySelector(`#f [name="${k}"]`); if (v && el) el.value = v.slice(0, +el.maxLength > 0 ? +el.maxLength : 300); });
 map.on('click', (e) => setPos(e.latlng.lat, e.latlng.lng));
 ['lat', 'lon'].forEach(id => $(id).onchange = () => { const a = parseFloat($('lat').value), b = parseFloat($('lon').value); if (Number.isFinite(a) && Number.isFinite(b)) setPos(a, b, true); });
 $('meBtn').onclick = () => navigator.geolocation && navigator.geolocation.getCurrentPosition(p => setPos(p.coords.latitude, p.coords.longitude, true), () => {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });

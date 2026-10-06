@@ -131,22 +131,43 @@ function summarize(g, lat, lon) {
   return near || far ? { max300: near && near.max, avg300: near && near.avg, radius: wide, max1k: far && far.max, at } : null;
 }
 
+// 격자에서 b(남북동서) 범위만 잘라내기
+function cropGrid(g, b) {
+  const i0 = Math.max(0, Math.floor((b.s - g.la0) / g.dla)), i1 = Math.min(g.rows - 1, Math.ceil((b.n - g.la0) / g.dla));
+  const j0 = Math.max(0, Math.floor((b.w - g.lo0) / g.dlo)), j1 = Math.min(g.cols - 1, Math.ceil((b.e - g.lo0) / g.dlo));
+  const rows = i1 - i0 + 1, cols = j1 - j0 + 1, z = new Array(rows * cols);
+  for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) z[i * cols + j] = g.z[(i0 + i) * g.cols + j0 + j];
+  return { la0: g.la0 + i0 * g.dla, lo0: g.lo0 + j0 * g.dlo, dla: g.dla, dlo: g.dlo, rows, cols, z };
+}
 // 지역별 순서대로 시도 → 첫 성공
 async function depthAt(lat, lon, opt = {}) {
   lat = +(+lat).toFixed(4); lon = +(+lon).toFixed(4);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const ck = KEY_VER + lat + '_' + lon;
-  if (!opt.fresh) { try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {} }
+  if (!opt.fresh) { try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && !o.sf4)) return o; } } catch (_) {} } // [FIX] 해외(GMRT) 옛 저장본은 위치 보정 전이라 다시 계산
   const order = inKorea(lat, lon) ? [fromKhoa, fromGmrt] : inEmodnet(lat, lon) ? [fromEmodnet, fromGmrt] : inUsArea(lat, lon) ? [fromNoaa, fromGmrt] : [fromNoaa, fromGmrt];
   const errors = [];
   for (const fn of order) {
     try {
-      const r = await fn(box(lat, lon));
+      const bx = box(lat, lon);
+      let r, fix = {};
+      if (fn === fromGmrt) { // [FIX] 지도 수심 타일과 똑같이: 해안선 기준 위치 보정 + 해안선 0m 연결(옮길 여유만큼 넓게 받아서 보정 후 잘라냄)
+        const P = 0.02; r = await fn({ s: bx.s - P, n: bx.n + P, w: bx.w - P, e: bx.e + P });
+        if (!r) continue;
+        fix.coarse = !(r.hiFrac >= 0.5); fix.sf4 = true;
+        if (fix.coarse) {
+          const n = 2 ** DTILE_Z, tx = Math.floor((lon + 180) / 360 * n), rr = lat * Math.PI / 180, ty = Math.floor((1 - Math.log(Math.tan(rr) + 1 / Math.cos(rr)) / Math.PI) / 2 * n);
+          try { await warpByShiftField(r.grid, tx, ty); const A = await areaControls(tx, ty); shoreTaper(r.grid, A.segsAll); fix.coastFixed = true; }
+          catch (e) { fix.coastFixed = false; }
+          delete r.grid._segs;
+        }
+        r.grid = cropGrid(r.grid, bx);
+      } else r = await fn(bx);
       if (!r) continue;
       const sum = summarize(r.grid, lat, lon);
       if (!sum) continue;
-      const out = { ok: true, lat, lon, src: r.src, srcName: SRC[r.src].name, srcShort: SRC[r.src].short, license: SRC[r.src].license, res: r.res, ...sum, grid: r.grid, saved: Date.now() };
-      try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
+      const out = { ok: true, lat, lon, src: r.src, srcName: SRC[r.src].name, srcShort: SRC[r.src].short, license: SRC[r.src].license, res: r.res, ...sum, ...fix, grid: r.grid, saved: Date.now() };
+      try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(fix.coarse && !fix.coastFixed ? 3600 : 180 * 86400)]]); } catch (_) {}
       return out;
     } catch (e) { errors.push(fn.name + ': ' + String(e && e.message || e).replace(/serviceKey=[^&\s]+/g, 'serviceKey=***').slice(0, 160)); }
   }
@@ -286,7 +307,7 @@ async function areaControls(x, y) {
     try { await redisPipeline(sets); } catch (_) {}
   }
   const seg4 = (a) => { const o = []; for (let k = 0; k + 3 < (a || []).length; k += 4) o.push([a[k], a[k + 1], a[k + 2], a[k + 3]]); return o; };
-  return { ctl: keys.map((k, i) => (got[i] && got[i].c) || []).flat(), segs: seg4(got[4] && got[4].s) };
+  return { ctl: keys.map((k, i) => (got[i] && got[i].c) || []).flat(), segs: seg4(got[4] && got[4].s), segsAll: keys.map((k, i) => seg4(got[i] && got[i].s)).flat() };
 }
 // [ADD] 해안선 = 수심 0m. 거친 자료(약 450m 간격)는 작은 섬 바로 옆이 50m로 뭉개져 있어서, 해안선에서 500m 안쪽만
 //  "해안선 0m ↔ 500m 지점의 원래 수심" 사이를 거리에 비례해 이어 줘요(그 바깥은 원래 값 그대로). 해안선 안쪽(선의 왼쪽)은 육지로.
@@ -462,7 +483,7 @@ function joinSegs(segs) {
 
 // 저장된 값만(없으면 null) - 페이지가 느려지지 않게
 async function depthCached(lat, lon) {
-  try { const [{ result }] = await redisPipeline([['GET', KEY_VER + (+(+lat).toFixed(4)) + '_' + (+(+lon).toFixed(4))]]); return result ? JSON.parse(result) : null; } catch (_) { return null; }
+  try { const [{ result }] = await redisPipeline([['GET', KEY_VER + (+(+lat).toFixed(4)) + '_' + (+(+lon).toFixed(4))]]); if (!result) return null; const o = JSON.parse(result); return o.src === 'gmrt' && !o.sf4 ? null : o; } catch (_) { return null; } // 보정 전 해외 저장본은 없는 셈
 }
 
 module.exports = { depthAt, depthCached, depthTile, depthVec, DTILE_Z, summarize, SRC, _t: { fromKhoa, fromEmodnet, fromNoaa, fromGmrt, gridFromPoints, inKorea, inEmodnet } };

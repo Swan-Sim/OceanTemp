@@ -43,6 +43,12 @@
         <button class="btn ghost" type="button" id="meBtn" data-k="me"></button></div>
       <div class="hint" data-k="posHint"></div>
     </div>
+    <div class="card" id="catRow" style="display:none">
+      <label>등록 종류 / Type</label>
+      <select id="catSel"><option value="spot">다이빙 포인트 · Dive spot</option><option value="shop">다이브샵 · Dive shop</option><option value="liveaboard">리브어보드 · Liveaboard</option><option value="pool">다이빙 풀장 · Dive pool</option></select>
+      <div id="shopSpotsBox" style="display:none;margin-top:12px"><label id="shopSpotsLbl"></label><div id="shopSpots" style="max-height:220px;overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 10px"></div>
+        <div class="hint" id="shopSpotsHint"></div></div>
+    </div>
     <div class="card">
       <label><span data-k="name"></span> <b>*</b></label><input name="name" maxlength="80" data-ph="namePh">
       <div class="grid">
@@ -121,7 +127,7 @@ country = OTLists.browserRegion(); countryHow = country ? 'browser' : ''; window
 (async () => { // 알려진 포인트 목록 - 나라 자동 선택용 [CHANGE] /api/shops?svc=spots 하나로
   try {
     const ex = await fetch('/api/shops?svc=spots').then(r => r.json()).catch(() => ({}));
-    (ex.spots || []).forEach(s => knownSpots.push({ lat: +s.lat, lon: +s.lon, code: OTLists.regionCode(s.country) }));
+    (ex.spots || []).forEach(s => knownSpots.push({ lat: +s.lat, lon: +s.lon, code: OTLists.regionCode(s.country), no: +s.no, name: s.label || s.name }));
     if ($('lat').value) autoCountry(+$('lat').value, +$('lon').value);
   } catch (_) {}
 })();
@@ -132,6 +138,7 @@ function setPos(la, lo, move) {
   $('lat').value = la; $('lon').value = lo;
   if (!pin) pin = L.circleMarker([la, lo], { radius: 8, color: '#fff', weight: 2.5, fillColor: '#ef4444', fillOpacity: 1 }).addTo(map);
   pin.setLatLng([la, lo]); if (move) map.setView([la, lo], Math.max(map.getZoom(), 14));
+  if (typeof renderShopSpots === 'function' && window.__catReady && cat() !== 'spot') renderShopSpots(); // 샵 위치가 바뀌면 가까운 포인트 다시
 }
 if (has0) setPos(lat0, lon0);
 // [ADD] 미리 채우기: /spot/?lat=..&lon=..&name=..&label=..&note=.. (여러 포인트를 링크로 빠르게 등록할 때)
@@ -149,22 +156,57 @@ function applyAdmin() {
   if (!adminPw || !adminOk) return;
   const L = T[lang]; $('submitBtn').textContent = L.adminSubmit;
   let bar = $('adminBar'); if (!bar) { bar = document.createElement('div'); bar.id = 'adminBar'; bar.className = 'msg ok'; bar.style.margin = '0 0 14px'; $('f').parentNode.insertBefore(bar, $('f')); }
-  bar.textContent = L.adminBar + ' ';
-  // [ADD] 관리자: 같은 위치로 샵·리브어보드·풀장도 바로 등록하러 가기
-  const here = () => { const la = parseFloat($('lat').value), lo = parseFloat($('lon').value), c = map.getCenter(); return Number.isFinite(la) && Number.isFinite(lo) ? [la, lo] : [c.lat, c.lng]; };
-  [['shop', lang === 'ko' ? '다이브샵 등록' : 'Add dive shop'], ['liveaboard', lang === 'ko' ? '리브어보드 등록' : 'Add liveaboard'], ['pool', lang === 'ko' ? '풀장 등록' : 'Add pool']].forEach(([ty, tx]) => {
-    const a = document.createElement('a'); a.textContent = tx; a.href = '#'; a.style.cssText = 'margin-left:10px;font-weight:700;color:inherit;text-decoration:underline';
-    a.onclick = (e) => { e.preventDefault(); const [la, lo] = here(); location.href = `/shop/?type=${ty}&lat=${la.toFixed(5)}&lon=${lo.toFixed(5)}`; };
-    bar.appendChild(a);
-  });
+  bar.textContent = L.adminBar;
+  $('catRow').style.display = ''; // 관리자만: 등록 종류 고르기
 }
 applyAdmin(); document.addEventListener('click', (e) => { if (e.target && e.target.id === 'langBtn') setTimeout(applyAdmin, 0); });
 
+// [ADD] 관리자: 같은 화면·같은 GPS로 다이브샵·리브어보드·풀장도 바로 등록
+const cat = () => (adminPw && adminOk ? $('catSel').value : 'spot');
+const kmTo = (la, lo, s) => { const R = 6371, r = Math.PI / 180; return 2 * R * Math.asin(Math.sqrt(Math.sin((s.lat - la) * r / 2) ** 2 + Math.cos(la * r) * Math.cos(s.lat * r) * Math.sin((s.lon - lo) * r / 2) ** 2)); };
+function renderShopSpots() {
+  const c = cat(), shopLike = c === 'shop' || c === 'liveaboard', ko = lang === 'ko';
+  $('shopSpotsBox').style.display = shopLike ? '' : 'none';
+  document.querySelectorAll('#f .grid')[0].style.display = c === 'spot' ? '' : 'none'; // 짧은 이름·나라는 포인트만
+  const nm = document.querySelector('[data-k="name"]'); if (nm) nm.textContent = c === 'spot' ? T[lang].name : c === 'pool' ? (ko ? '풀장 이름' : 'Pool name') : (ko ? '샵 이름' : 'Shop name');
+  if (!shopLike) return;
+  const max = c === 'liveaboard' ? 40 : 20, la = parseFloat($('lat').value), lo = parseFloat($('lon').value);
+  $('shopSpotsLbl').textContent = ko ? `연결할 포인트 (가까운 순, 최대 ${max}곳)` : `Linked dive spots (nearest first, up to ${max})`;
+  if (!Number.isFinite(la)) { $('shopSpots').innerHTML = ''; $('shopSpotsHint').textContent = ko ? '먼저 지도에서 샵 위치를 찍어주세요.' : 'Pick the shop location on the map first.'; return; }
+  const keep = new Set([...document.querySelectorAll('#shopSpots input:checked')].map(i => +i.value));
+  const list = knownSpots.filter(s => s.no).map(s => ({ s, d: kmTo(la, lo, s) })).filter(x => x.d <= 60).sort((a, b) => a.d - b.d).slice(0, 60);
+  const first = !$('shopSpots').dataset.init; $('shopSpots').dataset.init = '1';
+  $('shopSpots').innerHTML = list.map(({ s, d }) => `<label style="display:flex;gap:8px;align-items:center;margin:4px 0;font-weight:400"><input type="checkbox" value="${s.no}" style="width:auto" ${keep.has(s.no) || (first && d <= 5) ? 'checked' : ''}> ${String(s.name).replace(/[<>&]/g, '')} <span style="opacity:.6;font-size:12px">${d < 1 ? Math.round(d * 1000) + 'm' : d.toFixed(1) + 'km'}</span></label>`).join('');
+  $('shopSpotsHint').textContent = ko ? '5km 안 포인트는 미리 체크했어요. 연락처·소개·요금제는 등록 뒤 관리 페이지에서 고칠 수 있어요.' : 'Spots within 5 km are pre-checked. Contacts and plan can be edited in admin later.';
+}
+$('catSel').onchange = () => { $('shopSpots').dataset.init = ''; renderShopSpots(); };
+['lat', 'lon'].forEach(id => $(id).addEventListener('change', () => cat() !== 'spot' && renderShopSpots()));
+window.__catReady = true;
+async function adminShopSave(c) {
+  const fd = Object.fromEntries(new FormData($('f')).entries()), ko = lang === 'ko';
+  const spots = [...document.querySelectorAll('#shopSpots input:checked')].map(i => +i.value);
+  const max = c === 'liveaboard' ? 40 : 20;
+  if (c !== 'pool' && !spots.length) return { ok: false, msg: ko ? '연결할 포인트를 하나 이상 골라주세요.' : 'Pick at least one dive spot.' };
+  if (spots.length > max) return { ok: false, msg: ko ? `포인트는 ${max}곳까지예요.` : `Up to ${max} spots.` };
+  const body = { type: c, name: fd.name, note: fd.note, lat: fd.lat, lon: fd.lon, spots: c === 'pool' ? [] : spots, email: fd.email || '', show: true };
+  const r = await fetch('/api/stats?svc=shopSave', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw }, body: JSON.stringify(body) });
+  let j = {}; try { j = await r.json(); } catch (_) {}
+  return j.ok ? j : { ok: false, msg: j.error === 'need_name_loc' ? (ko ? '풀장 이름과 위치를 넣어주세요.' : 'Add a pool name and location.') : (j.error || (ko ? '등록하지 못했어요.' : 'Could not save.')) };
+}
 $('f').onsubmit = async (e) => {
   e.preventDefault();
   const L = T[lang], btn = $('submitBtn'), msg = $('msg');
   const body = Object.fromEntries(new FormData(e.target).entries());
   btn.disabled = true; btn.textContent = L.sending; msg.textContent = '';
+  if (cat() !== 'spot') { // 관리자: 샵·리브어보드·풀장 바로 등록
+    const a = await adminShopSave(cat()).catch(() => ({ ok: false }));
+    btn.disabled = false; btn.textContent = L.adminSubmit;
+    if (!a.ok) { msg.className = 'msg err'; msg.textContent = a.msg || L.e_default; return; }
+    msg.className = 'msg ok'; msg.innerHTML = ''; msg.append((lang === 'ko' ? `샵 #${a.id} 바로 게시했어요. ` : `Published shop #${a.id}. `));
+    const l = document.createElement('a'); l.href = '/admin/#shops'; l.target = '_blank'; l.textContent = lang === 'ko' ? '관리 페이지에서 보기' : 'Open admin'; msg.append(l);
+    ['name', 'note'].forEach(k => { const el = document.querySelector(`#f [name="${k}"]`); if (el) el.value = ''; }); $('shopSpots').dataset.init = ''; renderShopSpots();
+    return;
+  }
   let j = {};
   try {
     const r = adminPw && adminOk

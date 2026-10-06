@@ -82,7 +82,7 @@ function shopFields(b) {
     phone: phone(b.phone), kakao: httpsUrl(b.kakao), whatsapp: whatsapp(b.whatsapp),
     instagram: instagram(b.instagram), web: httpsUrl(b.web),
     address: str(b.address, 160), lang: langList(b.lang), note: str(b.note, 120),
-    ...(type === 'pool' ? poolFields(b) : {})
+    ...(type === 'pool' ? poolFields(b) : locFields(b)) // [ADD] 샵·리브어보드도 위치(있으면) 저장
   };
 }
 // [ADD] 풀장 칸: 위치(지도 핀) · 최대 수심 · 수온 · 실내/실외/계절 · 용도 · 입장 방식 · 운영시간 · 가격
@@ -95,6 +95,8 @@ function poolFields(b) {
     env: ['in', 'out', 'season'].includes(b.env) ? b.env : '', uses: [...new Set(uses)].join(','),
     entry: ['open', 'shop'].includes(b.entry) ? b.entry : '', hours: str(b.hours, 120), price: str(b.price, 80) };
 }
+// 샵·리브어보드 위치(선택)
+function locFields(b) { const la = parseFloat(b.lat), lo = parseFloat(b.lon); return Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180 ? { lat: +la.toFixed(5), lon: +lo.toFixed(5) } : {}; }
 // 등록 가능한지: 이름 + (풀장은 위치, 샵·리브어보드는 포인트 하나 이상)
 const shopValid = (f) => !!(f && f.name && (f.type === 'pool' ? f.lat != null && f.lon != null : f.spots && f.spots.length));
 const hasContact = (f) => !!(f.phone || f.kakao || f.whatsapp || f.instagram || f.web);

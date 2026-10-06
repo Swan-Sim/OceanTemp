@@ -88,10 +88,10 @@
       if (!st || !st.isBeach || /^River/.test(st.network || '') || !/^https?:$/.test(location.protocol)) return '';
       if (st._depthReq === undefined) {
         st._depthReq = fetch(`/api/spotobs?svc=depth&lite=1&lat=${st.coords[1].toFixed(4)}&lon=${st.coords[0].toFixed(4)}`).then(r => r.json())
-          .then(j => { st._depth = j && j.ok && j.max300 != null ? j : null; if (st._depth && selectedStation === st) setFootInfo(footText); })
+          .then(j => { st._depth = j && j.ok && (j.max300 != null || j.max1k != null) ? j : null; if (st._depth && selectedStation === st) { setFootInfo(footText); if (typeof activeMode !== 'undefined' && activeMode === 'depth' && typeof updateChart === 'function') updateChart(); } })
           .catch(() => { st._depth = null; });
       }
-      const d = st._depth; if (!d) return '';
+      const d = st._depth; if (!d || d.max300 == null) return '';
       return (t.depthFoot ? t.depthFoot(d.max300) : `수심 ~${d.max300}m`) + ' · ';
     }
     function setFootInfo(text) {

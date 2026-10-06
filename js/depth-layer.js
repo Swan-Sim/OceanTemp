@@ -34,7 +34,9 @@
         const strong = k === '30' || k === '40' || k === '60';
         layers.push(L.polyline(d.lines[k], { color: '#fff', weight: strong ? 1.6 : 0.8, opacity: strong ? 0.85 : 0.4, interactive: false, smoothFactor: 0.3, renderer: dRend() }));
       });
-      return { st: 'ok', grp: L.layerGroup(layers), lbl: d.lbl || [], coarse: !!cz };
+      // [CHANGE] 숫자 후보: 모든 등심선(10m 간격) 위 점들 - 화면에서 몇 m 선인지 바로 알 수 있게
+      const lbl = []; Object.keys(d.lines || {}).forEach(k => (d.lines[k] || []).forEach(ln => ln.forEach((p, i) => { if (i % 6 === 3) lbl.push([p[0], p[1], +k]); })));
+      return { st: 'ok', grp: L.layerGroup(layers), lbl: lbl.length ? lbl : (d.lbl || []), coarse: !!cz };
     }
 
     function loadNext() {
@@ -55,14 +57,15 @@
       if (!dLabels) dLabels = L.layerGroup().addTo(leafletMap);
       dLabels.clearLayers();
       if (!depthOn || leafletMap.getZoom() < DEPTH_MIN_ZOOM) return;
-      // 숫자끼리 70px 안으로 겹치지 않게: 수심별 후보를 화면 가운데에서 가까운 순으로 보며 빈 자리에 하나씩
-      const b = leafletMap.getBounds().pad(-0.08), c = leafletMap.getCenter(), cand = { 30: [], 40: [], 60: [] };
-      dTiles.forEach(tl => { if (tl.st !== 'ok') return; tl.lbl.forEach(p => { if (cand[p[2]] && b.contains([p[0], p[1]])) cand[p[2]].push([c.distanceTo([p[0], p[1]]), p]); }); });
-      const placed = [];
-      [30, 40, 60].forEach(k => {
-        cand[k].sort((a, z) => a[0] - z[0]);
+      // 숫자: 모든 수심(10·20·30…m)마다 화면 가운데에서 가까운 곳부터, 서로 60px 넘게 떨어진 자리에 최대 2개씩
+      const b = leafletMap.getBounds().pad(-0.06), c = leafletMap.getCenter(), cand = {};
+      dTiles.forEach(tl => { if (tl.st !== 'ok') return; tl.lbl.forEach(p => { if (!b.contains([p[0], p[1]])) return; (cand[p[2]] = cand[p[2]] || []).push([c.distanceTo([p[0], p[1]]), p]); }); });
+      const placed = [], levels = Object.keys(cand).map(Number).sort((a, z) => a - z);
+      levels.forEach(k => cand[k].sort((a, z) => a[0] - z[0]));
+      for (let pass = 0; pass < 2; pass++) levels.forEach(k => {
         for (const [, p] of cand[k]) { const px = leafletMap.latLngToContainerPoint([p[0], p[1]]);
-          if (placed.every(q => q.distanceTo(px) > 70)) { placed.push(px); dLabels.addLayer(L.marker([p[0], p[1]], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'depth-lbl', html: `${k}m`, iconSize: [30, 14], iconAnchor: [15, 7] }) })); break; } }
+          if (placed.every(q => q.distanceTo(px) > (pass ? 160 : 60))) { placed.push(px); const strong = k === 30 || k === 40 || k === 60;
+            dLabels.addLayer(L.marker([p[0], p[1]], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'depth-lbl' + (strong ? '' : ' sm'), html: `${k}m`, iconSize: [30, 14], iconAnchor: [15, 7] }) })); break; } }
       });
     }
 

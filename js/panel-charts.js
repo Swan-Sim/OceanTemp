@@ -179,14 +179,18 @@
       return { climLine, actualLine, projectedLine, todayPoint: todayLine };
     }
 
-    function getDepthProfile(surfaceTemp, isBeach) {
+    function getDepthProfile(surfaceTemp, isBeach, maxDepth) {
       // [FIX] 해변(연안)에서 500m 수심 수온이 나오는 건 비현실적이라는 지적 반영.
       // 해변은 최대 30m 안팎의 얕은 프로파일, 대양 정점은 기존처럼 깊은 프로파일을 씁니다.
+      // [CHANGE] 포인트 주변 1km 안 최대 수심(수심 자료)이 30m보다 깊으면 그 수심까지 늘려서 보여줘요(예: 1km 안 100m → 100m까지)
       if (isBeach) {
         const depths = [0, 3, 6, 10, 15, 20, 25, 30];
+        if (maxDepth > 32) { const lim = Math.min(300, maxDepth); [40, 50, 60, 80, 100, 120, 150, 200, 250, 300].forEach(d => { if (d < lim + 10) depths.push(d); }); if (depths[depths.length - 1] < lim - 5) depths.push(Math.round(lim)); }
         const bottomTemp = surfaceTemp - 4;
+        const t30 = surfaceTemp - (surfaceTemp - bottomTemp) * (1 - Math.exp(-30 / 12));
         const profile = depths.map(d => {
           if (d === 0) return surfaceTemp;
+          if (d > 30) return +(t30 - (t30 - 4) * (1 - Math.exp(-(d - 30) / 120))).toFixed(1); // 30m 아래는 천천히 더 차가워짐
           const ratio = 1 - Math.exp(-d / 12);
           return +(surfaceTemp - (surfaceTemp - bottomTemp) * ratio).toFixed(1);
         });
@@ -842,7 +846,8 @@
           <div class="item"><span class="swatch dashed" style="color:rgba(255,176,0,0.55);background:rgba(255,176,0,0.55);"></span>${t.chartFuture}</div>
         ` + visLegend;
       } else {
-        const data = getDepthProfile(selectedStation.curTemp, selectedStation.isBeach);
+        const dep = selectedStation._depth; // 수심 자료(js/shops.js가 받아 둠)
+        const data = getDepthProfile(selectedStation.curTemp, selectedStation.isBeach, dep && dep.max1k);
         chartInstance = new Chart(chartCanvas, {
           type: 'line',
           data: {
@@ -864,7 +869,8 @@
           }
         });
         legendBox.innerHTML = `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>` +
-          `<div class="item"><span class="swatch" style="background:#FFB000;"></span>${t.chartDepthLabel}</div>`;
+          `<div class="item"><span class="swatch" style="background:#FFB000;"></span>${t.chartDepthLabel}</div>` +
+          (dep && dep.max1k ? `<div class="item" style="color:#7DD3FC;">${t.depthNear ? t.depthNear(dep.max300, dep.max1k) : `수심: 300m 안 ~${dep.max300 ?? '–'}m · 1km 안 ~${dep.max1k}m`}</div>` : '');
       }
     }
 

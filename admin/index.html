@@ -113,7 +113,7 @@
       <div class="card"><h2>포인트 바로 등록</h2><a href="/spot/" style="display:inline-block;color:var(--text);border:1px solid rgba(255,176,0,.5);border-radius:999px;padding:6px 14px;text-decoration:none">+ 새 포인트 바로 등록</a><div class="hint">이 브라우저에서 관리자로 로그인해 두면(7일 유지, 로그아웃하면 해제) 사이트 지도의 '포인트 등록' 버튼으로 열어도 승인 없이 바로 등록되고 하루 한도도 없어요.</div>
         <details style="margin-top:12px"><summary style="cursor:pointer">여러 개 한 번에 등록</summary>
           <textarea id="bulkSpots" class="f" rows="8" style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px" placeholder="한 줄에 하나: 이름, 위도, 경도, 짧은이름(선택), 나라(선택), 메모(선택)&#10;예) Tawala MPA (Panglao), 9.54887, 123.79789, Tawala MPA, Philippines, Reef wall"></textarea>
-          <div class="actions" style="margin-top:6px"><button class="primary" id="bulkGo" type="button">등록</button><span class="muted" id="bulkMsg" style="margin-left:8px"></span></div>
+          <div class="actions" style="margin-top:6px"><button id="khoaScuba" type="button">KHOA 스쿠버 포인트 불러오기</button> <button class="primary" id="bulkGo" type="button">등록</button><span class="muted" id="bulkMsg" style="margin-left:8px"></span></div>
           <div class="hint">이름이 이미 있는 포인트는 건너뛰어요. 좌표는 소수(9.54887) 형식. 쉼표가 들어간 이름은 쓰지 마세요.</div>
         </details></div>
       <div class="card"><h2>승인 대기 (새 포인트)</h2><div id="spotReqs"></div><div class="hint">승인하면 기존 포인트와 겹치지 않는 다음 번호가 자동으로 붙어요. 이름·좌표는 승인 전에 고칠 수 있어요.</div></div>
@@ -308,6 +308,24 @@
     if (!r.ok || !j.ok) { alertMsg(j.error || ('HTTP ' + r.status)); throw new Error(j.error || r.status); }
     return j;
   }
+  // [ADD] KHOA 스킨스쿠버지수 포인트 → 위 칸에 채우기. 기존 포인트와 100m 안이면 # 붙여서(등록 안 됨) 겹침 표시
+  document.addEventListener('click', async (e) => {
+    if (!e.target || e.target.id !== 'khoaScuba') return;
+    const btn = e.target, msg = $('bulkMsg'); btn.disabled = true; msg.textContent = 'KHOA에서 불러오는 중…';
+    try {
+      const j = await api('khoaScubaSpots');
+      const clean = (v) => String(v).replace(/,/g, ' ').trim();
+      const lines = j.list.map(p => {
+        const dup = p.nearM != null && p.nearM < 100;
+        const near = p.nearNo != null ? ` · 가장 가까운 기존 #${p.nearNo} ${clean(p.nearName)} ${p.nearM}m` : '';
+        return `${dup ? '# ' : ''}${clean(p.name)}, ${p.lat}, ${p.lon}, ${clean(p.name).slice(0, 30)}, South Korea, 출처: 국립해양조사원 스킨스쿠버지수${near}`;
+      });
+      const dupN = lines.filter(l => l.startsWith('#')).length;
+      $('bulkSpots').value = `# KHOA 스킨스쿠버지수 포인트 ${j.count}곳 (# 줄 = 기존 포인트와 100m 안, 등록 안 됨). 확인 후 등록을 누르세요\n` + lines.join('\n');
+      msg.textContent = `불러옴 ${j.count}곳 · 새 포인트 ${j.count - dupN} · 겹침 ${dupN}`;
+    } catch (_) { msg.textContent = '불러오기 실패'; }
+    btn.disabled = false;
+  });
   // [ADD] 포인트 여러 개 한 번에 바로 등록(관리자) - 줄마다 spotAdd
   document.addEventListener('click', async (e) => {
     if (!e.target || e.target.id !== 'bulkGo') return;

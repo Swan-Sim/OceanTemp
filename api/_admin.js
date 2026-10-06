@@ -262,6 +262,38 @@ module.exports = async function admin(req, res) {
     S.clearSpotsMemo();
     return ok({ no });
   }
+  // [ADD] KHOA 스킨스쿠버지수 API의 전국 스쿠버 포인트(이름·위도·경도) 불러오기 - 관리자만.
+  //  같은 포인트가 날짜·시간별로 여러 줄 나와서 이름으로 하나만 남기고, 기존 포인트와 가장 가까운 거리를 붙여요.
+  //  라이선스: 공공누리 제1유형(출처표시) → 메모에 "출처: 국립해양조사원" 넣음
+  if (svc === 'khoaScubaSpots') {
+    const key = process.env.KHOA_API_KEY;
+    if (!key) return bad('no_khoa_key');
+    const base0 = 'https://apis.data.go.kr/1192136/fcstSkinScubav2/GetFcstSkinScubaApiServicev2';
+    const page = async (n) => {
+      const c = new AbortController(); const tm = setTimeout(() => c.abort(), 15000);
+      try {
+        const r = await fetch(`${base0}?serviceKey=${encodeURIComponent(key)}&type=json&pageNo=${n}&numOfRows=300`, { signal: c.signal });
+        const text = await r.text(); let j; try { j = JSON.parse(text); } catch (_) { throw new Error(`HTTP ${r.status} ${text.slice(0, 120)}`); }
+        const h = j.header || (j.response && j.response.header) || {}, b = j.body || (j.response && j.response.body) || {};
+        if (h.resultCode && h.resultCode !== '00') throw new Error(`KHOA ${h.resultCode} ${h.resultMsg || ''}`);
+        const raw = (b.items && b.items.item) || [];
+        return { items: Array.isArray(raw) ? raw : [raw], total: +b.totalCount || 0 };
+      } finally { clearTimeout(tm); }
+    };
+    let first;
+    try { first = await page(1); } catch (e) { return bad(String(e.message || e)); }
+    let items = first.items;
+    const pages = Math.min(20, Math.ceil(first.total / 300));
+    for (let n = 2; n <= pages; n++) { try { items = items.concat((await page(n)).items); } catch (_) { break; } }
+    const byName = new Map();
+    items.forEach(a => { const name = S.str(a && a.skscExpcnRgnNm, 80), lat = +(a && a.lat), lon = +(a && a.lot);
+      if (name && Number.isFinite(lat) && Number.isFinite(lon) && !byName.has(name)) byName.set(name, { name, lat: +lat.toFixed(5), lon: +lon.toFixed(5) }); });
+    const have = await S.allSpots(S.baseOf(req), { hidden: true, fresh: true });
+    const R2 = Math.PI / 180, dist = (a, b) => 12742000 * Math.asin(Math.sqrt(Math.sin((b.lat - a.lat) * R2 / 2) ** 2 + Math.cos(a.lat * R2) * Math.cos(b.lat * R2) * Math.sin((b.lon - a.lon) * R2 / 2) ** 2));
+    const list = [...byName.values()].map(p => { let near = null, d = Infinity; have.forEach(h => { const x = dist(p, h); if (x < d) { d = x; near = h; } }); return { ...p, nearNo: near ? near.no : null, nearName: near ? near.name : '', nearM: Number.isFinite(d) ? Math.round(d) : null }; })
+      .sort((a, b) => b.lat - a.lat);
+    return ok({ total: first.total, rows: items.length, count: list.length, list });
+  }
   if (svc === 'spotReject') { await R(['HDEL', K.spotreq, String(b.reqId)]); return ok(); }
   if (svc === 'spotSave') {
     const no = String(parseInt(b.no, 10));

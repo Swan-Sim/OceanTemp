@@ -15,8 +15,9 @@
         if (typeof leafletMap === 'undefined' || !leafletMap || typeof isDetailMode === 'undefined' || !isDetailMode) return;
         const size = leafletMap.getSize(), bounds = leafletMap.getBounds().pad(0.05), z = leafletMap.getZoom();
         const items = [], dots = [];
-        Object.keys(leafletMarkersByStationId).forEach(id => {
-          const m = leafletMarkersByStationId[id], el = m.getElement && m.getElement();
+        const all = Object.assign({}, leafletMarkersByStationId, window.__shopMarkers || {}); // 정점 + 샵·풀장(지도에 올라가 있을 때만)
+        Object.keys(all).forEach(id => {
+          const m = all[id], el = m.getElement && m.getElement();
           if (!el || !bounds.contains(m.getLatLng())) return;
           const p = leafletMap.latLngToContainerPoint(m.getLatLng());
           dots.push({ x: p.x - DOT, y: p.y - DOT, w: DOT * 2, h: DOT * 2 });

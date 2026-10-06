@@ -613,3 +613,16 @@ body:not(.detail-mode) .nt-sel { display: none; }
     #leafletMap .depth-lbl.sm { font-size: 10px; font-weight: 600; opacity: .85; }
     /* [ADD] 떠 있는 범례(body에 붙음): 지도·지구·패널 위 어디로든 */
     .chart-legend-overlay.floating { position: fixed; right: auto; z-index: 3000; }
+
+    /* [ADD] 지도 위 샵·리브어보드·풀장: 정점 동그라미와 같은 크기의 네모, 색만 다르게 (js/shop-layer.js) */
+    .lf-sq { width: 14px; height: 14px; border-radius: 2px; border: 2px solid rgba(255,255,255,.9); box-sizing: border-box; flex-shrink: 0; box-shadow: 0 0 4px rgba(0,0,0,.6); }
+    .lf-sq.shop { background: #f59e0b; } .lf-sq.liveaboard { background: #8b5cf6; } .lf-sq.pool { background: #2563eb; }
+    .sp-pop .leaflet-popup-content-wrapper { background: #0f172a; color: #e2e8f0; border: 1px solid rgba(255,255,255,.15); border-radius: 12px; }
+    .sp-pop .leaflet-popup-tip { background: #0f172a; }
+    .sp-pop .leaflet-popup-content { margin: 12px 14px; }
+    .sp-card .sp-h { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+    .sp-card .sp-t { font-size: 11.5px; color: #94a3b8; margin: 2px 0 6px; }
+    .sp-card .sp-note, .sp-card .sp-pf { font-size: 12px; color: #cbd5e1; line-height: 1.5; margin-bottom: 4px; }
+    .sp-card .shop-btns { margin: 8px 0; }
+    .sp-card .sp-spots { font-size: 11.5px; color: #94a3b8; line-height: 1.5; margin-bottom: 6px; } .sp-card .sp-spots b { color: #e2e8f0; font-weight: 600; }
+    .sp-card .shop-report { font-size: 11px; color: #64748b; }

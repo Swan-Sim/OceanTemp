@@ -153,8 +153,7 @@ async function depthAt(lat, lon, opt = {}) {
   return { ok: false, lat, lon, errors };
 }
 
-// [ADD] 거친 수심(GMRT 중 GEBCO 수준) "영점 맞추기": OpenStreetMap 해안선으로 육지/바다를 다시 정하고,
-//  해안선에서 수심 0m가 되도록 가까운 바다를 얕게 눌러 줘요(해안에서 멀어질수록 원래 값으로). 작은 섬 옆에 엉뚱한 깊은 구덩이가 생기던 문제 완화.
+// [ADD] 거친 수심(GMRT 중 GEBCO 수준) "영점 맞추기" - OpenStreetMap 해안선 기준으로 격자 위치만 바로잡기(아래 coastShift)
 //  해안선: Overpass API(OSM, ODbL) way["natural"="coastline"]. OSM 규칙상 선의 진행 방향 왼쪽이 육지예요.
 async function coastSegments(b) {
   const q = `[out:json][timeout:25];way["natural"="coastline"](${b.s.toFixed(4)},${b.w.toFixed(4)},${b.n.toFixed(4)},${b.e.toFixed(4)});out geom;`;
@@ -163,37 +162,38 @@ async function coastSegments(b) {
   (j.elements || []).forEach(w => { const g = w.geometry || []; for (let i = 1; i < g.length; i++) if (g[i - 1] && g[i]) segs.push([g[i - 1].lat, g[i - 1].lon, g[i].lat, g[i].lon]); });
   return segs;
 }
-function coastFix(g, segs) {
-  if (!segs.length) return { changed: 0 };
+// [CHANGE] 거친 수심 "영점 맞추기" = 값을 고치지 않고 격자 전체를 옮기기(평행 이동)만 해요.
+//  OpenStreetMap 해안선(선의 왼쪽이 육지)을 기준으로, 격자를 동서남북 ±1.5km 안에서 50m씩 옮겨 보며
+//  "해안선 위는 얕고, 해안에서 바다 쪽 300m는 깊은" 위치를 찾아 그만큼 옮겨요. 수심 값 자체는 원래 자료 그대로예요.
+function coastShift(g, segs) {
+  if (!segs.length) return null;
   const lat0 = g.la0 + (g.rows - 1) * g.dla / 2, kx = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 111320;
-  // 조각을 약 300m 칸 바구니에 나눠 담아 가까운 것만 찾기
-  const B = 300, key = (x, y) => Math.floor(x / B) + '_' + Math.floor(y / B), bins = new Map();
-  const S = segs.map(s => { const x1 = (s[1] - g.lo0) * kx, y1 = (s[0] - g.la0) * ky, x2 = (s[3] - g.lo0) * kx, y2 = (s[2] - g.la0) * ky; return [x1, y1, x2, y2]; });
-  S.forEach((s, i) => { const n = Math.max(1, Math.ceil(Math.hypot(s[2] - s[0], s[3] - s[1]) / (B / 2)));
-    for (let k = 0; k <= n; k++) { const x = s[0] + (s[2] - s[0]) * k / n, y = s[1] + (s[3] - s[1]) * k / n, kk = key(x, y); (bins.get(kk) || bins.set(kk, new Set()).get(kk)).add(i); } });
-  const SLOPE = 0.35; // 해안에서 1m 멀어질 때 최대 0.35m 깊어짐(약 19°) - 이보다 깊으면 눌러 줌
-  let changed = 0;
-  for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) {
-    const px = c * g.dlo * kx, py = r * g.dla * ky;
-    let best = Infinity, side = 0;
-    for (let ring = 0; ring <= 6 && best === Infinity; ring++) { // 가까운 바구니부터 넓혀 가며
-      const bx = Math.floor(px / B), by = Math.floor(py / B);
-      for (let ix = bx - ring; ix <= bx + ring; ix++) for (let iy = by - ring; iy <= by + ring; iy++) {
-        if (Math.max(Math.abs(ix - bx), Math.abs(iy - by)) !== ring) continue;
-        const set = bins.get(ix + '_' + iy); if (!set) continue;
-        set.forEach(i => { const s = S[i], dx = s[2] - s[0], dy = s[3] - s[1], L2 = dx * dx + dy * dy || 1;
-          const tt = Math.max(0, Math.min(1, ((px - s[0]) * dx + (py - s[1]) * dy) / L2)), qx = s[0] + dx * tt, qy = s[1] + dy * tt, d = Math.hypot(px - qx, py - qy);
-          if (d < best) { best = d; side = dx * (py - s[1]) - dy * (px - s[0]); } }); // > 0 이면 선의 왼쪽 = 육지
-      }
-    }
-    if (best === Infinity) continue; // 근처(약 2km)에 해안선 없음 → 그대로
-    const i = r * g.cols + c, v = g.z[i];
-    if (side > 0) { if (v == null || v < 0) { g.z[i] = 2; changed++; } continue; } // 육지
-    const cap = -Math.max(1, best * SLOPE); // 해안 가까운 바다의 최대 깊이(음수)
-    if (v == null || v >= 0) { g.z[i] = Math.max(cap, -Math.min(30, best * SLOPE * 0.6)); changed++; } // 원래 육지로 잘못 잡힌 바다
-    else if (v < cap) { g.z[i] = Math.round(cap * 10) / 10; changed++; }
-  }
-  return { changed };
+  // 해안선 위 점(약 60m 간격)과, 그 점에서 바다 쪽(선의 오른쪽)으로 300m 떨어진 점
+  const coast = [], sea = [];
+  segs.forEach(s => {
+    const x1 = s[1] * kx, y1 = s[0] * ky, x2 = s[3] * kx, y2 = s[2] * ky, L = Math.hypot(x2 - x1, y2 - y1); if (!L) return;
+    const nx = (y2 - y1) / L, ny = -(x2 - x1) / L; // 오른쪽(바다) 방향
+    for (let d = 0; d < L; d += 60) { const x = x1 + (x2 - x1) * d / L, y = y1 + (y2 - y1) * d / L; coast.push([x, y]); sea.push([x + nx * 300, y + ny * 300]); }
+  });
+  if (coast.length < 5) return null;
+  const step = Math.max(1, Math.floor(coast.length / 600)); // 점이 너무 많으면 골고루 줄이기
+  const C = coast.filter((_, i) => i % step === 0), Sx = sea.filter((_, i) => i % step === 0);
+  const z = (x, y) => { // 미터 좌표 → 격자 값(쌍선형, 밖이면 NaN, 빈 칸=육지 +2)
+    const fi = (y / ky - g.la0) / g.dla, fj = (x / kx - g.lo0) / g.dlo; if (fi < 0 || fj < 0 || fi > g.rows - 1 || fj > g.cols - 1) return NaN;
+    const i = Math.min(g.rows - 2, Math.floor(fi)), j = Math.min(g.cols - 2, Math.floor(fj)), a = fi - i, b = fj - j, G = (r, c) => { const v = g.z[r * g.cols + c]; return v == null ? 2 : v; };
+    return G(i, j) * (1 - a) * (1 - b) + G(i, j + 1) * (1 - a) * b + G(i + 1, j) * a * (1 - b) + G(i + 1, j + 1) * a * b; };
+  const score = (dx, dy) => { // 작을수록 좋음: 해안선 위 수심(얕을수록) - 0.5 × 바다 쪽 300m 수심(깊을수록)
+    let a = 0, n = 0, w = 0, m = 0;
+    for (let k = 0; k < C.length; k++) { const v = z(C[k][0] - dx, C[k][1] - dy), u = z(Sx[k][0] - dx, Sx[k][1] - dy);
+      if (!isNaN(v)) { a += Math.max(0, -v); n++; } if (!isNaN(u)) { w += Math.max(0, -u); m++; } }
+    return n < 5 || m < 5 ? Infinity : a / n - 0.5 * w / m; };
+  const base = score(0, 0); let best = { dx: 0, dy: 0, s: base };
+  for (let dx = -1500; dx <= 1500; dx += 100) for (let dy = -1500; dy <= 1500; dy += 100) { const s = score(dx, dy); if (s < best.s) best = { dx, dy, s }; }
+  for (let dx = best.dx - 100; dx <= best.dx + 100; dx += 25) for (let dy = best.dy - 100; dy <= best.dy + 100; dy += 25) { const s = score(dx, dy); if (s < best.s) best = { dx, dy, s }; }
+  // 확실히 나아질 때만 옮김(점수 차 3m 이상)
+  if (!(base - best.s >= 3) || (!best.dx && !best.dy)) return { dx: 0, dy: 0, moved: false };
+  g.la0 += best.dy / ky; g.lo0 += best.dx / kx;
+  return { dx: best.dx, dy: best.dy, moved: true };
 }
 
 // [ADD] 지도 타일(웹 메르카토르 줌 13, 한 장 약 4~5km) 단위 수심 격자 - 지도에 이어 붙여 깔기용
@@ -210,16 +210,18 @@ async function depthTile(x, y, opt = {}) {
   if (!opt.fresh) { try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {} }
   const t = tileBox(x, y), lat = (t.s + t.n) / 2, lon = (t.w + t.e) / 2;
   const b = { s: t.s - DTILE_PAD, n: t.n + DTILE_PAD, w: t.w - DTILE_PAD, e: t.e + DTILE_PAD };
+  const bigB = { s: t.s - 0.018, n: t.n + 0.018, w: t.w - 0.018, e: t.e + 0.018 };
   const order = inKorea(lat, lon) ? [fromKhoa, fromGmrt] : inEmodnet(lat, lon) ? [fromEmodnet, fromGmrt] : [fromNoaa, fromGmrt];
   let out = null; const errors = [];
   for (const fn of order) {
     try {
-      const r = await fn(b); if (!r) continue;
+      const r = await fn(fn === fromGmrt ? bigB : b); if (!r) continue; // GMRT는 옮길 여유(약 2km)까지 넉넉히 받기
       const g = r.grid; if (!g.z.some(v => v != null && v < 0)) { out = { ok: true, x, y, tile: t, src: r.src, empty: true }; break; } // 바다 없음
       const coarse = r.src === 'gmrt' && !(r.hiFrac >= 0.5);
       let coastFixed;
-      if (coarse) { try { coastFix(g, await coastSegments(b)); coastFixed = true; } catch (_) { coastFixed = false; } } // 거친 자료만 해안선으로 영점 맞추기
-      out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse, coastFixed, // 거친 자료(GEBCO 수준)면 앱에서 흐리게
+      let shift = null;
+      if (coarse) { try { shift = coastShift(g, await coastSegments(bigB)); coastFixed = true; } catch (_) { coastFixed = false; } } // 거친 자료만: 해안선에 맞춰 격자 평행 이동
+      out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse, coastFixed, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, // 거친 자료(GEBCO 수준)면 앱에서 흐리게
         grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
       break;
     } catch (e) {

@@ -52,13 +52,16 @@ async function fromKhoa(b) {
     return { total: +body.totalCount || 0, rows: (it || []).map(x => [+x.lat, +x.lot, -(+x.dpwt)]).filter(r => r.every(Number.isFinite)) };
   };
   const first = await page(1); if (!first.total) return null;
-  const rows = first.rows.slice(), pages = Math.min(20, Math.ceil(first.total / 300));
-  const more = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => page(i + 2).catch(() => ({ rows: [] }))));
-  more.forEach(m => rows.push(...m.rows));
+  // [FIX] 예전엔 나머지 쪽을 한꺼번에(최대 19개) 요청하고 실패한 쪽은 조용히 빼서, 타일 일부가 통째로 비어 "육지"(검은 네모)로 그려졌어요.
+  //  → 4개씩 나눠 받고, 실패하면 2번 더 시도, 그래도 실패하면 이 타일은 저장하지 않고 다음에 다시
+  const rows = first.rows.slice(), pages = Math.min(40, Math.ceil(first.total / 300)), todo = Array.from({ length: pages - 1 }, (_, i) => i + 2);
+  const one = async (no) => { for (let k = 0; ; k++) { try { return await page(no); } catch (e) { if (k >= 2) throw e; await new Promise(r => setTimeout(r, 600 * (k + 1))); } } };
+  for (let i = 0; i < todo.length; i += 4) (await Promise.all(todo.slice(i, i + 4).map(one))).forEach(m => rows.push(...m.rows));
+  if (rows.length < Math.min(first.total, pages * 300) * 0.95) throw new Error(`khoa partial ${rows.length}/${first.total}`);
   if (rows.length < 4) return null;
   // 지도 타일끼리 이어 붙도록 격자 시작점을 전 세계 공통 눈금(위도 0.00135°, 경도 0.0016°)에 맞춤
   const dla = 0.00135, dlo = 0.0016, gb = { s: Math.ceil(b.s / dla) * dla, n: b.n, w: Math.ceil(b.w / dlo) * dlo, e: b.e };
-  return { src: 'khoa', res: 150, nullLand: true, grid: gridFromPoints(rows, gb, dla, dlo, 110) };
+  return { src: 'khoa', res: 150, nullLand: true, kp: true, grid: gridFromPoints(rows, gb, dla, dlo, 110) };
 }
 
 // ── EMODnet(ERDDAP griddap CSV) ──
@@ -382,8 +385,8 @@ async function rawSet(x, y, r) {
     await redisPipeline([['SET', RAW_KEY(x, y), JSON.stringify(o), 'EX', String(180 * 86400)]]); } catch (_) {}
 }
 async function rawGet(x, y) {
-  try { const [{ result }] = await redisPipeline([['GET', RAW_KEY(x, y)]]); if (!result) return null; const o = JSON.parse(result);
-    return { src: o.src, res: o.res, hiFrac: o.hiFrac, nullLand: o.nullLand, grid: decGrid(o, o.z), fromRaw: true }; } catch (_) { return null; }
+  try { const [{ result }] = await redisPipeline([['GET', RAW_KEY(x, y)]]); if (!result) return null; const o = JSON.parse(result); if (o.src === 'khoa' && !o.kp) return null; // 쪽이 빠졌을 수 있는 옛 국립해양조사원 원본은 다시 받기
+    return { src: o.src, res: o.res, hiFrac: o.hiFrac, nullLand: o.nullLand, kp: o.kp, grid: decGrid(o, o.z), fromRaw: true }; } catch (_) { return null; }
 }
 async function depthTile(x, y, opt = {}) {
   x = parseInt(x, 10); y = parseInt(y, 10); const n = 2 ** DTILE_Z;
@@ -404,7 +407,7 @@ async function depthTile(x, y, opt = {}) {
       try { const sh = await warpByShiftField(g, x, y); coastFixed = true; shift = sh ? { dx: Math.round(sh[0]), dy: Math.round(sh[1]), moved: !!(sh[0] || sh[1]) } : null;
         shoreTaper(g, g._segs || []); delete g._segs; }
       catch (e) { coastFixed = false; fixErr = String(e && e.message || e).slice(0, 100); } }
-    return { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse, coastFixed, fixErr, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, fromRaw: !!r.fromRaw,
+    return { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, kp: !!r.kp, coarse, coastFixed, fixErr, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, fromRaw: !!r.fromRaw,
       grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
   };
   const raw = opt.noRaw ? null : await rawGet(x, y);
@@ -451,9 +454,10 @@ async function depthVec(x, y, opt = {}) {
   const ck = 'dvec:v2:' + x + '_' + y;
   // [ADD] fill=1: 그림은 있는데 원본 격자 저장본이 없으면 한 번 다시 받아 원본을 저장(이후엔 외부 서버 없이 다시 그리기)
   const needRaw = opt.fill ? !(await redisPipeline([['EXISTS', RAW_KEY(x, y)]]).then(r => r[0].result).catch(() => 1)) : false;
-  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf4))) || (!o.d150 && o.Ln && o.Ln['100']); if (!stale) return o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+  let old = null; // 다시 계산이 실패하면(국립해양조사원 하루 한도 등) 예전 그림이라도 보여주기
+  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf4))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']); if (!stale) return o; old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
   const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
-  if (!d || !d.ok) return d;
+  if (!d || !d.ok) return old ? Object.assign({}, old, { tmp: true }) : d; // tmp → 짧게만 캐시하고 다음에 다시 시도
   const t = d.tile;
   let out = { ok: true, x, y, tile: t, src: d.src, empty: true };
   if (d.grid) {
@@ -493,7 +497,7 @@ async function depthVec(x, y, opt = {}) {
     // 좌표를 타일 안 0~4096 정수로 바꾸고 앞 점과의 차이만 적어서 크기를 4~5배 줄임(앱에서 되돌림)
     const QX = (lo) => Math.round((lo - t.w) / (t.e - t.w) * 4096), QY = (la) => Math.round((t.n - la) / (t.n - t.s) * 4096);
     const enc = (pts) => { const o = []; let px = 0, py = 0; pts.forEach((p, i) => { const x1 = QX(p[1]), y1 = QY(p[0]); if (i && x1 === px && y1 === py) return; o.push(x1 - px, y1 - py); px = x1; py = y1; }); return o; };
-    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, fixErr: d.fixErr, shift: d.shift || null, full: true, sf2: true, sf3: true, sf4: true, d150: true, tmp: !!(d.coarse && !d.coastFixed) || undefined,
+    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, kp: d.kp, fixErr: d.fixErr, shift: d.shift || null, full: true, sf2: true, sf3: true, sf4: true, d150: true, tmp: !!(d.coarse && !d.coastFixed) || undefined,
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
   }

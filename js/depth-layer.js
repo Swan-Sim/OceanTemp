@@ -17,7 +17,7 @@
     const tileY = (lat) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** DTILE_Z); };
 
     // 서버가 미리 만들어 둔 벡터(다각형·선)를 그대로 그리기만 해요 - 일러스트처럼 단색 띠가 깊을수록 겹쳐 진해짐
-    const DFILL = { 1: ['#7dd3fc', 0.12], 10: ['#38bdf8', 0.09], 20: ['#0ea5e9', 0.09], 30: ['#0284c7', 0.09], 40: ['#0369a1', 0.09], 50: ['#075985', 0.09], 60: ['#0c4a6e', 0.1], 80: ['#082f49', 0.1], 100: ['#041e33', 0.12] };
+    const DFILL = { 1: ['#7dd3fc', 0.12], 10: ['#38bdf8', 0.09], 20: ['#0ea5e9', 0.09], 30: ['#0284c7', 0.09], 40: ['#0369a1', 0.09], 50: ['#075985', 0.09], 60: ['#0c4a6e', 0.1], 80: ['#082f49', 0.1], 100: ['#041e33', 0.12], 120: ['#03182b', 0.12], 150: ['#021224', 0.14] };
     // 서버 압축 형식(v2): 좌표 = 타일 안 0~4096 정수, 앞 점과의 차이만 → [위도, 경도]로 되돌리기
     function decodeTile(d) {
       const t = d.tile, dec = (a) => { const o = []; let x = 0, y = 0; for (let i = 0; i < a.length; i += 2) { x += a[i]; y += a[i + 1]; o.push([t.n - y / 4096 * (t.n - t.s), t.w + x / 4096 * (t.e - t.w)]); } return o; };
@@ -31,7 +31,7 @@
       const cz = d.coarse; // 거친 자료(해외 일부): 서버에서 해안선에 맞춰 평행 이동한 뒤라 다른 지역과 같은 모양으로 그림
       (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1]; layers.push(L.polygon(f.p, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: 0.3, renderer: dRend() })); });
       Object.keys(d.lines || {}).forEach(k => {
-        const strong = k === '30' || k === '40' || k === '60';
+        const strong = k === '10' || k === '20' || k === '30' || k === '40'; // [CHANGE] 다이빙 계획에 중요한 10·20·30·40m를 진하게
         layers.push(L.polyline(d.lines[k], { color: '#fff', weight: strong ? 1.6 : 0.8, opacity: strong ? 0.85 : 0.4, interactive: false, smoothFactor: 0.3, renderer: dRend() }));
       });
       // [CHANGE] 숫자 후보: 모든 등심선(10m 간격) 위 점들 - 화면에서 몇 m 선인지 바로 알 수 있게
@@ -43,7 +43,7 @@
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=7`).then(r => r.json()).then(d => {
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=8`).then(r => r.json()).then(d => {
           if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
           else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });
@@ -57,16 +57,18 @@
       if (!dLabels) dLabels = L.layerGroup().addTo(leafletMap);
       dLabels.clearLayers();
       if (!depthOn || leafletMap.getZoom() < DEPTH_MIN_ZOOM) return;
-      // 숫자: 모든 수심(10·20·30…m)마다 화면 가운데에서 가까운 곳부터, 서로 60px 넘게 떨어진 자리에 최대 2개씩
+      // 숫자: 10·20·30·40m는 늘(화면 가운데에서 가장 가까운 곳에 하나씩, 서로 40px 넘게) 먼저 놓고,
+      //  나머지 수심(50·60…150m)은 빈자리(60px 넘게)에 하나씩, 그다음 여유가 있으면 수심마다 하나 더(160px 넘게)
       const b = leafletMap.getBounds().pad(-0.06), c = leafletMap.getCenter(), cand = {};
       dTiles.forEach(tl => { if (tl.st !== 'ok') return; tl.lbl.forEach(p => { if (!b.contains([p[0], p[1]])) return; (cand[p[2]] = cand[p[2]] || []).push([c.distanceTo([p[0], p[1]]), p]); }); });
-      const placed = [], levels = Object.keys(cand).map(Number).sort((a, z) => a - z);
+      const placed = [], levels = Object.keys(cand).map(Number).sort((a, z) => a - z), KEY = [10, 20, 30, 40];
       levels.forEach(k => cand[k].sort((a, z) => a[0] - z[0]));
-      for (let pass = 0; pass < 2; pass++) levels.forEach(k => {
-        for (const [, p] of cand[k]) { const px = leafletMap.latLngToContainerPoint([p[0], p[1]]);
-          if (placed.every(q => q.distanceTo(px) > (pass ? 160 : 60))) { placed.push(px); const strong = k === 30 || k === 40 || k === 60;
-            dLabels.addLayer(L.marker([p[0], p[1]], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'depth-lbl' + (strong ? '' : ' sm'), html: `${k}m`, iconSize: [30, 14], iconAnchor: [15, 7] }) })); break; } }
-      });
+      const put = (k, gap) => { for (const [, p] of cand[k]) { const px = leafletMap.latLngToContainerPoint([p[0], p[1]]);
+        if (placed.every(q => q.distanceTo(px) > gap)) { placed.push(px);
+          dLabels.addLayer(L.marker([p[0], p[1]], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'depth-lbl' + (KEY.includes(k) ? '' : ' sm'), html: `${k}m`, iconSize: [30, 14], iconAnchor: [15, 7] }) })); return; } } };
+      KEY.forEach(k => { if (cand[k]) put(k, 40); });
+      levels.filter(k => !KEY.includes(k)).forEach(k => put(k, 60));
+      levels.forEach(k => put(k, 160));
     }
 
     function refreshDepthLayers() {

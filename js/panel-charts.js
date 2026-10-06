@@ -1044,18 +1044,24 @@
       let collapsed = store.get('collapsed', window.innerWidth < 600);
       let docked = store.get('docked', false);
       let off = store.get('offset', { x: 0, y: 0 });
+      // [CHANGE] 범례를 화면 어디로든(지도·지구 위까지) 옮길 수 있게: 치우지 않았을 땐 body에 붙인 떠 있는 상자(position:fixed)로,
+      //  위치는 "그래프 상자 오른쪽 위" 기준으로 얼마나 옮겼는지(off)만 기억. 화면 밖으로는 안 나가게. 그래프가 안 보이면(시트 닫힘 등) 같이 숨김
+      const anchor = () => { const pr = chartBox.getBoundingClientRect(); return { pr, x: pr.right - 2, y: pr.top + (chartBox.classList.contains('with-head') ? 26 : 2) }; };
+      const clampXY = (x, y, bw, bh) => [Math.min(window.innerWidth - bw - 4, Math.max(4, x)), Math.min(window.innerHeight - bh - 4, Math.max(4, y))];
       const place = () => {
-        if (docked) { if (box.parentElement === chartBox) chartBox.after(box); box.style.transform = 'none'; return; }
-        if (box.parentElement !== chartBox) chartBox.appendChild(box);
-        const pr = chartBox.getBoundingClientRect();
-        box.style.transform = 'none';
-        const br = box.getBoundingClientRect();
-        if (!br.width) return;
-        // 그래프 상자 밖으로 나가지 않게
-        off.x = Math.min(pr.right - br.right, Math.max(pr.left - br.left, off.x)) || 0;
-        off.y = Math.min(pr.bottom - br.bottom, Math.max(pr.top - br.top, off.y)) || 0;
-        box.style.transform = `translate(${off.x}px, ${off.y}px)`;
+        if (docked) { box.classList.remove('floating'); box.style.left = box.style.top = ''; box.style.display = ''; if (box.parentElement !== chartBox.parentElement || box.previousElementSibling !== chartBox) chartBox.after(box); box.style.transform = 'none'; return; }
+        if (box.parentElement !== document.body) document.body.appendChild(box);
+        box.classList.add('floating'); box.style.transform = 'none';
+        const a = anchor();
+        const hidden = !a.pr.width || !a.pr.height || chartBox.offsetParent === null;
+        box.style.display = hidden ? 'none' : '';
+        if (hidden) return;
+        const bw = box.offsetWidth, bh = box.offsetHeight;
+        const [x, y] = clampXY(a.x - bw + off.x, a.y + off.y, bw, bh);
+        off = { x: x - (a.x - bw), y: y - a.y };
+        box.style.left = x + 'px'; box.style.top = y + 'px';
       };
+      setInterval(() => { if (!docked && !box.classList.contains('dragging')) place(); }, 700); // 패널 열고 닫힘·회전 따라가기
       const apply = () => {
         box.classList.toggle('collapsed', collapsed && !docked);
         box.classList.toggle('docked', docked);
@@ -1074,14 +1080,11 @@
         box.insertBefore(head, box.firstChild);
         if (box._lgBound) { apply(); return; }
         box._lgBound = true;
-        // 범례 어디든 잡고 끌기(마우스·손가락). 끄는 동안 그래프 상자 안에만 머물게 해서 지구본 쪽으로 넘어가지 않게.
-        // 아래로는 조금 더(40px) 끌 수 있고, 그만큼 내려놓으면 그래프 아래 줄로 치움.
+        // 범례 어디든 잡고 끌기(마우스·손가락). 화면 안 어디로든(지도·지구 위 포함) 옮길 수 있어요.
         let start = null, moved = false;
         box.addEventListener('pointerdown', (e) => {
           if (e.button != null && e.button > 0) return;
-          const pr = chartBox.getBoundingClientRect(), br = box.getBoundingClientRect();
-          start = { x: e.clientX, y: e.clientY, ox: off.x, oy: off.y, pr, base: { l: br.left - off.x, r: br.right - off.x, t: br.top - off.y, b: br.bottom - off.y },
-            dockBtn: !!(e.target.closest && e.target.closest('.lg-dock')) };
+          start = { x: e.clientX, y: e.clientY, ox: off.x, oy: off.y, dockBtn: !!(e.target.closest && e.target.closest('.lg-dock')) };
           moved = false;
           try { box.setPointerCapture(e.pointerId); } catch (_) {}
         });
@@ -1091,11 +1094,10 @@
           if (!moved && Math.hypot(dx, dy) < 6) return; // 살짝 누른 건 "탭"
           moved = true; box.classList.add('dragging');
           if (docked) return; // 치운 상태에선 끌기 = 위로 올리기만(손 뗄 때 판단)
-          const { pr, base } = start;
-          const x = Math.min(pr.right - base.r, Math.max(pr.left - base.l, start.ox + dx));
-          const y = Math.min(pr.bottom - base.b + 40, Math.max(pr.top - base.t, start.oy + dy));
-          off = { x, y };
-          box.style.transform = `translate(${x}px, ${y}px)`;
+          const a = anchor(), bw = box.offsetWidth, bh = box.offsetHeight;
+          const [x, y] = clampXY(a.x - bw + start.ox + dx, a.y + start.oy + dy, bw, bh);
+          off = { x: x - (a.x - bw), y: y - a.y };
+          box.style.left = x + 'px'; box.style.top = y + 'px';
         });
         const end = (e) => {
           if (!start) return;
@@ -1106,9 +1108,9 @@
             collapsed = !collapsed; store.set('collapsed', collapsed); return apply();
           }
           if (docked) { if (e.clientY - s0.y < -30) setDocked(false); return; }
-          // 그래프 아래 끝 밖으로 20px 넘게 끌어내리면 그래프 밖(아래 줄)으로 치움
+          // 그래프 아래 끝보다 더 아래로(범례 윗변이 그래프 아래 끝 밑으로) 내려놓으면 그래프 아래 줄로 치움
           const pr = chartBox.getBoundingClientRect(), br = box.getBoundingClientRect();
-          if (br.bottom > pr.bottom + 20) return setDocked(true);
+          if (pr.height && br.top > pr.bottom - 6) return setDocked(true);
           place(); store.set('offset', off);
         };
         box.addEventListener('pointerup', end);

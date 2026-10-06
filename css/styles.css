@@ -609,3 +609,5 @@ body:not(.detail-mode) .nt-sel { display: none; }
     #leafletMap .leaflet-bottom.leaflet-left { bottom: 32px; }
     #leafletMap .leaflet-control-scale-line { background: transparent; color: #fff; border: 2px solid #fff; border-top: none; font-size: 11px; font-weight: 700; line-height: 1.1; padding: 0 4px 1px; text-shadow: 0 0 3px rgba(0,0,0,.9); box-shadow: 0 1px 2px rgba(0,0,0,.5); }
     #leafletMap .depth-lbl.sm { font-size: 10px; font-weight: 600; opacity: .85; }
+    /* [ADD] 떠 있는 범례(body에 붙음): 지도·지구·패널 위 어디로든 */
+    .chart-legend-overlay.floating { position: fixed; right: auto; z-index: 3000; }

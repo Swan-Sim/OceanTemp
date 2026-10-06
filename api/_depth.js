@@ -190,8 +190,8 @@ function coastShift(g, segs) {
   const base = score(0, 0); let best = { dx: 0, dy: 0, s: base };
   for (let dx = -1500; dx <= 1500; dx += 100) for (let dy = -1500; dy <= 1500; dy += 100) { const s = score(dx, dy); if (s < best.s) best = { dx, dy, s }; }
   for (let dx = best.dx - 100; dx <= best.dx + 100; dx += 25) for (let dy = best.dy - 100; dy <= best.dy + 100; dy += 25) { const s = score(dx, dy); if (s < best.s) best = { dx, dy, s }; }
-  // 확실히 나아질 때만 옮김(점수 차 3m 이상)
-  if (!(base - best.s >= 3) || (!best.dx && !best.dy)) return { dx: 0, dy: 0, moved: false };
+  // 확실히 나아질 때만 옮김(점수 차 1.5m 이상)
+  if (!(base - best.s >= 1.5) || (!best.dx && !best.dy)) return { dx: 0, dy: 0, moved: false };
   g.la0 += best.dy / ky; g.lo0 += best.dx / kx;
   return { dx: best.dx, dy: best.dy, moved: true };
 }
@@ -218,6 +218,48 @@ async function blockShift(lat, lon) {
   return out;
 }
 
+// [ADD] 옮길 거리를 칸마다 따로 재되(그 칸 주변 해안선 기준), 칸 가운데끼리 부드럽게 이어지는 "이동량 지도"로 써요.
+//  칸 경계에서는 양쪽 칸이 같은 값을 쓰니 선이 끊기지 않고, 작은 섬도 그 섬 해안선에 맞게 옮겨져요. 수심 값은 원본 그대로이고 위치만 옮김.
+async function tileShiftEst(x, y) {
+  const ck = `tshift:v1:${x}_${y}`;
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {}
+  const t = tileBox(x, y), b = { s: t.s - 0.012, n: t.n + 0.012, w: t.w - 0.012, e: t.e + 0.012 };
+  const [r, segs] = await Promise.all([fromGmrt(b), coastSegments(b)]); // 실패하면 저장 안 하고 다음에 다시
+  if (!r) throw new Error('gmrt');
+  let out = { dx: 0, dy: 0, known: false, segs: segs.length };
+  if (segs.length >= 5) { const m = coastShift(r.grid, segs); out = { dx: m ? m.dx : 0, dy: m ? m.dy : 0, known: true, segs: segs.length }; }
+  try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
+  return out;
+}
+async function warpByShiftField(g, x, y) {
+  const n = 2 ** DTILE_Z, LON = (v) => v / n * 360 - 180, LAT = (v) => Math.atan(Math.sinh(Math.PI * (1 - 2 * v / n))) * 180 / Math.PI;
+  // 해안선 서버(Overpass)는 동시에 여러 번 부르면 거절해서, 하나씩 차례로(이미 잰 칸은 저장값이라 바로)
+  const est = [];
+  for (const j of [-1, 0, 1]) { const row = []; for (const i of [-1, 0, 1]) row.push(await tileShiftEst(x + i, y + j).catch(() => null)); est.push(row); }
+  const known = est.flat().filter(e => e && e.known);
+  if (!known.length) return null;
+  const avg = { dx: known.reduce((a, e) => a + e.dx, 0) / known.length, dy: known.reduce((a, e) => a + e.dy, 0) / known.length };
+  const V = est.map(row => row.map(e => e && e.known ? e : avg)); // V[j][i], j=0 북쪽 줄
+  const cLon = [-1, 0, 1].map(i => LON(x + i + 0.5)), cLat = [-1, 0, 1].map(j => LAT(y + j + 0.5));
+  const field = (la, lo) => {
+    const fx = Math.max(0, Math.min(2, (lo - cLon[0]) / (cLon[1] - cLon[0]))), fy = Math.max(0, Math.min(2, la >= cLat[1] ? (cLat[0] - la) / (cLat[0] - cLat[1]) : 1 + (cLat[1] - la) / (cLat[1] - cLat[2])));
+    const i = Math.min(1, Math.floor(fx)), j = Math.min(1, Math.floor(fy)), a = fx - i, b = fy - j;
+    const q = (k) => V[j][i][k] * (1 - a) * (1 - b) + V[j][i + 1][k] * a * (1 - b) + V[j + 1][i][k] * (1 - a) * b + V[j + 1][i + 1][k] * a * b;
+    return [q('dx'), q('dy')];
+  };
+  const kx = Math.cos((g.la0 + g.rows * g.dla / 2) * Math.PI / 180) * 111320, ky = 111320, z0 = g.z.slice();
+  const at = (la, lo) => { const fi = (la - g.la0) / g.dla, fj = (lo - g.lo0) / g.dlo; if (fi < 0 || fj < 0 || fi > g.rows - 1 || fj > g.cols - 1) return null;
+    const i = Math.min(g.rows - 2, Math.floor(fi)), j = Math.min(g.cols - 2, Math.floor(fj)), a = fi - i, b = fj - j, q = [z0[i * g.cols + j], z0[i * g.cols + j + 1], z0[(i + 1) * g.cols + j], z0[(i + 1) * g.cols + j + 1]];
+    if (q.some(v => v == null)) return q[Math.round(a) * 2 + Math.round(b)] ?? q.find(v => v != null) ?? null;
+    return q[0] * (1 - a) * (1 - b) + q[1] * (1 - a) * b + q[2] * a * (1 - b) + q[3] * a * b; };
+  for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) {
+    const la = g.la0 + r * g.dla, lo = g.lo0 + c * g.dlo, [dx, dy] = field(la, lo);
+    g.z[r * g.cols + c] = at(la - dy / ky, lo - dx / kx); // 이 자리에는 (옮기기 전) 그만큼 떨어진 곳의 값이 옴
+  }
+  const me = est[1][1];
+  return me && me.known ? [me.dx, me.dy] : [Math.round(avg.dx), Math.round(avg.dy)];
+}
+
 // [ADD] 지도 타일(웹 메르카토르 줌 13, 한 장 약 4~5km) 단위 수심 격자 - 지도에 이어 붙여 깔기용
 //  타일 경계 밖으로 약 330m 더 받아서(겹침) 앱이 경계에서 잘라 그리면 이음새가 안 보여요. 180일 저장.
 const DTILE_Z = 13, DTILE_PAD = 0.003;
@@ -242,9 +284,8 @@ async function depthTile(x, y, opt = {}) {
       const coarse = r.src === 'gmrt' && !(r.hiFrac >= 0.5);
       let coastFixed;
       let shift = null;
-      if (coarse) { // 거친 자료만: 구역(약 18km) 공통 거리만큼 격자 평행 이동
-        try { shift = await blockShift((t.s + t.n) / 2, (t.w + t.e) / 2); coastFixed = true;
-          if (shift.moved) { const kx = Math.cos((t.s + t.n) / 2 * Math.PI / 180) * 111320; g.la0 += shift.dy / 111320; g.lo0 += shift.dx / kx; } }
+      if (coarse) { // 거친 자료만: 칸별 해안선 기준 이동량을 부드럽게 이어서 위치만 옮기기
+        try { const sh = await warpByShiftField(g, x, y); coastFixed = true; shift = sh ? { dx: Math.round(sh[0]), dy: Math.round(sh[1]), moved: !!(sh[0] || sh[1]) } : null; }
         catch (_) { coastFixed = false; } }
       out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse, coastFixed, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, // 거친 자료(GEBCO 수준)면 앱에서 흐리게
         grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
@@ -263,7 +304,7 @@ async function depthTile(x, y, opt = {}) {
 // [ADD] 수심 타일을 서버에서 미리 "그림(벡터)"으로 만들어 두기 - 앱은 받은 다각형·선을 그대로 그리기만 해요(계산·로딩 거의 없음)
 //  fills: 수심 0·10·20·30·40·50·60·80·100m 이상 구역 다각형(아래에서부터 겹쳐 칠하면 깊을수록 진해짐, 일러스트처럼 단색 띠)
 //  lines: 10m 간격 등심선, lbl: 30·40·60m 선 위 숫자 후보. 좌표는 [위도, 경도] 소수 5자리. 180일 저장 + CDN 30일
-const FILL_T = [1, 10, 20, 30, 40, 50, 60, 80, 100];
+const FILL_T = [1, 10, 20, 30, 40, 50, 60, 80, 100, 120, 150];
 function clipRing(ring, t) { // Sutherland–Hodgman: 타일 네모 안쪽만
   const edges = [[p => p[0] >= t.s, (a, b) => ix(a, b, 0, t.s)], [p => p[0] <= t.n, (a, b) => ix(a, b, 0, t.n)], [p => p[1] >= t.w, (a, b) => ix(a, b, 1, t.w)], [p => p[1] <= t.e, (a, b) => ix(a, b, 1, t.e)]];
   function ix(a, b, k, v) { const r = (v - a[k]) / (b[k] - a[k]); return k === 0 ? [v, a[1] + (b[1] - a[1]) * r] : [a[0] + (b[0] - a[0]) * r, v]; }
@@ -283,7 +324,7 @@ function thin(pts, tol) { // 가까운 점 빼기(약 2m)
 async function depthVec(x, y) {
   x = parseInt(x, 10); y = parseInt(y, 10);
   const ck = 'dvec:v2:' + x + '_' + y;
-  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && (!('shift' in o) || !o.full || !o.blk))))) return o; } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf))) || (!o.d150 && o.Ln && o.Ln['100']); if (!stale) return o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
   const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return d;
   const t = d.tile;
@@ -309,8 +350,8 @@ async function depthVec(x, y) {
     const lines = {}, lbl = [];
     const P = (r, c) => [laN - r * dla, g.lo0 + c * dlo];
     const keep = (s) => { const la = (s[0][0] + s[1][0]) / 2, lo = (s[0][1] + s[1][1]) / 2; return la >= t.s && la < t.n && lo >= t.w && lo < t.e; };
-    const step = 10; // [CHANGE] 거친 자료도 10m 간격 실선으로(해안선에 맞춰 옮긴 뒤라 쓸 만함)
-    for (let L = step; L <= Math.min(100, maxD); L += step) {
+    // [CHANGE] 등심선: 10~100m는 10m 간격, 그 아래는 120·150m까지
+    for (const L of [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 150].filter(v => v <= maxD)) {
       const lv = L + 0.013, segs = [];
       for (let r = 0; r < R - 1; r++) for (let c = 0; c < C - 1; c++) {
         const v = [V[r * C + c], V[r * C + c + 1], V[(r + 1) * C + c + 1], V[(r + 1) * C + c]], cn = [[r, c], [r, c + 1], [r + 1, c + 1], [r + 1, c]], pts = [];
@@ -325,7 +366,7 @@ async function depthVec(x, y) {
     // 좌표를 타일 안 0~4096 정수로 바꾸고 앞 점과의 차이만 적어서 크기를 4~5배 줄임(앱에서 되돌림)
     const QX = (lo) => Math.round((lo - t.w) / (t.e - t.w) * 4096), QY = (la) => Math.round((t.n - la) / (t.n - t.s) * 4096);
     const enc = (pts) => { const o = []; let px = 0, py = 0; pts.forEach((p, i) => { const x1 = QX(p[1]), y1 = QY(p[0]); if (i && x1 === px && y1 === py) return; o.push(x1 - px, y1 - py); px = x1; py = y1; }); return o; };
-    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, shift: d.shift || null, full: true, blk: true,
+    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, shift: d.shift || null, full: true, sf: true, d150: true,
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
   }

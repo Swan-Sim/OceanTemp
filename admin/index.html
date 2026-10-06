@@ -497,7 +497,7 @@
       ${FIELDS.map(([k, label]) => k === 'lang'
         ? `<label>${label} (최대 5개)</label><div><select class="f" id="edLangAdd"></select><div id="edLangChips" class="chips"></div></div>`
         : k === 'spots'
-        ? `<label>종류</label><select class="f" data-k="type" id="edType"><option value="shop"${!['liveaboard', 'pool'].includes(s.type) ? ' selected' : ''}>다이브샵 (포인트 10곳)</option><option value="liveaboard"${s.type === 'liveaboard' ? ' selected' : ''}>리브어보드 (포인트 20곳)</option><option value="pool"${s.type === 'pool' ? ' selected' : ''}>다이빙 풀장 (지도 위치)</option></select>
+        ? `<label>종류</label><select class="f" data-k="type" id="edType"><option value="shop"${!['liveaboard', 'pool'].includes(s.type) ? ' selected' : ''}>다이브샵 (포인트 20곳)</option><option value="liveaboard"${s.type === 'liveaboard' ? ' selected' : ''}>리브어보드 (포인트 40곳)</option><option value="pool"${s.type === 'pool' ? ' selected' : ''}>다이빙 풀장 (지도 위치)</option></select>
            <div id="edSpotsRow" style="display:contents"><label>${label}</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div></div>
            <div id="edPool" style="display:contents">
              <label>위치(위도, 경도)</label><div class="row"><input class="f" data-k="lat" value="${esc(s.lat ?? '')}" placeholder="위도 37.12345"><input class="f" data-k="lon" value="${esc(s.lon ?? '')}" placeholder="경도 127.12345"></div>

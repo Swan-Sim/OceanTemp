@@ -48,8 +48,8 @@ function whatsapp(v) {
   const n = v.replace(/\D/g, ''); return n.length >= 6 ? `https://wa.me/${n}` : '';
 }
 const email = (v) => { v = str(v, 120).toLowerCase(); return /^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/.test(v) ? v : ''; };
-// [CHANGE] 샵 하나당 포인트: 다이브샵 10곳, 리브어보드 20곳. 언어는 5개까지
-const MAX_SPOTS = 10, MAX_SPOTS_LIVEABOARD = 20, MAX_LANGS = 5;
+// [CHANGE] 샵 하나당 포인트: 다이브샵 20곳, 리브어보드 40곳. 언어는 5개까지
+const MAX_SPOTS = 20, MAX_SPOTS_LIVEABOARD = 40, MAX_LANGS = 5;
 const shopType = (v) => { v = String(v || '').toLowerCase(); return v === 'liveaboard' || v === 'pool' ? v : 'shop'; }; // [ADD] pool = 다이빙 풀장
 const maxSpotsFor = (type) => shopType(type) === 'liveaboard' ? MAX_SPOTS_LIVEABOARD : shopType(type) === 'pool' ? 0 : MAX_SPOTS;
 const spotList = (v, max = MAX_SPOTS) => [...new Set((Array.isArray(v) ? v : String(v || '').split(/[;,\s]+/)).map(Number).filter(n => Number.isInteger(n) && n > 0 && n < 100000))].slice(0, max);

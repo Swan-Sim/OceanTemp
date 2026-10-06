@@ -309,7 +309,7 @@ module.exports = async function handler(req, res) {
     try {
       const D = require('./_depth'), r = await (svc === 'dvec' ? D.depthVec : D.depthTile)(req.query.x, req.query.y);
       if (!r) return res.status(400).json({ ok: false });
-      res.setHeader('Cache-Control', r.ok ? 'public, s-maxage=2592000, max-age=86400' : r.retry ? 'no-store' : 's-maxage=3600');
+      res.setHeader('Cache-Control', r.ok && !r.tmp ? 'public, s-maxage=2592000, max-age=86400' : r.ok ? 'public, s-maxage=600, max-age=300' : r.retry ? 'no-store' : 's-maxage=3600'); // tmp = 해외 위치 보정 실패본(잠깐만 보관 후 다시 시도)
       return res.status(200).json(r);
     } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).replace(/serviceKey=[^&\s]+/g, 'serviceKey=***') }); }
   }

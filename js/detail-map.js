@@ -23,11 +23,22 @@ function showDetailMap(o,a,n=6){if(isDetailMode=!0,document.body.classList.add("
 
 // [ADD] 좌표 찍기 - 위성 지도에서 원하는 곳을 우클릭(휴대폰은 길게 누르기)하면 위도·경도를 보여주고 복사.
 // 한국은 구글·네이버 지도에서 정확한 좌표 얻기가 어려워서, 이 지도(Esri 위성, WGS84 = GPS와 같은 기준)에서 바로 따도록.
+// [CHANGE] 좌표 찍기(GPS 추출)는 관리자 로그인 상태에서만. 관리 페이지에 저장된 비밀번호가 서버에서 맞는지 확인(비밀번호별로 한 번만)
+let __adminChk=null;
+function isAdminLoggedIn(){
+  let pw='';try{const o=JSON.parse(localStorage.getItem('otemp.admin')||'null');if(o&&o.pw&&o.exp>Date.now())pw=o.pw}catch(_){}
+  if(!pw){try{pw=sessionStorage.getItem('adminPw')||''}catch(_){}}
+  if(!pw)return Promise.resolve(false);
+  if(__adminChk&&__adminChk.pw===pw)return __adminChk.p;
+  const p=fetch('/api/stats?svc=settings',{headers:{'x-admin-password':pw}}).then(r=>r.ok).catch(()=>false);
+  __adminChk={pw,p};return p;
+}
 function setupCoordPicker(map){
   const fmt=(v)=>v.toFixed(5);
   const dms=(v,pos,neg)=>{const a=Math.abs(v),d=Math.floor(a),m=Math.floor((a-d)*60),s=((a-d)*60-m)*60;return `${d}°${m}'${s.toFixed(1)}"${v>=0?pos:neg}`};
   let pin=null;
-  map.on('contextmenu',(ev)=>{
+  map.on('contextmenu',async(ev)=>{
+    if(!(await isAdminLoggedIn()))return; // 일반 방문자는 아무 일도 안 일어남
     const la=ev.latlng.lat,lo=L.Util.wrapNum(ev.latlng.lng,[-180,180],!0);
     const txt=`${fmt(la)}, ${fmt(lo)}`;
     if(pin)map.removeLayer(pin);

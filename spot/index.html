@@ -18,7 +18,7 @@
   .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
   #map { height: 360px; border-radius: 10px; border: 1px solid var(--line); }
   .pos { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
-  .pos input { width: 130px; }
+  .pos input { width: 130px; display: none; } body.is-admin .pos input { display: inline-block; } /* [CHANGE] 좌표 숫자는 관리자에게만 보임(일반 방문자는 지도 핀으로만) */
   label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 5px; } label b { color: var(--accent); }
   select { width: 100%; font: inherit; font-size: 15px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; }
   input, textarea { width: 100%; font: inherit; font-size: 15px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; }
@@ -70,13 +70,13 @@
 <script>
 const T = {
   ko: { title: '포인트 등록', lead: '사이트에 없는 포인트를 알려주세요. 운영자가 확인한 뒤 추가해요. 수온·파도·시야는 위성·관측 자료라서 꼭 바다 위 자리를 골라주세요.',
-    pos: '위치', me: '내 위치', posHint: '위성 지도에서 실제로 들어가는 바다 위 자리를 누르세요(확대해서 정확하게). 숫자를 직접 넣어도 돼요.',
+    pos: '위치', me: '내 위치', posHint: '위성 지도에서 실제로 들어가는 바다 위 자리를 누르세요(확대해서 정확하게).', posHintAdmin: '위성 지도에서 실제로 들어가는 바다 위 자리를 누르세요(확대해서 정확하게). 숫자를 직접 넣어도 돼요.',
     name: '포인트 이름', namePh: '예: 제주 문섬', label: '짧은 이름(지도 표시)', labelPh: '예: 문섬', country: '나라', countryAuto: '지도에서 고른 위치로 자동 선택했어요(가까운 포인트 기준). 틀리면 바꿔주세요.', countryBrowser: '브라우저 설정으로 자동 선택했어요. 위치를 고르면 다시 맞춰져요.',
     note: '설명', notePh: '수심, 입수 방법, 특징 등', email: '이메일(선택)', emailHint: '추가되면 알려드릴 수 있어요. 공개되지 않아요.',
     submit: '등록 요청 보내기', adminSubmit: '바로 등록 (관리자)', adminBar: '관리자로 로그인되어 있어요 - 승인 없이 바로 등록되고 하루 한도도 없어요.', adminOk: (n) => `#${n} 등록했어요. 사이트 목록에는 1~2분 안에 보여요.`, viewMap: '지도에서 보기', e_unauthorized: '관리자 로그인이 풀렸어요. 관리 페이지에서 다시 로그인해 주세요.', sending: '보내는 중…', ok: '요청을 보냈어요. 확인 후 사이트에 추가돼요. 고마워요!',
     e_need_name_pos: '이름과 지도 위치를 넣어주세요.', e_too_many: '오늘 보낼 수 있는 제안 수(30곳)를 넘었어요. 내일 다시 보내 주세요.', e_default: '보내지 못했어요. 잠시 후 다시 시도해 주세요.', other: 'English' },
   en: { title: 'Suggest a dive spot', lead: 'Tell us about a dive spot that is missing. We add it after review. Pick a point on the water, since temperature, waves and visibility come from satellite and sea observations.',
-    pos: 'Position', me: 'My location', posHint: 'Tap the exact spot on the water where you dive (zoom in). You can also type coordinates.',
+    pos: 'Position', me: 'My location', posHint: 'Tap the exact spot on the water where you dive (zoom in).', posHintAdmin: 'Tap the exact spot on the water where you dive (zoom in). You can also type coordinates.',
     name: 'Spot name', namePh: 'e.g. Moonseom, Jeju', label: 'Short name (map label)', labelPh: 'e.g. Moonseom', country: 'Country', countryAuto: 'Picked automatically from the map position (nearest spot). Change it if wrong.', countryBrowser: 'Picked from your browser settings. It updates when you choose a position.',
     note: 'Notes', notePh: 'Depth, entry, highlights…', email: 'Email (optional)', emailHint: 'So we can tell you when it is added. Not shown publicly.',
     submit: 'Send suggestion', adminSubmit: 'Add now (admin)', adminBar: 'Signed in as admin - spots are added right away, no review or daily limit.', adminOk: (n) => `Added #${n}. It shows on the site within 1-2 minutes.`, viewMap: 'View on map', e_unauthorized: 'Admin sign-in expired. Sign in again on the admin page.', sending: 'Sending…', ok: 'Sent! We will add it after review. Thank you!',
@@ -158,6 +158,8 @@ function applyAdmin() {
   let bar = $('adminBar'); if (!bar) { bar = document.createElement('div'); bar.id = 'adminBar'; bar.className = 'msg ok'; bar.style.margin = '0 0 14px'; $('f').parentNode.insertBefore(bar, $('f')); }
   bar.textContent = L.adminBar;
   $('catRow').style.display = ''; // 관리자만: 등록 종류 고르기
+  document.body.classList.add('is-admin'); // [ADD] 관리자만 좌표 숫자 보기·입력
+  const ph = document.querySelector('[data-k="posHint"]'); if (ph && L.posHintAdmin) ph.textContent = L.posHintAdmin;
 }
 applyAdmin(); document.addEventListener('click', (e) => { if (e.target && e.target.id === 'langBtn') setTimeout(applyAdmin, 0); });
 

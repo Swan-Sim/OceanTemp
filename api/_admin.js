@@ -251,6 +251,17 @@ module.exports = async function admin(req, res) {
     S.clearSpotsMemo();
     return ok({ no });
   }
+  // [ADD] 관리자 바로 등록(승인 대기 없이, 하루 한도 없음) - /spot/ 화면에서 관리자로 로그인된 상태일 때
+  if (svc === 'spotAdd') {
+    const f = S.spotFields(b);
+    if (!f.name || f.lat == null || f.lon == null) return bad('need_name_pos');
+    const extra = await S.hgetallJSON(K.spots);
+    const no = Math.max(await S.nextSpotNo(S.baseOf(req)), 0, ...Object.keys(extra).map(Number).map(n => n + 1));
+    const spot = { no, ...f, network: 'Beach/user', depth: true, show: true, email: '', created: Date.now() };
+    await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['DEL', 'sp:list']);
+    S.clearSpotsMemo();
+    return ok({ no });
+  }
   if (svc === 'spotReject') { await R(['HDEL', K.spotreq, String(b.reqId)]); return ok(); }
   if (svc === 'spotSave') {
     const no = String(parseInt(b.no, 10));

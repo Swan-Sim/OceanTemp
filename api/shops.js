@@ -247,7 +247,7 @@ module.exports = async function handler(req, res) {
     if (svc === 'spot' && req.method === 'POST') {
       const b = bodyOf(req);
       if (b.website2) return send(res, 200, { ok: true });
-      if (await limited(req, 'spot', 10, 86400)) return send(res, 429, { ok: false, error: 'too_many' });
+      if (await limited(req, 'spot', 30, 86400)) /* [CHANGE] 하루 10 → 30곳(같은 사람 기준) */ return send(res, 429, { ok: false, error: 'too_many' });
       const f = S.spotFields(b);
       if (!f.name || f.lat == null || f.lon == null) return send(res, 400, { ok: false, error: 'need_name_pos' });
       const id = 'p' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');

@@ -98,6 +98,15 @@
         if (searchedStation) {
           selectStation(searchedStation);
           showDetailMap(searchedStation.coords[1], searchedStation.coords[0], SPOT_ZOOM);
+        } else {
+          // [ADD] 포인트 등록 화면의 "← otemp.app"으로 돌아오면(/?lat=..&lon=..&z=..) 보고 있던 지도 자리 그대로 열기
+          try {
+            const q = new URLSearchParams(location.search), la = parseFloat(q.get('lat')), lo = parseFloat(q.get('lon')), z = parseFloat(q.get('z'));
+            if (Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) {
+              showDetailMap(la, lo, Number.isFinite(z) ? Math.max(5, Math.min(18, Math.round(z))) : 15);
+              history.replaceState(null, '', location.pathname); // 주소창은 깔끔하게
+            }
+          } catch (_) {}
         }
 
         // [ADD] "실데이터는 백그라운드로 천천히" - 화면이 이미 다 보이는

@@ -32,7 +32,7 @@ function setupCoordPicker(map){
     const txt=`${fmt(la)}, ${fmt(lo)}`;
     if(pin)map.removeLayer(pin);
     pin=L.circleMarker([la,lo],{radius:5,color:'#fff',weight:2,fillColor:'#ef4444',fillOpacity:1}).addTo(map);
-    const html=`<div class="cp-box"><div class="cp-val">${txt}</div><div class="cp-dms">${dms(la,'N','S')} ${dms(lo,'E','W')}</div><button class="cp-copy" type="button">${t.coordCopy||'복사'}</button><a class="cp-spot" href="/spot/?lat=${fmt(la)}&lon=${fmt(lo)}" target="_blank" rel="noopener">${t.spotHere||'이 위치로 포인트 등록'}</a></div>`;
+    const html=`<div class="cp-box"><div class="cp-val">${txt}</div><div class="cp-dms">${dms(la,'N','S')} ${dms(lo,'E','W')}</div><button class="cp-copy" type="button">${t.coordCopy||'복사'}</button><a class="cp-spot" href="/spot/?lat=${fmt(la)}&lon=${fmt(lo)}&z=${map.getZoom()}" target="_blank" rel="noopener">${t.spotHere||'이 위치로 포인트 등록'}</a></div>`;
     const pop=L.popup({closeButton:!0,autoPan:!0,offset:[0,-4]}).setLatLng([la,lo]).setContent(html).openOn(map);
     pop.once('remove',()=>{if(pin){map.removeLayer(pin);pin=null}});
     setTimeout(()=>{const b=pop.getElement()&&pop.getElement().querySelector('.cp-copy');if(!b)return;

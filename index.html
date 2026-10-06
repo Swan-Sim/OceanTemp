@@ -143,7 +143,7 @@
         <!-- [ADD] 홈 화면에 추가(휴대폰) / 즐겨찾기(컴퓨터) - js/save-app.js -->
         <button class="ctrl-btn" id="btn-save" style="display:none" title="홈 화면에 추가"></button>
         <!-- [ADD] 다이빙 포인트(정점) 등록 요청 - 상세 지도에서 누르면 지금 지도 가운데 좌표를 넘겨줘요 -->
-        <a class="ctrl-btn" id="btn-spot-add" href="/spot/" target="_blank" rel="noopener" title="포인트 등록" onclick="this.href = (typeof isDetailMode !== 'undefined' && isDetailMode && typeof leafletMap !== 'undefined' && leafletMap) ? '/spot/?lat=' + leafletMap.getCenter().lat.toFixed(5) + '&lon=' + leafletMap.getCenter().lng.toFixed(5) : '/spot/'">
+        <a class="ctrl-btn" id="btn-spot-add" href="/spot/" target="_blank" rel="noopener" title="포인트 등록" onclick="this.href = (typeof isDetailMode !== 'undefined' && isDetailMode && typeof leafletMap !== 'undefined' && leafletMap) ? '/spot/?lat=' + leafletMap.getCenter().lat.toFixed(5) + '&lon=' + leafletMap.getCenter().lng.toFixed(5) + '&z=' + leafletMap.getZoom() : '/spot/'">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><path d="M12 7.5v5M9.5 10h5"/></svg>
         </a>
         <!-- [ADD] 커피값 후원 (Buy Me a Coffee) - 주소는 js/i18n-and-input.js의 DONATE_URL -->

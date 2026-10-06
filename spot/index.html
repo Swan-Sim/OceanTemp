@@ -32,7 +32,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><a href="/">← otemp.app</a><a href="#" id="langBtn"></a></div>
+  <div class="top"><a href="/" id="backLink">← otemp.app</a><a href="#" id="langBtn"></a></div>
   <h1 data-k="title"></h1>
   <p class="lead" data-k="lead"></p>
   <form id="f" novalidate>
@@ -91,7 +91,10 @@ applyLang();
 const qs = new URLSearchParams(location.search);
 const lat0 = parseFloat(qs.get('lat')), lon0 = parseFloat(qs.get('lon'));
 const has0 = Number.isFinite(lat0) && Number.isFinite(lon0);
-const map = L.map('map', { attributionControl: true }).setView(has0 ? [lat0, lon0] : [33.3, 126.5], has0 ? 15 : 6);
+const z0 = parseFloat(qs.get('z'));
+const map = L.map('map', { attributionControl: true }).setView(has0 ? [lat0, lon0] : [33.3, 126.5], has0 ? (Number.isFinite(z0) ? Math.max(12, Math.min(18, z0)) : 15) : 6);
+// [ADD] "← otemp.app": 지금 보고 있는 지도 자리(가운데·확대)로 사이트 지도를 열기
+$('backLink').addEventListener('click', () => { if (!has0 && !pin) return; const c = map.getCenter(); $('backLink').href = `/?lat=${c.lat.toFixed(5)}&lon=${c.lng.toFixed(5)}&z=${map.getZoom()}`; });
 map.attributionControl.setPrefix(false);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' }).addTo(map);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Labels © Esri' }).addTo(map);

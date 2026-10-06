@@ -175,6 +175,8 @@ module.exports = async function handler(req, res) {
   // 매일 미리 채우기(refresh=1)용 - 남용 방지로 저장한 지 6시간이 지난 것만 새로 받음
   const force = req.query.refresh === '1' && stored && Date.now() - stored.savedAt > 6 * 3600e3;
   if (stored && !force && Date.now() - stored.savedAt < FRESH_MS) return send(stored.body, 'redis', 21600);
+  // [ADD] 포인트 페이지(서버)용: 저장본이 조금 오래됐어도 바로 돌려줌(새로 받기는 30~50초 걸려서 페이지가 시야 없이 나가던 문제)
+  if (stored && stored.body && stored.body.ok && req.query.fast === '1') return send(stored.body, 'redis-fast', 600);
 
   // 2) NOAA 원본: 저장본이 있으면 최근 며칠만 이어 붙이고, 없으면 30일씩 나눠 처음부터
   try {

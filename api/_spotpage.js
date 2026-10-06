@@ -266,7 +266,7 @@ async function build(st, all) {
     getJSON(`${MARINE}?${ll}&current=sea_surface_temperature,wave_height,wave_period&hourly=sea_surface_temperature,wave_height,wave_period,sea_level_height_msl&forecast_days=3&timezone=auto&cell_selection=sea`),
     getJSON(`${WX}?${ll}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m&hourly=wind_speed_10m,wind_gusts_10m,temperature_2m&wind_speed_unit=ms&forecast_days=3&timezone=auto`),
     near.length ? getJSON(`${MARINE}?latitude=${near.map(x => x.s.lat).join(',')}&longitude=${near.map(x => x.s.lon).join(',')}&current=sea_surface_temperature&cell_selection=sea`) : null,
-    callApi('./visibility', { lat: st.lat.toFixed(3), lon: st.lon.toFixed(3), v: '3' }, 15000), // [CHANGE] 8초 → 15초(처음 계산하는 곳은 오래 걸려서 시야가 비던 문제)
+    callApi('./visibility', { lat: st.lat.toFixed(3), lon: st.lon.toFixed(3), v: '3', fast: '1' }, 15000), // [FIX] fast=1: 오래된 저장본이라도 있으면 바로(갱신은 앱·매일 채우기·페이지 방문자 브라우저가) // [CHANGE] 8초 → 15초(처음 계산하는 곳은 오래 걸려서 시야가 비던 문제)
     obsNow(st)
   ]);
   const d = { at: Date.now(), tz: (mar && mar.timezone) || (wx && wx.timezone) || 'UTC', off: (mar && mar.utc_offset_seconds) || (wx && wx.utc_offset_seconds) || 0 };
@@ -622,7 +622,7 @@ ${tide}${days}${climH}${inland ? '' : depthHtml(lang, depth)}${shopHtml}${nearHt
 <script>(function(){var no=${st.no};document.getElementById('share').onclick=function(){var u=location.href.split('#')[0];if(navigator.share){navigator.share({title:document.title,url:u}).catch(function(){})}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){var x=document.getElementById('toast');x.textContent=${JSON.stringify(t.copied)};x.style.display='block';setTimeout(function(){x.style.display='none'},1600)})}};
 var ids=[].slice.call(document.querySelectorAll('[data-shop]')).map(function(a){return a.getAttribute('data-shop')}).filter(function(v,i,a){return a.indexOf(v)===i});
 try{ids.forEach(function(id){navigator.sendBeacon('/api/shops?svc=imp&id='+encodeURIComponent(id)+'&no='+no)})}catch(e){}
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});})();</script>`;
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
 
   const jsonld = [
     { '@context': 'https://schema.org', '@type': 'TouristAttraction', name: st.name, description, url: base + hrefs[lang],

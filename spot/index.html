@@ -136,9 +136,12 @@ map.on('click', (e) => setPos(e.latlng.lat, e.latlng.lng));
 $('meBtn').onclick = () => navigator.geolocation && navigator.geolocation.getCurrentPosition(p => setPos(p.coords.latitude, p.coords.longitude, true), () => {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
 
 // [ADD] 관리자 로그인 상태(같은 탭의 관리 페이지 비밀번호)면 승인 대기 없이 바로 등록
-const adminPw = (() => { try { return sessionStorage.getItem('adminPw') || ''; } catch (_) { return ''; } })();
+let adminPw = (() => { try { const o = JSON.parse(localStorage.getItem('otemp.admin') || 'null'); if (o && o.pw && o.exp > Date.now()) return o.pw; } catch (_) {} try { return sessionStorage.getItem('adminPw') || ''; } catch (_) { return ''; } })();
+// 저장된 비밀번호가 아직 맞는지 서버에 확인한 뒤에만 관리자 모드로(틀리면 일반 등록 요청)
+let adminOk = false;
+if (adminPw) fetch('/api/stats?svc=settings', { headers: { 'x-admin-password': adminPw } }).then(r => { adminOk = r.ok; if (!r.ok) adminPw = ''; applyAdmin(); }).catch(() => {});
 function applyAdmin() {
-  if (!adminPw) return;
+  if (!adminPw || !adminOk) return;
   const L = T[lang]; $('submitBtn').textContent = L.adminSubmit;
   let bar = $('adminBar'); if (!bar) { bar = document.createElement('div'); bar.id = 'adminBar'; bar.className = 'msg ok'; bar.style.margin = '0 0 14px'; $('f').parentNode.insertBefore(bar, $('f')); }
   bar.textContent = L.adminBar;
@@ -152,15 +155,15 @@ $('f').onsubmit = async (e) => {
   btn.disabled = true; btn.textContent = L.sending; msg.textContent = '';
   let j = {};
   try {
-    const r = adminPw
+    const r = adminPw && adminOk
       ? await fetch('/api/stats?svc=spotAdd', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw }, body: JSON.stringify(body) })
       : await fetch('/api/shops?svc=spot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     j = await r.json(); if (r.status === 401) j = { ok: false, error: 'unauthorized' };
   } catch (_) {}
-  btn.disabled = false; btn.textContent = adminPw ? L.adminSubmit : L.submit;
+  btn.disabled = false; btn.textContent = adminPw && adminOk ? L.adminSubmit : L.submit;
   if (!j.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + j.error] || L.e_default; return; }
   msg.className = 'msg ok';
-  if (adminPw && j.no) { msg.innerHTML = ''; msg.append(L.adminOk(j.no) + ' '); const a = document.createElement('a'); a.href = '/?no=' + j.no; a.target = '_blank'; a.textContent = L.viewMap; msg.append(a); }
+  if (adminPw && adminOk && j.no) { msg.innerHTML = ''; msg.append(L.adminOk(j.no) + ' '); const a = document.createElement('a'); a.href = '/?no=' + j.no; a.target = '_blank'; a.textContent = L.viewMap; msg.append(a); }
   else msg.textContent = L.ok;
   e.target.reset(); renderCountries(); if (pin) { map.removeLayer(pin); pin = null; }
 };

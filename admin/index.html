@@ -110,7 +110,7 @@
       </div>
     </div>
     <div id="secSpots" class="sec" style="display:none">
-      <div class="card"><h2>포인트 바로 등록</h2><a href="/spot/" style="display:inline-block;color:var(--text);border:1px solid rgba(255,176,0,.5);border-radius:999px;padding:6px 14px;text-decoration:none">+ 새 포인트 바로 등록</a><div class="hint">이 탭에서 열면 관리자로 로그인된 상태라 승인 없이 바로 등록되고 하루 한도도 없어요(새 탭으로 열면 일반 등록 요청이 돼요).</div></div>
+      <div class="card"><h2>포인트 바로 등록</h2><a href="/spot/" style="display:inline-block;color:var(--text);border:1px solid rgba(255,176,0,.5);border-radius:999px;padding:6px 14px;text-decoration:none">+ 새 포인트 바로 등록</a><div class="hint">이 브라우저에서 관리자로 로그인해 두면(7일 유지, 로그아웃하면 해제) 사이트 지도의 '포인트 등록' 버튼으로 열어도 승인 없이 바로 등록되고 하루 한도도 없어요.</div></div>
       <div class="card"><h2>승인 대기 (새 포인트)</h2><div id="spotReqs"></div><div class="hint">승인하면 기존 포인트와 겹치지 않는 다음 번호가 자동으로 붙어요. 이름·좌표는 승인 전에 고칠 수 있어요.</div></div>
       <div class="card" id="migrateCard" style="display:none"><h2>구글 시트 → 관리 페이지로 옮기기</h2>
         <p class="muted" style="margin:0 0 10px">지금은 포인트 목록을 아직 구글 시트에서 읽고 있어요. 한 번 옮기면 시트의 모든 포인트가 여기로 복사되고, 그다음부터는 <b>여기서만</b> 추가·수정·숨기기를 해요(시트는 더 안 읽어요). 이미 등록된 번호는 그대로 둬요.</p>
@@ -175,8 +175,10 @@
   $('tzNote').textContent = `시간 기준: ${tz} · 개인정보(IP 등)는 저장하지 않고 국가·도시·시간대별 숫자만 모읍니다`;
   const regionName = (() => { try { const d = new Intl.DisplayNames(['ko'], { type: 'region' }); return (c) => { try { return d.of(c) || c; } catch (_) { return c; } }; } catch (_) { return (c) => c; } })();
   let days = 14;
-  const getPw = () => { try { return sessionStorage.getItem('adminPw') || ''; } catch (_) { return ''; } };
-  const setPw = (v) => { try { v ? sessionStorage.setItem('adminPw', v) : sessionStorage.removeItem('adminPw'); } catch (_) {} };
+  // [CHANGE] 로그인 유지: 이 브라우저의 모든 탭에서 7일(로그아웃하면 바로 지워짐) - 사이트의 '포인트 등록'에서도 관리자로 바로 등록되게
+  const ADMIN_KEY = 'otemp.admin', ADMIN_DAYS = 7;
+  const getPw = () => { try { const o = JSON.parse(localStorage.getItem(ADMIN_KEY) || 'null'); if (o && o.pw && o.exp > Date.now()) return o.pw; localStorage.removeItem(ADMIN_KEY); } catch (_) {} try { return sessionStorage.getItem('adminPw') || ''; } catch (_) { return ''; } };
+  const setPw = (v) => { try { sessionStorage.removeItem('adminPw'); v ? localStorage.setItem(ADMIN_KEY, JSON.stringify({ pw: v, exp: Date.now() + ADMIN_DAYS * 86400000 })) : localStorage.removeItem(ADMIN_KEY); } catch (_) {} };
 
   let shopNames = {};
   fetch('/api/shops').then(r => r.json()).then(j => { (j.shops || []).forEach(s => { shopNames[s.id] = s.name; }); }).catch(() => {});

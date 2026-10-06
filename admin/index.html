@@ -523,7 +523,7 @@
         : k === 'spots'
         ? `<label>종류</label><select class="f" data-k="type" id="edType"><option value="shop"${!['liveaboard', 'pool'].includes(s.type) ? ' selected' : ''}>다이브샵 (포인트 20곳)</option><option value="liveaboard"${s.type === 'liveaboard' ? ' selected' : ''}>리브어보드 (포인트 40곳)</option><option value="pool"${s.type === 'pool' ? ' selected' : ''}>다이빙 풀장 (지도 위치)</option></select>
            <div id="edSpotsRow" style="display:contents"><label>${label}</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div></div>
-           <label>위치(위도, 경도)<div class="muted" style="font-weight:400">풀장 필수 · 샵은 선택</div></label><div class="row"><input class="f" data-k="lat" value="${esc(s.lat ?? '')}" placeholder="위도 37.12345"><input class="f" data-k="lon" value="${esc(s.lon ?? '')}" placeholder="경도 127.12345"></div>
+           <label>위치(위도, 경도)<div class="muted" style="font-weight:400">풀장 필수 · 샵은 선택</div></label><div class="row"><input class="f" data-k="lat" value="${esc(s.lat ?? '')}" placeholder="위도 37.12345"><input class="f" data-k="lon" value="${esc(s.lon ?? '')}" placeholder="경도 127.12345"><button type="button" id="edNear" title="이 위치에서 5km 안 포인트를 연결 목록에 넣어요">근처 포인트 넣기</button><span class="muted" id="edNearMsg" style="align-self:center"></span></div>
            <div id="edPool" style="display:contents">
              <label>최대 수심 · 수온</label><div class="row"><input class="f" data-k="depthMax" value="${esc(s.depthMax ?? '')}" placeholder="최대 수심 m"><input class="f" data-k="waterTemp" value="${esc(s.waterTemp ?? '')}" placeholder="수온 °C"></div>
              <label>실내/실외 · 입장</label><div class="row"><select class="f" data-k="env">${[['', '-'], ['in', '실내'], ['out', '실외'], ['season', '계절 운영']].map(([v, n]) => `<option value="${v}"${(s.env || '') === v ? ' selected' : ''}>${n}</option>`).join('')}</select><select class="f" data-k="entry">${[['', '-'], ['open', '개인 입장 가능'], ['shop', '샵 통해서만']].map(([v, n]) => `<option value="${v}"${(s.entry || '') === v ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
@@ -572,6 +572,24 @@
     sel.innerHTML = `<option value="">${full ? '5개까지 고를 수 있어요' : '+ 언어 추가'}</option>` + OTLists.LANGS.filter(c => !edLangs.includes(c)).map(c => `<option value="${c}">${esc(OTLists.langNative(c))} (${esc(OTLists.langIn(c, OTLists.uiLocale()))})</option>`).join('');
     $('edLangChips').innerHTML = edLangs.map(c => `<span class="chip">${esc(OTLists.langNative(c))}<button type="button" data-rmlang="${c}">×</button></span>`).join('');
   }
+  // [ADD] 샵 위치(GPS)로 근처 포인트 자동 넣기: 5km 안을 가까운 순으로(이미 있는 건 빼고, 한도까지). 위도 칸에 "9.548, 123.752"처럼 붙여 넣어도 돼요
+  function nearSpotsFromGps(auto) {
+    const latEl = $('edNear') && $('edNear').parentNode.querySelector('[data-k="lat"]'), lonEl = $('edNear') && $('edNear').parentNode.querySelector('[data-k="lon"]');
+    if (!latEl || !lonEl) return;
+    const m = latEl.value.match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/); if (m) { latEl.value = m[1]; lonEl.value = m[2]; }
+    const la = parseFloat(latEl.value), lo = parseFloat(lonEl.value), msg = $('edNearMsg');
+    if (!Number.isFinite(la) || !Number.isFinite(lo)) { if (!auto) msg.textContent = '위도·경도를 먼저 넣어주세요'; return; }
+    if ($('edType') && $('edType').value === 'pool') { msg.textContent = ''; return; }
+    const R = 6371, r = Math.PI / 180, km = (s) => 2 * R * Math.asin(Math.sqrt(Math.sin((s.lat - la) * r / 2) ** 2 + Math.cos(la * r) * Math.cos(s.lat * r) * Math.sin((s.lon - lo) * r / 2) ** 2));
+    const mx = $('edType') && $('edType').value === 'liveaboard' ? 40 : 20;
+    const list = (mg.spots || []).filter(s => s.show !== false && Number.isFinite(+s.lat) && Number.isFinite(+s.lon)).map(s => ({ no: +s.no, d: km({ lat: +s.lat, lon: +s.lon }) })).sort((a, b) => a.d - b.d);
+    const near = list.filter(x => x.d <= 5 && !edSpots.includes(x.no));
+    let added = 0; for (const x of near) { if (edSpots.length >= mx) break; edSpots.push(x.no); added++; }
+    renderEdChips();
+    msg.textContent = added ? `${added}곳 넣었어요(5km 안)` : list.length ? `5km 안에 새 포인트가 없어요(가장 가까운 곳 ${list[0].d.toFixed(1)}km)` : '포인트 목록이 없어요';
+  }
+  document.addEventListener('click', (e) => { if (e.target && e.target.id === 'edNear') nearSpotsFromGps(false); });
+  document.addEventListener('change', (e) => { const k = e.target && e.target.dataset && e.target.dataset.k; if ((k === 'lat' || k === 'lon') && $('edNear') && !edSpots.length) nearSpotsFromGps(true); }); // 포인트가 비어 있으면 위치 넣을 때 자동으로
   function renderEdChips() { const c = $('edChips'); if (c) c.innerHTML = edSpots.map(n => `<span class="chip" title="#${n}">${esc(spotNames[n] || '#' + n)}<button type="button" data-rm="${n}">×</button></span>`).join(''); }
   const readEd = (root) => { const o = {}; root.querySelectorAll('[data-k]').forEach(el => { o[el.dataset.k] = el.value; }); return o; };
 

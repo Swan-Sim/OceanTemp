@@ -249,7 +249,7 @@ async function coastLines(b) {
 //  실패해도 조용히 넘어가서 기준점 없이 저장되는 문제가 있었어요). 하나라도 실패하면 오류 → 보정 안 된 그림은 짧게만 보관
 async function areaControls(x, y) {
   const keys = []; for (const j of [-1, 0, 1]) for (const i of [-1, 0, 1]) keys.push([x + i, y + j]);
-  const ck = (k) => `tctl:v2:${k[0]}_${k[1]}`, got = {};
+  const ck = (k) => `tctl:v3:${k[0]}_${k[1]}`, got = {}; // v3 = { c: 기준점, s: 이 칸 근처 해안선 조각 }
   try { const rs = await redisPipeline(keys.map(k => ['GET', ck(k)])); rs.forEach((r, i) => { if (r && r.result) got[i] = JSON.parse(r.result); }); } catch (_) {}
   const miss = keys.map((k, i) => i).filter(i => !got[i]);
   if (miss.length) {
@@ -278,14 +278,44 @@ async function areaControls(x, y) {
         const m = coastShift(Object.assign({}, r.grid), segs);
         if (m) ctl.push({ la: +o.la.toFixed(5), lo: +o.lo.toFixed(5), dx: m.dx, dy: m.dy, n: segs.length });
       });
-      got[i] = ctl; sets.push(['SET', ck(keys[i]), JSON.stringify(ctl), 'EX', String(180 * 86400)]);
+      // 이 칸 근처(약 650m 여유) 해안선 조각도 같이 저장 → 해안선 = 0m 기준으로 쓰기
+      const E = 0.006, inb = (la, lo) => la >= t.s - E && la <= t.n + E && lo >= t.w - E && lo <= t.e + E, sg = [];
+      lines.forEach(l => { for (let k = 1; k < l.length; k++) if (inb(l[k - 1][0], l[k - 1][1]) || inb(l[k][0], l[k][1])) sg.push(q5(l[k - 1][0]), q5(l[k - 1][1]), q5(l[k][0]), q5(l[k][1])); });
+      got[i] = { c: ctl, s: sg }; sets.push(['SET', ck(keys[i]), JSON.stringify(got[i]), 'EX', String(180 * 86400)]);
     });
     try { await redisPipeline(sets); } catch (_) {}
   }
-  return keys.map((k, i) => got[i] || []).flat();
+  const seg4 = (a) => { const o = []; for (let k = 0; k + 3 < (a || []).length; k += 4) o.push([a[k], a[k + 1], a[k + 2], a[k + 3]]); return o; };
+  return { ctl: keys.map((k, i) => (got[i] && got[i].c) || []).flat(), segs: seg4(got[4] && got[4].s) };
+}
+// [ADD] 해안선 = 수심 0m. 거친 자료(약 450m 간격)는 작은 섬 바로 옆이 50m로 뭉개져 있어서, 해안선에서 500m 안쪽만
+//  "해안선 0m ↔ 500m 지점의 원래 수심" 사이를 거리에 비례해 이어 줘요(그 바깥은 원래 값 그대로). 해안선 안쪽(선의 왼쪽)은 육지로.
+const SHORE_W = 500;
+function shoreTaper(g, segs) {
+  if (!segs.length) return 0;
+  const lat0 = g.la0 + (g.rows - 1) * g.dla / 2, kx = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 111320;
+  const S = segs.map(s => [(s[1] - g.lo0) * kx, (s[0] - g.la0) * ky, (s[3] - g.lo0) * kx, (s[2] - g.la0) * ky]);
+  const B = 250, bins = new Map(), key = (a, b) => a + '_' + b;
+  S.forEach((s, i) => { const n = Math.max(1, Math.ceil(Math.hypot(s[2] - s[0], s[3] - s[1]) / (B / 2)));
+    for (let k = 0; k <= n; k++) { const kk = key(Math.floor((s[0] + (s[2] - s[0]) * k / n) / B), Math.floor((s[1] + (s[3] - s[1]) * k / n) / B)); (bins.get(kk) || bins.set(kk, []).get(kk)).push(i); } });
+  let changed = 0;
+  for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) {
+    const px = c * g.dlo * kx, py = r * g.dla * ky, bx = Math.floor(px / B), by = Math.floor(py / B);
+    let best = Infinity, side = 0;
+    for (let ix = bx - 3; ix <= bx + 3; ix++) for (let iy = by - 3; iy <= by + 3; iy++) { const L = bins.get(key(ix, iy)); if (!L) continue;
+      for (const i of L) { const s = S[i], dx = s[2] - s[0], dy = s[3] - s[1], L2 = dx * dx + dy * dy || 1, tt = Math.max(0, Math.min(1, ((px - s[0]) * dx + (py - s[1]) * dy) / L2));
+        const d = Math.hypot(px - s[0] - dx * tt, py - s[1] - dy * tt); if (d < best) { best = d; side = dx * (py - s[1]) - dy * (px - s[0]); } } }
+    if (!(best < SHORE_W)) continue;
+    const i = r * g.cols + c, v = g.z[i];
+    if (side > 0) { if (v == null || v < 0) { g.z[i] = 2; changed++; } continue; } // 육지
+    const f = best / SHORE_W; // 0(해안선) ~ 1(500m)
+    g.z[i] = v == null || v >= 0 ? -Math.max(0.5, 10 * f) : Math.min(-0.5, v * f); changed++;
+  }
+  return changed;
 }
 async function warpByShiftField(g, x, y) {
-  const ctl = await areaControls(x, y); // 실패하면 오류가 위로 전달됨(조용히 넘어가지 않음)
+  const A = await areaControls(x, y), ctl = A.ctl; // 실패하면 오류가 위로 전달됨(조용히 넘어가지 않음)
+  g._segs = A.segs; // 해안선 0m 맞추기에 사용
   if (!ctl.length) return null;
   const kx = Math.cos((g.la0 + g.rows * g.dla / 2) * Math.PI / 180) * 111320, ky = 111320;
   const field = (la, lo) => { let sw = 0, sx = 0, sy = 0;
@@ -328,11 +358,12 @@ async function depthTile(x, y, opt = {}) {
       const g = r.grid; if (!g.z.some(v => v != null && v < 0)) { out = { ok: true, x, y, tile: t, src: r.src, empty: true }; break; } // 바다 없음
       const coarse = r.src === 'gmrt' && !(r.hiFrac >= 0.5);
       let coastFixed;
-      let shift = null;
+      let shift = null, fixErr;
       if (coarse) { // 거친 자료만: 칸별 해안선 기준 이동량을 부드럽게 이어서 위치만 옮기기
-        try { const sh = await warpByShiftField(g, x, y); coastFixed = true; shift = sh ? { dx: Math.round(sh[0]), dy: Math.round(sh[1]), moved: !!(sh[0] || sh[1]) } : null; }
-        catch (_) { coastFixed = false; } }
-      out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse, coastFixed, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, // 거친 자료(GEBCO 수준)면 앱에서 흐리게
+        try { const sh = await warpByShiftField(g, x, y); coastFixed = true; shift = sh ? { dx: Math.round(sh[0]), dy: Math.round(sh[1]), moved: !!(sh[0] || sh[1]) } : null;
+          shoreTaper(g, g._segs || []); delete g._segs; }
+        catch (e) { coastFixed = false; fixErr = String(e && e.message || e).slice(0, 100); } }
+      out = { ok: true, x, y, tile: t, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, coarse, coastFixed, fixErr, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, // 거친 자료(GEBCO 수준)면 앱에서 흐리게
         grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
       break;
     } catch (e) {
@@ -369,7 +400,7 @@ function thin(pts, tol) { // 가까운 점 빼기(약 2m)
 async function depthVec(x, y) {
   x = parseInt(x, 10); y = parseInt(y, 10);
   const ck = 'dvec:v2:' + x + '_' + y;
-  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf3))) || (!o.d150 && o.Ln && o.Ln['100']); if (!stale) return o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf4))) || (!o.d150 && o.Ln && o.Ln['100']); if (!stale) return o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
   const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return d;
   const t = d.tile;
@@ -411,7 +442,7 @@ async function depthVec(x, y) {
     // 좌표를 타일 안 0~4096 정수로 바꾸고 앞 점과의 차이만 적어서 크기를 4~5배 줄임(앱에서 되돌림)
     const QX = (lo) => Math.round((lo - t.w) / (t.e - t.w) * 4096), QY = (la) => Math.round((t.n - la) / (t.n - t.s) * 4096);
     const enc = (pts) => { const o = []; let px = 0, py = 0; pts.forEach((p, i) => { const x1 = QX(p[1]), y1 = QY(p[0]); if (i && x1 === px && y1 === py) return; o.push(x1 - px, y1 - py); px = x1; py = y1; }); return o; };
-    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, shift: d.shift || null, full: true, sf2: true, sf3: true, d150: true, tmp: !!(d.coarse && !d.coastFixed) || undefined,
+    out = { ok: true, v: 2, x, y, tile: t, src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, fixErr: d.fixErr, shift: d.shift || null, full: true, sf2: true, sf3: true, sf4: true, d150: true, tmp: !!(d.coarse && !d.coastFixed) || undefined,
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
   }

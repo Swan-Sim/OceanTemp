@@ -111,7 +111,7 @@
           `<text x="9" y="15" font-size="11" fill="#4ade80" font-weight="800">${ko ? '흐름' : 'Current'}</text>` +
           line(31, '#d9f99d', ko ? '▷ 수면' : '▷ Surface', cs) +
           (c5 ? line(46, '#22c55e', ko ? '▶ 수심 5m' : '▶ 5 m', c5) + line(61, '#15803d', ko ? '▶ 수심 30m' : '▶ 30 m', c30) +
-            `<text x="9" y="73" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬 앞·뒤 약해짐' : 'sheltered, slower') : (ko ? '섬 영향' : 'island effect'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>` : '') + `</g>`;
+            `<text x="9" y="73" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬·해안에 막혀 약해짐' : 'sheltered, slower') : (ko ? '지형 따라 방향 바뀜' : 'steered by terrain'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>` : '') + `</g>`;
       }
       // [CHANGE] 시각을 잘 보이게: 원 아래 진한 알약 모양
       const tw = Math.max(64, timeLabel.length * 9 + 22), isNowLbl = /^(지금|Now)$/.test(timeLabel);

@@ -524,18 +524,39 @@ async function depthCached(lat, lon) {
 async function islandsNear(lat, lon) {
   lat = +(+lat).toFixed(2); lon = +(+lon).toFixed(2); // 약 1km 칸으로 묶어 저장(가까운 정점끼리 같이 씀)
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-  const ck = `isl:v1:${lat}_${lon}`;
+  const ck = `isl:v2:${lat}_${lon}`; // [CHANGE] v2 = 섬 + 본섬·육지 해안선(방파제 포함) 조각(walls)
   try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {}
   const P = 0.035, lines = await coastLines({ s: lat - P, n: lat + P, w: lon - P, e: lon + P });
   const kx = Math.cos(lat * Math.PI / 180) * 111320, ky = 111320, K = (p) => p[0].toFixed(6) + ',' + p[1].toFixed(6);
-  const isl = [];
-  lines.filter(l => l.length >= 4 && K(l[0]) === K(l[l.length - 1])).forEach(l => {
-    let A = 0; for (let i = 0; i < l.length - 1; i++) A += l[i][1] * kx * l[i + 1][0] * ky - l[i + 1][1] * kx * l[i][0] * ky;
-    const r = Math.sqrt(Math.abs(A / 2) / Math.PI); if (!(r >= 15 && r <= 2500)) return; // 바위~큰 섬(본섬·큰 땅은 제외)
-    const step = Math.max(1, Math.floor(l.length / 120));
-    isl.push(l.filter((_, i) => i % step === 0 || i === l.length - 1).map(p => [+p[0].toFixed(5), +p[1].toFixed(5)]));
+  const isl = [], walls = [];
+  // 선 단순화(약 8m 오차까지 점 줄이기) - 방향(왼쪽=육지)은 그대로 유지
+  const simp = (l, tol) => { if (l.length < 3) return l; const keep = new Uint8Array(l.length); keep[0] = keep[l.length - 1] = 1; const st = [[0, l.length - 1]];
+    while (st.length) { const [a, b] = st.pop(); const ax = l[a][1] * kx, ay = l[a][0] * ky, bx = l[b][1] * kx, by = l[b][0] * ky, dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1;
+      let m = -1, mi = -1; for (let i = a + 1; i < b; i++) { const d = Math.abs((l[i][1] * kx - ax) * dy - (l[i][0] * ky - ay) * dx) / L; if (d > m) { m = d; mi = i; } }
+      if (m > tol) { keep[mi] = 1; st.push([a, mi], [mi, b]); } }
+    return l.filter((_, i) => keep[i]); };
+  const inBox = (p) => Math.abs(p[0] - lat) <= P && Math.abs(p[1] - lon) <= P;
+  lines.filter(l => l.length >= 2).forEach(l => {
+    const closed = l.length >= 4 && K(l[0]) === K(l[l.length - 1]);
+    if (closed) {
+      let A = 0; for (let i = 0; i < l.length - 1; i++) A += l[i][1] * kx * l[i + 1][0] * ky - l[i + 1][1] * kx * l[i][0] * ky;
+      const r = Math.sqrt(Math.abs(A / 2) / Math.PI);
+      if (r < 15) return; // 아주 작은 바위는 무시
+      if (r <= 2500) { // 바위~작은 섬: 원기둥 흐름 모델
+        const step = Math.max(1, Math.floor(l.length / 120));
+        isl.push(l.filter((_, i) => i % step === 0 || i === l.length - 1).map(p => [+p[0].toFixed(5), +p[1].toFixed(5)]));
+        return;
+      }
+    }
+    // [ADD] 본섬·육지 해안(방파제·항구 포함): 상자 안 부분만 잘라 "벽"으로. 흐름이 벽을 뚫지 못하고, 둘러싸인 항구 안은 잔잔
+    let run = [];
+    const flush = () => { if (run.length >= 2) walls.push(simp(run, 8).map(p => [+p[0].toFixed(5), +p[1].toFixed(5)])); run = []; };
+    for (let i = 0; i < l.length; i++) { const p = l[i];
+      if (inBox(p)) { if (!run.length && i > 0) run.push(l[i - 1]); run.push(p); }
+      else if (run.length) { run.push(p); flush(); } }
+    flush();
   });
-  const out = { ok: true, lat, lon, islands: isl };
+  const out = { ok: true, lat, lon, islands: isl, walls };
   try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
   return out;
 }

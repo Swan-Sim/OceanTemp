@@ -520,4 +520,23 @@ async function depthCached(lat, lon) {
   try { const [{ result }] = await redisPipeline([['GET', KEY_VER + (+(+lat).toFixed(4)) + '_' + (+(+lon).toFixed(4))]]); if (!result) return null; const o = JSON.parse(result); return o.src === 'gmrt' && !o.sf4 ? null : o; } catch (_) { return null; } // 보정 전 해외 저장본은 없는 셈
 }
 
-module.exports = { depthAt, depthCached, depthTile, depthVec, DTILE_Z, summarize, SRC, _t: { fromKhoa, fromEmodnet, fromNoaa, fromGmrt, gridFromPoints, inKorea, inEmodnet } };
+// [ADD] 정점 주변 섬 모양(흐름 지형 반영용): 반경 약 3km 안 해안선 중 닫힌 것(섬)만, 점 수를 줄여서. 180일 저장
+async function islandsNear(lat, lon) {
+  lat = +(+lat).toFixed(2); lon = +(+lon).toFixed(2); // 약 1km 칸으로 묶어 저장(가까운 정점끼리 같이 씀)
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const ck = `isl:v1:${lat}_${lon}`;
+  try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {}
+  const P = 0.035, lines = await coastLines({ s: lat - P, n: lat + P, w: lon - P, e: lon + P });
+  const kx = Math.cos(lat * Math.PI / 180) * 111320, ky = 111320, K = (p) => p[0].toFixed(6) + ',' + p[1].toFixed(6);
+  const isl = [];
+  lines.filter(l => l.length >= 4 && K(l[0]) === K(l[l.length - 1])).forEach(l => {
+    let A = 0; for (let i = 0; i < l.length - 1; i++) A += l[i][1] * kx * l[i + 1][0] * ky - l[i + 1][1] * kx * l[i][0] * ky;
+    const r = Math.sqrt(Math.abs(A / 2) / Math.PI); if (!(r >= 15 && r <= 2500)) return; // 바위~큰 섬(본섬·큰 땅은 제외)
+    const step = Math.max(1, Math.floor(l.length / 120));
+    isl.push(l.filter((_, i) => i % step === 0 || i === l.length - 1).map(p => [+p[0].toFixed(5), +p[1].toFixed(5)]));
+  });
+  const out = { ok: true, lat, lon, islands: isl };
+  try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
+  return out;
+}
+module.exports = { islandsNear, depthAt, depthCached, depthTile, depthVec, DTILE_Z, summarize, SRC, _t: { fromKhoa, fromEmodnet, fromNoaa, fromGmrt, gridFromPoints, inKorea, inEmodnet } };

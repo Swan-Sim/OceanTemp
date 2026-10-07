@@ -111,7 +111,7 @@
           `<text x="9" y="15" font-size="11" fill="#4ade80" font-weight="800">${ko ? '흐름' : 'Current'}</text>` +
           line(31, '#d9f99d', ko ? '▷ 수면' : '▷ Surface', cs) +
           (c5 ? line(46, '#22c55e', ko ? '▶ 수심 5m' : '▶ 5 m', c5) + line(61, '#15803d', ko ? '▶ 수심 30m' : '▶ 30 m', c30) +
-            `<text x="9" y="73" font-size="8.5" fill="#94a3b8">${ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'}</text>` : '') + `</g>`;
+            `<text x="9" y="73" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬 앞·뒤 약해짐' : 'sheltered, slower') : (ko ? '섬 영향' : 'island effect'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>` : '') + `</g>`;
       }
       // [CHANGE] 시각을 잘 보이게: 원 아래 진한 알약 모양
       const tw = Math.max(64, timeLabel.length * 9 + 22), isNowLbl = /^(지금|Now)$/.test(timeLabel);
@@ -130,10 +130,14 @@
       const map = typeof leafletMap !== 'undefined' ? leafletMap : null;
       const d = st && st._hourlyCache;
       const show = map && typeof isDetailMode !== 'undefined' && isDetailMode && d && (d.wind.length || d.waves.length || (d.current || []).length);
-      if (!show) { if (windDialMarker && map) { map.removeLayer(windDialMarker); } windDialMarker = null; return; }
+      if (!show) { if (windDialMarker && map) { map.removeLayer(windDialMarker); } windDialMarker = null; if (window.currentTerrainField) currentTerrainField(null, null); return; }
       const x = windDialX != null && windDialX >= d.from - 3600e3 && windDialX <= d.to + 3600e3 ? windDialX : d.nowLocalMs;
       const w = windDialNearest(d.wind, x), v = windDialNearest(d.waves, x);
-      const cs = windDialNearest(d.current, x), c5 = windDialCurrentAt(cs, w, st.coords[1], 5), c30 = windDialCurrentAt(cs, w, st.coords[1], 30);
+      const cs0 = windDialNearest(d.current, x);
+      let cs = cs0, c5 = windDialCurrentAt(cs0, w, st.coords[1], 5), c30 = windDialCurrentAt(cs0, w, st.coords[1], 30);
+      // [ADD] 섬 주변 지형 반영(js/current-terrain.js): 정점 자리 흐름을 다시 계산 + 지도에 섬 둘레 흐름 화살표
+      if (window.currentTerrainAdjust) { c5 = currentTerrainAdjust(st, c5); c30 = currentTerrainAdjust(st, c30); cs = currentTerrainAdjust(st, cs0); }
+      if (window.currentTerrainField) currentTerrainField(st, cs0);
       const isNow = Math.abs(x - d.nowLocalMs) < 1.5 * 3600e3;
       const dt = new Date(x), ko = typeof lang !== 'undefined' && lang === 'ko';
       const timeLabel = isNow ? (ko ? '지금' : 'Now') : `${dt.getUTCMonth() + 1}/${dt.getUTCDate()} ${String(dt.getUTCHours()).padStart(2, '0')}:00`;

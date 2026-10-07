@@ -657,3 +657,5 @@ body:not(.detail-mode) .nt-sel { display: none; }
     .sg-lg { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: #94a3b8; padding: 6px 4px 0; border-top: 1px solid rgba(255,255,255,.08); margin-top: 4px; }
     .sg-lg i { width: 9px; height: 9px; border-radius: 50%; margin-left: 6px; } .sg-lg i:first-child { margin-left: 0; }
     .sg-lg i.good { background: #22c55e; } .sg-lg i.ok { background: #facc15; } .sg-lg i.no { background: #ef4444; }
+/* [FIX] 상세 지도(밝은 위성사진)에서 선택 탭 테두리가 배경에 묻히던 것 - 상세 지도일 때만 더 밝은 호박색 */
+body.detail-mode { --tab-line: #C48A14; }

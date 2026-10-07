@@ -299,7 +299,7 @@ module.exports = async function admin(req, res) {
     const no = String(parseInt(b.no, 10));
     const [raw] = await R(['HGET', K.spots, no]);
     if (!raw) return bad('no_spot');
-    const spot = Object.assign(JSON.parse(raw), S.spotFields(Object.assign(JSON.parse(raw), b)), { show: b.show !== false });
+    const spot = Object.assign(JSON.parse(raw), S.spotFields(Object.assign(JSON.parse(raw), b)), { show: b.show !== undefined ? b.show !== false : JSON.parse(raw).show !== false }); // [FIX] 종목만 바꿀 때 숨김 상태 유지
     if (b.network !== undefined) spot.network = S.str(b.network, 40) || spot.network || 'Beach/local'; // [ADD]
     if (b.depth !== undefined) spot.depth = b.depth !== false;
     await R(['HSET', K.spots, no, JSON.stringify(spot)], ['DEL', 'sp:list']);

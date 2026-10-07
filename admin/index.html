@@ -112,7 +112,7 @@
     <div id="secSpots" class="sec" style="display:none">
       <div class="card"><h2>포인트 바로 등록</h2><a href="/spot/" style="display:inline-block;color:var(--text);border:1px solid rgba(255,176,0,.5);border-radius:999px;padding:6px 14px;text-decoration:none">+ 새 포인트 바로 등록</a><div class="hint">이 브라우저에서 관리자로 로그인해 두면(7일 유지, 로그아웃하면 해제) 사이트 지도의 '포인트 등록' 버튼으로 열어도 승인 없이 바로 등록되고 하루 한도도 없어요.</div>
         <details style="margin-top:12px"><summary style="cursor:pointer">여러 개 한 번에 등록</summary>
-          <textarea id="bulkSpots" class="f" rows="8" style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px" placeholder="한 줄에 하나: 이름, 위도, 경도, 짧은이름(선택), 나라(선택), 메모(선택), 종목(선택: dive|surf|wind|paddle|row)&#10;예) Tawala MPA (Panglao), 9.54887, 123.79789, Tawala MPA, Philippines, Reef wall"></textarea>
+          <textarea id="bulkSpots" class="f" rows="8" style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px" placeholder="한 줄에 하나: 이름, 위도, 경도, 짧은이름(선택), 나라(선택), 메모(선택), 종목(선택: dive|surf|wind|paddle|row)&#10;기존 포인트 종목만 바꾸기: @번호, 종목 (예: @5, wind|paddle)&#10;예) Tawala MPA (Panglao), 9.54887, 123.79789, Tawala MPA, Philippines, Reef wall"></textarea>
           <div class="actions" style="margin-top:6px"><button id="khoaScuba" type="button">KHOA 스쿠버 포인트 불러오기</button> <button class="primary" id="bulkGo" type="button">등록</button><span class="muted" id="bulkMsg" style="margin-left:8px"></span></div>
           <div class="hint">이름이 이미 있는 포인트는 건너뛰어요. 좌표는 소수(9.54887) 형식. 쉼표가 들어간 이름은 쓰지 마세요.</div>
         </details></div>
@@ -333,7 +333,12 @@
     const have = new Set(((mg && mg.spots) || []).map(s => String(s.name || '').trim().toLowerCase()));
     let ok = 0, skip = 0, bad = [];
     btn.disabled = true;
+    let upd = 0;
     for (const [i, l] of lines.entries()) {
+      // [ADD] 기존 포인트 종목만 바꾸기: "@번호, 종목" (예: @5, wind|paddle)
+      const um = l.match(/^@(\d+)\s*,\s*([a-z|\s]+)$/i);
+      if (um) { msg.textContent = `${i + 1}/${lines.length} #${um[1]}…`;
+        try { await api('spotSave', { no: um[1], sports: um[2].trim() }); upd++; } catch (_) { bad.push(i + 1); } continue; }
       const [name, la, lo, label, country, note, sports] = l.split(',').map(x => (x || '').trim()); // [ADD] 7번째 칸 = 종목(예: wind|surf, 비우면 다이빙)
       const lat = parseFloat(la), lon = parseFloat(lo);
       if (!name || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) { bad.push(i + 1); continue; }
@@ -342,8 +347,8 @@
       try { await api('spotAdd', { name, lat, lon, label: label || '', country: country || '', note: note || '', sports: sports || '' }); ok++; have.add(name.toLowerCase()); } catch (_) { bad.push(i + 1); }
     }
     btn.disabled = false;
-    msg.textContent = `등록 ${ok} · 이미 있음 ${skip}` + (bad.length ? ` · 실패/형식 오류 줄: ${bad.join(', ')}` : '');
-    if (ok) loadMgmt();
+    msg.textContent = `등록 ${ok} · 종목 변경 ${upd} · 이미 있음 ${skip}` + (bad.length ? ` · 실패/형식 오류 줄: ${bad.join(', ')}` : '');
+    if (ok || upd) loadMgmt();
   });
   function alertMsg(m) { const d = document.createElement('div'); d.className = 'err'; d.textContent = '오류: ' + m; document.querySelector('.nav').after(d); setTimeout(() => d.remove(), 5000); }
   function showSec(name) {

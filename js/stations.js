@@ -112,7 +112,7 @@
           const spots = (j.spots || []).filter(s => s.name && Number.isFinite(+s.lat) && Number.isFinite(+s.lon)).map(s => ({
             country: s.country || '', name: cleanSpotName(s.name), shortName: cleanSpotName(s.label || s.name), lat: +s.lat, lon: +s.lon,
             depth: s.depth !== false, net: s.network || 'Beach/local', no: +s.no || null,
-            sports: Array.isArray(s.sports) && s.sports.length ? s.sports : null, face: Number.isFinite(s.face) ? s.face : null // [ADD] 종목·바다 방향
+            face: Number.isFinite(s.face) ? s.face : null // [ADD] 바다 쪽 방향
           }));
           if (spots.length >= 10) { console.info(`[stations] 관리 목록에서 정점 ${spots.length}곳을 읽었어요`); return spots; }
         } catch (e) { console.warn('[stations] 관리 목록 읽기 실패 - stations.csv로:', e.message); }
@@ -158,7 +158,7 @@
           hasDepth: s.depth,
           network: s.net,
           no: s.no,
-          sports: s.sports || null, face: s.face ?? null
+          face: s.face ?? null
         });
       });
 

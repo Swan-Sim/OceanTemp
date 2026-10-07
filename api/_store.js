@@ -119,20 +119,13 @@ function newToken() { const token = crypto.randomBytes(24).toString('base64url')
 const editUrl = (base, token) => `${base}/shop/#t=${token}`;
 
 // 정점 칸
-// [ADD] 포인트 종목: dive(다이빙)·surf(서핑)·wind(윈드서핑·카이트·윙)·paddle(SUP·카약)·row(조정). 여러 개 가능, 없으면 다이빙
-const SPORTS = ['dive', 'surf', 'wind', 'paddle', 'row'];
-function sportsOf(v) {
-  const a = Array.isArray(v) ? v : String(v || '').split(/[|,/\s]+/);
-  const out = [...new Set(a.map(x => String(x).trim().toLowerCase()).filter(x => SPORTS.includes(x)))];
-  return out.length ? out : null;
-}
 // [ADD] 바다 쪽 방향(°, 북=0). 비우면 해안선으로 자동 계산
 function faceOf(v) { if (v === '' || v == null) return null; const n = +v; return Number.isFinite(n) ? Math.round(((n % 360) + 360) % 360) : null; }
 function spotFields(b) {
   b = b || {};
   const lat = +b.lat, lon = +b.lon;
   return {
-    sports: sportsOf(b.sports), face: faceOf(b.face),
+    face: faceOf(b.face), // [ADD] 바다 쪽 방향(바람 종목 오프쇼어 판단)
     name: str(b.name, 80), label: str(b.label, 30) || str(b.name, 30), country: str(b.country, 40),
     lat: Number.isFinite(lat) && Math.abs(lat) <= 90 ? +lat.toFixed(5) : null,
     lon: Number.isFinite(lon) && Math.abs(lon) <= 180 ? +lon.toFixed(5) : null,
@@ -181,7 +174,7 @@ function normSpot(o) {
   if (!(no > 0) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   return { no, country: str(o.country, 40), name: str(o.name, 80), label: str(o.label, 30) || str(o.name, 30), lat: +lat.toFixed(5), lon: +lon.toFixed(5),
     network: str(o.network, 40) || 'Beach/local', depth: truthy(o.depth, true), show: truthy(o.show, true),
-    sports: sportsOf(o.sports), face: faceOf(o.face) };
+    face: faceOf(o.face) };
 }
 async function legacySpots(base) {
   let text = await getText(STATION_SHEET, 8000);
@@ -243,6 +236,6 @@ async function adminEmail() { const c = await adminCfg(); return c.email || proc
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
-module.exports = { SPORTS, sportsOf, adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, MAX_SPOTS_LIVEABOARD, maxSpotsFor, shopType, shopValid, POOL_USES, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
+module.exports = { adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, MAX_SPOTS_LIVEABOARD, maxSpotsFor, shopType, shopValid, POOL_USES, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
   csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET, BUILTIN_SPOTS,
   allSpots, legacySpots, normSpot, cleanName, spotsMigrated, nextSpotNo, clearSpotsMemo, MIGRATED_KEY };

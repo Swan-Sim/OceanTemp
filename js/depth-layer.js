@@ -43,7 +43,7 @@
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=13`).then(r => r.json()).then(d => {
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=14`).then(r => r.json()).then(d => {
           if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
           else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });

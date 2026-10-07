@@ -38,6 +38,14 @@ async function getText(url, ms) {
   catch (_) { return null; } finally { clearTimeout(tm); }
 }
 // 다른 API 파일(visibility, jmatide, noaa)을 함수 호출로 재사용 - 가짜 res로 결과 JSON만 받아요
+// [FIX] require(변수)는 Vercel이 배포 묶음에 그 파일을 안 넣어서(정적 분석이 못 찾음) 서버에서 늘 실패 → 시야·NOAA 물때가 비던 원인.
+//  파일 이름을 글자 그대로 적은 require로 바꿔서 묶음에 들어가게
+const API_MODS = {
+  './visibility': () => require('./visibility'),
+  './jmatide': () => require('./jmatide'),
+  './noaa': () => require('./noaa'),
+  './spotobs': () => require('./spotobs')
+};
 function callApi(mod, query, ms) {
   return Promise.race([
     new Promise((resolve) => {
@@ -47,7 +55,7 @@ function callApi(mod, query, ms) {
         send(b) { try { resolve(this.statusCode < 400 ? (typeof b === 'string' ? JSON.parse(b) : b) : null); } catch (_) { resolve(null); } },
         end() { resolve(null); }
       };
-      try { Promise.resolve(require(mod)({ method: 'GET', query, headers: {} }, res)).catch(() => resolve(null)); } catch (_) { resolve(null); }
+      try { Promise.resolve((API_MODS[mod] ? API_MODS[mod]() : require(mod))({ method: 'GET', query, headers: {} }, res)).catch((e) => { console.warn('[spotpage] callApi', mod, e && e.message); resolve(null); }); } catch (e) { console.warn('[spotpage] callApi', mod, e && e.message); resolve(null); }
     }),
     new Promise(r => setTimeout(() => r(null), ms || 8000))
   ]);

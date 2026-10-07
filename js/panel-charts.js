@@ -318,6 +318,19 @@
       return t.compass[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
     }
 
+    // [ADD] 칸 시각 값: 딱 맞는 자료(±10분)가 있으면 그것, 없으면 앞뒤 자료로 직선 보간(30분·1시간 칸이 같은 값 반복되지 않게).
+    //  보간한 값은 실측 표시(obs)를 하지 않아요. 앞뒤가 없으면 예전처럼 가장 가까운 값(1시간 반 이내)
+    function valueAtX(arr, x) {
+      if (!arr || !arr.length) return null;
+      let a = null, b = null;
+      for (const p of arr) { if (p.x <= x && (!a || p.x > a.x)) a = p; if (p.x >= x && (!b || p.x < b.x)) b = p; }
+      const near = nearestByX(arr, x);
+      if (near && Math.abs(near.x - x) <= 10 * 60 * 1000) return near;
+      if (!a || !b || a === b || b.x - a.x > 4 * 3600 * 1000) return near;
+      const f = (x - a.x) / (b.x - a.x), o = Object.assign({}, f < 0.5 ? a : b, { x, obs: false });
+      ['y', 'speed', 'gust', 'height', 'swellPeriod'].forEach(k => { if (typeof a[k] === 'number' && typeof b[k] === 'number') o[k] = a[k] + (b[k] - a[k]) * f; });
+      return o;
+    }
     function nearestByX(arr, x) {
       if (!arr || !arr.length) return null;
       let best = arr[0], bd = Math.abs(arr[0].x - x);
@@ -333,7 +346,10 @@
     // 처음엔 "지금" 선이 보이도록 자동 스크롤됩니다.
     // 실데이터가 없을 땐(클릭 전/불러오는 중/실패) 추정값으로 같은 표를 그리고,
     // 맨 위 상태 줄로 실시간 데이터인지 아닌지만 알려줍니다.
-    const NOW_STEP_H = 3, NOW_COL_W = 34;
+    // [CHANGE] 칸 간격 선택(3시간 / 1시간) - 표 머리줄 셀렉트 박스. 고른 값은 이 브라우저에 기억
+    const NOW_STEPS = [3, 1, 0.5]; // [ADD] 30분 간격도
+    let NOW_STEP_H = (() => { try { const v = +localStorage.getItem('otemp.nowStep'); return NOW_STEPS.includes(v) ? v : 3; } catch (_) { return 3; } })();
+    const NOW_COL_W = 34;
 
     // [ADD] "정점명 앞 이모티콘 빼줘" - 이름 앞의 이모지(🤿 등)를 떼고 보여줍니다.
     // [ADD] 정점 이름을 누르면 그 포인트 상세 페이지(/ko/s/번호)로 - 번호 없는 바다 격자 정점은 그냥 글자
@@ -559,7 +575,7 @@
         }).join('');
         // [FIX] "모바일에서 조석 곡선이 너무 얇아 안 보임" - 선을 굵게, 아래 채움을 진하게, 글자를 크고 밝게(굵기는 CSS에서 화면 크기별로)
         // 하루 경계(0시)에 옅은 세로선을 그어 위 칸들과 이어져 보이게
-        const dayLines = cols.filter(x => new Date(x).getUTCHours() === 0).map(x => `<line x1="${(xp(x) - COLW / 2).toFixed(1)}" y1="0" x2="${(xp(x) - COLW / 2).toFixed(1)}" y2="${TH}" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>`).join('');
+        const dayLines = cols.filter(x => new Date(x).getUTCHours() === 0 && new Date(x).getUTCMinutes() === 0).map(x => `<line x1="${(xp(x) - COLW / 2).toFixed(1)}" y1="0" x2="${(xp(x) - COLW / 2).toFixed(1)}" y2="${TH}" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>`).join('');
         tideSvg = `<svg width="${W}" height="${TH}" style="display:block">${dayLines}<path d="${area}" fill="rgba(56,189,248,0.20)"/><path class="tl-line" d="${line}" fill="none" stroke="#38BDF8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>${marks}</svg>`;
       }
 
@@ -572,23 +588,23 @@
       let lastDay = null;
       cols.forEach((x, i) => {
         colIdx = i;
-        const dt = new Date(x), hh = dt.getUTCHours(), day = dt.getUTCDate();
-        const dayEdge = hh === 0 ? 'border-left:1px solid rgba(255,255,255,0.10);' : '';
+        const dt = new Date(x), hh = dt.getUTCHours(), mm = dt.getUTCMinutes(), day = dt.getUTCDate();
+        const dayEdge = hh === 0 && mm === 0 ? 'border-left:1px solid rgba(255,255,255,0.10);' : '';
         rows.date += i === nowCol
           ? cell(`<button class="nt-nowbtn" title="${t.backToNow}">${t.tideNow}</button>`, '')
           : cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:rgba(255,255,255,0.9);font-weight:700;' + dayEdge);
         lastDay = day;
-        rows.time += cell(String(hh).padStart(2, '0'), 'color:#8A94A6;' + dayEdge);
+        rows.time += cell(mm ? `<span style="font-size:8.5px;opacity:.75">:${String(mm).padStart(2, '0')}</span>` : String(hh).padStart(2, '0'), 'color:#8A94A6;' + dayEdge);
 
-        const tp = nearestByX(d.temp, x);
+        const tp = valueAtX(d.temp, x);
         rows.temp += cell(tp ? (tp.obs ? `<span class="nt-obs">${tempVal(tp.y)}</span>` : tempVal(tp.y)) : '–', tp ? 'color:rgba(255,255,255,0.9);font-weight:700;' : 'color:#4B5565;');
 
-        const w = nearestByX(d.wind, x);
+        const w = valueAtX(d.wind, x);
         rows.wind += cell(w ? (w.obs ? `<span class="nt-obs">${Math.round(w.speed)}</span>` : Math.round(w.speed)) : '–', w ? `color:${windColor(w.speed)};font-weight:600;` : 'color:#4B5565;');
         rows.dir += cell(w ? `<span class="nt-dir" style="display:inline-block;transform:rotate(${(w.dir + 180) % 360}deg);color:${w.speed >= 9 ? windColor(w.speed) : '#8A94A6'}">${ARROW_UP_SVG}</span>` : '');
         rows.gust += cell(w && w.gust != null ? Math.round(w.gust) : '', 'color:#5B6474;');
 
-        const wv = nearestByX(d.waves, x);
+        const wv = valueAtX(d.waves, x);
         rows.wave += cell(wv ? (wv.obs ? `<span class="nt-obs">${wv.height.toFixed(1)}</span>` : wv.height.toFixed(1)) : '–', wv ? waveCellStyle(wv.height) : 'color:#4B5565;');
         rows.swell += cell(wv && wv.swellPeriod != null ? Math.round(wv.swellPeriod) + t.sec : '', 'color:#5B6474;');
       });
@@ -617,8 +633,11 @@
       // [ADD] "스크롤로 전날·다음 날로" - 좌우 스크롤 + ◀ ▶ 버튼(하루씩) +
       // 마우스 휠(세로 휠을 가로 이동으로)
       // [CHANGE] 첨부 디자인 반영 - 정점명 옆에 Live, 전날/다음날은 표 양옆 화살표
+      const stepLbl = (h) => h < 1 ? (lang === 'ko' ? '30분' : lang === 'ja' ? '30分' : '30m') : lang === 'ko' ? `${h}시간` : lang === 'ja' ? `${h}時間` : `${h}h`;
+      const stepSel = `<select class="nt-step" aria-label="${lang === 'ko' ? '시간 간격' : lang === 'ja' ? '時間間隔' : 'Interval'}">` +
+        NOW_STEPS.map(h => `<option value="${h}"${h === NOW_STEP_H ? ' selected' : ''}>${stepLbl(h)}</option>`).join('') + `</select>`;
       box.innerHTML = `<div class="nt-head">${titleTag(st, 'nt-title')}` +
-          `<span class="nt-status">${visGaugeHTML(st)}${status}</span></div>` +
+          `<span class="nt-status">${visGaugeHTML(st)}${status}${stepSel}</span></div>` +
         `<div class="nt-frame">` +
           `<button class="nt-arrow" data-dir="-1" aria-label="${t.prevDay}">${CHEVRON_SVG(-1)}</button>` +
           `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
@@ -680,6 +699,14 @@
       // [ADD] "지금" 글자를 누르면 현재 시각 칸이 가운데로 오게
       const nowBtn = box.querySelector('.nt-nowbtn');
       if (nowBtn) nowBtn.addEventListener('click', () => sc.scrollTo({ left: toNow(), behavior: 'smooth' }));
+      // [ADD] 칸 간격 바꾸기: 지금 칸이 가운데 오게 다시 그림
+      const stepEl = box.querySelector('.nt-step');
+      if (stepEl) stepEl.addEventListener('change', () => {
+        NOW_STEP_H = NOW_STEPS.includes(+stepEl.value) ? +stepEl.value : 3;
+        try { localStorage.setItem('otemp.nowStep', String(NOW_STEP_H)); } catch (_) {}
+        box._userScrolled = false; box._lastScroll = null;
+        updateChart();
+      });
       const retry = box.querySelector('.nt-retry');
       if (retry) retry.addEventListener('click', (e) => { e.preventDefault(); st._hourlyState = undefined; updateChart(); });
     }

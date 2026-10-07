@@ -626,3 +626,7 @@ body:not(.detail-mode) .nt-sel { display: none; }
     .sp-card .shop-btns { margin: 8px 0; }
     .sp-card .sp-spots { font-size: 11.5px; color: #94a3b8; line-height: 1.5; margin-bottom: 6px; } .sp-card .sp-spots b { color: #e2e8f0; font-weight: 600; }
     .sp-card .shop-report { font-size: 11px; color: #64748b; }
+
+    /* [ADD] 실시간 현황 칸 간격 선택(3시간/1시간) */
+    .nt-step { margin-left: 8px; background: rgba(255,255,255,0.06); color: var(--ui-muted, #cbd5e1); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; font-size: 11px; padding: 1px 4px; height: 20px; cursor: pointer; vertical-align: middle; }
+    .nt-step option { background: #0f172a; color: #e2e8f0; }

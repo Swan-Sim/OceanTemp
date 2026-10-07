@@ -325,7 +325,7 @@
       let a = null, b = null;
       for (const p of arr) { if (p.x <= x && (!a || p.x > a.x)) a = p; if (p.x >= x && (!b || p.x < b.x)) b = p; }
       const near = nearestByX(arr, x);
-      if (near && Math.abs(near.x - x) <= 10 * 60 * 1000) return near;
+      if (near && Math.abs(near.x - x) <= 2 * 60 * 1000) return near;
       if (!a || !b || a === b || b.x - a.x > 4 * 3600 * 1000) return near;
       const f = (x - a.x) / (b.x - a.x), o = Object.assign({}, f < 0.5 ? a : b, { x, obs: false });
       ['y', 'speed', 'gust', 'height', 'swellPeriod'].forEach(k => { if (typeof a[k] === 'number' && typeof b[k] === 'number') o[k] = a[k] + (b[k] - a[k]) * f; });
@@ -347,8 +347,9 @@
     // 실데이터가 없을 땐(클릭 전/불러오는 중/실패) 추정값으로 같은 표를 그리고,
     // 맨 위 상태 줄로 실시간 데이터인지 아닌지만 알려줍니다.
     // [CHANGE] 칸 간격 선택(3시간 / 1시간) - 표 머리줄 셀렉트 박스. 고른 값은 이 브라우저에 기억
-    const NOW_STEPS = [3, 1, 0.5]; // [ADD] 30분 간격도
-    let NOW_STEP_H = (() => { try { const v = +localStorage.getItem('otemp.nowStep'); return NOW_STEPS.includes(v) ? v : 3; } catch (_) { return 3; } })();
+    // [ADD] 30분·10분 간격도(물때 맞춰 입수 시각 고르기용). 저장은 분 단위
+    const NOW_STEPS = [180, 60, 30, 10];
+    let NOW_STEP_H = (() => { try { const v = +localStorage.getItem('otemp.nowStepMin'); return (NOW_STEPS.includes(v) ? v : 180) / 60; } catch (_) { return 3; } })();
     const NOW_COL_W = 34;
 
     // [ADD] "정점명 앞 이모티콘 빼줘" - 이름 앞의 이모지(🤿 등)를 떼고 보여줍니다.
@@ -528,6 +529,48 @@
     const ARROW_UP_SVG = '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 10.5V1.8M6 1.5 2.6 4.9M6 1.5l3.4 3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     const CHEVRON_SVG = (dir) => `<svg width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="${dir < 0 ? 'M6 1.5 1.8 6 6 10.5' : 'M2 1.5 6.2 6 2 10.5'}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+    // ───────── [ADD] 수상레저 종목(시안 A): 종목별 "탈 만한 시간" 줄 ─────────
+    //  바람 kn, 파고 m, 주기 s, 바람이 불어오는 방향 dir, 바다 쪽 방향 face(모르면 null - 해안 기준 판단 생략)
+    //  기준은 일반적인 값(초중급 기준). good = 좋음, ok = 가능, no = 별로
+    const KN = 1.94384;
+    function windSide(dir, face) { // 해안 기준 바람: on(바다에서) · side · off(육지에서, 떠밀려 나갈 위험)
+      if (face == null || dir == null) return null;
+      const d = Math.abs(((dir - face + 540) % 360) - 180);
+      return d <= 45 ? 'on' : d <= 80 ? 'side-on' : d <= 110 ? 'side' : d <= 140 ? 'side-off' : 'off';
+    }
+    function sportRate(sport, w, wv, face) {
+      if (!w) return null;
+      const kn = w.speed * KN, gk = w.gust != null ? w.gust * KN : kn, side = windSide(w.dir, face);
+      const h = wv && wv.height != null ? wv.height : null, per = wv && wv.swellPeriod != null ? wv.swellPeriod : null;
+      if (sport === 'wind') {
+        if (side === 'off') return 'no';
+        if (kn >= 14 && kn <= 25 && gk <= kn * 1.5 + 2) return 'good';
+        return kn >= 11 && kn <= 30 ? 'ok' : 'no';
+      }
+      if (sport === 'surf') {
+        if (h == null || h < 0.5) return 'no';
+        const clean = kn < 8 || side === 'off' || side === 'side-off';
+        if (h >= 0.9 && h <= 2.5 && (per == null || per >= 10) && clean) return 'good';
+        return h <= 3.2 && (clean || kn < 14) ? 'ok' : 'no';
+      }
+      const hh = h == null ? 0 : h;
+      if (sport === 'paddle') {
+        if (side === 'off' && kn >= 8) return 'no';
+        if (kn <= 8 && hh <= 0.5) return 'good';
+        return kn <= 12 && hh <= 0.9 ? 'ok' : 'no';
+      }
+      if (sport === 'row') {
+        if (kn <= 7 && hh <= 0.3) return 'good';
+        return kn <= 11 && hh <= 0.6 ? 'ok' : 'no';
+      }
+      return null;
+    }
+    const SIDE_TXT = {
+      ko: { on: '온', 'side-on': '사온', side: '사이드', 'side-off': '사오', off: '오프' },
+      en: { on: 'on', 'side-on': 's-on', side: 'side', 'side-off': 's-off', off: 'off' }
+    };
+    window.__onCoastLoaded = (s) => { if (selectedStation && selectedStation._faceWait && activeMode === 'now') { selectedStation._faceWait = false; updateChart(); } };
+
     function renderNowTable(box) {
       const st = selectedStation;
       let d = st._hourlyCache;
@@ -584,7 +627,15 @@
       const nowCol = Math.max(0, Math.min(cols.length - 1, Math.floor((d.nowLocalMs - cols[0] + STEP / 2) / STEP)));
       let colIdx = 0;
       const cell = (html, style) => `<div class="nt-cell${colIdx === nowCol ? ' nt-nowcell' : ''}" style="${style || ''}">${html}</div>`;
-      const rows = { date: '', time: '', temp: '', wind: '', dir: '', gust: '', wave: '', swell: '' };
+      const rows = { date: '', time: '', temp: '', wind: '', dir: '', gust: '', wave: '', swell: '', tideh: '' };
+      const fine = NOW_STEP_H < 1; // 30분·10분: 칸마다 조위(m) 숫자 줄을 더해서 만조·간조 전후 물 높이 변화를 바로 보게
+      // [ADD] 종목(다이빙 말고): 맨 위에 종목별 줄, 바람은 kn, 해안 기준 바람 줄
+      const act = (typeof stationSports === 'function' ? stationSports(st) : ['dive']).filter(k => k !== 'dive');
+      let face = st.face != null ? st.face : null;
+      if (act.length && face == null && typeof coastFace === 'function') { const f0 = coastFace(st); if (f0 === undefined) st._faceWait = true; else face = f0; }
+      const useKn = act.length > 0;
+      act.forEach(k => { rows['sp_' + k] = ''; });
+      if (useKn) rows.side = '';
       let lastDay = null;
       cols.forEach((x, i) => {
         colIdx = i;
@@ -599,14 +650,18 @@
         const tp = valueAtX(d.temp, x);
         rows.temp += cell(tp ? (tp.obs ? `<span class="nt-obs">${tempVal(tp.y)}</span>` : tempVal(tp.y)) : '–', tp ? 'color:rgba(255,255,255,0.9);font-weight:700;' : 'color:#4B5565;');
 
-        const w = valueAtX(d.wind, x);
-        rows.wind += cell(w ? (w.obs ? `<span class="nt-obs">${Math.round(w.speed)}</span>` : Math.round(w.speed)) : '–', w ? `color:${windColor(w.speed)};font-weight:600;` : 'color:#4B5565;');
+        const w = valueAtX(d.wind, x), wvv = valueAtX(d.waves, x);
+        const wsp = (v) => Math.round(useKn ? v * KN : v);
+        rows.wind += cell(w ? (w.obs ? `<span class="nt-obs">${wsp(w.speed)}</span>` : wsp(w.speed)) : '–', w ? `color:${windColor(w.speed)};font-weight:600;` : 'color:#4B5565;');
+        act.forEach(k => { const r = sportRate(k, w, wvv, face); rows['sp_' + k] += cell(r ? `<span class="nt-g ${r}"></span>` : ''); });
+        if (useKn) { const sd = w ? windSide(w.dir, face) : null; rows.side += cell(sd ? `<span style="font-size:8.5px;color:${sd === 'off' ? '#f87171' : sd === 'on' || sd === 'side-on' ? '#93c5fd' : '#cbd5e1'}">${(SIDE_TXT[lang] || SIDE_TXT.en)[sd]}</span>` : ''); }
         rows.dir += cell(w ? `<span class="nt-dir" style="display:inline-block;transform:rotate(${(w.dir + 180) % 360}deg);color:${w.speed >= 9 ? windColor(w.speed) : '#8A94A6'}">${ARROW_UP_SVG}</span>` : '');
-        rows.gust += cell(w && w.gust != null ? Math.round(w.gust) : '', 'color:#5B6474;');
+        rows.gust += cell(w && w.gust != null ? wsp(w.gust) : '', 'color:#5B6474;');
 
         const wv = valueAtX(d.waves, x);
         rows.wave += cell(wv ? (wv.obs ? `<span class="nt-obs">${wv.height.toFixed(1)}</span>` : wv.height.toFixed(1)) : '–', wv ? waveCellStyle(wv.height) : 'color:#4B5565;');
         rows.swell += cell(wv && wv.swellPeriod != null ? Math.round(wv.swellPeriod) + t.sec : '', 'color:#5B6474;');
+        if (fine) { const th = typeof interpAt === 'function' ? interpAt(d.tide, x) : null; rows.tideh += cell(th != null ? th.toFixed(2) : '', 'color:#7DD3FC;font-size:9.5px;'); }
       });
 
       const ROWS = [
@@ -614,6 +669,13 @@
         ['temp', `${t.rowTemp} °${tempUnit}`, 22], ['wind', t.rowWind, 20], ['dir', t.rowDir, 16], ['gust', t.gust, 14],
         ['wave', t.rowWave, 20], ['swell', t.rowSwell, 14]
       ];
+      // [ADD] 종목 줄은 맨 위, 바람 단위 kn, 해안 기준 바람 줄은 방향 아래
+      if (useKn) {
+        ROWS.find(r => r[0] === 'wind')[1] = (t.rowWind || 'Wind m/s').replace(/m\/s/, 'kn');
+        if (face != null) ROWS.splice(ROWS.findIndex(r => r[0] === 'dir') + 1, 0, ['side', lang === 'ko' ? '해안 기준' : lang === 'ja' ? '岸に対して' : 'vs shore', 14]);
+        act.slice().reverse().forEach(k => ROWS.unshift(['sp_' + k, `<span class="lf-sport ${k} nt-spic">${(window.SPORT_SVG || {})[k] || ''}</span>${typeof sportName === 'function' ? sportName(k).split(/[·・]/)[0].trim() : k}`, 16]));
+      }
+      if (fine) ROWS.push(['tideh', lang === 'ko' ? '조위 m' : lang === 'ja' ? '潮位 m' : 'Tide m', 16]);
       const labelCol = `<div class="nt-labels">` +
         ROWS.map(([, l, h]) => `<div style="height:${h}px">${l}</div>`).join('') +
         `<div style="height:${TH}px">${t.rowTide}</div></div>`;
@@ -633,9 +695,9 @@
       // [ADD] "스크롤로 전날·다음 날로" - 좌우 스크롤 + ◀ ▶ 버튼(하루씩) +
       // 마우스 휠(세로 휠을 가로 이동으로)
       // [CHANGE] 첨부 디자인 반영 - 정점명 옆에 Live, 전날/다음날은 표 양옆 화살표
-      const stepLbl = (h) => h < 1 ? (lang === 'ko' ? '30분' : lang === 'ja' ? '30分' : '30m') : lang === 'ko' ? `${h}시간` : lang === 'ja' ? `${h}時間` : `${h}h`;
+      const stepLbl = (m) => m < 60 ? (lang === 'ko' ? `${m}분` : lang === 'ja' ? `${m}分` : `${m}m`) : lang === 'ko' ? `${m / 60}시간` : lang === 'ja' ? `${m / 60}時間` : `${m / 60}h`;
       const stepSel = `<select class="nt-step" aria-label="${lang === 'ko' ? '시간 간격' : lang === 'ja' ? '時間間隔' : 'Interval'}">` +
-        NOW_STEPS.map(h => `<option value="${h}"${h === NOW_STEP_H ? ' selected' : ''}>${stepLbl(h)}</option>`).join('') + `</select>`;
+        NOW_STEPS.map(m => `<option value="${m}"${m === Math.round(NOW_STEP_H * 60) ? ' selected' : ''}>${stepLbl(m)}</option>`).join('') + `</select>`;
       box.innerHTML = `<div class="nt-head">${titleTag(st, 'nt-title')}` +
           `<span class="nt-status">${visGaugeHTML(st)}${status}${stepSel}</span></div>` +
         `<div class="nt-frame">` +
@@ -643,6 +705,7 @@
           `<div class="nt-scroll"><div class="nt-inner">${labelCol}${grid}</div></div>` +
           `<button class="nt-arrow" data-dir="1" aria-label="${t.nextDay}">${CHEVRON_SVG(1)}</button>` +
         `</div>` +
+        (act.length ? `<div class="nt-note nt-splg"><span><i class="nt-g good"></i>${lang === 'ko' ? '좋음' : lang === 'ja' ? '良い' : 'Good'}</span><span><i class="nt-g ok"></i>${lang === 'ko' ? '가능' : lang === 'ja' ? '可' : 'OK'}</span><span><i class="nt-g no"></i>${lang === 'ko' ? '별로' : lang === 'ja' ? '不向き' : 'Poor'}</span>${face == null ? ` · ${lang === 'ko' ? '해안 방향을 몰라 온쇼어·오프쇼어 판단은 빠졌어요' : 'shore direction unknown - on/offshore not checked'}` : ''}</div>` : '') +
         `<div class="nt-note">${d._obs && d._obs.sources.length ? t.obsNote(obsSourceText(d._obs.sources), d._tidePred === 'jma' ? t.tideJmaShort : !!d._tidePred)
           : d._tideJma ? t.tideJma(d._tideJma.name, d._tideJma.dist) : t.tideNote}</div>`;
       const sc = box.querySelector('.nt-scroll');
@@ -702,8 +765,8 @@
       // [ADD] 칸 간격 바꾸기: 지금 칸이 가운데 오게 다시 그림
       const stepEl = box.querySelector('.nt-step');
       if (stepEl) stepEl.addEventListener('change', () => {
-        NOW_STEP_H = NOW_STEPS.includes(+stepEl.value) ? +stepEl.value : 3;
-        try { localStorage.setItem('otemp.nowStep', String(NOW_STEP_H)); } catch (_) {}
+        const m = NOW_STEPS.includes(+stepEl.value) ? +stepEl.value : 180; NOW_STEP_H = m / 60;
+        try { localStorage.setItem('otemp.nowStepMin', String(m)); } catch (_) {}
         box._userScrolled = false; box._lastScroll = null;
         updateChart();
       });

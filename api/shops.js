@@ -8,6 +8,7 @@
 //   POST /api/shops?svc=edit    {t,...}  수정 요청(승인 후 반영)
 //   POST /api/shops?svc=resend  {email}  등록 이메일로 새 수정 링크 보내기
 //   POST /api/shops?svc=spot    {...}    새 정점(다이빙 포인트) 등록 요청
+//   *    /api/shops?svc=auth&a=…          간편 로그인·계정·즐겨찾기 (api/_auth.js)
 const crypto = require('crypto');
 const S = require('./_store');
 const { K, R } = S;
@@ -96,6 +97,7 @@ module.exports = async function handler(req, res) {
   const q = req.query || {};
   const svc = String(q.svc || '');
   try {
+    if (svc === 'auth') return await require('./_auth')(req, res); // [ADD] 간편 로그인·계정·즐겨찾기(api/_auth.js)
     if (svc === 'click') {
       const id = String(q.id || ''), k = String(q.k || ''), no = parseInt(q.no, 10);
       if (/^[\w-]{1,20}$/.test(id) && KINDS.has(k) && !botInfo(req.headers['user-agent'])) { // [CHANGE] 봇 클릭은 안 셈
@@ -124,7 +126,7 @@ module.exports = async function handler(req, res) {
 
     if (svc === 'spots') {
       // [CHANGE] 전체 포인트 목록(관리 페이지에서 관리 · 옮기기 전엔 구글 시트+사용자 등록+기본 포인트). 앱·샵·포인트 등록 페이지가 이걸 읽어요
-      const spots = (await S.allSpots(S.baseOf(req))).map(s => ({ no: s.no, country: s.country, name: s.name, label: s.label, lat: s.lat, lon: s.lon, network: s.network, depth: s.depth }));
+      const spots = (await S.allSpots(S.baseOf(req))).map(s => ({ no: s.no, country: s.country, name: s.name, label: s.label, lat: s.lat, lon: s.lon, network: s.network, depth: s.depth, sports: s.sports || undefined, face: s.face ?? undefined }));
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=86400');
       return res.status(200).json({ ok: true, spots });
     }

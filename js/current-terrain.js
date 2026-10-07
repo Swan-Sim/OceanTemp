@@ -89,7 +89,7 @@
         // 벽에서 바다 쪽으로 향하는 방향(가까운 점 → 내 위치)
         let ox = x - best.px, oy = y - best.py; const ol = Math.hypot(ox, oy);
         if (ol > 0.5) { ox /= ol; oy /= ol; } else { ox = nx; oy = ny; }
-        return { d: best.d, nx: ox, ny: oy, land: side < -0.5 };
+        return { d: best.d, nx: ox, ny: oy, sx: nx, sy: ny, land: side < -0.5 };
       }
       // 한 방향으로 선을 쏴서 처음 막히는 거리(없으면 Infinity)
       function rayHit(x, y, ux, uy, segs, R) {
@@ -149,6 +149,7 @@
           ent.islands = j && j.ok ? (j.islands || []).map(model) : [];
           ent.walls = wallModel(j && j.ok ? (j.walls || []) : [], +st.coords[1].toFixed(2), +st.coords[0].toFixed(2));
           if (typeof windDialUpdate === 'function') windDialUpdate();
+          if (typeof window.__onCoastLoaded === 'function') window.__onCoastLoaded(st);
         }).catch(() => { cache.delete(key); });
         return ent;
       }
@@ -161,6 +162,18 @@
         const W = ent.walls && ent.walls.segs.length ? ent.walls : null;
         return isl.length || W ? { isl, W } : null;
       }
+
+      // [ADD] 포인트의 바다 쪽 방향(°, 북=0) - 가장 가까운 해안선(3km 안)의 바다 쪽. 불러오는 중이면 undefined, 해안선이 없으면(호수 등) null
+      window.coastFace = function (st) {
+        if (!st || !st.coords) return null;
+        const ent = load(st); if (!ent.islands) return undefined;
+        const la = st.coords[1], lo = st.coords[0];
+        let best = null;
+        if (ent.walls && ent.walls.segs.length) { const nw = nearWall(lo * ent.walls.kx, la * ent.walls.ky, ent.walls, 3000); if (nw && nw.d < 3000) best = { d: nw.d, x: nw.sx, y: nw.sy }; }
+        // 작은 섬이 더 가까우면 섬에서 바깥쪽
+        ent.islands.forEach(m => { const x = lo * m.kx - m.cx, y = la * m.ky - m.cy, r = Math.hypot(x, y), d = Math.max(0, r - m.a); if (r > 1 && d < 3000 && (!best || d < best.d)) best = { d, x: x / r, y: y / r }; });
+        return best ? Math.round((Math.atan2(best.x, best.y) * 180 / Math.PI + 360) % 360) : null;
+      };
 
       // 나침반·흐름 상자용: 정점 자리의 흐름을 지형 반영으로 바꿔요. 영향이 없으면 그대로
       window.currentTerrainAdjust = function (st, c) {

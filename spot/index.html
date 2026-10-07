@@ -56,6 +56,9 @@
         <div><label data-k="country"></label><select id="countrySel"></select><input type="hidden" name="country" id="countryVal">
           <div class="hint" id="countryHint"></div></div>
       </div>
+      <!-- [ADD] 종목(여러 개) -->
+      <div id="sportRow" style="margin-top:10px"><label id="sportLbl"></label>
+        <div id="sportBox" style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px"></div></div>
       <label data-k="note"></label><textarea name="note" maxlength="300" data-ph="notePh"></textarea>
       <label data-k="email"></label><input name="email" type="email" autocomplete="email">
       <div class="hint" data-k="emailHint"></div>
@@ -91,7 +94,7 @@ function applyLang() {
   $('langBtn').textContent = L.other;
   if (window.__countryReady) renderCountries();
 }
-$('langBtn').onclick = (e) => { e.preventDefault(); lang = lang === 'ko' ? 'en' : 'ko'; applyLang(); };
+$('langBtn').onclick = (e) => { e.preventDefault(); lang = lang === 'ko' ? 'en' : 'ko'; applyLang(); renderSports(); };
 applyLang();
 
 const qs = new URLSearchParams(location.search);
@@ -170,6 +173,7 @@ function renderShopSpots() {
   const c = cat(), shopLike = c === 'shop' || c === 'liveaboard', ko = lang === 'ko';
   $('shopSpotsBox').style.display = shopLike ? '' : 'none';
   document.querySelectorAll('#f .grid')[0].style.display = c === 'spot' ? '' : 'none'; // 짧은 이름·나라는 포인트만
+  if ($('sportRow')) $('sportRow').style.display = c === 'spot' ? '' : 'none';
   const nm = document.querySelector('[data-k="name"]'); if (nm) nm.textContent = c === 'spot' ? T[lang].name : c === 'pool' ? (ko ? '풀장 이름' : 'Pool name') : (ko ? '샵 이름' : 'Shop name');
   if (!shopLike) return;
   const max = c === 'liveaboard' ? 40 : 20, la = parseFloat($('lat').value), lo = parseFloat($('lon').value);
@@ -181,6 +185,15 @@ function renderShopSpots() {
   $('shopSpots').innerHTML = list.map(({ s, d }) => `<label style="display:flex;gap:8px;align-items:center;margin:4px 0;font-weight:400"><input type="checkbox" value="${s.no}" style="width:auto" ${keep.has(s.no) || (first && d <= 5) ? 'checked' : ''}> ${String(s.name).replace(/[<>&]/g, '')} <span style="opacity:.6;font-size:12px">${d < 1 ? Math.round(d * 1000) + 'm' : d.toFixed(1) + 'km'}</span></label>`).join('');
   $('shopSpotsHint').textContent = ko ? '5km 안 포인트는 미리 체크했어요. 연락처·소개·요금제는 등록 뒤 관리 페이지에서 고칠 수 있어요.' : 'Spots within 5 km are pre-checked. Contacts and plan can be edited in admin later.';
 }
+// [ADD] 종목 체크박스(다이빙이 기본). 주소에 ?sports=wind|surf 로 미리 고를 수 있어요
+const SPORTS = [['dive', '다이빙', 'Diving'], ['surf', '서핑', 'Surfing'], ['wind', '윈드서핑·카이트·윙', 'Windsurf · Kite · Wing'], ['paddle', 'SUP·카약', 'SUP · Kayak'], ['row', '조정', 'Rowing']];
+function renderSports() {
+  const ko = lang === 'ko', pre = (new URLSearchParams(location.search).get('sports') || 'dive').split(/[|,]/);
+  const keep = document.querySelectorAll('#sportBox input').length ? new Set([...document.querySelectorAll('#sportBox input:checked')].map(i => i.value)) : new Set(pre);
+  $('sportLbl').textContent = ko ? '종목 (여러 개 고를 수 있어요)' : 'Activities (choose any)';
+  $('sportBox').innerHTML = SPORTS.map(([k, a, b]) => `<label style="display:inline-flex;gap:5px;align-items:center;margin:0;font-weight:500"><input type="checkbox" value="${k}"${keep.has(k) ? ' checked' : ''} style="width:auto">${ko ? a : b}</label>`).join('');
+}
+renderSports();
 $('catSel').onchange = () => { $('shopSpots').dataset.init = ''; renderShopSpots(); };
 ['lat', 'lon'].forEach(id => $(id).addEventListener('change', () => cat() !== 'spot' && renderShopSpots()));
 window.__catReady = true;
@@ -199,6 +212,7 @@ $('f').onsubmit = async (e) => {
   e.preventDefault();
   const L = T[lang], btn = $('submitBtn'), msg = $('msg');
   const body = Object.fromEntries(new FormData(e.target).entries());
+  body.sports = [...document.querySelectorAll('#sportBox input:checked')].map(i => i.value); // [ADD] 종목
   btn.disabled = true; btn.textContent = L.sending; msg.textContent = '';
   if (cat() !== 'spot') { // 관리자: 샵·리브어보드·풀장 바로 등록
     const a = await adminShopSave(cat()).catch(() => ({ ok: false }));

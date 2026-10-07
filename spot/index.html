@@ -45,7 +45,7 @@
     </div>
     <div class="card" id="catRow" style="display:none">
       <label>등록 종류 / Type</label>
-      <select id="catSel"><option value="spot">다이빙 포인트 · Dive spot</option><option value="shop">다이브샵 · Dive shop</option><option value="liveaboard">리브어보드 · Liveaboard</option><option value="pool">다이빙 풀장 · Dive pool</option></select>
+      <select id="catSel"><option value="spot">포인트 · Spot</option><option value="shop">다이브샵 · Dive shop</option><option value="liveaboard">리브어보드 · Liveaboard</option><option value="pool">다이빙 풀장 · Dive pool</option></select>
       <div id="shopSpotsBox" style="display:none;margin-top:12px"><label id="shopSpotsLbl"></label><div id="shopSpots" style="max-height:220px;overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 10px"></div>
         <div class="hint" id="shopSpotsHint"></div></div>
     </div>
@@ -75,7 +75,7 @@ const T = {
     note: '설명', notePh: '수심, 입수 방법, 특징 등', email: '이메일(선택)', emailHint: '추가되면 알려드릴 수 있어요. 공개되지 않아요.',
     submit: '등록 요청 보내기', adminSubmit: '바로 등록 (관리자)', adminBar: '관리자로 로그인되어 있어요 - 승인 없이 바로 등록되고 하루 한도도 없어요.', adminOk: (n) => `#${n} 등록했어요. 사이트 목록에는 1~2분 안에 보여요.`, viewMap: '지도에서 보기', e_unauthorized: '관리자 로그인이 풀렸어요. 관리 페이지에서 다시 로그인해 주세요.', sending: '보내는 중…', ok: '요청을 보냈어요. 확인 후 사이트에 추가돼요. 고마워요!',
     e_need_name_pos: '이름과 지도 위치를 넣어주세요.', e_too_many: '오늘 보낼 수 있는 제안 수(30곳)를 넘었어요. 내일 다시 보내 주세요.', e_default: '보내지 못했어요. 잠시 후 다시 시도해 주세요.', other: 'English' },
-  en: { title: 'Suggest a dive spot', lead: 'Tell us about a dive spot that is missing. We add it after review. Pick a point on the water, since temperature, waves and visibility come from satellite and sea observations.',
+  en: { title: 'Suggest a spot', lead: 'Tell us about a spot that is missing. We add it after review. Pick a point on the water, since temperature, waves and visibility come from satellite and sea observations.',
     pos: 'Position', me: 'My location', posHint: 'Tap the exact spot on the water where you dive (zoom in).', posHintAdmin: 'Tap the exact spot on the water where you dive (zoom in). You can also type coordinates.',
     name: 'Spot name', namePh: 'e.g. Moonseom, Jeju', label: 'Short name (map label)', labelPh: 'e.g. Moonseom', country: 'Country', countryAuto: 'Picked automatically from the map position (nearest spot). Change it if wrong.', countryBrowser: 'Picked from your browser settings. It updates when you choose a position.',
     note: 'Notes', notePh: 'Depth, entry, highlights…', email: 'Email (optional)', emailHint: 'So we can tell you when it is added. Not shown publicly.',
@@ -173,7 +173,7 @@ function renderShopSpots() {
   const nm = document.querySelector('[data-k="name"]'); if (nm) nm.textContent = c === 'spot' ? T[lang].name : c === 'pool' ? (ko ? '풀장 이름' : 'Pool name') : (ko ? '샵 이름' : 'Shop name');
   if (!shopLike) return;
   const max = c === 'liveaboard' ? 40 : 20, la = parseFloat($('lat').value), lo = parseFloat($('lon').value);
-  $('shopSpotsLbl').textContent = ko ? `연결할 포인트 (가까운 순, 최대 ${max}곳)` : `Linked dive spots (nearest first, up to ${max})`;
+  $('shopSpotsLbl').textContent = ko ? `연결할 포인트 (가까운 순, 최대 ${max}곳)` : `Linked spots (nearest first, up to ${max})`;
   if (!Number.isFinite(la)) { $('shopSpots').innerHTML = ''; $('shopSpotsHint').textContent = ko ? '먼저 지도에서 샵 위치를 찍어주세요.' : 'Pick the shop location on the map first.'; return; }
   const keep = new Set([...document.querySelectorAll('#shopSpots input:checked')].map(i => +i.value));
   const list = knownSpots.filter(s => s.no).map(s => ({ s, d: kmTo(la, lo, s) })).filter(x => x.d <= 60).sort((a, b) => a.d - b.d).slice(0, 60);
@@ -188,7 +188,7 @@ async function adminShopSave(c) {
   const fd = Object.fromEntries(new FormData($('f')).entries()), ko = lang === 'ko';
   const spots = [...document.querySelectorAll('#shopSpots input:checked')].map(i => +i.value);
   const max = c === 'liveaboard' ? 40 : 20;
-  if (c !== 'pool' && !spots.length) return { ok: false, msg: ko ? '연결할 포인트를 하나 이상 골라주세요.' : 'Pick at least one dive spot.' };
+  if (c !== 'pool' && !spots.length) return { ok: false, msg: ko ? '연결할 포인트를 하나 이상 골라주세요.' : 'Pick at least one spot.' };
   if (spots.length > max) return { ok: false, msg: ko ? `포인트는 ${max}곳까지예요.` : `Up to ${max} spots.` };
   const body = { type: c, name: fd.name, note: fd.note, lat: fd.lat, lon: fd.lon, spots: c === 'pool' ? [] : spots, email: fd.email || '', show: true };
   const r = await fetch('/api/stats?svc=shopSave', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw }, body: JSON.stringify(body) });

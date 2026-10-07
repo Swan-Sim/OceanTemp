@@ -77,17 +77,18 @@
         const isl = st && cs && cs.speed > 0 && typeof isDetailMode !== 'undefined' && isDetailMode && map.getZoom() >= 13 ? islandsFor(st) : null;
         if (!isl || !isl.length) { if (map.hasLayer(fieldLayer)) map.removeLayer(fieldLayer); return; }
         if (!map.getPane('curFieldPane')) { const pn = map.createPane('curFieldPane'); pn.style.zIndex = 450; pn.style.pointerEvents = 'none'; }
-        const sz = map.getSize(), step = 34, U = cs.speed;
+        const sz = map.getSize(), step = 46, U = cs.speed; // [CHANGE] 간격 34 → 46px(덜 빽빽하게)
         for (let py = step / 2; py < sz.y; py += step) for (let px = step / 2; px < sz.x; px += step) {
           const ll = map.containerPointToLatLng([px, py]);
-          if (!isl.some(m => Math.hypot(ll.lng * m.kx - m.cx, ll.lat * m.ky - m.cy) < m.a * 3.2)) continue; // 섬 둘레에만
+          const near = Math.min(...isl.map(m => Math.hypot(ll.lng * m.kx - m.cx, ll.lat * m.ky - m.cy) / m.a)); if (near > 3.2) continue; // 섬 둘레에만
+          const op = 0.5 - 0.3 * Math.max(0, Math.min(1, (near - 1.2) / 2)); // [CHANGE] 반투명: 섬 가까이 0.5 → 바깥 0.2로 흐려짐
           const v = flowAt(ll.lat, ll.lng, U, cs.to, isl); if (!v) continue;
           const k = Math.hypot(v[0], v[1]) / U, len = 6 + 20 * Math.min(2, k), ang = Math.atan2(v[0], v[1]);
           const col = k >= 1.4 ? '#fb923c' : k <= 0.5 ? '#94a3b8' : '#a3e635';
           const x2 = px + Math.sin(ang) * len, y2 = py - Math.cos(ang) * len, hx = Math.sin(ang), hy = -Math.cos(ang);
           const P = (x, y) => map.containerPointToLatLng([x, y]);
-          L.polyline([P(px, py), P(x2, y2)], { color: col, weight: 2, opacity: 0.85, interactive: false, pane: 'curFieldPane' }).addTo(fieldLayer);
-          L.polyline([P(x2 - hx * 6 - hy * 4, y2 - hy * 6 + hx * 4), P(x2, y2), P(x2 - hx * 6 + hy * 4, y2 - hy * 6 - hx * 4)], { color: col, weight: 2, opacity: 0.85, interactive: false, pane: 'curFieldPane' }).addTo(fieldLayer);
+          L.polyline([P(px, py), P(x2, y2)], { color: col, weight: 1.5, opacity: op, interactive: false, pane: 'curFieldPane' }).addTo(fieldLayer);
+          L.polyline([P(x2 - hx * 6 - hy * 4, y2 - hy * 6 + hx * 4), P(x2, y2), P(x2 - hx * 6 + hy * 4, y2 - hy * 6 - hx * 4)], { color: col, weight: 1.5, opacity: op, interactive: false, pane: 'curFieldPane' }).addTo(fieldLayer);
         }
         if (!map.hasLayer(fieldLayer)) fieldLayer.addTo(map);
       };

@@ -27,6 +27,18 @@
   ],
   "rewrites": [
     {
+      "source": "/auth/start/:p(google|kakao|naver|facebook)",
+      "destination": "/api/shops?svc=auth&a=start&p=:p"
+    },
+    {
+      "source": "/auth/callback/:p(google|kakao|naver|facebook)",
+      "destination": "/api/shops?svc=auth&a=cb&p=:p"
+    },
+    {
+      "source": "/auth/fb-delete",
+      "destination": "/api/shops?svc=auth&a=fbdelete"
+    },
+    {
       "source": "/:lang(ko|en|ja)/s",
       "destination": "/api/spotobs?svc=index&lang=:lang"
     },
@@ -55,7 +67,7 @@
       "destination": "/api/spotobs?svc=sitemap"
     },
     {
-      "source": "/:name((?!(?:api|admin|shop|terms|spot|s|ko|en|ja|js|css|icons|bg|data|scripts|index|offline|_vercel)(?:/|$))[^/.]+)",
+      "source": "/:name((?!(?:api|admin|shop|terms|privacy|auth|spot|s|ko|en|ja|js|css|icons|bg|data|scripts|index|offline|_vercel)(?:/|$))[^/.]+)",
       "destination": "/api/spotobs?svc=go&name=:name"
     }
   ]

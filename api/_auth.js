@@ -74,7 +74,7 @@ async function fetchJson(url, opt) {
   try {
     const r = await fetch(url, { ...opt, signal: c.signal });
     const text = await r.text(); let j; try { j = JSON.parse(text); } catch (_) { throw new Error(`HTTP ${r.status}`); }
-    if (!r.ok || j.error) throw new Error(`HTTP ${r.status} ${String(j.error_description || (j.error && (j.error.message || j.error)) || '').slice(0, 80)}`);
+    if (!r.ok || j.error) throw new Error(`HTTP ${r.status} ${j.error_code || ''} ${typeof j.error === 'string' ? j.error : ''} ${String(j.error_description || (j.error && j.error.message) || '').slice(0, 80)}`);
     return j;
   } finally { clearTimeout(tm); }
 }
@@ -139,7 +139,11 @@ module.exports = async function auth(req, res) {
     if (q.error || !q.code) return back(next, 'cancelled'); // 사용자가 취소
     if (!state || state !== q.state || sp !== p) return back(next, 'state');
     let prof;
-    try { prof = await P.profile(String(q.code), cbUrl(req, p), state); } catch (e) { console.error('[auth]', p, e.message); return back(next, 'provider'); }
+    try { prof = await P.profile(String(q.code), cbUrl(req, p), state); }
+    catch (e) { console.error('[auth]', p, e.message);
+      // [ADD] 원인 코드만 짧게 같이 돌려줘서(키·토큰 같은 값은 없음) 화면에 보여주기 - 예: KOE010(카카오 Client Secret 불일치), invalid_client
+      const why = (String(e.message).match(/KOE\d{3}|invalid_[a-z_]+|unauthorized_[a-z_]+|redirect_uri_mismatch|HTTP \d{3}/) || [''])[0].replace(' ', '');
+      return back(next + (why ? (next.includes('?') ? '&' : '?') + 'login_why=' + encodeURIComponent(why) : ''), 'provider'); }
     if (!prof || !prof.sub) return back(next, 'provider');
     const key = `${p}:${prof.sub}`;
     const cur = await sessionUid(req); // 이미 로그인한 상태면 이 로그인을 같은 계정에 연결

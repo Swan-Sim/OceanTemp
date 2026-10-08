@@ -50,7 +50,7 @@
   document.head.appendChild(css);
 
   function toast(msg) { let d = document.getElementById('locate-msg'); if (!d) { d = document.createElement('div'); d.id = 'locate-msg'; document.body.appendChild(d); } d.textContent = msg; d.classList.add('show'); clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('show'), 3000); }
-  const here = () => location.pathname + location.search.replace(/([?&])login_error=[^&]*&?/, '$1').replace(/[?&]$/, '');
+  const here = () => location.pathname + location.search.replace(/([?&])login_(error|why)=[^&]*&?/g, '$1').replace(/([?&])login_(error|why)=[^&]*&?/g, '$1').replace(/[?&]$/, '');
   const startUrl = (p) => `/auth/start/${p}?next=${encodeURIComponent(here())}`;
   async function post(a, body) {
     const r = await fetch(`/api/shops?svc=auth&a=${a}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
@@ -122,7 +122,8 @@
     if (typeof selectStation === 'function') { const orig = selectStation; selectStation = function (st, o) { const r = orig.apply(this, arguments); paintStar(); return r; }; }
     // 로그인 실패하고 돌아왔으면 안내
     const m = location.search.match(/[?&]login_error=([a-z_]+)/);
-    if (m) { toast(T.err[m[1]] || T.err.provider); history.replaceState(null, '', here()); }
+    const why = (location.search.match(/[?&]login_why=([A-Za-z0-9_]+)/) || [])[1]; // [ADD] 원인 코드(예: KOE010)
+    if (m) { toast((T.err[m[1]] || T.err.provider) + (why ? ` (${why})` : '')); if (why) console.warn('[login] 실패 원인:', why); history.replaceState(null, '', here()); }
     load();
   });
 })();

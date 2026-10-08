@@ -215,10 +215,11 @@ $('f').onsubmit = async (e) => {
     const r = adminOk
       ? await fetch('/api/stats?svc=spotAdd', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw }, body: JSON.stringify(body) })
       : await fetch('/api/shops?svc=spot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    j = await r.json(); if (r.status === 401) j = { ok: false, error: 'unauthorized' };
-  } catch (_) {}
+    const txt = await r.text(); try { j = JSON.parse(txt); } catch (_) { j = { ok: false, error: 'http_' + r.status }; }
+    if (r.status === 401) j = { ok: false, error: 'unauthorized' };
+  } catch (err) { j = { ok: false, error: 'net ' + (err && err.message || err) }; }
   btn.disabled = false; btn.textContent = adminOk ? L.adminSubmit : L.submit;
-  if (!j.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + j.error] || L.e_default; return; }
+  if (!j.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + j.error] || (L.e_default + (j.error ? ` (${j.error})` : '')); return; }
   msg.className = 'msg ok';
   if (adminOk && j.no) { msg.innerHTML = ''; msg.append(L.adminOk(j.no) + ' '); const a = document.createElement('a'); a.href = '/?no=' + j.no; a.target = '_blank'; a.textContent = L.viewMap; msg.append(a); }
   else msg.textContent = L.ok;

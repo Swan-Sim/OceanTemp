@@ -89,13 +89,16 @@ module.exports = async function admin(req, res) {
     S.clearSpotsMemo();
     return ok({ added, total: list.length });
   }
-  // [ADD] 관리자가 새 포인트를 바로 추가
+  // [ADD] 관리자가 새 포인트를 바로 추가(/admin, /spot 관리자 모드 공용)
+  //  [CHANGE] 시트 이전 여부와 상관없이 등록, 번호는 시트·등록 포인트 모두와 안 겹치게
   if (svc === 'spotAdd') {
-    if (!(await S.spotsMigrated())) return bad('migrate_first');
     const f = S.spotFields(b);
-    if (!f.name || f.lat == null || f.lon == null) return bad('need_name_latlon');
-    const no = await S.nextSpotNo(S.baseOf(req));
-    const spot = { no, ...f, network: S.str(b.network, 40) || 'Beach/local', depth: b.depth !== false, show: b.show !== false, created: Date.now() };
+    if (!f.name || f.lat == null || f.lon == null) return bad('need_name_pos');
+    const extra = await S.hgetallJSON(K.spots);
+    let base0 = 0; try { base0 = await S.nextSpotNo(S.baseOf(req)); } catch (_) {}
+    const nums = [base0, ...Object.keys(extra).map(Number).map(n => n + 1)].filter(Number.isFinite);
+    const no = Math.max(1, ...nums);
+    const spot = { no, ...f, network: S.str(b.network, 40) || 'Beach/local', depth: b.depth !== false, show: b.show !== false && b.show !== 'false', email: '', created: Date.now() };
     await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['DEL', 'sp:list']);
     S.clearSpotsMemo();
     return ok({ no });
@@ -249,17 +252,6 @@ module.exports = async function admin(req, res) {
     const no = Math.max(await S.nextSpotNo(S.baseOf(req)), 0, ...Object.keys(extra).map(Number).map(n => n + 1));
     const spot = { no, ...f, network: 'Beach/user', depth: true, show: true, email: rq.email || '', created: Date.now() };
     await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['HDEL', K.spotreq, rq.id], ['DEL', 'sp:list']);
-    S.clearSpotsMemo();
-    return ok({ no });
-  }
-  // [ADD] 관리자 바로 등록(승인 대기 없이, 하루 한도 없음) - /spot/ 화면에서 관리자로 로그인된 상태일 때
-  if (svc === 'spotAdd') {
-    const f = S.spotFields(b);
-    if (!f.name || f.lat == null || f.lon == null) return bad('need_name_pos');
-    const extra = await S.hgetallJSON(K.spots);
-    const no = Math.max(await S.nextSpotNo(S.baseOf(req)), 0, ...Object.keys(extra).map(Number).map(n => n + 1));
-    const spot = { no, ...f, network: 'Beach/user', depth: true, show: true, email: '', created: Date.now() };
-    await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['DEL', 'sp:list']);
     S.clearSpotsMemo();
     return ok({ no });
   }

@@ -650,7 +650,7 @@ async function depthVec(x, y, opt = {}) {
   const needRaw = opt.fill ? !(await redisPipeline([['EXISTS', RAW_KEY(x, y)]]).then(r => r[0].result).catch(() => 1)) : false;
   let old = null; // 다시 계산이 실패하면(국립해양조사원 하루 한도 등) 예전 그림이라도 보여주기
   const curPf = (await sigFor(tileBox(x, y))).sig;
-  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf8) || (RAW_COARSE && o.coarse && !o.raw))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']) || (!o.empty && !o.ld && !(o.landErr && Date.now() - (o.at || 0) < 600e3)); let stale2 = stale;
+  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf8) || (RAW_COARSE && o.coarse && !o.raw))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']) || ((!o.empty && !o.ld || (o.Ld && !o.ld2)) && !(o.landErr && Date.now() - (o.at || 0) < 600e3)); let stale2 = stale;
     // [ADD] 2·5m 얕은 등심선 추가 전 저장본: 10m보다 얕은 곳이 있고 원본 격자가 저장돼 있을 때만 다시 그림(외부 서버 다시 안 부르게)
     if (!stale2 && !o.sh5 && o.F && o.F.some(f => f[0] === 1)) { try { const [{ result: ex }] = await redisPipeline([['EXISTS', RAW_KEY(x, y)]]); if (ex) stale2 = true; } catch (_) {} }
     if (!stale2) return o; old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
@@ -699,7 +699,19 @@ async function depthVec(x, y, opt = {}) {
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
     // [ADD] 섬·바위 육지(수심 위에 덮어 그림). 해안선 서버 실패 시 표시 없이 짧게만 저장해 곧 다시 시도
-    try { const ld = await landFor(x, y, t); out.ld = true; if (ld.r.length) out.Ld = ld.r.map(enc).filter(a => a.length >= 6); }
+    // [FIX] 정밀 수심 자료(해양조사원·NOAA·EMODnet)가 그 자리를 깊은 바다(3m 넘게)로 보면 OSM 섬 모양이 어긋난 것 → 덮지 않음
+    //  (OSM 해안선이 위성사진·수심과 100m가량 밀려 있는 곳에서, 실제 섬은 바다로 보이고 바다에 육지가 덮이던 문제). 거친 자료(GMRT)는 OSM이 기준이라 그대로.
+    const ringOk = (ring) => {
+      if (d.src === 'gmrt') return true;
+      let s0 = Infinity, n0 = -Infinity, w0 = Infinity, e0 = -Infinity; ring.forEach(p => { s0 = Math.min(s0, p[0]); n0 = Math.max(n0, p[0]); w0 = Math.min(w0, p[1]); e0 = Math.max(e0, p[1]); });
+      const inR = (la, lo) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a[0] > la) !== (b[0] > la) && lo < (b[1] - a[1]) * (la - a[0]) / (b[0] - a[0]) + a[1]) c = !c; } return c; };
+      let tot = 0, deep = 0;
+      const r0 = Math.max(0, Math.floor((s0 - g.la0) / g.dla)), r1 = Math.min(g.rows - 1, Math.ceil((n0 - g.la0) / g.dla)), c0 = Math.max(0, Math.floor((w0 - g.lo0) / g.dlo)), c1 = Math.min(g.cols - 1, Math.ceil((e0 - g.lo0) / g.dlo));
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { if (!inR(g.la0 + r * g.dla, g.lo0 + c * g.dlo)) continue; tot++; const v = g.z[r * g.cols + c]; if (v != null && v < -3) deep++; }
+      if (!tot) { const la = (s0 + n0) / 2, lo = (w0 + e0) / 2, r = Math.round((la - g.la0) / g.dla), c = Math.round((lo - g.lo0) / g.dlo); if (r < 0 || c < 0 || r >= g.rows || c >= g.cols) return true; const v = g.z[r * g.cols + c]; return !(v != null && v < -3); }
+      return deep / tot <= 0.6;
+    };
+    try { const ld = await landFor(x, y, t); out.ld = true; out.ld2 = true; const rs = ld.r.filter(ringOk); if (rs.length) out.Ld = rs.map(enc).filter(a => a.length >= 6); }
     catch (_) { out.landErr = true; out.tmp = true; }
     out.at = Date.now();
   }

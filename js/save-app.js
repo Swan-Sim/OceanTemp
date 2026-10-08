@@ -19,8 +19,10 @@
 
       const ICON_HOME = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 9v6M9 12h6"/></svg>';
       const ICON_STAR = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>';
-      btn.innerHTML = isMobile ? ICON_HOME : ICON_STAR;
-      btn.title = isMobile ? (ko ? '홈 화면에 추가' : 'Add to Home Screen') : (ko ? '즐겨찾기' : 'Bookmark');
+      // [CHANGE] 컴퓨터에서도 별 대신 "설치" 아이콘 - 별(☆)은 포인트 즐겨찾기(로그인) 버튼과 헷갈려서
+      const ICON_INSTALL = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11M7.5 9.5 12 14l4.5-4.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>';
+      btn.innerHTML = isMobile ? ICON_HOME : ICON_INSTALL;
+      btn.title = isMobile ? (ko ? '홈 화면에 추가' : 'Add to Home Screen') : (ko ? '앱으로 설치 · 브라우저 북마크' : 'Install app · Bookmark site');
       btn.style.display = '';
 
       const SHARE = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#7dd3fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"/></svg>';

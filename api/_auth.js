@@ -26,6 +26,7 @@
 const crypto = require('crypto');
 const S = require('./_store');
 const { R } = S;
+const C = require('./_credits');
 
 const SESSION_DAYS = 60;
 const PROVIDERS = {
@@ -95,12 +96,14 @@ async function sessionUid(req) {
   try { const [uid] = await R(['GET', 'sess:' + sha(t)]); return uid || null; } catch (_) { return null; }
 }
 async function getUser(uid) { const [raw] = await R(['HGET', 'users:v1', uid]); try { return raw ? JSON.parse(raw) : null; } catch (_) { return null; } }
-const publicUser = (u) => u && { id: u.id, name: u.name || '', avatar: u.avatar || '', providers: (u.logins || []).map(l => l.p), created: u.created };
+const publicUser = (u) => u && { id: u.id, name: u.name || '', avatar: u.avatar || '', providers: (u.logins || []).map(l => l.p), created: u.created, role: u.role === 'admin' ? 'admin' : '' };
+// [ADD] 관리자 확인(로그인 세션 기준) - api/stats.js가 /admin 접근을 허용할 때 써요
+async function isAdminReq(req) { const uid = await sessionUid(req); if (!uid) return false; const u = await getUser(uid); return !!(u && u.role === 'admin' && !u.blocked); }
 
 async function deleteUser(uid) {
   const u = await getUser(uid);
   const [sessions] = await R(['SMEMBERS', 'usess:' + uid]);
-  const cmds = [['HDEL', 'users:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid]];
+  const cmds = [['HDEL', 'users:v1', uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid]];
   (sessions || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));
   ((u && u.logins) || []).forEach(l => cmds.push(['HDEL', 'uidx:v1', `${l.p}:${l.sub}`]));
   await R(...cmds);
@@ -164,7 +167,11 @@ module.exports = async function auth(req, res) {
         if (favs && favs.length) cmds.push(['SADD', 'ufav:' + cur, ...favs.map(String)]);
         (user.logins || []).forEach(l => cmds.push(['HSET', 'uidx:v1', `${l.p}:${l.sub}`, cur]));
         (sess || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));
-        cmds.push(['HSET', 'users:v1', cur, JSON.stringify(curUser)], ['HDEL', 'users:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid]);
+        const [oc, op, cp] = await R(['HGET', 'ucred:v1', uid], ['HGET', 'uprefs:v1', uid], ['HGET', 'uprefs:v1', cur]);
+        if (+oc > 0) cmds.push(['HINCRBY', 'ucred:v1', cur, Math.floor(+oc)]);
+        if (op && !cp) cmds.push(['HSET', 'uprefs:v1', cur, op]);
+        if (user.role === 'admin') curUser.role = 'admin';
+        cmds.push(['HSET', 'users:v1', cur, JSON.stringify(curUser)], ['HDEL', 'users:v1', uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid]);
         await R(...cmds);
         uid = cur; user = curUser;
       }
@@ -180,6 +187,7 @@ module.exports = async function auth(req, res) {
     const token = crypto.randomBytes(32).toString('base64url'), h = sha(token);
     await R(['HSET', 'users:v1', uid, JSON.stringify(user)], ['HSET', 'uidx:v1', key, uid],
       ['SET', 'sess:' + h, uid, 'EX', String(SESSION_DAYS * 86400)], ['SADD', 'usess:' + uid, h], ['EXPIRE', 'usess:' + uid, String(SESSION_DAYS * 86400)]);
+    await C.award(R, uid, 'login'); // 하루 첫 로그인 크레딧
     res.setHeader('Set-Cookie', [cookie('ot_st', '', 0), cookie('ot_s', token, SESSION_DAYS * 86400)]);
     return back(next);
   }
@@ -190,7 +198,9 @@ module.exports = async function auth(req, res) {
     const user = uid ? await getUser(uid) : null;
     if (!user) return json(200, { ok: true, user: null, providers: on });
     const [favs] = await R(['SMEMBERS', 'ufav:' + uid]);
-    return json(200, { ok: true, user: publicUser(user), favs: (favs || []).map(Number).filter(Boolean), providers: on });
+    const [cr, pf] = await R(['HGET', 'ucred:v1', uid], ['HGET', 'uprefs:v1', uid]);
+    let prefs = {}; try { prefs = pf ? JSON.parse(pf) : {}; } catch (_) {}
+    return json(200, { ok: true, user: { ...publicUser(user), ...C.info(cr) }, prefs, favs: (favs || []).map(Number).filter(Boolean), providers: on });
   }
 
   if (a === 'fbdelete' && req.method === 'POST') { // 메타 → 이 사용자 데이터 지워달라는 요청
@@ -216,8 +226,18 @@ module.exports = async function auth(req, res) {
   if (a === 'fav') {
     const no = parseInt(b.no, 10); if (!(no > 0 && no < 100000)) return json(400, { ok: false, error: 'bad_no' });
     if (b.on === false) await R(['SREM', 'ufav:' + uid, String(no)]);
-    else { const [n] = await R(['SCARD', 'ufav:' + uid]); if (n >= 300) return json(400, { ok: false, error: 'too_many' }); await R(['SADD', 'ufav:' + uid, String(no)]); }
+    else { const [n] = await R(['SCARD', 'ufav:' + uid]); if (n >= 300) return json(400, { ok: false, error: 'too_many' }); await R(['SADD', 'ufav:' + uid, String(no)]);
+      const [firstTime] = await R(['SADD', 'ufavseen:' + uid, String(no)]); if (firstTime) await C.award(R, uid, 'fav'); } // 처음 즐겨찾기하는 포인트만 크레딧
     return json(200, { ok: true });
+  }
+  // [ADD] 설정 저장: 온도 단위, 언어, 마지막으로 본 포인트 - 계정에 저장해서 다른 기기에서도 이어서 써요
+  if (a === 'prefs') {
+    const [pf] = await R(['HGET', 'uprefs:v1', uid]); let cur = {}; try { cur = pf ? JSON.parse(pf) : {}; } catch (_) {}
+    if (b.unit === 'C' || b.unit === 'F') cur.unit = b.unit;
+    if (['ko', 'en', 'ja'].includes(b.lang)) cur.lang = b.lang;
+    if (b.last && typeof b.last === 'object') { const no = parseInt(b.last.no, 10); if (no > 0 && no < 100000) cur.last = { no, at: Date.now() }; }
+    await R(['HSET', 'uprefs:v1', uid, JSON.stringify(cur)]);
+    return json(200, { ok: true, prefs: cur });
   }
   if (a === 'delete') {
     await deleteUser(uid);
@@ -226,3 +246,4 @@ module.exports = async function auth(req, res) {
   }
   return json(400, { ok: false, error: 'unknown' });
 };
+module.exports.isAdminReq = isAdminReq;

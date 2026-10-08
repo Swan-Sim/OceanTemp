@@ -1,6 +1,7 @@
 // [ADD] 관리 페이지(/admin)의 샵·정점 관리 동작. api/stats.js가 비밀번호를 확인한 뒤에만 불러요.
 const S = require('./_store');
 const { K, R } = S;
+const C = require('./_credits');
 
 const bodyOf = (req) => { let b = req.body; if (typeof b === 'string') { try { b = JSON.parse(b); } catch (_) { b = {}; } } return b || {}; };
 const ym = () => new Date().toISOString().slice(0, 7);
@@ -313,12 +314,14 @@ module.exports = async function admin(req, res) {
     const users = Object.values(await S.hgetallJSON('users:v1')).filter(u => u && u.id);
     const favRes = users.length ? await R(...users.map(u => ['SMEMBERS', 'ufav:' + u.id])) : [];
     const favOf = {}; users.forEach((u, i) => { favOf[u.id] = Array.isArray(favRes[i]) ? favRes[i] : []; });
+    const crMap = await S.hgetallJSON('ucred:v1').catch(() => ({})); // uid → 크레딧
+    const crOf = (id) => Math.max(0, parseInt(crMap[id], 10) || 0);
     const now = Date.now(), D = 86400000;
     const byProvider = {}, rank = {};
     users.forEach(u => { (u.logins || []).forEach(l => { byProvider[l.p] = (byProvider[l.p] || 0) + 1; }); favOf[u.id].forEach(no => { rank[no] = (rank[no] || 0) + 1; }); });
     const stats = { total: users.length, new7: users.filter(u => now - (u.created || 0) < 7 * D).length, new30: users.filter(u => now - (u.created || 0) < 30 * D).length,
       active30: users.filter(u => now - (u.last || 0) < 30 * D).length, blocked: users.filter(u => u.blocked).length, byProvider,
-      withFav: users.filter(u => favOf[u.id].length).length };
+      withFav: users.filter(u => favOf[u.id].length).length, admins: users.filter(u => u.role === 'admin').length };
     const topFavs = Object.entries(rank).sort((a, z) => z[1] - a[1]).slice(0, 15).map(([no, n]) => ({ no: +no, n }));
     const q = String(b.q || '').trim().toLowerCase();
     let list = users.filter(u => !q || String(u.name || '').toLowerCase().includes(q) || String(u.email || '').toLowerCase().includes(q) || String(u.id) === String(b.q).trim());
@@ -326,14 +329,15 @@ module.exports = async function admin(req, res) {
     const total = list.length, per = 50, page = Math.max(0, parseInt(b.page, 10) || 0);
     const mask = (e) => { e = String(e || ''); const i = e.indexOf('@'); return i < 1 ? '' : e.slice(0, Math.min(2, i)) + '***' + e.slice(i); }; // 목록에는 이메일 일부만(개인정보)
     const items = list.slice(page * per, page * per + per).map(u => ({ id: u.id, name: u.name || '', avatar: u.avatar || '', email: mask(u.email), created: u.created || 0, last: u.last || 0,
-      providers: (u.logins || []).map(l => l.p), favCount: favOf[u.id].length, favs: favOf[u.id].map(Number).filter(Boolean).slice(0, 30), blocked: !!u.blocked }));
+      providers: (u.logins || []).map(l => l.p), favCount: favOf[u.id].length, favs: favOf[u.id].map(Number).filter(Boolean).slice(0, 30), blocked: !!u.blocked,
+      role: u.role === 'admin' ? 'admin' : '', credits: crOf(u.id), level: C.info(crOf(u.id)).level }));
     return ok({ stats, topFavs, items, total, page, per });
   }
   // 회원 삭제(계정·즐겨찾기·로그인 연결·세션 모두)
   const dropUser = async (uid) => {
     const [raw] = await R(['HGET', 'users:v1', uid]); let u = null; try { u = raw ? JSON.parse(raw) : null; } catch (_) {}
     const [sessions] = await R(['SMEMBERS', 'usess:' + uid]);
-    const cmds = [['HDEL', 'users:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid]];
+    const cmds = [['HDEL', 'users:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid]];
     (sessions || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));
     ((u && u.logins) || []).forEach(l => cmds.push(['HDEL', 'uidx:v1', `${l.p}:${l.sub}`]));
     await R(...cmds); return u;
@@ -350,6 +354,24 @@ module.exports = async function admin(req, res) {
     if (u.blocked) { const [sessions] = await R(['SMEMBERS', 'usess:' + id]); (sessions || []).forEach(h => cmds.push(['DEL', 'sess:' + h])); cmds.push(['DEL', 'usess:' + id]); }
     await R(...cmds); return ok({ blocked: u.blocked });
   }
+  // 관리자 권한 주기/빼기 (마지막 관리자는 못 뺌)
+  if (svc === 'userRole') {
+    const id = String(b.id || ''), [raw] = await R(['HGET', 'users:v1', id]); if (!raw) return bad('not_found');
+    const u = JSON.parse(raw), on = b.role === 'admin';
+    if (!on && u.role === 'admin') {
+      const admins = Object.values(await S.hgetallJSON('users:v1')).filter(x => x && x.role === 'admin');
+      if (admins.length <= 1) return bad('last_admin');
+    }
+    if (on) u.role = 'admin'; else delete u.role;
+    await R(['HSET', 'users:v1', id, JSON.stringify(u)]); return ok({ role: u.role || '' });
+  }
+  // 크레딧 수동 조정(+/-)
+  if (svc === 'userCredit') {
+    const id = String(b.id || ''), d = Math.max(-100000, Math.min(100000, parseInt(b.delta, 10) || 0));
+    const [raw] = await R(['HGET', 'users:v1', id]); if (!raw || !d) return bad(raw ? 'no_delta' : 'not_found');
+    const cur = await C.creditsOf(R, id), nv = Math.max(0, cur + d);
+    await R(['HSET', 'ucred:v1', id, String(nv)]); return ok({ credits: nv, level: C.info(nv).level });
+  }
   // 중복 계정 수동 합치기: from 계정을 to 계정으로 합침(즐겨찾기·로그인 연결 이동, from 삭제)
   if (svc === 'userMerge') {
     const from = String(b.from || '').trim(), to = String(b.to || '').trim();
@@ -359,7 +381,10 @@ module.exports = async function admin(req, res) {
     const [favs] = await R(['SMEMBERS', 'ufav:' + from]), [sess] = await R(['SMEMBERS', 'usess:' + from]);
     (uf.logins || []).forEach(l => { if (!(ut.logins || []).some(x => x.p === l.p && String(x.sub) === String(l.sub))) (ut.logins = ut.logins || []).push(l); });
     ut.name = ut.name || uf.name; ut.avatar = ut.avatar || uf.avatar; ut.email = ut.email || uf.email; ut.created = Math.min(ut.created || Infinity, uf.created || Infinity);
+    if (uf.role === 'admin') ut.role = 'admin';
     const cmds = [];
+    const cf = await C.creditsOf(R, from); if (cf) cmds.push(['HINCRBY', 'ucred:v1', to, String(cf)]);
+    cmds.push(['HDEL', 'ucred:v1', from], ['HDEL', 'uprefs:v1', from], ['DEL', 'ufavseen:' + from]);
     if (favs && favs.length) cmds.push(['SADD', 'ufav:' + to, ...favs.map(String)]);
     (uf.logins || []).forEach(l => cmds.push(['HSET', 'uidx:v1', `${l.p}:${l.sub}`, to]));
     (sess || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));

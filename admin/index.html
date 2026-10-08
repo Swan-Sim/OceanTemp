@@ -204,10 +204,9 @@
   let shopNames = {};
   fetch('/api/shops').then(r => r.json()).then(j => { (j.shops || []).forEach(s => { shopNames[s.id] = s.name; }); }).catch(() => {});
   async function load() {
-    const pw = getPw();
-    if (!pw) return showLogin();
+    const pw = getPw(); // 비밀번호가 없어도 관리자 권한 회원으로 로그인돼 있으면(쿠키) 통과
     const r = await fetch(`/api/stats?days=${days}`, { headers: { 'x-admin-password': pw } });
-    if (r.status === 401) { setPw(''); return showLogin('비밀번호가 맞지 않아요'); }
+    if (r.status === 401) { setPw(''); return showLogin(pw ? '비밀번호가 맞지 않아요' : ''); }
     const j = await r.json();
     if (!r.ok) return showLogin(j.error || '불러오지 못했어요');
     $('login').style.display = 'none'; $('dash').style.display = '';
@@ -369,19 +368,19 @@
   async function loadUsers() {
     try { uData = await api('users', { q: $('uQ').value, page: uPage }); } catch (_) { return; }
     const st = uData.stats;
-    $('uKpis').innerHTML = [['전체 회원', st.total], ['최근 7일 신규', st.new7], ['최근 30일 신규', st.new30], ['30일 내 접속', st.active30], ['즐겨찾기 사용', st.withFav]]
+    $('uKpis').innerHTML = [['전체 회원', st.total], ['최근 7일 신규', st.new7], ['최근 30일 신규', st.new30], ['30일 내 접속', st.active30], ['즐겨찾기 사용', st.withFav], ['관리자', st.admins || 0]]
       .map(([l, v]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('') + (st.blocked ? `<div class="kpi"><div class="v">${st.blocked}</div><div class="l">차단됨</div></div>` : '');
     const tot = Math.max(1, Object.values(st.byProvider).reduce((a, n) => a + n, 0));
     $('uProv').innerHTML = Object.entries(st.byProvider).sort((a, z) => z[1] - a[1]).map(([p, n]) => `<span class="chip">${esc(PN[p] || p)} ${n} <span class="muted">(${Math.round(n / tot * 100)}%)</span></span>`).join('') || '<span class="muted">아직 없어요</span>';
     $('uTop').innerHTML = uData.topFavs.map(t => `<tr><td>${esc(spotNames[t.no] || ('#' + t.no))}</td><td class="n">${t.n}명</td></tr>`).join('') || '<tr><td class="muted">아직 즐겨찾기가 없어요</td></tr>';
     $('uCount').textContent = `${uData.total}명`;
-    $('uList').innerHTML = '<tr><th class="n" style="text-align:left">회원</th><th class="n" style="text-align:left">로그인</th><th class="n">가입</th><th class="n">최근 접속</th><th class="n">즐겨찾기</th><th></th></tr>' + (uData.items.map(u => {
+    $('uList').innerHTML = '<tr><th class="n" style="text-align:left">회원</th><th class="n" style="text-align:left">로그인</th><th class="n">가입</th><th class="n">최근 접속</th><th class="n">레벨·크레딧</th><th class="n">즐겨찾기</th><th></th></tr>' + (uData.items.map(u => {
       const fav = u.favs.map(no => esc(spotNames[no] || ('#' + no))).join(', ');
       const merge = uMergeFrom ? (uMergeFrom === u.id ? '<span class="muted">합칠 계정</span>' : `<button data-um-to="${esc(u.id)}">여기로 합치기</button>`) : `<button data-um="${esc(u.id)}" title="중복 계정을 이 계정으로 합치려면 먼저 합칠 쪽을 누르세요">합치기</button>`;
-      return `<tr style="${u.blocked ? 'opacity:.55' : ''}"><td><div style="display:flex;gap:8px;align-items:center">${u.avatar ? `<img src="${esc(u.avatar)}" referrerpolicy="no-referrer" width="28" height="28" style="border-radius:50%;object-fit:cover">` : '<span style="width:28px;height:28px;border-radius:50%;background:#1e293b;display:inline-block"></span>'}<div><b>${esc(u.name || '(이름 없음)')}</b>${u.blocked ? ' <span class="tag off">차단</span>' : ''}<div class="muted" title="${esc(u.id)}">${esc(u.email || '이메일 없음')} · ID ${esc(u.id.slice(0, 6))}…</div></div></div></td>`
-        + `<td>${u.providers.map(p => `<span class="tag off">${esc(PN[p] || p)}</span>`).join(' ')}</td><td class="n">${fmtD(u.created)}</td><td class="n">${fmtD(u.last)}</td><td class="n" title="${fav}">${u.favCount}</td>`
-        + `<td class="act">${merge} <button data-ub="${esc(u.id)}" data-on="${u.blocked ? 0 : 1}">${u.blocked ? '차단 해제' : '차단'}</button> <button data-ud="${esc(u.id)}" style="color:#f87171">삭제</button></td></tr>`;
-    }).join('') || '<tr><td class="muted" colspan="6">회원이 없어요</td></tr>');
+      return `<tr style="${u.blocked ? 'opacity:.55' : ''}"><td><div style="display:flex;gap:8px;align-items:center">${u.avatar ? `<img src="${esc(u.avatar)}" referrerpolicy="no-referrer" width="28" height="28" style="border-radius:50%;object-fit:cover">` : '<span style="width:28px;height:28px;border-radius:50%;background:#1e293b;display:inline-block"></span>'}<div><b>${esc(u.name || '(이름 없음)')}</b>${u.role === 'admin' ? ' <span class="tag">관리자</span>' : ''}${u.blocked ? ' <span class="tag off">차단</span>' : ''}<div class="muted" title="${esc(u.id)}">${esc(u.email || '이메일 없음')} · ID ${esc(u.id.slice(0, 6))}…</div></div></div></td>`
+        + `<td>${u.providers.map(p => `<span class="tag off">${esc(PN[p] || p)}</span>`).join(' ')}</td><td class="n">${fmtD(u.created)}</td><td class="n">${fmtD(u.last)}</td><td class="n">Lv.${u.level} · ${u.credits}<br><button data-uc="${esc(u.id)}" title="크레딧 수동 조정">조정</button></td><td class="n" title="${fav}">${u.favCount}</td>`
+        + `<td class="act">${merge} <button data-ur="${esc(u.id)}" data-role="${u.role === 'admin' ? '' : 'admin'}">${u.role === 'admin' ? '관리자 해제' : '관리자 지정'}</button> <button data-ub="${esc(u.id)}" data-on="${u.blocked ? 0 : 1}">${u.blocked ? '차단 해제' : '차단'}</button> <button data-ud="${esc(u.id)}" style="color:#f87171">삭제</button></td></tr>`;
+    }).join('') || '<tr><td class="muted" colspan="7">회원이 없어요</td></tr>');
     const pages = Math.max(1, Math.ceil(uData.total / uData.per));
     $('uPage').textContent = `${uPage + 1} / ${pages}`; $('uPrev').disabled = uPage <= 0; $('uNext').disabled = uPage >= pages - 1;
     const mb = $('uMergeBar');
@@ -397,6 +396,8 @@
     try {
       if (t.dataset.ud) { if (!confirm('이 회원을 삭제할까요? 즐겨찾기·로그인 연결이 모두 지워지고 되돌릴 수 없어요.')) return; await api('userDelete', { id: t.dataset.ud }); }
       else if (t.dataset.ub) { if (t.dataset.on === '1' && !confirm('이 회원을 차단할까요? 바로 로그아웃되고 다시 로그인할 수 없어요.')) return; await api('userBlock', { id: t.dataset.ub, on: t.dataset.on === '1' }); }
+      else if (t.dataset.ur) { const on = t.dataset.role === 'admin'; if (!confirm(on ? '이 회원에게 관리자 권한을 줄까요? 회원·샵·정점을 관리할 수 있게 돼요.' : '이 회원의 관리자 권한을 뺄까요?')) return; await api('userRole', { id: t.dataset.ur, role: t.dataset.role }); }
+      else if (t.dataset.uc) { const v = prompt('크레딧 가감 (예: 10 또는 -5)', '10'); if (v == null) return; await api('userCredit', { id: t.dataset.uc, delta: parseInt(v, 10) || 0 }); }
       else if (t.dataset.um) { uMergeFrom = t.dataset.um; }
       else if (t.dataset.umTo) { if (!confirm('선택한 계정을 이 계정으로 합칠까요? 합쳐진 쪽 계정은 사라지고 되돌릴 수 없어요.')) return; await api('userMerge', { from: uMergeFrom, to: t.dataset.umTo }); uMergeFrom = null; }
       else return;

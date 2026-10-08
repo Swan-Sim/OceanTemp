@@ -11,6 +11,7 @@
     hello: (n) => `${n}님`, linked: '연결된 로그인', link: '다른 계정 연결', favs: '즐겨찾기 포인트', noFav: '아직 없어요. 포인트를 고르고 아래 ☆를 눌러보세요.',
     logout: '로그아웃', del: '회원 탈퇴', delAsk: '계정과 즐겨찾기를 모두 지울까요? 되돌릴 수 없어요.', close: '닫기',
     favOn: '즐겨찾기에 넣었어요', favOff: '즐겨찾기에서 뺐어요', favNeed: '즐겨찾기는 로그인하면 쓸 수 있어요', favNo: '이 지점은 즐겨찾기할 수 없어요',
+    lv: (l) => `Lv.${l}`, toNext: (n) => `다음 레벨까지 ${n} 크레딧`, maxLv: '최고 레벨', credits: '크레딧', last: '마지막', admin: 'Admin', creditHint: '로그인·즐겨찾기 등 활동하면 크레딧이 쌓이고 레벨이 올라가요.',
     err: { cancelled: '로그인을 취소했어요', state: '로그인 시간이 지났어요. 다시 시도해 주세요', provider: '로그인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요', provider_off: '지금은 이 로그인을 쓸 수 없어요' }
   } : {
     login: 'Log in', title: 'Sign in', sub: 'Save favorite spots and see them on any device.',
@@ -19,6 +20,7 @@
     hello: (n) => n, linked: 'Linked accounts', link: 'Link another account', favs: 'Favorite spots', noFav: 'None yet. Pick a spot and tap ☆ below.',
     logout: 'Log out', del: 'Delete account', delAsk: 'Delete your account and favorites? This cannot be undone.', close: 'Close',
     favOn: 'Added to favorites', favOff: 'Removed from favorites', favNeed: 'Log in to save favorites', favNo: 'This point cannot be saved',
+    lv: (l) => `Lv.${l}`, toNext: (n) => `${n} credits to next level`, maxLv: 'Max level', credits: 'Credits', last: 'Last', admin: 'Admin', creditHint: 'Earn credits by being active to level up.',
     err: { cancelled: 'Sign-in cancelled', state: 'Sign-in expired. Please try again', provider: 'Sign-in failed. Please try again later', provider_off: 'This sign-in is not available' }
   };
   const PNAME = { google: 'Google', kakao: 'Kakao', naver: 'Naver', facebook: 'Facebook' };
@@ -26,7 +28,7 @@
   const ICON_USER = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  let me = { user: null, favs: [], providers: [] }, favSet = new Set();
+  let me = { user: null, favs: [], providers: [], prefs: {} }, favSet = new Set(), prefsApplied = false;
 
   const css = document.createElement('style');
   css.textContent = `
@@ -46,7 +48,17 @@
   .a-row{display:flex;gap:8px;margin-top:14px} .a-row button{flex:1;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e2e8f0;cursor:pointer}
   .a-row .a-del{color:#f87171;border-color:rgba(248,113,113,.35)}
   .tab-btn.tab-fav{flex:0 0 auto;min-width:38px;padding:0 10px;font-size:16px;line-height:1}
-  .tab-btn.tab-fav.on{color:#FFB000}`;
+  .tab-btn.tab-fav.on{color:#FFB000}
+  #btn-admin{position:fixed;top:12px;left:12px;z-index:57;height:30px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,176,0,.6);background:rgba(11,17,32,.85);color:#FFB000;font-size:12.5px;font-weight:700;letter-spacing:.3px;cursor:pointer;text-decoration:none;display:none;align-items:center;backdrop-filter:blur(6px)}
+  #btn-admin.show{display:inline-flex}
+  #fav-bar{position:fixed;top:50px;left:12px;right:12px;z-index:55;display:none;gap:6px;overflow-x:auto;pointer-events:none;scrollbar-width:none;padding:2px 0}
+  #fav-bar::-webkit-scrollbar{display:none} #fav-bar.show{display:flex}
+  #fav-bar button{pointer-events:auto;flex:0 0 auto;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;height:28px;padding:0 11px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(11,17,32,.82);color:#e2e8f0;font-size:12px;cursor:pointer;backdrop-filter:blur(6px)}
+  #fav-bar button.last{border-color:rgba(125,211,252,.5);color:#7dd3fc}
+  body.detail-mode #fav-bar{top:50px}
+  .a-lv{margin:2px 0 10px;font-size:12px;color:#94a3b8} .a-lv .bar{height:6px;border-radius:99px;background:#1e293b;overflow:hidden;margin:5px 0} .a-lv .bar i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#FFB000)}
+  .a-lv b{color:#FFB000;font-size:13px}
+  .a-adm{display:block;text-align:center;margin-top:12px;height:34px;line-height:34px;border-radius:8px;border:1px solid rgba(255,176,0,.5);color:#FFB000;text-decoration:none;font-weight:700}`;
   document.head.appendChild(css);
 
   function toast(msg) { let d = document.getElementById('locate-msg'); if (!d) { d = document.createElement('div'); d.id = 'locate-msg'; document.body.appendChild(d); } d.textContent = msg; d.classList.add('show'); clearTimeout(d._t); d._t = setTimeout(() => d.classList.remove('show'), 3000); }
@@ -57,10 +69,35 @@
     const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.error || r.status); return j;
   }
   async function load() {
-    try { const j = await fetch('/api/shops?svc=auth&a=me', { credentials: 'same-origin', cache: 'no-store' }).then(r => r.json()); me = { user: j.user || null, favs: j.favs || [], providers: j.providers || [] }; }
+    try { const j = await fetch('/api/shops?svc=auth&a=me', { credentials: 'same-origin', cache: 'no-store' }).then(r => r.json()); me = { user: j.user || null, favs: j.favs || [], providers: j.providers || [], prefs: j.prefs || {} }; }
     catch (_) {}
-    favSet = new Set(me.favs); paintBtn(); paintStar();
+    favSet = new Set(me.favs); paintBtn(); paintStar(); paintAdmin(); paintFavBar(); applyPrefs();
   }
+  // ── 설정 저장: 온도 단위·마지막으로 본 포인트를 계정에 저장하고 다른 기기에서도 이어서 ──
+  function applyPrefs() {
+    if (prefsApplied || !me.user) return; prefsApplied = true;
+    const u = me.prefs && me.prefs.unit;
+    try { if ((u === 'C' || u === 'F') && typeof tempUnit !== 'undefined' && tempUnit !== u && typeof _origToggle === 'function') _origToggle(); } catch (_) {}
+  }
+  let _origToggle = null, _prefT = null;
+  function savePrefs(p) { if (!me.user) return; me.prefs = Object.assign({}, me.prefs, p); clearTimeout(_prefT); _prefT = setTimeout(() => { post('prefs', p).catch(() => {}); }, 800); }
+  function paintAdmin() {
+    let a = document.getElementById('btn-admin');
+    if (!a) { a = document.createElement('a'); a.id = 'btn-admin'; a.href = '/admin'; a.textContent = T.admin; document.body.appendChild(a); }
+    a.classList.toggle('show', !!(me.user && me.user.role === 'admin'));
+  }
+  function paintFavBar() {
+    let b = document.getElementById('fav-bar');
+    if (!b) { b = document.createElement('div'); b.id = 'fav-bar'; document.body.appendChild(b); }
+    const chips = [];
+    const last = me.prefs && me.prefs.last && stationByNo(me.prefs.last.no);
+    if (last && !favSet.has(last.no)) chips.push(`<button class="last" data-no="${last.no}">⟲ ${T.last}: ${esc(last.name)}</button>`);
+    me.favs.map(stationByNo).filter(Boolean).forEach(s => chips.push(`<button data-no="${s.no}">★ ${esc(s.name)}</button>`));
+    b.innerHTML = me.user ? chips.join('') : '';
+    b.classList.toggle('show', !!(me.user && chips.length));
+    b.querySelectorAll('button').forEach(x => x.onclick = () => goTo(stationByNo(+x.dataset.no)));
+  }
+  function goTo(s) { if (!s) return; try { selectStation(s); showDetailMap(s.coords[1], s.coords[0], typeof SPOT_ZOOM === 'number' ? SPOT_ZOOM : 16); } catch (_) {} }
 
   // ── 오른쪽 버튼 ──
   let btn;
@@ -84,6 +121,11 @@
     } else {
       const u = me.user, more = avail.filter(p => !u.providers.includes(p));
       h += `<div class="a-me">${u.avatar ? `<img src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer">` : `<div class="a-ph">${ICON_USER}</div>`}<div><h3>${esc(T.hello(u.name))}</h3></div></div>`;
+      if (u.level) {
+        const span = u.next ? (u.next - u.base) : 1, pct = u.next ? Math.max(0, Math.min(100, Math.round((u.credits - u.base) / span * 100))) : 100;
+        h += `<div class="a-lv"><b>${T.lv(u.level)}</b> · ${u.credits} ${T.credits}<div class="bar"><i style="width:${pct}%"></i></div>${u.next ? T.toNext(u.next - u.credits) : T.maxLv}<br>${T.creditHint}</div>`;
+      }
+      if (u.role === 'admin') h += `<a class="a-adm" href="/admin">${T.admin}</a>`;
       h += `<div class="a-sec">${T.favs}</div>`;
       const favs = me.favs.map(stationByNo).filter(Boolean);
       h += favs.length ? favs.map(s => `<button class="a-fav" data-no="${s.no}">★ ${esc(s.name)}</button>`).join('') : `<div class="a-sub">${T.noFav}</div>`;
@@ -100,7 +142,7 @@
       document.addEventListener('pointerdown', (e) => { const o = document.getElementById('acct-ov'); if (!o || !o.classList.contains('show')) return; if (e.target.closest('#acct-box') || (btn && btn.contains(e.target))) return; close(); }, true);
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); }); }
     box.querySelector('.a-x').onclick = close;
-    box.querySelectorAll('.a-fav').forEach(b => b.onclick = () => { const s = stationByNo(+b.dataset.no); if (!s) return; close(); try { selectStation(s); showDetailMap(s.coords[1], s.coords[0], typeof SPOT_ZOOM === 'number' ? SPOT_ZOOM : 16); } catch (_) {} });
+    box.querySelectorAll('.a-fav').forEach(b => b.onclick = () => { const s = stationByNo(+b.dataset.no); if (!s) return; close(); goTo(s); });
     const out = box.querySelector('.a-out'); if (out) out.onclick = async () => { try { await post('logout'); } catch (_) {} close(); await load(); };
     const del = box.querySelector('.a-del'); if (del) del.onclick = async () => { if (!confirm(T.delAsk)) return; try { await post('delete'); } catch (_) {} close(); await load(); };
   }
@@ -115,7 +157,7 @@
     if (!me.user) { toast(T.favNeed); return open(); }
     const on = !favSet.has(no);
     on ? favSet.add(no) : favSet.delete(no); paintStar(); // 먼저 바꿔 보이고, 실패하면 되돌림
-    try { await post('fav', { no, on }); me.favs = [...favSet]; toast(on ? T.favOn : T.favOff); }
+    try { const j = await post('fav', { no, on }); me.favs = [...favSet]; paintFavBar(); toast(on ? T.favOn : T.favOff); }
     catch (_) { on ? favSet.delete(no) : favSet.add(no); paintStar(); }
   }
 
@@ -129,7 +171,8 @@
     const bar = document.querySelector('.tab-bar');
     if (bar) { star = document.createElement('button'); star.className = 'tab-btn tab-fav'; star.type = 'button'; star.title = KO ? '이 포인트 즐겨찾기' : 'Favorite this spot'; star.onclick = toggleFav; bar.appendChild(star); paintStar(); }
     // 고른 포인트가 바뀌면 ★ 다시 그리기
-    if (typeof selectStation === 'function') { const orig = selectStation; selectStation = function (st, o) { const r = orig.apply(this, arguments); paintStar(); return r; }; }
+    if (typeof selectStation === 'function') { const orig = selectStation; selectStation = function (st, o) { const r = orig.apply(this, arguments); paintStar(); if (st && st.no && me.user) savePrefs({ last: { no: st.no } }); return r; }; }
+    if (typeof toggleTempUnit === 'function') { _origToggle = toggleTempUnit; toggleTempUnit = function () { const r = _origToggle.apply(this, arguments); savePrefs({ unit: tempUnit }); return r; }; }
     // 로그인 실패하고 돌아왔으면 안내
     const m = location.search.match(/[?&]login_error=([a-z_]+)/);
     const why = (location.search.match(/[?&]login_why=([A-Za-z0-9_]+)/) || [])[1]; // [ADD] 원인 코드(예: KOE010)

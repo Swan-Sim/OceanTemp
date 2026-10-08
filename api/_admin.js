@@ -307,5 +307,64 @@ module.exports = async function admin(req, res) {
     return ok();
   }
   if (svc === 'spotDelete') { await R(['HDEL', K.spots, String(parseInt(b.no, 10))], ['DEL', 'sp:list']); S.clearSpotsMemo(); return ok(); }
+
+  // ───────── [ADD] 회원 관리 (간편 로그인 계정: users:v1 · uidx:v1 · ufav:{uid} · usess:{uid}) ─────────
+  if (svc === 'users') {
+    const users = Object.values(await S.hgetallJSON('users:v1')).filter(u => u && u.id);
+    const favRes = users.length ? await R(...users.map(u => ['SMEMBERS', 'ufav:' + u.id])) : [];
+    const favOf = {}; users.forEach((u, i) => { favOf[u.id] = Array.isArray(favRes[i]) ? favRes[i] : []; });
+    const now = Date.now(), D = 86400000;
+    const byProvider = {}, rank = {};
+    users.forEach(u => { (u.logins || []).forEach(l => { byProvider[l.p] = (byProvider[l.p] || 0) + 1; }); favOf[u.id].forEach(no => { rank[no] = (rank[no] || 0) + 1; }); });
+    const stats = { total: users.length, new7: users.filter(u => now - (u.created || 0) < 7 * D).length, new30: users.filter(u => now - (u.created || 0) < 30 * D).length,
+      active30: users.filter(u => now - (u.last || 0) < 30 * D).length, blocked: users.filter(u => u.blocked).length, byProvider,
+      withFav: users.filter(u => favOf[u.id].length).length };
+    const topFavs = Object.entries(rank).sort((a, z) => z[1] - a[1]).slice(0, 15).map(([no, n]) => ({ no: +no, n }));
+    const q = String(b.q || '').trim().toLowerCase();
+    let list = users.filter(u => !q || String(u.name || '').toLowerCase().includes(q) || String(u.email || '').toLowerCase().includes(q) || String(u.id) === String(b.q).trim());
+    list.sort((a, z) => (z.last || z.created || 0) - (a.last || a.created || 0));
+    const total = list.length, per = 50, page = Math.max(0, parseInt(b.page, 10) || 0);
+    const mask = (e) => { e = String(e || ''); const i = e.indexOf('@'); return i < 1 ? '' : e.slice(0, Math.min(2, i)) + '***' + e.slice(i); }; // 목록에는 이메일 일부만(개인정보)
+    const items = list.slice(page * per, page * per + per).map(u => ({ id: u.id, name: u.name || '', avatar: u.avatar || '', email: mask(u.email), created: u.created || 0, last: u.last || 0,
+      providers: (u.logins || []).map(l => l.p), favCount: favOf[u.id].length, favs: favOf[u.id].map(Number).filter(Boolean).slice(0, 30), blocked: !!u.blocked }));
+    return ok({ stats, topFavs, items, total, page, per });
+  }
+  // 회원 삭제(계정·즐겨찾기·로그인 연결·세션 모두)
+  const dropUser = async (uid) => {
+    const [raw] = await R(['HGET', 'users:v1', uid]); let u = null; try { u = raw ? JSON.parse(raw) : null; } catch (_) {}
+    const [sessions] = await R(['SMEMBERS', 'usess:' + uid]);
+    const cmds = [['HDEL', 'users:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid]];
+    (sessions || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));
+    ((u && u.logins) || []).forEach(l => cmds.push(['HDEL', 'uidx:v1', `${l.p}:${l.sub}`]));
+    await R(...cmds); return u;
+  };
+  if (svc === 'userDelete') {
+    const id = String(b.id || ''); if (!id) return bad('no_id');
+    await dropUser(id); return ok();
+  }
+  // 차단/해제: 차단하면 로그인 세션을 모두 끊고, 다시 로그인하려 해도 막혀요(api/_auth.js)
+  if (svc === 'userBlock') {
+    const id = String(b.id || ''), [raw] = await R(['HGET', 'users:v1', id]); if (!raw) return bad('not_found');
+    const u = JSON.parse(raw); u.blocked = !!b.on;
+    const cmds = [['HSET', 'users:v1', id, JSON.stringify(u)]];
+    if (u.blocked) { const [sessions] = await R(['SMEMBERS', 'usess:' + id]); (sessions || []).forEach(h => cmds.push(['DEL', 'sess:' + h])); cmds.push(['DEL', 'usess:' + id]); }
+    await R(...cmds); return ok({ blocked: u.blocked });
+  }
+  // 중복 계정 수동 합치기: from 계정을 to 계정으로 합침(즐겨찾기·로그인 연결 이동, from 삭제)
+  if (svc === 'userMerge') {
+    const from = String(b.from || '').trim(), to = String(b.to || '').trim();
+    if (!from || !to || from === to) return bad('bad_ids');
+    const [rf, rt] = await R(['HGET', 'users:v1', from], ['HGET', 'users:v1', to]); if (!rf || !rt) return bad('not_found');
+    const uf = JSON.parse(rf), ut = JSON.parse(rt);
+    const [favs] = await R(['SMEMBERS', 'ufav:' + from]), [sess] = await R(['SMEMBERS', 'usess:' + from]);
+    (uf.logins || []).forEach(l => { if (!(ut.logins || []).some(x => x.p === l.p && String(x.sub) === String(l.sub))) (ut.logins = ut.logins || []).push(l); });
+    ut.name = ut.name || uf.name; ut.avatar = ut.avatar || uf.avatar; ut.email = ut.email || uf.email; ut.created = Math.min(ut.created || Infinity, uf.created || Infinity);
+    const cmds = [];
+    if (favs && favs.length) cmds.push(['SADD', 'ufav:' + to, ...favs.map(String)]);
+    (uf.logins || []).forEach(l => cmds.push(['HSET', 'uidx:v1', `${l.p}:${l.sub}`, to]));
+    (sess || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));
+    cmds.push(['HSET', 'users:v1', to, JSON.stringify(ut)], ['HDEL', 'users:v1', from], ['DEL', 'ufav:' + from, 'usess:' + from]);
+    await R(...cmds); return ok();
+  }
   return bad('unknown_svc');
 };

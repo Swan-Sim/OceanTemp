@@ -94,6 +94,7 @@
       <button data-sec="stats" class="on">통계</button>
       <button data-sec="shops">샵 <span class="badge" id="bShops"></span></button>
       <button data-sec="spots">정점 <span class="badge" id="bSpots"></span></button>
+      <button data-sec="users">회원</button>
       <span style="flex:1"></span><a href="#settings" class="navlink" id="settingsLink">관리 설정</a><button id="logout">로그아웃</button>
     </div>
     <div id="secShops" class="sec" style="display:none">
@@ -143,6 +144,21 @@
           <label>새 비밀번호 확인</label><input class="f" type="password" name="confirm" autocomplete="new-password">
           <span></span><div><button class="primary" type="submit">비밀번호 바꾸기</button></div>
         </form><div class="muted" id="pwMsg"></div></div>
+    </div>
+    <div id="secUsers" class="sec" style="display:none">
+      <div class="card kpis" id="uKpis"></div>
+      <div class="grid2">
+        <div class="card"><h2>로그인 종류</h2><div id="uProv" class="chips"></div></div>
+        <div class="card"><h2>인기 즐겨찾기 포인트</h2><table id="uTop"></table></div>
+      </div>
+      <div class="card">
+        <h2>회원 목록 <span class="muted" id="uCount" style="font-size:12px;font-weight:400"></span></h2>
+        <div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap"><input class="f" id="uQ" placeholder="이름 · 이메일 · 회원 ID 검색" style="flex:1;min-width:180px"><button id="uSearch">검색</button></div>
+        <div class="hint" id="uMergeBar" style="display:none;color:#7dd3fc"></div>
+        <table id="uList"></table>
+        <div class="row" style="margin-top:10px;gap:8px;justify-content:center"><button id="uPrev">이전</button><span class="muted" id="uPage"></span><button id="uNext">다음</button></div>
+        <div class="hint">이메일은 개인정보라 목록에는 일부만 보여요(검색은 전체 이메일로 돼요). 차단하면 바로 로그아웃되고 다시 로그인할 수 없어요. 삭제는 되돌릴 수 없어요.</div>
+      </div>
     </div>
     <div id="secStats" class="sec">
     <div class="row" style="margin-bottom:14px">
@@ -346,19 +362,63 @@
     if (ok) loadMgmt();
   });
   function alertMsg(m) { const d = document.createElement('div'); d.className = 'err'; d.textContent = '오류: ' + m; document.querySelector('.nav').after(d); setTimeout(() => d.remove(), 5000); }
+  // ───────── [ADD] 회원 관리 탭 ─────────
+  let uPage = 0, uMergeFrom = null, uData = null;
+  const fmtD = (t) => t ? new Date(t).toLocaleDateString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric' }) : '–';
+  const PN = { google: '구글', kakao: '카카오', naver: '네이버', facebook: '페이스북' };
+  async function loadUsers() {
+    try { uData = await api('users', { q: $('uQ').value, page: uPage }); } catch (_) { return; }
+    const st = uData.stats;
+    $('uKpis').innerHTML = [['전체 회원', st.total], ['최근 7일 신규', st.new7], ['최근 30일 신규', st.new30], ['30일 내 접속', st.active30], ['즐겨찾기 사용', st.withFav]]
+      .map(([l, v]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('') + (st.blocked ? `<div class="kpi"><div class="v">${st.blocked}</div><div class="l">차단됨</div></div>` : '');
+    const tot = Math.max(1, Object.values(st.byProvider).reduce((a, n) => a + n, 0));
+    $('uProv').innerHTML = Object.entries(st.byProvider).sort((a, z) => z[1] - a[1]).map(([p, n]) => `<span class="chip">${esc(PN[p] || p)} ${n} <span class="muted">(${Math.round(n / tot * 100)}%)</span></span>`).join('') || '<span class="muted">아직 없어요</span>';
+    $('uTop').innerHTML = uData.topFavs.map(t => `<tr><td>${esc(spotNames[t.no] || ('#' + t.no))}</td><td class="n">${t.n}명</td></tr>`).join('') || '<tr><td class="muted">아직 즐겨찾기가 없어요</td></tr>';
+    $('uCount').textContent = `${uData.total}명`;
+    $('uList').innerHTML = '<tr><th class="n" style="text-align:left">회원</th><th class="n" style="text-align:left">로그인</th><th class="n">가입</th><th class="n">최근 접속</th><th class="n">즐겨찾기</th><th></th></tr>' + (uData.items.map(u => {
+      const fav = u.favs.map(no => esc(spotNames[no] || ('#' + no))).join(', ');
+      const merge = uMergeFrom ? (uMergeFrom === u.id ? '<span class="muted">합칠 계정</span>' : `<button data-um-to="${esc(u.id)}">여기로 합치기</button>`) : `<button data-um="${esc(u.id)}" title="중복 계정을 이 계정으로 합치려면 먼저 합칠 쪽을 누르세요">합치기</button>`;
+      return `<tr style="${u.blocked ? 'opacity:.55' : ''}"><td><div style="display:flex;gap:8px;align-items:center">${u.avatar ? `<img src="${esc(u.avatar)}" referrerpolicy="no-referrer" width="28" height="28" style="border-radius:50%;object-fit:cover">` : '<span style="width:28px;height:28px;border-radius:50%;background:#1e293b;display:inline-block"></span>'}<div><b>${esc(u.name || '(이름 없음)')}</b>${u.blocked ? ' <span class="tag off">차단</span>' : ''}<div class="muted" title="${esc(u.id)}">${esc(u.email || '이메일 없음')} · ID ${esc(u.id.slice(0, 6))}…</div></div></div></td>`
+        + `<td>${u.providers.map(p => `<span class="tag off">${esc(PN[p] || p)}</span>`).join(' ')}</td><td class="n">${fmtD(u.created)}</td><td class="n">${fmtD(u.last)}</td><td class="n" title="${fav}">${u.favCount}</td>`
+        + `<td class="act">${merge} <button data-ub="${esc(u.id)}" data-on="${u.blocked ? 0 : 1}">${u.blocked ? '차단 해제' : '차단'}</button> <button data-ud="${esc(u.id)}" style="color:#f87171">삭제</button></td></tr>`;
+    }).join('') || '<tr><td class="muted" colspan="6">회원이 없어요</td></tr>');
+    const pages = Math.max(1, Math.ceil(uData.total / uData.per));
+    $('uPage').textContent = `${uPage + 1} / ${pages}`; $('uPrev').disabled = uPage <= 0; $('uNext').disabled = uPage >= pages - 1;
+    const mb = $('uMergeBar');
+    if (uMergeFrom) { const f = uData.items.find(x => x.id === uMergeFrom); mb.style.display = ''; mb.innerHTML = `합칠 계정: <b>${esc(f ? f.name : uMergeFrom)}</b> → 남길 계정 행의 "여기로 합치기"를 누르세요. <button id="uMergeCancel">취소</button>`; $('uMergeCancel').onclick = () => { uMergeFrom = null; loadUsers(); }; }
+    else mb.style.display = 'none';
+  }
+  $('uSearch').onclick = () => { uPage = 0; loadUsers(); };
+  $('uQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { uPage = 0; loadUsers(); } });
+  $('uPrev').onclick = () => { if (uPage > 0) { uPage--; loadUsers(); } };
+  $('uNext').onclick = () => { uPage++; loadUsers(); };
+  $('uList').addEventListener('click', async (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    try {
+      if (t.dataset.ud) { if (!confirm('이 회원을 삭제할까요? 즐겨찾기·로그인 연결이 모두 지워지고 되돌릴 수 없어요.')) return; await api('userDelete', { id: t.dataset.ud }); }
+      else if (t.dataset.ub) { if (t.dataset.on === '1' && !confirm('이 회원을 차단할까요? 바로 로그아웃되고 다시 로그인할 수 없어요.')) return; await api('userBlock', { id: t.dataset.ub, on: t.dataset.on === '1' }); }
+      else if (t.dataset.um) { uMergeFrom = t.dataset.um; }
+      else if (t.dataset.umTo) { if (!confirm('선택한 계정을 이 계정으로 합칠까요? 합쳐진 쪽 계정은 사라지고 되돌릴 수 없어요.')) return; await api('userMerge', { from: uMergeFrom, to: t.dataset.umTo }); uMergeFrom = null; }
+      else return;
+    } catch (_) { return; }
+    loadUsers();
+  });
+
   function showSec(name) {
     document.querySelectorAll('[data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === name));
     $('secStats').style.display = name === 'stats' ? '' : 'none';
     $('secShops').style.display = name === 'shops' ? '' : 'none';
     $('secSpots').style.display = name === 'spots' ? '' : 'none';
+    $('secUsers').style.display = name === 'users' ? '' : 'none';
     $('secSettings').style.display = name === 'settings' ? '' : 'none';
     $('settingsLink').classList.toggle('on', name === 'settings');
     if (name === 'settings' && window.__mgLoaded) loadSettings();
+    if (name === 'users') loadUsers();
     if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
     if ((name === 'shops' || name === 'spots') && window.__mgLoaded) loadMgmt(); // 탭을 열 때마다 최신 요청으로
   }
   document.querySelectorAll('[data-sec]').forEach(b => b.addEventListener('click', () => showSec(b.dataset.sec)));
-  const secFromHash = () => showSec(['shops', 'spots', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'stats');
+  const secFromHash = () => showSec(['shops', 'spots', 'users', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'stats');
   window.addEventListener('hashchange', secFromHash);
   secFromHash();
 

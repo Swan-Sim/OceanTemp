@@ -7,7 +7,14 @@
     //  - 오른쪽 아래 "수심" 버튼으로 켜고 끄기(이 브라우저에 기억)
     const DEPTH_MIN_ZOOM = 12, DTILE_Z = 13, DTILE_MAX = 500, DTILE_PAR = 6;
     let dRenderer = null; // 칸이 많아도 가볍게: 등심선·띠는 캔버스 한 장에 그림
-    const dRend = () => dRenderer || (dRenderer = L.canvas({ padding: 0.5 }));
+    // [CHANGE] 섬·바위 육지: 색으로 덮지 않고 "지우개"로 - 육지 자리의 수심 색·등심선만 지워서 아래 위성사진이 그대로 보이게(투명)
+    //  캔버스에서 그 다각형 모양을 destination-out으로 칠하면 앞서 그린 수심 그림이 뚫려요(같은 캔버스 안에서만)
+    const dRend = () => dRenderer || (dRenderer = (() => { const r = L.canvas({ padding: 0.5 }), orig = r._fillStroke;
+      r._fillStroke = function (ctx, layer) {
+        if (layer.options.erase) { ctx.save(); ctx.globalCompositeOperation = 'destination-out'; ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.fill('evenodd'); ctx.restore(); return; }
+        return orig.call(this, ctx, layer);
+      };
+      return r; })());
     const dTiles = new Map(); // "x_y" → { st: 'load'|'ok'|'none', grp, lbl: [[위도, 경도, 수심]] }
     let dQueue = [], dActive = 0, dLabels = null;
     let depthOn = (() => { try { return localStorage.getItem('otemp.depthLayer') !== '0'; } catch (_) { return true; } })();
@@ -40,7 +47,8 @@
       const lbl = []; Object.keys(d.lines || {}).forEach(k => (d.lines[k] || []).forEach(ln => ln.forEach((p, i) => { if (i % 6 === 3) lbl.push([p[0], p[1], +k]); })));
       // [ADD] 섬·바위 육지: 수심 띠·등심선 위에 불투명하게 덮어서 물속에 잠긴 것처럼 보이지 않게(OSM 해안선, 반지름 15m 이상)
       const land = d.land || [];
-      land.forEach(r => layers.push(L.polygon(r, { stroke: true, color: '#fff', weight: 1, opacity: 0.9, fillColor: '#d8cfae', fillOpacity: 0.96, interactive: false, smoothFactor: 0.3, renderer: dRend() })));
+      land.forEach(r => { layers.push(L.polygon(r, { erase: true, stroke: false, fill: true, interactive: false, smoothFactor: 0.3, renderer: dRend() })); // 지우개(투명)
+        layers.push(L.polygon(r, { stroke: true, color: '#fff', weight: 0.8, opacity: 0.45, fill: false, interactive: false, smoothFactor: 0.3, renderer: dRend() })); }); // 옅은 해안선
       const inLand = (la, lo) => land.some(r => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > lo) !== (b[1] > lo) && la < (b[0] - a[0]) * (lo - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; });
       const lb2 = land.length ? lbl.filter(p => !inLand(p[0], p[1])) : lbl;
       return { st: 'ok', grp: L.layerGroup(layers), lbl: lb2.length ? lb2 : (land.length ? [] : (d.lbl || [])), coarse: !!cz };
@@ -64,7 +72,7 @@
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=19${profParam(+x, +y)}${fixParam()}`).then(r => r.json()).then(d => {
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=20${profParam(+x, +y)}${fixParam()}`).then(r => r.json()).then(d => {
           if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
           else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });

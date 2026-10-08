@@ -569,7 +569,7 @@ async function depthTile(x, y, opt = {}) {
 // [ADD] 수심 타일을 서버에서 미리 "그림(벡터)"으로 만들어 두기 - 앱은 받은 다각형·선을 그대로 그리기만 해요(계산·로딩 거의 없음)
 //  fills: 수심 0·10·20·30·40·50·60·80·100m 이상 구역 다각형(아래에서부터 겹쳐 칠하면 깊을수록 진해짐, 일러스트처럼 단색 띠)
 //  lines: 10m 간격 등심선, lbl: 30·40·60m 선 위 숫자 후보. 좌표는 [위도, 경도] 소수 5자리. 180일 저장 + CDN 30일
-const FILL_T = [1, 10, 20, 30, 40, 50, 60, 80, 100, 120, 150];
+const FILL_T = [1, 5, 10, 20, 30, 40, 50, 60, 80, 100, 120, 150]; // [ADD] 5m: 얕은 만(예: 샌프란시스코만 동쪽 1~4m)을 10m 안에서도 구분
 function clipRing(ring, t) { // Sutherland–Hodgman: 타일 네모 안쪽만
   const edges = [[p => p[0] >= t.s, (a, b) => ix(a, b, 0, t.s)], [p => p[0] <= t.n, (a, b) => ix(a, b, 0, t.n)], [p => p[1] >= t.w, (a, b) => ix(a, b, 1, t.w)], [p => p[1] <= t.e, (a, b) => ix(a, b, 1, t.e)]];
   function ix(a, b, k, v) { const r = (v - a[k]) / (b[k] - a[k]); return k === 0 ? [v, a[1] + (b[1] - a[1]) * r] : [a[0] + (b[0] - a[0]) * r, v]; }
@@ -593,7 +593,10 @@ async function depthVec(x, y, opt = {}) {
   const needRaw = opt.fill ? !(await redisPipeline([['EXISTS', RAW_KEY(x, y)]]).then(r => r[0].result).catch(() => 1)) : false;
   let old = null; // 다시 계산이 실패하면(국립해양조사원 하루 한도 등) 예전 그림이라도 보여주기
   const curPf = profSig(profIn(await profSpots(), tileBox(x, y)));
-  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf8))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']); if (!stale) return o; old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf8))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']); let stale2 = stale;
+    // [ADD] 2·5m 얕은 등심선 추가 전 저장본: 10m보다 얕은 곳이 있고 원본 격자가 저장돼 있을 때만 다시 그림(외부 서버 다시 안 부르게)
+    if (!stale2 && !o.sh5 && o.F && o.F.some(f => f[0] === 1)) { try { const [{ result: ex }] = await redisPipeline([['EXISTS', RAW_KEY(x, y)]]); if (ex) stale2 = true; } catch (_) {} }
+    if (!stale2) return o; old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
   const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return old ? Object.assign({}, old, { tmp: true }) : d; // tmp → 짧게만 캐시하고 다음에 다시 시도
   const t = d.tile;
@@ -620,7 +623,7 @@ async function depthVec(x, y, opt = {}) {
     const P = (r, c) => [laN - r * dla, g.lo0 + c * dlo];
     const keep = (s) => { const la = (s[0][0] + s[1][0]) / 2, lo = (s[0][1] + s[1][1]) / 2; return la >= t.s && la < t.n && lo >= t.w && lo < t.e; };
     // [CHANGE] 등심선: 10~100m는 10m 간격, 그 아래는 120·150m까지
-    for (const L of [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 150].filter(v => v <= maxD)) {
+    for (const L of [2, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 150].filter(v => v <= maxD)) { // [ADD] 2·5m 얕은 등심선(앱에서 가는 점선)
       const lv = L + 0.013, segs = [];
       for (let r = 0; r < R - 1; r++) for (let c = 0; c < C - 1; c++) {
         const v = [V[r * C + c], V[r * C + c + 1], V[(r + 1) * C + c + 1], V[(r + 1) * C + c]], cn = [[r, c], [r, c + 1], [r + 1, c + 1], [r + 1, c]], pts = [];
@@ -635,7 +638,7 @@ async function depthVec(x, y, opt = {}) {
     // 좌표를 타일 안 0~4096 정수로 바꾸고 앞 점과의 차이만 적어서 크기를 4~5배 줄임(앱에서 되돌림)
     const QX = (lo) => Math.round((lo - t.w) / (t.e - t.w) * 4096), QY = (la) => Math.round((t.n - la) / (t.n - t.s) * 4096);
     const enc = (pts) => { const o = []; let px = 0, py = 0; pts.forEach((p, i) => { const x1 = QX(p[1]), y1 = QY(p[0]); if (i && x1 === px && y1 === py) return; o.push(x1 - px, y1 - py); px = x1; py = y1; }); return o; };
-    out = { ok: true, v: 2, x, y, tile: t, pf: d.pf || '', src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, kp: d.kp, fixErr: d.fixErr, shift: d.shift || null, full: true, sf2: true, sf3: true, sf4: true, sf5: true, sf6: true, sf7: true, sf8: true, d150: true, tmp: !!(d.coarse && !d.coastFixed) || undefined,
+    out = { ok: true, v: 2, x, y, tile: t, pf: d.pf || '', src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, coastFixed: d.coastFixed, kp: d.kp, fixErr: d.fixErr, shift: d.shift || null, full: true, sf2: true, sf3: true, sf4: true, sf5: true, sf6: true, sf7: true, sf8: true, sh5: true, d150: true, tmp: !!(d.coarse && !d.coastFixed) || undefined,
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
   }

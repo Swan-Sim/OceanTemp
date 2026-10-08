@@ -1,16 +1,10 @@
 {
   "functions": {
-    "api/visibility.js": {
-      "maxDuration": 60
-    },
-    "api/khoa.js": {
+    "api/regional.js": {
       "maxDuration": 120
     },
-    "api/noaa.js": {
+    "api/global.js": {
       "maxDuration": 60
-    },
-    "api/kma.js": {
-      "maxDuration": 120
     },
     "api/cmems.js": {
       "maxDuration": 60
@@ -26,6 +20,38 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/khoa",
+      "destination": "/api/regional?_h=khoa"
+    },
+    {
+      "source": "/api/kma",
+      "destination": "/api/regional?_h=kma"
+    },
+    {
+      "source": "/api/jmatide",
+      "destination": "/api/regional?_h=jmatide"
+    },
+    {
+      "source": "/api/busanwq",
+      "destination": "/api/regional?_h=busanwq"
+    },
+    {
+      "source": "/api/noaa",
+      "destination": "/api/global?_h=noaa"
+    },
+    {
+      "source": "/api/sst",
+      "destination": "/api/global?_h=sst"
+    },
+    {
+      "source": "/api/visibility",
+      "destination": "/api/global?_h=visibility"
+    },
+    {
+      "source": "/api/track",
+      "destination": "/api/global?_h=track"
+    },
     {
       "source": "/auth/start/:p(google|kakao|naver|facebook)",
       "destination": "/api/shops?svc=auth&a=start&p=:p"

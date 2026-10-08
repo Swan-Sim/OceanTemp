@@ -39,11 +39,21 @@
       return { st: 'ok', grp: L.layerGroup(layers), lbl: lbl.length ? lbl : (d.lbl || []), coarse: !!cz };
     }
 
+    // [ADD] 포인트 현지 지형(관리자 입력)이 이 타일에 걸리면 주소에 짧은 표시를 붙여요(서버 api/_depth.js profSig와 같은 계산) - 바꾸면 바로 새로 그림
+    function profParam(x, y) {
+      const n = 2 ** 13, lon = (v) => v / n * 360 - 180, lat = (v) => Math.atan(Math.sinh(Math.PI * (1 - 2 * v / n))) * 180 / Math.PI;
+      const b = { s: lat(y + 1), n: lat(y), w: lon(x), e: lon(x + 1) }, E = 0.02;
+      const str = (typeof stations !== 'undefined' ? stations : []).filter(st => st.prof && st.no && st.coords && st.coords[1] >= b.s - E && st.coords[1] <= b.n + E && st.coords[0] >= b.w - E && st.coords[0] <= b.e + E)
+        .map(st => `${st.no}:${st.prof.top}/${st.prof.max}/${st.prof.run}/${st.prof.r}`).sort().join(',');
+      if (!str) return '';
+      let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
+      return '&p=' + h.toString(36);
+    }
     function loadNext() {
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=15`).then(r => r.json()).then(d => {
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=15${profParam(+x, +y)}`).then(r => r.json()).then(d => {
           if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
           else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });

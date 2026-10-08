@@ -121,11 +121,16 @@ const editUrl = (base, token) => `${base}/shop/#t=${token}`;
 // 정점 칸
 // [ADD] 바다 쪽 방향(°, 북=0). 비우면 해안선으로 자동 계산
 function faceOf(v) { if (v === '' || v == null) return null; const n = +v; return Number.isFinite(n) ? Math.round(((n % 360) + 360) % 360) : null; }
+// [ADD] 포인트 현지 지형(수심 지도 보완): 상단 수심·바닥 수심·수평 거리·적용 반경(m). 바닥 수심이 없으면 안 씀
+const numIn = (v, lo, hi) => { if (v === '' || v == null) return null; const n = +v; return Number.isFinite(n) && n >= lo && n <= hi ? +n.toFixed(1) : null; };
+function profOf(b) { const pMax = numIn(b.pMax, 1, 300); if (pMax == null) return { pTop: null, pMax: null, pRun: null, pR: null };
+  return { pTop: numIn(b.pTop, 0, 100) ?? 2, pMax, pRun: numIn(b.pRun, 1, 2000) ?? 10, pR: numIn(b.pR, 50, 2000) ?? 250 }; }
 function spotFields(b) {
   b = b || {};
   const lat = +b.lat, lon = +b.lon;
   return {
     face: faceOf(b.face), // [ADD] 바다 쪽 방향(바람 종목 오프쇼어 판단)
+    ...profOf(b),
     name: str(b.name, 80), label: str(b.label, 30) || str(b.name, 30), country: str(b.country, 40),
     lat: Number.isFinite(lat) && Math.abs(lat) <= 90 ? +lat.toFixed(5) : null,
     lon: Number.isFinite(lon) && Math.abs(lon) <= 180 ? +lon.toFixed(5) : null,
@@ -174,7 +179,7 @@ function normSpot(o) {
   if (!(no > 0) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   return { no, country: str(o.country, 40), name: str(o.name, 80), label: str(o.label, 30) || str(o.name, 30), lat: +lat.toFixed(5), lon: +lon.toFixed(5),
     network: str(o.network, 40) || 'Beach/local', depth: truthy(o.depth, true), show: truthy(o.show, true),
-    face: faceOf(o.face) };
+    face: faceOf(o.face), ...profOf(o) };
 }
 async function legacySpots(base) {
   let text = await getText(STATION_SHEET, 8000);

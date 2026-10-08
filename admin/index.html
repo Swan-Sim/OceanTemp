@@ -502,9 +502,20 @@
       <label>경도<input class="f" data-k="lon" value="${s.lon ?? ''}"></label>
       <label><input type="checkbox" data-k="depth"${s.depth !== false ? ' checked' : ''}> 수심 프로파일 탭 보이기</label>
       <label><input type="checkbox" data-k="show"${s.show !== false ? ' checked' : ''}> 사이트에 보이기</label>
-      <label>바다 쪽 방향°(북=0, 비우면 해안선으로 자동)<input class="f" data-k="face" value="${s.face ?? ''}" placeholder="예) 270 = 서쪽이 바다"></label></div>
+      <label>바다 쪽 방향°(북=0, 비우면 해안선으로 자동)<input class="f" data-k="face" value="${s.face ?? ''}" placeholder="예) 270 = 서쪽이 바다"></label>
+      <div style="grid-column:1/-1;border-top:1px solid rgba(255,255,255,.1);padding-top:8px"><b>현지 지형(수심 지도 보완)</b> <span class="hint">공개 수심 자료가 거친 곳(해외 섬 등)을 다이버가 아는 지형으로 바로잡아요. 바닥 수심을 비우면 안 씀</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:flex-end">
+          <label>모양<select class="f" data-prof-preset><option value="">직접 입력</option><option value="5">직벽(수평 5m)</option><option value="30">급경사(30m)</option><option value="150">완경사(150m)</option></select></label>
+          <label>상단 수심 m<input class="f" data-k="pTop" value="${s.pTop ?? ''}" placeholder="2" style="width:70px"></label>
+          <label>바닥 수심 m<input class="f" data-k="pMax" value="${s.pMax ?? ''}" placeholder="예) 45" style="width:70px"></label>
+          <label>수평 거리 m<input class="f" data-k="pRun" value="${s.pRun ?? ''}" placeholder="10" style="width:70px"></label>
+          <label>적용 반경 m<input class="f" data-k="pR" value="${s.pR ?? ''}" placeholder="250" style="width:70px"></label></div>
+        <div class="hint">상단(해안·리프 끝)에서 바닥 수심까지 수평 거리 안에 떨어진다고 그려요. 포인트에서 적용 반경까지 그대로, 2배 거리까지 서서히 원래 자료로.</div></div></div>
       <div class="actions" style="margin-top:8px"><button class="primary" data-act="${isNew ? 'sadd' : 'ssave'}">${isNew ? '추가 (번호 자동)' : '저장'}</button><button data-act="scancel">취소</button></div></div>`;
   }
+  // [ADD] 현지 지형 모양 고르면 수평 거리 채우기
+  document.addEventListener('change', (e) => { const sel = e.target.closest && e.target.closest('[data-prof-preset]'); if (!sel || !sel.value) return;
+    const f = sel.closest('[data-sform]'), run = f && f.querySelector('[data-k=pRun]'); if (run) run.value = sel.value; });
   function readSpotForm(el) {
     const o = {}; el.querySelectorAll('[data-k]').forEach(i => { o[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.value.trim(); });
     if (o.country !== undefined) { const sel = el.querySelector('select[data-k=country]'); if (sel) o.country = sel.value; }

@@ -31,9 +31,9 @@
   const css = document.createElement('style');
   css.textContent = `
   .acct-av{width:100%;height:100%;border-radius:6px;object-fit:cover}
-  #acct-ov{position:fixed;inset:0;z-index:4000;background:rgba(2,6,16,.6);display:none;align-items:center;justify-content:center;padding:16px}
-  #acct-ov.show{display:flex}
-  #acct-box{width:100%;max-width:360px;max-height:86vh;overflow:auto;background:#0B1120;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:18px 18px 14px;color:#f1f5f9;font-size:14px;position:relative}
+  #acct-ov{position:fixed;inset:0;z-index:4000;background:none;display:none;pointer-events:none}
+  #acct-ov.show{display:block}
+  #acct-box{position:absolute;pointer-events:auto;box-shadow:0 10px 30px rgba(0,0,0,.5);width:340px;max-width:calc(100vw - 24px);max-height:calc(100vh - 90px);overflow:auto;background:#0B1120;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:18px 18px 14px;color:#f1f5f9;font-size:14px}
   #acct-box h3{margin:0 0 4px;font-size:17px} #acct-box .a-sub{color:#94a3b8;font-size:12.5px;margin-bottom:14px}
   #acct-box .a-x{position:absolute;right:10px;top:8px;background:none;border:0;color:#94a3b8;font-size:20px;cursor:pointer}
   .a-pbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:44px;border-radius:10px;border:0;margin:8px 0;font-size:14.5px;font-weight:600;cursor:pointer;text-decoration:none}
@@ -76,7 +76,7 @@
   function stationByNo(no) { return (typeof stations !== 'undefined' ? stations : []).find(s => s.no === no); }
   function open() {
     let ov = document.getElementById('acct-ov');
-    if (!ov) { ov = document.createElement('div'); ov.id = 'acct-ov'; ov.innerHTML = '<div id="acct-box"></div>'; document.body.appendChild(ov); ov.addEventListener('click', (e) => { if (e.target === ov) close(); }); }
+    if (!ov) { ov = document.createElement('div'); ov.id = 'acct-ov'; ov.innerHTML = '<div id="acct-box"></div>'; document.body.appendChild(ov); }
     const box = document.getElementById('acct-box'), avail = ORDER.filter(p => me.providers.includes(p));
     let h = `<button class="a-x" aria-label="${T.close}">×</button>`;
     if (!me.user) {
@@ -92,6 +92,12 @@
       h += `<div class="a-row"><button class="a-out">${T.logout}</button><button class="a-del">${T.del}</button></div>`;
     }
     box.innerHTML = h; ov.classList.add('show');
+    // 사용자 버튼 바로 아래에 드롭다운으로 열기(화면을 어둡게 하지 않음)
+    const r = btn ? btn.getBoundingClientRect() : { bottom: 56, right: window.innerWidth - 12 };
+    box.style.top = Math.round(r.bottom + 8) + 'px'; box.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + 'px';
+    if (!open._hooked) { open._hooked = true;
+      document.addEventListener('pointerdown', (e) => { const o = document.getElementById('acct-ov'); if (!o || !o.classList.contains('show')) return; if (e.target.closest('#acct-box') || (btn && btn.contains(e.target))) return; close(); }, true);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); }); }
     box.querySelector('.a-x').onclick = close;
     box.querySelectorAll('.a-fav').forEach(b => b.onclick = () => { const s = stationByNo(+b.dataset.no); if (!s) return; close(); try { selectStation(s); showDetailMap(s.coords[1], s.coords[0], typeof SPOT_ZOOM === 'number' ? SPOT_ZOOM : 16); } catch (_) {} });
     const out = box.querySelector('.a-out'); if (out) out.onclick = async () => { try { await post('logout'); } catch (_) {} close(); await load(); };
@@ -115,7 +121,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     // [CHANGE] 로그인 버튼 위치: 위쪽 줄 내 위치(나침반 모양) 버튼 왼쪽. 없으면 예전처럼 오른쪽 버튼 줄
     const loc = document.getElementById('btn-locate'), ctr = document.querySelector('.map-controls');
-    if (loc || ctr) { btn = document.createElement('button'); btn.className = loc ? 'ctrl-btn top-btn' : 'ctrl-btn'; btn.id = 'btn-account'; btn.type = 'button'; btn.style.overflow = 'hidden'; btn.style.padding = '0'; btn.onclick = open;
+    if (loc || ctr) { btn = document.createElement('button'); btn.className = loc ? 'ctrl-btn top-btn' : 'ctrl-btn'; btn.id = 'btn-account'; btn.type = 'button'; btn.style.overflow = 'hidden'; btn.style.padding = '0'; btn.onclick = () => { const o = document.getElementById('acct-ov'); if (o && o.classList.contains('show')) close(); else open(); };
       if (loc) loc.parentNode.insertBefore(btn, loc);
       else { const before = document.getElementById('btn-spot-add'); before ? ctr.insertBefore(btn, before) : ctr.appendChild(btn); }
       paintBtn(); }

@@ -150,6 +150,23 @@ module.exports = async function auth(req, res) {
     let [uid] = await R(['HGET', 'uidx:v1', key]);
     let user = uid ? await getUser(uid) : null;
     if (!user && cur) { uid = cur; user = await getUser(cur); }
+    // [ADD] 이미 로그인한 상태에서 "다른 계정 연결"을 눌렀는데 그 로그인이 이미 다른 계정(예: 예전 카카오 계정)으로 있으면 → 두 계정을 하나로 합쳐요(즐겨찾기·연결된 로그인 모두)
+    if (cur && uid && uid !== cur && user) {
+      const curUser = await getUser(cur);
+      if (curUser) {
+        const [favs] = await R(['SMEMBERS', 'ufav:' + uid]);
+        const [sess] = await R(['SMEMBERS', 'usess:' + uid]);
+        (user.logins || []).forEach(l => { if (!curUser.logins.some(x => x.p === l.p && String(x.sub) === String(l.sub))) curUser.logins.push(l); });
+        curUser.name = curUser.name || user.name; curUser.avatar = curUser.avatar || user.avatar; curUser.email = curUser.email || user.email;
+        const cmds = [];
+        if (favs && favs.length) cmds.push(['SADD', 'ufav:' + cur, ...favs.map(String)]);
+        (user.logins || []).forEach(l => cmds.push(['HSET', 'uidx:v1', `${l.p}:${l.sub}`, cur]));
+        (sess || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));
+        cmds.push(['HSET', 'users:v1', cur, JSON.stringify(curUser)], ['HDEL', 'users:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid]);
+        await R(...cmds);
+        uid = cur; user = curUser;
+      }
+    }
     const now = Date.now();
     if (!user) { uid = crypto.randomBytes(9).toString('base64url'); user = { id: uid, created: now, logins: [] }; }
     if (!user.logins.some(l => l.p === p && String(l.sub) === String(prof.sub))) user.logins.push({ p, sub: String(prof.sub), at: now });

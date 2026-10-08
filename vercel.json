@@ -3,7 +3,7 @@
     "api/regional.js": {
       "maxDuration": 120
     },
-    "api/global.js": {
+    "api/world.js": {
       "maxDuration": 60
     },
     "api/cmems.js": {
@@ -38,19 +38,19 @@
     },
     {
       "source": "/api/noaa",
-      "destination": "/api/global?_h=noaa"
+      "destination": "/api/world?_h=noaa"
     },
     {
       "source": "/api/sst",
-      "destination": "/api/global?_h=sst"
+      "destination": "/api/world?_h=sst"
     },
     {
       "source": "/api/visibility",
-      "destination": "/api/global?_h=visibility"
+      "destination": "/api/world?_h=visibility"
     },
     {
       "source": "/api/track",
-      "destination": "/api/global?_h=track"
+      "destination": "/api/world?_h=track"
     },
     {
       "source": "/auth/start/:p(google|kakao|naver|facebook)",

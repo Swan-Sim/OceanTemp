@@ -29,6 +29,9 @@ module.exports = async function admin(req, res) {
   const svc = String(req.query.svc), b = bodyOf(req), base = S.baseOf(req);
   const ok = (o) => res.status(200).json({ ok: true, ...(o || {}) });
   const bad = (e) => res.status(400).json({ ok: false, error: e });
+  // [ADD] 크레딧: 요청 보낸 회원(승인 때) 또는 지금 로그인한 관리자 본인(직접 추가·수정 때)
+  const meUid = async () => { try { return await require('./_auth').sessionUid(req); } catch (_) { return null; } };
+  const give = async (uid, key) => { if (uid) { try { await C.award(R, uid, key); } catch (_) {} } };
 
   // [ADD] 관리자 설정: 비밀번호·알림 이메일 바꾸기
   if (svc === 'settings') {
@@ -149,6 +152,7 @@ module.exports = async function admin(req, res) {
     const spot = { no, ...f, network: S.str(b.network, 40) || 'Beach/local', depth: b.depth !== false, show: b.show !== false && b.show !== 'false', email: '', created: Date.now() };
     await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['DEL', 'sp:list']);
     S.clearSpotsMemo();
+    await give(await meUid(), 'spotAdd');
     return ok({ no });
   }
 
@@ -166,6 +170,7 @@ module.exports = async function admin(req, res) {
       const shop = { id, ...data, email: rq.email, plan, expires: S.dateStr(b.expires) || S.defaultExpires(plan), terms: rq.terms || '', termsAt: rq.termsAt || 0,
         show: true, checked: ym(), created: Date.now(), updated: Date.now(), tok: rq.tok };
       await R(['HSET', K.shops, id, JSON.stringify(shop)], ['HSET', K.tok, rq.tok, 's:' + id], ['HDEL', K.req, rq.id]);
+      await give(rq.uid, 'shopAdd');
       await S.sendMail(rq.email, '[otemp.app] 샵이 등록됐어요 / Your shop is live',
         `<p>${S.esc(shop.name)} 정보가 사이트에 올라갔어요. 고칠 때는 처음 받은 수정 링크를 쓰거나, ${base}/shop/ 에서 이메일로 새 링크를 받으세요.</p>`);
       return ok({ id });
@@ -176,6 +181,7 @@ module.exports = async function admin(req, res) {
     Object.assign(shop, data, { email: rq.email || shop.email, checked: ym(), updated: Date.now() });
     if (rq.terms) { shop.terms = rq.terms; shop.termsAt = rq.termsAt; }
     await R(['HSET', K.shops, String(shop.id), JSON.stringify(shop)], ['HDEL', K.req, rq.id]);
+    await give(rq.uid, 'shopEdit');
     return ok({ id: shop.id });
   }
   if (svc === 'shopReject') {
@@ -201,6 +207,7 @@ module.exports = async function admin(req, res) {
       show: b.show !== false, checked: S.str(b.checked, 10) || shop.checked || ym(), updated: Date.now() });
     await R(['HSET', K.shops, id, JSON.stringify(shop)]);
     // [ADD] 이메일 없이 새로 넣은 샵은 수정 링크를 관리자에게
+    await give(await meUid(), isNew ? 'shopAdd' : 'shopEdit'); // [ADD] 관리자 직접 추가·수정 크레딧
     if (isNew && !shop.email) { const links = await linksToAdmin([shop], base); return ok({ id, links }); }
     return ok({ id });
   }
@@ -300,6 +307,7 @@ module.exports = async function admin(req, res) {
     const no = Math.max(await S.nextSpotNo(S.baseOf(req)), 0, ...Object.keys(extra).map(Number).map(n => n + 1));
     const spot = { no, ...f, network: 'Beach/user', depth: true, show: true, email: rq.email || '', created: Date.now() };
     await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['HDEL', K.spotreq, rq.id], ['DEL', 'sp:list']);
+    await give(rq.uid, 'spotAdd');
     S.clearSpotsMemo();
     return ok({ no });
   }
@@ -345,6 +353,7 @@ module.exports = async function admin(req, res) {
     if (b.depth !== undefined) spot.depth = b.depth !== false;
     await R(['HSET', K.spots, no, JSON.stringify(spot)], ['DEL', 'sp:list']);
     S.clearSpotsMemo();
+    await give(await meUid(), 'spotEdit');
     return ok();
   }
   if (svc === 'spotDelete') { await R(['HDEL', K.spots, String(parseInt(b.no, 10))], ['DEL', 'sp:list']); S.clearSpotsMemo(); return ok(); }

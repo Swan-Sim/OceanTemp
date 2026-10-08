@@ -146,7 +146,8 @@ module.exports = async function handler(req, res) {
       if (!b.agree || b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' }); // [CHANGE] 약관 동의 필수
       const id = 'n' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
       const { token, hash } = S.newToken();
-      const rq = { id, type: 'new', data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now(), tok: hash, terms: S.TERMS_VERSION, termsAt: Date.now() };
+      const uid = await require('./_auth').sessionUid(req).catch(() => null); // [ADD] 로그인 회원이면 승인 때 크레딧
+      const rq = { id, type: 'new', data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now(), tok: hash, terms: S.TERMS_VERSION, termsAt: Date.now(), uid: uid || '' };
       await R(['HSET', K.req, id, JSON.stringify(rq)], ['HSET', K.tok, hash, 'r:' + id]);
       const base = S.baseOf(req), url = S.editUrl(base, token);
       await notifyAdmin(`[otemp] 새 샵 등록 요청: ${f.name}`, `<p>${S.esc(f.name)} (${S.esc(mail)})</p><p><a href="${base}/admin/#shops">관리 페이지에서 확인</a></p>`);
@@ -190,6 +191,7 @@ module.exports = async function handler(req, res) {
         const rq = JSON.parse(raw);
         if (rq.terms !== S.TERMS_VERSION && b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' });
         Object.assign(rq, { data: f, email: mail, memo: S.str(b.memo, 500) || rq.memo, at: Date.now() });
+        if (!rq.uid) rq.uid = (await require('./_auth').sessionUid(req).catch(() => null)) || '';
         if (b.terms === S.TERMS_VERSION) { rq.terms = S.TERMS_VERSION; rq.termsAt = Date.now(); }
         await R(['HSET', K.req, tk.id, JSON.stringify(rq)]);
         return send(res, 200, { ok: true, status: 'pending_new' });
@@ -199,7 +201,7 @@ module.exports = async function handler(req, res) {
       const s = JSON.parse(raw);
       // [ADD] 아직 지금 약관에 동의하지 않은 샵(가져오기·관리자 추가·예전 약관)은 수정할 때 동의 받기
       if (s.terms !== S.TERMS_VERSION && b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' });
-      const rq = { id: 'e' + tk.id, type: 'edit', shopId: tk.id, data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now() };
+      const rq = { id: 'e' + tk.id, type: 'edit', shopId: tk.id, data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now(), uid: (await require('./_auth').sessionUid(req).catch(() => null)) || '' };
       if (b.terms === S.TERMS_VERSION) { rq.terms = S.TERMS_VERSION; rq.termsAt = Date.now(); }
       await R(['HSET', K.req, rq.id, JSON.stringify(rq)]);
       await notifyAdmin(`[otemp] 샵 수정 요청: ${s.name}`, `<p>${S.esc(s.name)} → ${S.esc(f.name)}</p><p><a href="${S.baseOf(req)}/admin/#shops">관리 페이지에서 확인</a></p>`);
@@ -257,7 +259,8 @@ module.exports = async function handler(req, res) {
       const f = S.spotFields(b);
       if (!f.name || f.lat == null || f.lon == null) return send(res, 400, { ok: false, error: 'need_name_pos' });
       const id = 'p' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
-      await R(['HSET', K.spotreq, id, JSON.stringify({ id, data: f, email: S.email(b.email), at: Date.now() })]);
+      const uid = await require('./_auth').sessionUid(req).catch(() => null); // [ADD] 로그인 회원이면 승인 때 크레딧
+      await R(['HSET', K.spotreq, id, JSON.stringify({ id, data: f, email: S.email(b.email), at: Date.now(), uid: uid || '' })]);
       await notifyAdmin(`[otemp] 새 정점 등록 요청: ${f.name}`, `<p>${S.esc(f.name)} ${f.lat}, ${f.lon}</p><p><a href="${S.baseOf(req)}/admin/#spots">관리 페이지에서 확인</a></p>`);
       return send(res, 200, { ok: true });
     }

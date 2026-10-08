@@ -249,3 +249,4 @@ module.exports = async function auth(req, res) {
   return json(400, { ok: false, error: 'unknown' });
 };
 module.exports.isAdminReq = isAdminReq;
+module.exports.sessionUid = sessionUid; // [ADD] 정점·샵 요청에 보낸 회원 기록(승인 때 크레딧)

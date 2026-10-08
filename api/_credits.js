@@ -10,6 +10,11 @@ const RULES = {
   login: { amount: 1, cap: 1 },      // 하루 첫 로그인
   fav: { amount: 1, cap: 5 },        // 처음 즐겨찾기하는 포인트(같은 포인트는 다시 안 쳐줘요)
   log: { amount: 3, cap: 5 },        // 로그북 새 기록(하루 5건까지 크레딧. 기록 자체는 하루 30건까지 쓸 수 있어요)
+  // [ADD] 정점·샵 기여 - 회원이 보낸 요청은 관리자가 승인할 때, 관리자가 직접 하면 저장할 때 적립
+  spotAdd: { amount: 5, cap: 10 },   // 정점 추가
+  shopAdd: { amount: 10, cap: 5 },   // 샵 추가
+  spotEdit: { amount: 2, cap: 10 },  // 정점 수정
+  shopEdit: { amount: 3, cap: 5 },   // 샵 수정
   // 아래는 기능이 생기면 쓸 자리: photo(3, 3) · report(5, 3)
 };
 

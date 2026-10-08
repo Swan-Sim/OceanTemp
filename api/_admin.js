@@ -59,6 +59,30 @@ module.exports = async function admin(req, res) {
     if (old && old !== mail) await S.sendMail(old, '[otemp] 관리자 알림 이메일이 바뀌었어요', `<p>알림 이메일이 ${S.esc(mail || '(환경변수 값)')}(으)로 바뀌었어요.</p>`);
     return ok({ email: c.email || process.env.ADMIN_EMAIL || '' });
   }
+  // [ADD] Redis 용량 보기: 키를 훑어 앞부분(접두어)별 개수·크기(문자열 키 기준) 합계. 한 번에 ~8초씩, cursor로 이어서
+  if (svc === 'redisUsage') {
+    let cur = String(b.cursor || '0'); const t0 = Date.now(), agg = {};
+    do {
+      const [sc] = await R(['SCAN', cur, 'COUNT', '1000']); cur = String(sc[0]); const keys = sc[1] || [];
+      if (keys.length) {
+        const out = await require('./_redis').redisPipeline(keys.map(k => ['STRLEN', k]));
+        keys.forEach((k, i) => { const pf = k.split(':').slice(0, 2).join(':'); const a = agg[pf] || (agg[pf] = { n: 0, bytes: 0 }); a.n++; const v = out[i] && out[i].result; if (typeof v === 'number') a.bytes += v + k.length; });
+      }
+    } while (cur !== '0' && Date.now() - t0 < 8000);
+    return ok({ cursor: cur, agg });
+  }
+  // [ADD] 다시 만들 수 있는 캐시(수심·해안선 등)만 지우기. 포인트·샵·회원·통계는 못 지움
+  if (svc === 'redisPurge') {
+    const CACHE = ['draw:', 'dvec:', 'dtile:', 'depth:v1:', 'land:', 'reef:', 'isl:', 'tctl:', 'dshift:'];
+    const pf = String(b.prefix || '');
+    if (!CACHE.some(c => (pf + ':').startsWith(c) || pf.startsWith(c))) return bad('not_cache');
+    let cur = String(b.cursor || '0'), del = 0; const t0 = Date.now();
+    do {
+      const [sc] = await R(['SCAN', cur, 'MATCH', pf + ':*', 'COUNT', '1000']); cur = String(sc[0]); const keys = sc[1] || [];
+      for (let i = 0; i < keys.length; i += 500) { await R(['DEL', ...keys.slice(i, i + 500)]); del += Math.min(500, keys.length - i); }
+    } while (cur !== '0' && Date.now() - t0 < 8000);
+    return ok({ cursor: cur, del });
+  }
   if (svc === 'testMail') {
     const to = await S.adminEmail();
     if (!to) return bad('no_email');

@@ -550,7 +550,7 @@ function decGrid(m, b64) {
 }
 async function rawSet(x, y, r) {
   try { const g = r.grid, o = { v: 1, src: r.src, res: r.res, hiFrac: r.hiFrac, nullLand: !!r.nullLand, la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: encGrid(g), at: Date.now() };
-    await redisPipeline([['SET', RAW_KEY(x, y), JSON.stringify(o), 'EX', String(180 * 86400)]]); } catch (_) {}
+    await redisPipeline([['SET', RAW_KEY(x, y), JSON.stringify(o), 'EX', String(30 * 86400)]]); } catch (_) {}
 }
 async function rawGet(x, y) {
   try { const [{ result }] = await redisPipeline([['GET', RAW_KEY(x, y)]]); if (!result) return null; const o = JSON.parse(result); if (o.src === 'khoa' && !o.kp) return null; // 쪽이 빠졌을 수 있는 옛 국립해양조사원 원본은 다시 받기

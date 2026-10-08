@@ -144,6 +144,9 @@
         </form><div class="muted" id="siteMsg"></div></div>
       <div class="card"><h2>지금 설정</h2><div class="kv" id="setInfo"></div>
         <div class="actions"><button id="testMailBtn">알림 이메일로 테스트 메일 보내기</button></div><div class="muted" id="testMailMsg"></div></div>
+      <div class="card"><h2>Redis 용량</h2>
+        <div class="muted" style="margin-bottom:8px">무료 한도(256MB)를 넘으면 포인트 등록·로그인·통계 저장이 막혀요. 수심·해안선 같은 캐시는 지워도 필요할 때 다시 만들어져요(포인트·샵·회원·통계는 지울 수 없음).</div>
+        <div class="actions"><button id="redisScanBtn">용량 살펴보기</button></div><div class="muted" id="redisMsg"></div><div id="redisTbl"></div></div>
       <div class="card"><h2>알림 이메일 바꾸기</h2>
         <div class="muted" style="margin-bottom:8px">새 등록·수정 요청, 이의 제기, 이메일 없는 샵의 수정 링크, 만료 안내가 이 주소로 가요. 비우고 저장하면 Vercel의 ADMIN_EMAIL 값으로 돌아가요.</div>
         <form id="emailForm" class="ed" style="border-color:var(--line)">
@@ -499,6 +502,26 @@
     const j = await apiQuiet('setPassword', { current: f.current.value, next: f.next.value, confirm: f.confirm.value });
     if (j.ok) { setPw(f.next.value); f.reset(); $('pwMsg').textContent = '바꿨어요. 다음부터 새 비밀번호로 들어오세요.'; loadSettings(); }
     else { $('pwMsg').textContent = ERR[j.error] || '바꾸지 못했어요'; f.current.value = ''; } };
+  // [ADD] Redis 용량 보기·캐시 지우기
+  const REDIS_CACHE = ['draw:', 'dvec:', 'dtile:', 'depth:v1', 'land:', 'reef:', 'isl:', 'tctl:', 'dshift:'];
+  async function redisScan() {
+    const agg = {}; let cursor = '0', loops = 0;
+    $('redisMsg').textContent = '살펴보는 중…'; $('redisTbl').innerHTML = '';
+    do { const r = await apiQuiet('redisUsage', { cursor }); if (!r.ok) { $('redisMsg').textContent = '실패: ' + (r.error || ''); return; }
+      Object.entries(r.agg).forEach(([k, v]) => { const a = agg[k] || (agg[k] = { n: 0, bytes: 0 }); a.n += v.n; a.bytes += v.bytes; });
+      cursor = r.cursor; $('redisMsg').textContent = `살펴보는 중… (${++loops})`; } while (cursor !== '0' && loops < 200);
+    const rows = Object.entries(agg).sort((a, b) => b[1].bytes - a[1].bytes);
+    const tot = rows.reduce((t, r) => t + r[1].bytes, 0);
+    $('redisMsg').textContent = `문자열 키 합계 약 ${(tot / 1048576).toFixed(1)}MB (해시·집합 키는 크기 0으로 표시)`;
+    $('redisTbl').innerHTML = '<table style="width:100%;font-size:13px"><tr><th align="left">접두어</th><th align="right">키 수</th><th align="right">MB</th><th></th></tr>' + rows.slice(0, 40).map(([k, v]) =>
+      `<tr><td>${esc(k)}</td><td align="right">${v.n}</td><td align="right">${(v.bytes / 1048576).toFixed(1)}</td><td align="right">${REDIS_CACHE.some(c => (k + ':').startsWith(c)) ? `<button data-purge="${esc(k)}">지우기</button>` : ''}</td></tr>`).join('') + '</table>';
+    $('redisTbl').querySelectorAll('[data-purge]').forEach(btn => btn.onclick = async () => {
+      const prefix = btn.dataset.purge; if (!confirm(prefix + ' 캐시를 모두 지울까요? (필요할 때 다시 만들어져요)')) return;
+      let cursor = '0', del = 0, n = 0; btn.disabled = true;
+      do { const r = await apiQuiet('redisPurge', { prefix, cursor }); if (!r.ok) { btn.textContent = '실패 ' + (r.error || ''); return; } del += r.del; cursor = r.cursor; btn.textContent = `${del}개 지움…`; } while (cursor !== '0' && ++n < 300);
+      btn.textContent = `${del}개 지움`; });
+  }
+  $('redisScanBtn').onclick = redisScan;
   $('testMailBtn').onclick = async () => { const j = await apiQuiet('testMail');
     $('testMailMsg').textContent = j.ok ? (j.sent ? `${j.to}로 보냈어요. 메일함(스팸함 포함)을 확인해 주세요.` : '보내지 못했어요 - 메일 발송(RESEND) 설정을 확인해 주세요.') : (ERR[j.error] || '실패'); };
   const FIELDS = [['name', '샵 이름'], ['spots', '포인트'], ['phone', '전화'], ['kakao', '카카오'], ['whatsapp', 'WhatsApp'], ['instagram', '인스타'], ['web', '웹'], ['address', '주소'], ['lang', '언어'], ['note', '소개']];

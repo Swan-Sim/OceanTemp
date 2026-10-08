@@ -71,6 +71,30 @@ module.exports = async function admin(req, res) {
     } while (cur !== '0' && Date.now() - t0 < 8000);
     return ok({ cursor: cur, agg });
   }
+  // [ADD] 수심·해안선 캐시를 Redis → Cloudflare R2로 옮기기(남은 만료 기간 유지, 옮긴 것만 Redis에서 지움). 한 번에 ~8초씩, cursor로 이어서
+  if (svc === 'redisMove') {
+    const R2 = require('./_r2'), raw = require('./_redis').redisPipeline;
+    if (!R2.on) return bad('no_r2');
+    const CACHE = ['draw:', 'dvec:', 'dtile:', 'depth:v1:', 'land:', 'reef:', 'isl:', 'tctl:', 'dshift:'];
+    const pf = String(b.prefix || '');
+    if (!CACHE.some(c => (pf + ':').startsWith(c) || pf.startsWith(c))) return bad('not_cache');
+    let cur = String(b.cursor || '0'), moved = 0, fail = 0, lastErr = ''; const t0 = Date.now();
+    do {
+      const [sc] = await R(['SCAN', cur, 'MATCH', pf + ':*', 'COUNT', '200']); cur = String(sc[0]); const keys = sc[1] || [];
+      for (let i = 0; i < keys.length; i += 16) {
+        const part = keys.slice(i, i + 16);
+        const got = await raw(part.flatMap(k => [['GET', k], ['TTL', k]]));
+        const done = [];
+        await Promise.all(part.map(async (k, j) => {
+          const v = got[2 * j] && got[2 * j].result, ttl = +(got[2 * j + 1] && got[2 * j + 1].result);
+          if (v == null) return;
+          try { await R2.put(k, v, ttl > 0 ? ttl : 180 * 86400); done.push(k); } catch (e) { fail++; lastErr = String(e.message || e); }
+        }));
+        if (done.length) { await raw([['DEL', ...done]]); moved += done.length; }
+      }
+    } while (cur !== '0' && Date.now() - t0 < 8000);
+    return ok({ cursor: cur, moved, fail, lastErr });
+  }
   // [ADD] 다시 만들 수 있는 캐시(수심·해안선 등)만 지우기. 포인트·샵·회원·통계는 못 지움
   if (svc === 'redisPurge') {
     const CACHE = ['draw:', 'dvec:', 'dtile:', 'depth:v1:', 'land:', 'reef:', 'isl:', 'tctl:', 'dshift:'];

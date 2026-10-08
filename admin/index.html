@@ -514,7 +514,13 @@
     const tot = rows.reduce((t, r) => t + r[1].bytes, 0);
     $('redisMsg').textContent = `문자열 키 합계 약 ${(tot / 1048576).toFixed(1)}MB (해시·집합 키는 크기 0으로 표시)`;
     $('redisTbl').innerHTML = '<table style="width:100%;font-size:13px"><tr><th align="left">접두어</th><th align="right">키 수</th><th align="right">MB</th><th></th></tr>' + rows.slice(0, 40).map(([k, v]) =>
-      `<tr><td>${esc(k)}</td><td align="right">${v.n}</td><td align="right">${(v.bytes / 1048576).toFixed(1)}</td><td align="right">${REDIS_CACHE.some(c => (k + ':').startsWith(c)) ? `<button data-purge="${esc(k)}">지우기</button>` : ''}</td></tr>`).join('') + '</table>';
+      `<tr><td>${esc(k)}</td><td align="right">${v.n}</td><td align="right">${(v.bytes / 1048576).toFixed(1)}</td><td align="right">${REDIS_CACHE.some(c => (k + ':').startsWith(c)) ? `<button data-move="${esc(k)}">R2로 옮기기</button> <button data-purge="${esc(k)}">지우기</button>` : ''}</td></tr>`).join('') + '</table>';
+    $('redisTbl').querySelectorAll('[data-move]').forEach(btn => btn.onclick = async () => {
+      const prefix = btn.dataset.move; let cursor = '0', moved = 0, fail = 0, n = 0; btn.disabled = true;
+      do { const r = await apiQuiet('redisMove', { prefix, cursor }); if (!r.ok) { btn.textContent = '실패 ' + (r.error || ''); btn.disabled = false; return; }
+        moved += r.moved; fail += r.fail; cursor = r.cursor; btn.textContent = `${moved}개 옮김…` + (fail ? ` (실패 ${fail}: ${r.lastErr || ''})` : '');
+      } while (cursor !== '0' && ++n < 1000);
+      btn.textContent = `${moved}개 옮김` + (fail ? ` · 실패 ${fail}` : ' ✓'); });
     $('redisTbl').querySelectorAll('[data-purge]').forEach(btn => btn.onclick = async () => {
       const prefix = btn.dataset.purge; if (!confirm(prefix + ' 캐시를 모두 지울까요? (필요할 때 다시 만들어져요)')) return;
       let cursor = '0', del = 0, n = 0; btn.disabled = true;

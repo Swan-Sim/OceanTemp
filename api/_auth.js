@@ -142,13 +142,15 @@ module.exports = async function auth(req, res) {
     try { prof = await P.profile(String(q.code), cbUrl(req, p), state); }
     catch (e) { console.error('[auth]', p, e.message);
       // [ADD] 원인 코드만 짧게 같이 돌려줘서(키·토큰 같은 값은 없음) 화면에 보여주기 - 예: KOE010(카카오 Client Secret 불일치), invalid_client
-      const why = (String(e.message).match(/KOE\d{3}|invalid_[a-z_]+|unauthorized_[a-z_]+|redirect_uri_mismatch|HTTP \d{3}/) || [''])[0].replace(' ', '');
+      // [CHANGE] 네이버처럼 오류인데도 HTTP 200으로 돌려주는 곳은 "HTTP200"만 보여서 원인을 알 수 없었어요 → 오류 이름·설명(키·토큰 없음)을 영문·숫자로 정리해 보여주기
+      const msg = String(e.message), why = (msg.replace(/^HTTP \d{3}\s*/, '').trim().replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || (msg.match(/HTTP \d{3}/) || [''])[0].replace(' ', ''));
       return back(next + (why ? (next.includes('?') ? '&' : '?') + 'login_why=' + encodeURIComponent(why) : ''), 'provider'); }
     if (!prof || !prof.sub) return back(next, 'provider');
     const key = `${p}:${prof.sub}`;
     const cur = await sessionUid(req); // 이미 로그인한 상태면 이 로그인을 같은 계정에 연결
     let [uid] = await R(['HGET', 'uidx:v1', key]);
     let user = uid ? await getUser(uid) : null;
+    if (user && user.blocked) return back(next, 'blocked'); // [ADD] 차단된 계정은 합치기·로그인 모두 막기
     if (!user && cur) { uid = cur; user = await getUser(cur); }
     // [ADD] 이미 로그인한 상태에서 "다른 계정 연결"을 눌렀는데 그 로그인이 이미 다른 계정(예: 예전 카카오 계정)으로 있으면 → 두 계정을 하나로 합쳐요(즐겨찾기·연결된 로그인 모두)
     if (cur && uid && uid !== cur && user) {
@@ -168,6 +170,7 @@ module.exports = async function auth(req, res) {
       }
     }
     const now = Date.now();
+    if (user && user.blocked) return back(next, 'blocked'); // [ADD] 관리자가 차단한 계정
     if (!user) { uid = crypto.randomBytes(9).toString('base64url'); user = { id: uid, created: now, logins: [] }; }
     if (!user.logins.some(l => l.p === p && String(l.sub) === String(prof.sub))) user.logins.push({ p, sub: String(prof.sub), at: now });
     user.name = user.name || S.str(prof.name, 40) || '다이버';

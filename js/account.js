@@ -168,7 +168,7 @@
   const DEFAULT_SITE = { notice: { show: 'guest', title: '', sub: '', items: [], start: 0, end: 0 }, ver: { text: 'V:B1008', pos: 'acct' }, updated: 0 };
   let site = DEFAULT_SITE;
   async function loadSite() {
-    try { const j = await fetch('/api/shops?svc=site', { cache: 'default' }).then(r => r.json()); if (j && j.ok) site = { notice: j.notice || DEFAULT_SITE.notice, ver: j.ver || DEFAULT_SITE.ver, updated: j.updated || 0 }; } catch (_) {}
+    try { const j = await fetch('/api/shops?svc=site', { cache: 'default' }).then(r => r.json()); if (j && j.ok) site = { notice: j.notice || DEFAULT_SITE.notice, ver: j.ver || DEFAULT_SITE.ver, updated: j.updated || 0 }; if (j && j.ok) { window.otDepthFix = j.depthFix || []; try { window.dispatchEvent(new Event('otemp:site')); } catch (_) {} } } catch (_) {}
   }
   const verText = () => (site.ver && site.ver.text) || '';
   function paintVer() { // 화면 모서리에 표시하는 경우

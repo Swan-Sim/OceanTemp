@@ -138,6 +138,8 @@
           <label>노출 종료</label><input class="f" type="datetime-local" name="end">
           <label>소프트웨어 버전 표시</label><input class="f" name="vtext" maxlength="24" placeholder="V:B1008">
           <label>버전 노출 위치</label><select class="f" name="vpos"><option value="acct">로그인/계정 창 맨 아래</option><option value="bl">화면 왼쪽 아래</option><option value="br">화면 오른쪽 아래</option><option value="off">표시 안 함</option></select>
+          <label>최소 수심 구역 (한 줄에 하나: 위도, 경도, 반경m, 최소수심m, 이름)</label><textarea class="f" name="dfix" rows="3" placeholder="37.8225, -122.3690, 500, 7, Treasure Island"></textarea>
+          <div class="muted">공개 수심 자료가 너무 얕게 나오는 곳을 현지에서 확인한 값으로 바로잡아요. 원 안의 바다는 최소수심보다 얕아지지 않고, 육지·해안 바로 옆은 그대로예요. 저장하면 해당 지역 수심이 다시 그려져요.</div>
           <span></span><div><button class="primary" type="submit">저장</button></div>
         </form><div class="muted" id="siteMsg"></div></div>
       <div class="card"><h2>지금 설정</h2><div class="kv" id="setInfo"></div>
@@ -427,6 +429,7 @@
     try { const c = await api('siteGet'); const n = c.notice || {}, v = c.ver || {};
       f.show.value = n.show || 'guest'; f.title.value = n.title || ''; f.sub.value = n.sub || ''; f.items.value = (n.items || []).join('\n');
       f.start.value = toLocalIn(n.start); f.end.value = toLocalIn(n.end); f.vtext.value = v.text == null ? '' : v.text; f.vpos.value = v.pos || 'acct';
+      f.dfix.value = (c.depthFix || []).map(x => [x.la, x.lo, x.r, x.min, x.name || ''].join(', ')).join('\n');
     } catch (_) {}
   }
   $('siteForm').addEventListener('submit', async (e) => {
@@ -434,7 +437,7 @@
     const st = fromLocalIn(f.start.value), en = fromLocalIn(f.end.value);
     if (st && en && en <= st) { msg.textContent = '종료 시각이 시작보다 늦어야 해요'; return; }
     try {
-      await api('siteSave', { notice: { show: f.show.value, title: f.title.value, sub: f.sub.value, items: f.items.value.split('\n'), start: st, end: en }, ver: { text: f.vtext.value, pos: f.vpos.value } });
+      await api('siteSave', { notice: { show: f.show.value, title: f.title.value, sub: f.sub.value, items: f.items.value.split('\n'), start: st, end: en }, ver: { text: f.vtext.value, pos: f.vpos.value }, depthFix: f.dfix.value.split('\n').map(l => l.split(',').map(z => z.trim())).filter(a => a.length >= 4).map(a => ({ la: a[0], lo: a[1], r: a[2], min: a[3], name: a.slice(4).join(',') })) });
       msg.textContent = '저장했어요. 사이트에는 최대 1분 안에 반영돼요.';
     } catch (_) { msg.textContent = ''; }
   });
@@ -605,6 +608,11 @@
           <label>바닥 수심 m<input class="f" data-k="pMax" value="${s.pMax ?? ''}" placeholder="예) 45" style="width:70px"></label>
           <label>수평 거리 m<input class="f" data-k="pRun" value="${s.pRun ?? ''}" placeholder="10" style="width:70px"></label>
           <label>적용 반경 m<input class="f" data-k="pR" value="${s.pR ?? ''}" placeholder="250" style="width:70px"></label></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:flex-end">
+          <label>완만한 쪽 방향°<input class="f" data-k="pDir" value="${s.pDir ?? ''}" placeholder="예) 135 = 남동" style="width:100px"></label>
+          <label>완만한 범위°<input class="f" data-k="pSpan" value="${s.pSpan ?? ''}" placeholder="90" style="width:70px"></label>
+          <label>그 밖(가파른 쪽) 수평 거리 m<input class="f" data-k="pRun2" value="${s.pRun2 ?? ''}" placeholder="5" style="width:70px"></label></div>
+        <div class="hint">섬처럼 한쪽만 완만하고 나머지는 가파른 곳: 위 "수평 거리"는 완만한 쪽, 여기 "가파른 쪽 수평 거리"는 그 밖. 방향은 해안선에서 바다 쪽을 바라보는 방향(북=0, 동=90, 남=180, 서=270; 시계 4~5시 = 약 135°). 방향을 비우면 모든 방향 같은 경사.</div>
         <div class="hint">상단(해안·리프 끝)에서 바닥 수심까지 수평 거리 안에 떨어진다고 그려요. 포인트에서 적용 반경까지 그대로, 2배 거리까지 서서히 원래 자료로.</div></div></div>
       <div class="actions" style="margin-top:8px"><button class="primary" data-act="${isNew ? 'sadd' : 'ssave'}">${isNew ? '추가 (번호 자동)' : '저장'}</button><button data-act="scancel">취소</button></div></div>`;
   }

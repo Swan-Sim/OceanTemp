@@ -23,6 +23,7 @@
       const t = d.tile, dec = (a) => { const o = []; let x = 0, y = 0; for (let i = 0; i < a.length; i += 2) { x += a[i]; y += a[i + 1]; o.push([t.n - y / 4096 * (t.n - t.s), t.w + x / 4096 * (t.e - t.w)]); } return o; };
       return { fills: (d.F || []).map(([dd, polys]) => ({ d: dd, p: polys.map(poly => poly.map(dec)) })),
         lines: Object.fromEntries(Object.entries(d.Ln || {}).map(([k, ls]) => [k, ls.map(dec)])),
+        land: (d.Ld || []).map(dec),
         lbl: (d.lb || []).map(([x, y, k]) => [t.n - y / 4096 * (t.n - t.s), t.w + x / 4096 * (t.e - t.w), k]) };
     }
     function buildTile(d) {
@@ -37,7 +38,12 @@
       });
       // [CHANGE] 숫자 후보: 모든 등심선(10m 간격) 위 점들 - 화면에서 몇 m 선인지 바로 알 수 있게
       const lbl = []; Object.keys(d.lines || {}).forEach(k => (d.lines[k] || []).forEach(ln => ln.forEach((p, i) => { if (i % 6 === 3) lbl.push([p[0], p[1], +k]); })));
-      return { st: 'ok', grp: L.layerGroup(layers), lbl: lbl.length ? lbl : (d.lbl || []), coarse: !!cz };
+      // [ADD] 섬·바위 육지: 수심 띠·등심선 위에 불투명하게 덮어서 물속에 잠긴 것처럼 보이지 않게(OSM 해안선, 반지름 15m 이상)
+      const land = d.land || [];
+      land.forEach(r => layers.push(L.polygon(r, { stroke: true, color: '#fff', weight: 1, opacity: 0.9, fillColor: '#d8cfae', fillOpacity: 0.96, interactive: false, smoothFactor: 0.3, renderer: dRend() })));
+      const inLand = (la, lo) => land.some(r => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > lo) !== (b[1] > lo) && la < (b[0] - a[0]) * (lo - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; });
+      const lb2 = land.length ? lbl.filter(p => !inLand(p[0], p[1])) : lbl;
+      return { st: 'ok', grp: L.layerGroup(layers), lbl: lb2.length ? lb2 : (land.length ? [] : (d.lbl || [])), coarse: !!cz };
     }
 
     // [ADD] 포인트 현지 지형(관리자 입력)이 이 타일에 걸리면 주소에 짧은 표시를 붙여요(서버 api/_depth.js profSig와 같은 계산) - 바꾸면 바로 새로 그림
@@ -45,16 +51,20 @@
       const n = 2 ** 13, lon = (v) => v / n * 360 - 180, lat = (v) => Math.atan(Math.sinh(Math.PI * (1 - 2 * v / n))) * 180 / Math.PI;
       const b = { s: lat(y + 1), n: lat(y), w: lon(x), e: lon(x + 1) }, E = 0.02;
       const str = (typeof stations !== 'undefined' ? stations : []).filter(st => st.prof && st.no && st.coords && st.coords[1] >= b.s - E && st.coords[1] <= b.n + E && st.coords[0] >= b.w - E && st.coords[0] <= b.e + E)
-        .map(st => `${st.no}:${st.prof.top}/${st.prof.max}/${st.prof.run}/${st.prof.r}`).sort().join(',');
+        .map(st => `${st.no}:${st.prof.top}/${st.prof.max}/${st.prof.run}/${st.prof.r}` + (st.prof.dir != null ? `/${Math.round(st.prof.dir)}/${st.prof.span}/${st.prof.run2}` : '')).sort().join(',');
       if (!str) return '';
       let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
       return '&p=' + h.toString(36);
     }
+    // [ADD] 관리자 "최소 수심 구역"이 바뀌면 주소가 바뀌게(서버 api/_site.js depthFix, 계정 js/account.js가 읽어 옴)
+    const fixParam = () => { const f = window.otDepthFix || []; if (!f.length) return ''; const str = f.map(x => `${x.la}/${x.lo}/${x.r}/${x.min}`).sort().join(','); let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return '&f=' + h.toString(36); };
+    let lastFix = fixParam();
+    window.addEventListener('otemp:site', () => { const n = fixParam(); if (n === lastFix) return; lastFix = n; dTiles.forEach(tl => { if (tl.grp && leafletMap) leafletMap.removeLayer(tl.grp); }); dTiles.clear(); dQueue = []; refreshDepthLayers(); });
     function loadNext() {
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=18${profParam(+x, +y)}`).then(r => r.json()).then(d => {
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=19${profParam(+x, +y)}${fixParam()}`).then(r => r.json()).then(d => {
           if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
           else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });

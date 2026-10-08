@@ -113,7 +113,7 @@
             country: s.country || '', name: cleanSpotName(s.name), shortName: cleanSpotName(s.label || s.name), lat: +s.lat, lon: +s.lon,
             depth: s.depth !== false, net: s.network || 'Beach/local', no: +s.no || null,
             face: Number.isFinite(s.face) ? s.face : null, // [ADD] 바다 쪽 방향
-            prof: s.pMax > 0 ? { top: s.pTop ?? 2, max: s.pMax, run: s.pRun ?? 10, r: s.pR ?? 250 } : null // [ADD] 현지 지형(수심 지도 보완)
+            prof: s.pMax > 0 ? { top: s.pTop ?? 2, max: s.pMax, run: s.pRun ?? 10, r: s.pR ?? 250, dir: s.pDir ?? null, span: s.pSpan ?? null, run2: s.pRun2 ?? null } : null // [ADD] 현지 지형(수심 지도 보완)
           }));
           if (spots.length >= 10) { console.info(`[stations] 관리 목록에서 정점 ${spots.length}곳을 읽었어요`); return spots; }
         } catch (e) { console.warn('[stations] 관리 목록 읽기 실패 - stations.csv로:', e.message); }

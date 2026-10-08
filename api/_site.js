@@ -17,6 +17,9 @@ function clean(c) {
       start: num(n.start), end: num(n.end)                           // 노출 기간(밀리초, 0이면 제한 없음)
     },
     ver: { text: v.text == null ? 'V:B1008' : S.str(v.text, 24), pos: POS.includes(v.pos) ? v.pos : 'acct' },
+    // 최소 수심 구역: 공개 수심 자료가 너무 얕게 나오는 곳(예: 샌프란시스코 트레저아일랜드 옆 항로)을 현지 확인 값으로 보정. 원 안 바다는 min m보다 얕지 않게
+    depthFix: (Array.isArray(c.depthFix) ? c.depthFix : []).map(f => { f = f || {}; const la = Number(f.la), lo = Number(f.lo), r = Number(f.r), mn = Number(f.min);
+      return Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180 && r >= 50 && r <= 5000 && mn >= 1 && mn <= 100 ? { la: +la.toFixed(5), lo: +lo.toFixed(5), r: Math.round(r), min: Math.round(mn * 10) / 10, name: S.str(f.name, 30) } : null; }).filter(Boolean).slice(0, 40),
     updated: num(c.updated)
   };
 }

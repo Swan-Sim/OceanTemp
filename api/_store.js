@@ -123,8 +123,11 @@ const editUrl = (base, token) => `${base}/shop/#t=${token}`;
 function faceOf(v) { if (v === '' || v == null) return null; const n = +v; return Number.isFinite(n) ? Math.round(((n % 360) + 360) % 360) : null; }
 // [ADD] 포인트 현지 지형(수심 지도 보완): 상단 수심·바닥 수심·수평 거리·적용 반경(m). 바닥 수심이 없으면 안 씀
 const numIn = (v, lo, hi) => { if (v === '' || v == null) return null; const n = +v; return Number.isFinite(n) && n >= lo && n <= hi ? +n.toFixed(1) : null; };
-function profOf(b) { const pMax = numIn(b.pMax, 1, 300); if (pMax == null) return { pTop: null, pMax: null, pRun: null, pR: null };
-  return { pTop: numIn(b.pTop, 0, 100) ?? 2, pMax, pRun: numIn(b.pRun, 1, 2000) ?? 10, pR: numIn(b.pR, 50, 2000) ?? 250 }; }
+// [ADD] 방향별 경사: pDir = 완만한 쪽이 바라보는 방향(°, 북=0, 해안선의 바다 쪽 법선 기준), pSpan = 완만한 범위(°), pRun2 = 나머지(가파른) 쪽 수평 거리 m
+function profOf(b) { const pMax = numIn(b.pMax, 1, 300); if (pMax == null) return { pTop: null, pMax: null, pRun: null, pR: null, pDir: null, pSpan: null, pRun2: null };
+  const d = numIn(b.pDir, 0, 360), dir = d == null ? null : Math.round(d) % 360;
+  return { pTop: numIn(b.pTop, 0, 100) ?? 2, pMax, pRun: numIn(b.pRun, 1, 2000) ?? 10, pR: numIn(b.pR, 50, 2000) ?? 250,
+    pDir: dir, pSpan: dir == null ? null : (numIn(b.pSpan, 20, 340) ?? 90), pRun2: dir == null ? null : (numIn(b.pRun2, 1, 2000) ?? 5) }; }
 function spotFields(b) {
   b = b || {};
   const lat = +b.lat, lon = +b.lon;

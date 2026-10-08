@@ -130,7 +130,7 @@ module.exports = async function handler(req, res) {
 
     if (svc === 'spots') {
       // [CHANGE] 전체 포인트 목록(관리 페이지에서 관리 · 옮기기 전엔 구글 시트+사용자 등록+기본 포인트). 앱·샵·포인트 등록 페이지가 이걸 읽어요
-      const spots = (await S.allSpots(S.baseOf(req))).map(s => ({ no: s.no, country: s.country, name: s.name, label: s.label, lat: s.lat, lon: s.lon, network: s.network, depth: s.depth, face: s.face ?? undefined, pTop: s.pTop ?? undefined, pMax: s.pMax ?? undefined, pRun: s.pRun ?? undefined, pR: s.pR ?? undefined }));
+      const spots = (await S.allSpots(S.baseOf(req))).map(s => ({ no: s.no, country: s.country, name: s.name, label: s.label, lat: s.lat, lon: s.lon, network: s.network, depth: s.depth, face: s.face ?? undefined, pTop: s.pTop ?? undefined, pMax: s.pMax ?? undefined, pRun: s.pRun ?? undefined, pR: s.pR ?? undefined, pDir: s.pDir ?? undefined, pSpan: s.pSpan ?? undefined, pRun2: s.pRun2 ?? undefined }));
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=86400');
       return res.status(200).json({ ok: true, spots });
     }

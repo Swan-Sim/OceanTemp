@@ -356,7 +356,7 @@ module.exports = async function admin(req, res) {
   }
   // [ADD] 공지(팝업)·버전 표시 설정 읽기/저장
   if (svc === 'siteGet') return ok(await require('./_site').get());
-  if (svc === 'siteSave') { const c = await require('./_site').save({ notice: b.notice, ver: b.ver }); return ok(c); }
+  if (svc === 'siteSave') { const c = await require('./_site').save({ notice: b.notice, ver: b.ver, depthFix: b.depthFix }); return ok(c); }
   // 관리자 권한 주기/빼기 (마지막 관리자는 못 뺌)
   if (svc === 'userRole') {
     const id = String(b.id || ''), [raw] = await R(['HGET', 'users:v1', id]); if (!raw) return bad('not_found');

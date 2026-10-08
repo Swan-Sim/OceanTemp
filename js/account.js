@@ -67,6 +67,9 @@
   #acct-notice .n-x{position:absolute;right:8px;top:6px;background:none;border:0;color:#94a3b8;font-size:20px;cursor:pointer}
   #acct-notice .n-row{display:flex;gap:8px} #acct-notice .n-row button{flex:1;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#cbd5e1;cursor:pointer;font-size:12.5px}
   #acct-notice .n-row .n-go{background:#FFB000;border-color:#FFB000;color:#111;font-weight:700}
+  .a-ver{margin-top:12px;text-align:center;font-size:11px;color:#64748b;letter-spacing:.4px}
+  #sw-ver{position:fixed;bottom:6px;z-index:50;font-size:10.5px;color:rgba(226,232,240,.55);letter-spacing:.4px;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+  #sw-ver.bl{left:8px} #sw-ver.br{right:8px}
   .a-lv{margin:2px 0 10px;font-size:12px;color:#94a3b8} .a-lv .bar{height:6px;border-radius:99px;background:#1e293b;overflow:hidden;margin:5px 0} .a-lv .bar i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#FFB000)}
   .a-lv b{color:#FFB000;font-size:13px}
   .a-adm{display:block;text-align:center;margin-top:12px;height:34px;line-height:34px;border-radius:8px;border:1px solid rgba(255,176,0,.5);color:#FFB000;text-decoration:none;font-weight:700}`;
@@ -82,7 +85,7 @@
   async function load() {
     try { const j = await fetch('/api/shops?svc=auth&a=me', { credentials: 'same-origin', cache: 'no-store' }).then(r => r.json()); me = { user: j.user || null, favs: j.favs || [], providers: j.providers || [], prefs: j.prefs || {} }; }
     catch (_) {}
-    favSet = new Set(me.favs); paintBtn(); paintStar(); paintAdmin(); paintFavBar(); applyPrefs(); if (me.user) hideNotice(); else showNotice();
+    favSet = new Set(me.favs); paintBtn(); paintStar(); paintAdmin(); paintFavBar(); applyPrefs(); await loadSite(); paintVer(); showNotice();
   }
   // ── 설정 저장: 온도 단위·마지막으로 본 포인트를 계정에 저장하고 다른 기기에서도 이어서 ──
   function applyPrefs() {
@@ -144,6 +147,7 @@
       if (more.length) h += `<div class="a-sec">${T.link}</div><div class="a-small">${pbtns(more)}</div>`;
       h += `<div class="a-row"><button class="a-out">${T.logout}</button><button class="a-del">${T.del}</button></div>`;
     }
+    if (verText() && site.ver.pos === 'acct') h += `<div class="a-ver">${esc(verText())}</div>`;
     hideNotice(); box.innerHTML = h; ov.classList.add('show');
     // 사용자 버튼 바로 아래에 드롭다운으로 열기(화면을 어둡게 하지 않음)
     const r = btn ? btn.getBoundingClientRect() : { bottom: 56, right: window.innerWidth - 12 };
@@ -157,27 +161,38 @@
     const out = box.querySelector('.a-out'); if (out) out.onclick = async () => { try { await post('logout'); } catch (_) {} close(); await load(); };
     const del = box.querySelector('.a-del'); if (del) del.onclick = async () => { if (!confirm(T.delAsk)) return; try { await post('delete'); } catch (_) {} close(); await load(); };
   }
-  // ── 공지: 로그인 버튼 바로 아래(계정 창이 열리는 자리)에 한 번 보여줌. 닫으면 기억 ──
-  const NOTICE_ID = 'n-member-2026-10';
-  const nGet = () => { try { return localStorage.getItem(NOTICE_ID); } catch (_) { return null; } };
-  const nSet = (v) => { try { localStorage.setItem(NOTICE_ID, v); } catch (_) {} };
+  // ── 공지 + 소프트웨어 버전: 관리 페이지(/admin → 관리 설정)에서 정한 값을 /api/shops?svc=site 로 받아 와요 ──
+  const DEFAULT_SITE = { notice: { show: 'guest', title: '', sub: '', items: [], start: 0, end: 0 }, ver: { text: 'V:B1008', pos: 'acct' }, updated: 0 };
+  let site = DEFAULT_SITE;
+  async function loadSite() {
+    try { const j = await fetch('/api/shops?svc=site', { cache: 'default' }).then(r => r.json()); if (j && j.ok) site = { notice: j.notice || DEFAULT_SITE.notice, ver: j.ver || DEFAULT_SITE.ver, updated: j.updated || 0 }; } catch (_) {}
+  }
+  const verText = () => (site.ver && site.ver.text) || '';
+  function paintVer() { // 화면 모서리에 표시하는 경우
+    let v = document.getElementById('sw-ver'); const pos = site.ver && site.ver.pos, t = verText();
+    if (!t || (pos !== 'bl' && pos !== 'br')) { if (v) v.style.display = 'none'; return; }
+    if (!v) { v = document.createElement('div'); v.id = 'sw-ver'; document.body.appendChild(v); }
+    v.textContent = t; v.className = pos; v.style.display = '';
+  }
+  const noticeId = () => 'n-' + (site.updated || 'default');
+  const nGet = () => { try { return localStorage.getItem(noticeId()); } catch (_) { return null; } };
+  const nSet = (v) => { try { localStorage.setItem(noticeId(), v); } catch (_) {} };
   function placeNotice(n) {
     const r = btn ? btn.getBoundingClientRect() : { bottom: 56, left: window.innerWidth - 312 }, bw = Math.min(300, window.innerWidth - 24);
     n.style.top = Math.round(r.bottom + 8) + 'px'; n.style.left = Math.max(12, Math.min(Math.round(r.left), window.innerWidth - bw - 12)) + 'px';
   }
   function showNotice() {
-    if (nGet() || (me.user && me.user.id)) return; // 이미 닫았거나 로그인한 사람은 안 보여줌
+    const c = site.notice || DEFAULT_SITE.notice, now = Date.now();
     let n = document.getElementById('acct-notice');
-    if (!n) {
-      n = document.createElement('div'); n.id = 'acct-notice';
-      n.innerHTML = `<button class="n-x" aria-label="${T.close}">×</button><h4>${T.nTitle}</h4><div class="n-sub">${T.nSub}</div><ul>${T.nItems.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="n-row"><button class="n-hide">${T.nHide}</button><button class="n-go">${T.nBtn}</button></div>`;
-      document.body.appendChild(n);
-      const hide = (perm) => { n.classList.remove('show'); if (perm) nSet('1'); };
-      n.querySelector('.n-x').onclick = () => hide(false);
-      n.querySelector('.n-hide').onclick = () => hide(true);
-      n.querySelector('.n-go').onclick = () => { hide(true); open(); };
-      window.addEventListener('resize', () => placeNotice(n));
-    }
+    const hideIt = () => { if (n) n.classList.remove('show'); };
+    if (c.show === 'off' || (c.show === 'guest' && me.user) || (c.start && now < c.start) || (c.end && now > c.end) || nGet()) return hideIt();
+    const title = c.title || T.nTitle, sub = c.title ? c.sub : T.nSub, items = c.title ? c.items : T.nItems;
+    if (!n) { n = document.createElement('div'); n.id = 'acct-notice'; document.body.appendChild(n); window.addEventListener('resize', () => placeNotice(n)); }
+    n.innerHTML = `<button class="n-x" aria-label="${T.close}">×</button><h4>${esc(title)}</h4>${sub ? `<div class="n-sub">${esc(sub)}</div>` : ''}<ul>${(items || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="n-row"><button class="n-hide">${T.nHide}</button>${me.user ? '' : `<button class="n-go">${T.nBtn}</button>`}</div>`;
+    const hide = (perm) => { n.classList.remove('show'); if (perm) nSet('1'); };
+    n.querySelector('.n-x').onclick = () => hide(false);
+    n.querySelector('.n-hide').onclick = () => hide(true);
+    const go = n.querySelector('.n-go'); if (go) go.onclick = () => { hide(true); open(); };
     placeNotice(n); n.classList.add('show');
   }
   function close() { const ov = document.getElementById('acct-ov'); if (ov) ov.classList.remove('show'); }

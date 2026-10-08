@@ -98,6 +98,10 @@ module.exports = async function handler(req, res) {
   const svc = String(q.svc || '');
   try {
     if (svc === 'auth') return await require('./_auth')(req, res); // [ADD] 간편 로그인·계정·즐겨찾기(api/_auth.js)
+    if (svc === 'site') { // [ADD] 공지(팝업)·버전 표시 설정 - 누구나 읽기(30초 캐시)
+      res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+      return res.status(200).json({ ok: true, ...(await require('./_site').get()) });
+    }
     if (svc === 'click') {
       const id = String(q.id || ''), k = String(q.k || ''), no = parseInt(q.no, 10);
       if (/^[\w-]{1,20}$/.test(id) && KINDS.has(k) && !botInfo(req.headers['user-agent'])) { // [CHANGE] 봇 클릭은 안 셈

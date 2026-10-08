@@ -127,6 +127,19 @@
     </div>
     <!-- [ADD] 관리 설정: 알림 이메일·비밀번호 바꾸기 -->
     <div id="secSettings" class="sec" style="display:none">
+      <div class="card"><h2>공지 팝업 · 소프트웨어 버전</h2>
+        <div class="muted" style="margin-bottom:8px">공지는 로그인 버튼 아래에 카드로 떠요. 제목을 비우면 기본 문구(회원가입 기능 안내)가 나와요. 내용을 저장하면 "다시 보지 않기"를 눌렀던 방문자에게도 다시 보여요. 기간은 지금 보고 있는 이 브라우저의 시간대 기준이에요.</div>
+        <form id="siteForm" class="ed" style="border-color:var(--line)">
+          <label>공지 노출</label><select class="f" name="show"><option value="off">보이지 않음</option><option value="guest">로그인 안 한 방문자만</option><option value="all">모든 방문자</option></select>
+          <label>제목</label><input class="f" name="title" maxlength="60" placeholder="예: 📢 회원가입 기능이 추가됐어요">
+          <label>설명</label><input class="f" name="sub" maxlength="140">
+          <label>항목 (한 줄에 하나, 최대 8개)</label><textarea class="f" name="items" rows="4" placeholder="정점별 즐겨찾기&#10;회원 포인트/등급 기능 추가"></textarea>
+          <label>노출 시작</label><input class="f" type="datetime-local" name="start">
+          <label>노출 종료</label><input class="f" type="datetime-local" name="end">
+          <label>소프트웨어 버전 표시</label><input class="f" name="vtext" maxlength="24" placeholder="V:B1008">
+          <label>버전 노출 위치</label><select class="f" name="vpos"><option value="acct">로그인/계정 창 맨 아래</option><option value="bl">화면 왼쪽 아래</option><option value="br">화면 오른쪽 아래</option><option value="off">표시 안 함</option></select>
+          <span></span><div><button class="primary" type="submit">저장</button></div>
+        </form><div class="muted" id="siteMsg"></div></div>
       <div class="card"><h2>지금 설정</h2><div class="kv" id="setInfo"></div>
         <div class="actions"><button id="testMailBtn">알림 이메일로 테스트 메일 보내기</button></div><div class="muted" id="testMailMsg"></div></div>
       <div class="card"><h2>알림 이메일 바꾸기</h2>
@@ -405,6 +418,26 @@
     loadUsers();
   });
 
+
+  // ── [ADD] 공지 팝업 · 버전 표시 ──
+  const toLocalIn = (ms) => ms ? new Date(ms - new Date(ms).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+  const fromLocalIn = (v) => { const t = v ? new Date(v).getTime() : 0; return Number.isFinite(t) ? t : 0; };
+  async function loadSite() {
+    const f = $('siteForm'); if (!f) return;
+    try { const c = await api('siteGet'); const n = c.notice || {}, v = c.ver || {};
+      f.show.value = n.show || 'guest'; f.title.value = n.title || ''; f.sub.value = n.sub || ''; f.items.value = (n.items || []).join('\n');
+      f.start.value = toLocalIn(n.start); f.end.value = toLocalIn(n.end); f.vtext.value = v.text == null ? '' : v.text; f.vpos.value = v.pos || 'acct';
+    } catch (_) {}
+  }
+  $('siteForm').addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.target, msg = $('siteMsg');
+    const st = fromLocalIn(f.start.value), en = fromLocalIn(f.end.value);
+    if (st && en && en <= st) { msg.textContent = '종료 시각이 시작보다 늦어야 해요'; return; }
+    try {
+      await api('siteSave', { notice: { show: f.show.value, title: f.title.value, sub: f.sub.value, items: f.items.value.split('\n'), start: st, end: en }, ver: { text: f.vtext.value, pos: f.vpos.value } });
+      msg.textContent = '저장했어요. 사이트에는 최대 1분 안에 반영돼요.';
+    } catch (_) { msg.textContent = ''; }
+  });
   function showSec(name) {
     document.querySelectorAll('[data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === name));
     $('secStats').style.display = name === 'stats' ? '' : 'none';
@@ -415,6 +448,7 @@
     $('settingsLink').classList.toggle('on', name === 'settings');
     if (name === 'settings' && window.__mgLoaded) loadSettings();
     if (name === 'users') loadUsers();
+    if (name === 'settings') loadSite();
     if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
     if ((name === 'shops' || name === 'spots') && window.__mgLoaded) loadMgmt(); // 탭을 열 때마다 최신 요청으로
   }

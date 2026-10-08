@@ -9,7 +9,7 @@ const PERK_LEVEL = { reportReview: 4, photoModerate: 5, spotApprove: 6 };
 const RULES = {
   login: { amount: 1, cap: 1 },      // 하루 첫 로그인
   fav: { amount: 1, cap: 5 },        // 처음 즐겨찾기하는 포인트(같은 포인트는 다시 안 쳐줘요)
-  log: { amount: 3, cap: 2 },        // 로그북 새 기록(하루 2건까지)
+  log: { amount: 3, cap: 5 },        // 로그북 새 기록(하루 5건까지 크레딧. 기록 자체는 하루 30건까지 쓸 수 있어요)
   // 아래는 기능이 생기면 쓸 자리: photo(3, 3) · report(5, 3)
 };
 

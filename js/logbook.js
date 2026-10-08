@@ -7,20 +7,20 @@
   const T = KO ? {
     tab: '로그북', title: (n) => `내 로그북 · ${n}`, add: '+ 새 기록', login: '로그인하고 쓰기', needLogin: '로그북은 로그인하면 쓸 수 있어요. 같은 포인트에 쓴 지난 기록도 여기서 볼 수 있어요.',
     noSpot: '이 지점은 로그북을 쓸 수 없어요(번호가 있는 포인트만).', empty: '아직 이 포인트에 쓴 기록이 없어요.', loading: '불러오는 중…', fail: '불러오지 못했어요',
-    date: '날짜', kind: '다이버 종류', rec: '레크레이션', tec: '텍다이버', tank: '탱크 종류', dmax: '최대수심 (m)', davg: '평균수심 (m)', mins: '다이빙 시간 (분)',
+    date: '날짜', tod: '시작 시각 (HH:MM)', kind: '다이버 종류', rec: '레크레이션', tec: '텍다이버', tank: '탱크 종류', dmax: '최대수심 (m)', davg: '평균수심 (m)', mins: '다이빙 시간 (분)',
     fill: '충전 압력 (bar)', remain: '잔압 (bar)', weight: '웨이트 (kg)', suit: '슈트 두께 (mm)', temp: '수온 (°C)', vis: '시야 (m)', buddy: '버디', notes: '메모',
     used: '사용량', sac: '분당 소비량', sacU: 'bar/분 (수면 환산)', rmv: 'L/분', needCalc: '충전·잔압·평균수심·시간을 넣으면 분당 공기소비량이 계산돼요',
     prev: (d) => `지난 기록(${d})에서 불러왔어요`, save: '저장', cancel: '취소', edit: '수정', del: '삭제', delAsk: '이 기록을 지울까요?', saved: '저장했어요', gain: (n) => ` · 크레딧 +${n}`,
-    err: { bad_date: '날짜를 확인해 주세요', avg_gt_max: '평균수심이 최대수심보다 클 수 없어요', remain_gt_fill: '잔압이 충전 압력보다 클 수 없어요', too_many: '기록이 너무 많아요', bad_no: '이 지점은 쓸 수 없어요' },
+    err: { bad_date: '날짜를 확인해 주세요', avg_gt_max: '평균수심이 최대수심보다 클 수 없어요', remain_gt_fill: '잔압이 충전 압력보다 클 수 없어요', too_many: '기록이 너무 많아요', bad_no: '이 지점은 쓸 수 없어요', too_fast: '너무 빨라요. 10초 뒤에 다시 저장해 주세요', daily_limit: '하루(24시간)에 30건까지 쓸 수 있어요' },
     tanks: { al80: '알루미늄 80cf (11.1L)', s10: '스틸 10L', s12: '스틸 12L', s15: '스틸 15L', s7: '7L (스테이지/슬링)', d12: '더블 12L (24L)', d7: '더블 7L (14L)', sm80: '사이드마운트 2×80cf (22.2L)' }
   } : {
     tab: 'Logbook', title: (n) => `My logbook · ${n}`, add: '+ New entry', login: 'Log in to write', needLogin: 'Log in to keep a logbook. Past entries for the same spot show up here.',
     noSpot: 'Logbook is only for numbered spots.', empty: 'No entries for this spot yet.', loading: 'Loading…', fail: 'Could not load',
-    date: 'Date', kind: 'Diver type', rec: 'Recreational', tec: 'Technical', tank: 'Tank', dmax: 'Max depth (m)', davg: 'Avg depth (m)', mins: 'Dive time (min)',
+    date: 'Date', tod: 'Start time (HH:MM)', kind: 'Diver type', rec: 'Recreational', tec: 'Technical', tank: 'Tank', dmax: 'Max depth (m)', davg: 'Avg depth (m)', mins: 'Dive time (min)',
     fill: 'Start pressure (bar)', remain: 'End pressure (bar)', weight: 'Weight (kg)', suit: 'Suit (mm)', temp: 'Water temp (°C)', vis: 'Visibility (m)', buddy: 'Buddy', notes: 'Notes',
     used: 'Used', sac: 'SAC', sacU: 'bar/min (surface)', rmv: 'L/min', needCalc: 'Enter pressures, average depth and time to get your air consumption',
     prev: (d) => `Filled from your last entry (${d})`, save: 'Save', cancel: 'Cancel', edit: 'Edit', del: 'Delete', delAsk: 'Delete this entry?', saved: 'Saved', gain: (n) => ` · +${n} credits`,
-    err: { bad_date: 'Check the date', avg_gt_max: 'Average depth cannot exceed max depth', remain_gt_fill: 'End pressure cannot exceed start pressure', too_many: 'Too many entries', bad_no: 'Not available for this spot' },
+    err: { bad_date: 'Check the date', avg_gt_max: 'Average depth cannot exceed max depth', remain_gt_fill: 'End pressure cannot exceed start pressure', too_many: 'Too many entries', bad_no: 'Not available for this spot', too_fast: 'Too fast - wait 10 seconds and save again', daily_limit: 'Up to 30 entries per 24 hours' },
     tanks: { al80: 'Aluminum 80cf (11.1L)', s10: 'Steel 10L', s12: 'Steel 12L', s15: 'Steel 15L', s7: '7L (stage/sling)', d12: 'Twin 12L (24L)', d7: 'Twin 7L (14L)', sm80: 'Sidemount 2×80cf (22.2L)' }
   };
   const VOL = { al80: 11.1, s10: 10, s12: 12, s15: 15, s7: 7, d12: 24, d7: 14, sm80: 22.2 };
@@ -66,6 +66,7 @@
     const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) { const er = new Error(j.error || r.status); er.code = j.error; er.status = r.status; throw er; } return j;
   }
   const acct = () => window.otAccount || {};
+  const nowStr = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   const todayStr = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 
   let box = null, state = { no: 0, items: null, last: null, loading: false, form: null, msg: '' };
@@ -79,7 +80,7 @@
   }
 
   window.renderLogTab = function (b) {
-    getBox(b); b.style.display = '';
+    getBox(b); b.style.display = 'block'; // '' 로 두면 CSS의 display:none 이 되살아나 통째로 안 보여요
     const st = typeof selectedStation !== 'undefined' ? selectedStation : null, no = st && st.no ? st.no : 0;
     if (no !== state.no) { state = { no, items: null, last: null, loading: false, form: null, msg: '' }; if (no && acct().user && acct().user()) refresh(no); }
     else if (no && state.items == null && !state.loading && acct().user && acct().user()) refresh(no);
@@ -101,7 +102,7 @@
     else if (state.items && !state.items.length) h += `<div class="log-msg">${T.empty}</div>`;
     else (state.items || []).forEach(e => {
       const c = calc(e);
-      h += `<div class="log-card" data-id="${esc(e.id)}"><div class="l1"><b>${esc(e.date)}</b><span>${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : ' min') : ''}</span>${c && c.sac != null ? `<span class="log-chip">${fmt(c.sac, 1)} bar/min</span>` : ''}</div>`
+      h += `<div class="log-card" data-id="${esc(e.id)}"><div class="l1"><b>${esc(e.date)}${e.tod ? ' ' + esc(e.tod) : ''}</b><span>${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : ' min') : ''}</span>${c && c.sac != null ? `<span class="log-chip">${fmt(c.sac, 1)} bar/min</span>` : ''}</div>`
         + `<div class="det">${[
           e.type === 'tec' ? `${T.tec}${e.tank ? ' · ' + esc(T.tanks[e.tank] || e.tank) : ''}` : T.rec,
           e.depthAvg != null ? `${T.davg}: ${e.depthAvg}` : '', e.weight != null ? `${T.weight}: ${e.weight}` : '', e.suit != null ? `${T.suit}: ${e.suit}` : '',
@@ -119,7 +120,7 @@
   }
 
   function openForm(e) {
-    const L = state.last, base = e || { date: todayStr(), type: L ? L.type : 'rec', tank: L ? L.tank : '', weight: L ? L.weight : null, suit: L ? L.suit : null };
+    const L = state.last, base = e || { date: todayStr(), tod: nowStr(), type: L ? L.type : 'rec', tank: L ? L.tank : '', weight: L ? L.weight : null, suit: L ? L.suit : null };
     state.form = { id: e ? e.id : '', v: Object.assign({}, base), hint: !e && L ? T.prev(L.date) : '' }; draw();
   }
   function drawForm() {
@@ -127,7 +128,7 @@
     const fld = (k, label, type, extra) => `<div><label>${label}</label><input name="${k}" type="${type || 'number'}" ${type === 'text' || type === 'date' ? '' : 'inputmode="decimal" step="any"'} value="${val(v[k])}" ${extra || ''}></div>`;
     box.innerHTML = `<form class="log-form" id="log-form">`
       + (f.hint ? `<div class="log-hint">${esc(f.hint)}</div>` : '')
-      + fld('date', T.date, 'date') + `<div><label>${T.kind}</label><select name="type"><option value="rec"${v.type !== 'tec' ? ' selected' : ''}>${T.rec}</option><option value="tec"${v.type === 'tec' ? ' selected' : ''}>${T.tec}</option></select></div>`
+      + fld('date', T.date, 'date') + fld('tod', T.tod, 'text', 'maxlength="5" placeholder="09:30" pattern="([01][0-9]|2[0-3]):[0-5][0-9]"') + `<div class="full"><label>${T.kind}</label><select name="type"><option value="rec"${v.type !== 'tec' ? ' selected' : ''}>${T.rec}</option><option value="tec"${v.type === 'tec' ? ' selected' : ''}>${T.tec}</option></select></div>`
       + (v.type === 'tec' ? `<div class="full"><label>${T.tank}</label><select name="tank"><option value="">—</option>${Object.keys(VOL).map(k => `<option value="${k}"${v.tank === k ? ' selected' : ''}>${esc(T.tanks[k])}</option>`).join('')}</select></div>` : '')
       + fld('depthMax', T.dmax) + fld('depthAvg', T.davg) + fld('mins', T.mins) + fld('weight', T.weight)
       + fld('fill', T.fill) + fld('remain', T.remain) + fld('suit', T.suit) + fld('temp', T.temp) + fld('vis', T.vis) + fld('buddy', T.buddy, 'text', 'maxlength="60"')

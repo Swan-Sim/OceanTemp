@@ -94,7 +94,8 @@
     box.innerHTML = h; ov.classList.add('show');
     // 사용자 버튼 바로 아래에 드롭다운으로 열기(화면을 어둡게 하지 않음)
     const r = btn ? btn.getBoundingClientRect() : { bottom: 56, right: window.innerWidth - 12 };
-    box.style.top = Math.round(r.bottom + 8) + 'px'; box.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + 'px';
+    const bw = Math.min(340, window.innerWidth - 24), lx = r.left != null ? r.left : window.innerWidth - bw - 12; // 버튼 왼쪽 끝에 맞춰 오른쪽으로 펼치고, 화면 밖으로 나가면 안으로 당김
+    box.style.top = Math.round(r.bottom + 8) + 'px'; box.style.right = 'auto'; box.style.left = Math.max(12, Math.min(Math.round(lx), window.innerWidth - bw - 12)) + 'px';
     if (!open._hooked) { open._hooked = true;
       document.addEventListener('pointerdown', (e) => { const o = document.getElementById('acct-ov'); if (!o || !o.classList.contains('show')) return; if (e.target.closest('#acct-box') || (btn && btn.contains(e.target))) return; close(); }, true);
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); }); }

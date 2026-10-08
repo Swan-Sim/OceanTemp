@@ -151,9 +151,10 @@ $('meBtn').onclick = () => navigator.geolocation && navigator.geolocation.getCur
 let adminPw = (() => { try { const o = JSON.parse(localStorage.getItem('otemp.admin') || 'null'); if (o && o.pw && o.exp > Date.now()) return o.pw; } catch (_) {} try { return sessionStorage.getItem('adminPw') || ''; } catch (_) { return ''; } })();
 // 저장된 비밀번호가 아직 맞는지 서버에 확인한 뒤에만 관리자 모드로(틀리면 일반 등록 요청)
 let adminOk = false;
-if (adminPw) fetch('/api/stats?svc=settings', { headers: { 'x-admin-password': adminPw } }).then(r => { adminOk = r.ok; if (!r.ok) adminPw = ''; applyAdmin(); }).catch(() => {});
+// [FIX] 관리자 권한 회원으로 로그인(쿠키)한 경우도 관리자 모드 - 저장된 비밀번호가 없어도 서버에 물어봄
+fetch('/api/stats?svc=settings', { credentials: 'same-origin', headers: adminPw ? { 'x-admin-password': adminPw } : {} }).then(r => { adminOk = r.ok; if (!r.ok) adminPw = ''; applyAdmin(); }).catch(() => {});
 function applyAdmin() {
-  if (!adminPw || !adminOk) return;
+  if (!adminOk) return;
   const L = T[lang]; $('submitBtn').textContent = L.adminSubmit;
   let bar = $('adminBar'); if (!bar) { bar = document.createElement('div'); bar.id = 'adminBar'; bar.className = 'msg ok'; bar.style.margin = '0 0 14px'; $('f').parentNode.insertBefore(bar, $('f')); }
   bar.textContent = L.adminBar;
@@ -164,7 +165,7 @@ function applyAdmin() {
 applyAdmin(); document.addEventListener('click', (e) => { if (e.target && e.target.id === 'langBtn') setTimeout(applyAdmin, 0); });
 
 // [ADD] 관리자: 같은 화면·같은 GPS로 다이브샵·리브어보드·풀장도 바로 등록
-const cat = () => (adminPw && adminOk ? $('catSel').value : 'spot');
+const cat = () => (adminOk ? $('catSel').value : 'spot');
 const kmTo = (la, lo, s) => { const R = 6371, r = Math.PI / 180; return 2 * R * Math.asin(Math.sqrt(Math.sin((s.lat - la) * r / 2) ** 2 + Math.cos(la * r) * Math.cos(s.lat * r) * Math.sin((s.lon - lo) * r / 2) ** 2)); };
 function renderShopSpots() {
   const c = cat(), shopLike = c === 'shop' || c === 'liveaboard', ko = lang === 'ko';
@@ -211,15 +212,15 @@ $('f').onsubmit = async (e) => {
   }
   let j = {};
   try {
-    const r = adminPw && adminOk
+    const r = adminOk
       ? await fetch('/api/stats?svc=spotAdd', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw }, body: JSON.stringify(body) })
       : await fetch('/api/shops?svc=spot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     j = await r.json(); if (r.status === 401) j = { ok: false, error: 'unauthorized' };
   } catch (_) {}
-  btn.disabled = false; btn.textContent = adminPw && adminOk ? L.adminSubmit : L.submit;
+  btn.disabled = false; btn.textContent = adminOk ? L.adminSubmit : L.submit;
   if (!j.ok) { msg.className = 'msg err'; msg.textContent = L['e_' + j.error] || L.e_default; return; }
   msg.className = 'msg ok';
-  if (adminPw && adminOk && j.no) { msg.innerHTML = ''; msg.append(L.adminOk(j.no) + ' '); const a = document.createElement('a'); a.href = '/?no=' + j.no; a.target = '_blank'; a.textContent = L.viewMap; msg.append(a); }
+  if (adminOk && j.no) { msg.innerHTML = ''; msg.append(L.adminOk(j.no) + ' '); const a = document.createElement('a'); a.href = '/?no=' + j.no; a.target = '_blank'; a.textContent = L.viewMap; msg.append(a); }
   else msg.textContent = L.ok;
   e.target.reset(); renderCountries(); if (pin) { map.removeLayer(pin); pin = null; }
 };

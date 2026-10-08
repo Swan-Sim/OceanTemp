@@ -404,7 +404,7 @@ function fill(d, email) {
 }
 // [ADD] 관리자로 로그인된 브라우저(관리 페이지 7일 로그인)면 승인 없이 바로 게시 - 이메일·연락처·약관 동의 없어도 됨
 let adminPw = (() => { try { const o = JSON.parse(localStorage.getItem('otemp.admin') || 'null'); if (o && o.pw && o.exp > Date.now()) return o.pw; } catch (_) {} return ''; })(), adminOk = false;
-if (adminPw && !token) fetch('/api/stats?svc=settings', { headers: { 'x-admin-password': adminPw } }).then(r => { adminOk = r.ok; applyAdmin(); }).catch(() => {});
+if (!token) fetch('/api/stats?svc=settings', { credentials: 'same-origin', headers: adminPw ? { 'x-admin-password': adminPw } : {} }).then(r => { adminOk = r.ok; applyAdmin(); }).catch(() => {}); // [FIX] 관리자 회원 로그인도
 function applyAdmin() {
   if (!adminOk || token) return;
   const ko = lang === 'ko';

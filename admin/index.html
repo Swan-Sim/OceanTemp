@@ -431,17 +431,22 @@
     const f = $('siteForm'); if (!f) return;
     try { const c = await api('siteGet'); const n = c.notice || {}, v = c.ver || {};
       f.show.value = n.show || 'guest'; f.title.value = n.title || ''; f.sub.value = n.sub || ''; f.items.value = (n.items || []).join('\n');
-      f.start.value = toLocalIn(n.start); f.end.value = toLocalIn(n.end); f.vtext.value = v.text == null ? '' : v.text; f.vpos.value = v.pos || 'acct';
+      // [CHANGE] 기간이 비었거나 이미 끝났으면 자동으로 지금 ~ 24시간 뒤
+      if (!n.end || n.end <= Date.now()) { const now = Date.now(); f.start.value = toLocalIn(now); f.end.value = toLocalIn(now + 24 * 3600e3); }
+      else { f.start.value = toLocalIn(n.start || Date.now()); f.end.value = toLocalIn(n.end); } f.vtext.value = v.text == null ? '' : v.text; f.vpos.value = v.pos || 'acct';
       f.dfix.value = (c.depthFix || []).map(x => [x.la, x.lo, x.r, x.min, x.name || ''].join(', ')).join('\n');
     } catch (_) {}
   }
   $('siteForm').addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.target, msg = $('siteMsg');
+    if (!f.start.value) f.start.value = toLocalIn(Date.now());
+    if (!f.end.value) f.end.value = toLocalIn(fromLocalIn(f.start.value) + 24 * 3600e3);
     const st = fromLocalIn(f.start.value), en = fromLocalIn(f.end.value);
+    msg.textContent = '저장 중…';
     if (st && en && en <= st) { msg.textContent = '종료 시각이 시작보다 늦어야 해요'; return; }
     try {
       await api('siteSave', { notice: { show: f.show.value, title: f.title.value, sub: f.sub.value, items: f.items.value.split('\n'), start: st, end: en }, ver: { text: f.vtext.value, pos: f.vpos.value }, depthFix: f.dfix.value.split('\n').map(l => l.split(',').map(z => z.trim())).filter(a => a.length >= 4).map(a => ({ la: a[0], lo: a[1], r: a[2], min: a[3], name: a.slice(4).join(',') })) });
-      msg.textContent = '저장했어요. 사이트에는 최대 1분 안에 반영돼요.';
+      msg.textContent = `저장했어요 (${new Date().toLocaleTimeString('ko-KR', { hour12: false })}). 사이트에는 최대 1분 안에 반영돼요.`;
     } catch (_) { msg.textContent = ''; }
   });
   function showSec(name) {

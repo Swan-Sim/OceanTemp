@@ -70,7 +70,7 @@
       const reg = `<a class="shop-reg" href="/shop/?spot=${encodeURIComponent(selectedStation && selectedStation.no || '')}" target="_blank" rel="noopener">＋ ${shopEsc(t.shopRegister || '샵 등록하기')}</a>`;
       if (!list.length) { box.innerHTML = `<div class="shop-empty"><p>${shopEsc(t.shopEmpty || '아직 이 포인트에 등록된 제휴 샵이 없어요.')}</p>${reg}</div>`; return; }
       sendImps(list);
-      box.innerHTML = `<div class="shop-note"><span>${shopEsc(t.shopPartnerOnly || '제휴 샵만 보여요')}</span><i>${shopEsc(t.shopMayChange || '정보가 바뀌었을 수 있어요')}</i></div>` +
+      box.innerHTML = `<div class="shop-note"><span>${shopEsc(t.shopPartnerOnly || '제휴 샵만 랜덤 순서로 보여요')}</span><i>${shopEsc(t.shopMayChange || '정보가 바뀌었을 수 있어요')}</i></div>` +
         list.map(s => `<div class="shop-card">
           <div class="shop-top"><span class="shop-name">${shopEsc(s.name)}</span><span class="shop-badge">${shopEsc(t.shopPartner || '제휴')}</span>${s.type === 'liveaboard' ? `<span class="shop-lang">${shopEsc(t.shopLiveaboard || 'Liveaboard')}</span>` : ''}${s.lang ? `<span class="shop-lang">${shopEsc(langLabel(s.lang))}</span>` : ''}</div>
           ${s.note ? `<div class="shop-desc">${shopEsc(s.note)}</div>` : ''}

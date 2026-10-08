@@ -86,6 +86,7 @@
     try { const j = await fetch('/api/shops?svc=auth&a=me', { credentials: 'same-origin', cache: 'no-store' }).then(r => r.json()); me = { user: j.user || null, favs: j.favs || [], providers: j.providers || [], prefs: j.prefs || {} }; }
     catch (_) {}
     favSet = new Set(me.favs); paintBtn(); paintStar(); paintAdmin(); paintFavBar(); applyPrefs(); await loadSite(); paintVer(); showNotice();
+    try { window.dispatchEvent(new Event('otemp:account')); } catch (_) {}
   }
   // ── 설정 저장: 온도 단위·마지막으로 본 포인트를 계정에 저장하고 다른 기기에서도 이어서 ──
   function applyPrefs() {
@@ -112,6 +113,8 @@
     b.querySelectorAll('button').forEach(x => x.onclick = () => goTo(stationByNo(+x.dataset.no)));
   }
   function goTo(s) { if (!s) return; try { selectStation(s); showDetailMap(s.coords[1], s.coords[0], typeof SPOT_ZOOM === 'number' ? SPOT_ZOOM : 16); } catch (_) {} }
+
+  window.otAccount = { user: () => me.user, open: () => open(), reload: () => load() }; // 로그북 등 다른 파일이 쓰는 입구
 
   // ── 오른쪽 버튼 ──
   let btn;

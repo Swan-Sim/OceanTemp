@@ -103,7 +103,7 @@ async function isAdminReq(req) { const uid = await sessionUid(req); if (!uid) re
 async function deleteUser(uid) {
   const u = await getUser(uid);
   const [sessions] = await R(['SMEMBERS', 'usess:' + uid]);
-  const cmds = [['HDEL', 'users:v1', uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid]];
+  const cmds = [['HDEL', 'users:v1', uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid, 'ulog:' + uid]];
   (sessions || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));
   ((u && u.logins) || []).forEach(l => cmds.push(['HDEL', 'uidx:v1', `${l.p}:${l.sub}`]));
   await R(...cmds);
@@ -171,6 +171,7 @@ module.exports = async function auth(req, res) {
         if (+oc > 0) cmds.push(['HINCRBY', 'ucred:v1', cur, Math.floor(+oc)]);
         if (op && !cp) cmds.push(['HSET', 'uprefs:v1', cur, op]);
         if (user.role === 'admin') curUser.role = 'admin';
+        cmds.push(...await require('./_logbook').mergeCmds(R, uid, cur));
         cmds.push(['HSET', 'users:v1', cur, JSON.stringify(curUser)], ['HDEL', 'users:v1', uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid]);
         await R(...cmds);
         uid = cur; user = curUser;
@@ -217,6 +218,7 @@ module.exports = async function auth(req, res) {
   if (!uid) return json(401, { ok: false, error: 'login_required' });
   const b = bodyOf(req);
 
+  if (a === 'logs' || a === 'logsave' || a === 'logdel') { if (await require('./_logbook')(a, b, uid, R, json)) return; } // [ADD] 다이빙 로그북(api/_logbook.js)
   if (a === 'logout') {
     const t = cookies(req).ot_s, h = sha(t);
     await R(['DEL', 'sess:' + h], ['SREM', 'usess:' + uid, h]);

@@ -337,7 +337,7 @@ module.exports = async function admin(req, res) {
   const dropUser = async (uid) => {
     const [raw] = await R(['HGET', 'users:v1', uid]); let u = null; try { u = raw ? JSON.parse(raw) : null; } catch (_) {}
     const [sessions] = await R(['SMEMBERS', 'usess:' + uid]);
-    const cmds = [['HDEL', 'users:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid]];
+    const cmds = [['HDEL', 'users:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid], ['DEL', 'ulog:' + uid]];
     (sessions || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));
     ((u && u.logins) || []).forEach(l => cmds.push(['HDEL', 'uidx:v1', `${l.p}:${l.sub}`]));
     await R(...cmds); return u;
@@ -387,7 +387,7 @@ module.exports = async function admin(req, res) {
     if (uf.role === 'admin') ut.role = 'admin';
     const cmds = [];
     const cf = await C.creditsOf(R, from); if (cf) cmds.push(['HINCRBY', 'ucred:v1', to, String(cf)]);
-    cmds.push(['HDEL', 'ucred:v1', from], ['HDEL', 'uprefs:v1', from], ['DEL', 'ufavseen:' + from]);
+    cmds.push(['HDEL', 'ucred:v1', from], ['HDEL', 'uprefs:v1', from], ['DEL', 'ufavseen:' + from], ...await require('./_logbook').mergeCmds(R, from, to));
     if (favs && favs.length) cmds.push(['SADD', 'ufav:' + to, ...favs.map(String)]);
     (uf.logins || []).forEach(l => cmds.push(['HSET', 'uidx:v1', `${l.p}:${l.sub}`, to]));
     (sess || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));

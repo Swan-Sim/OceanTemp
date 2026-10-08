@@ -730,6 +730,18 @@
         const info = t.infoCoord(s0.network, s0.coords[1], s0.coords[0]) + (s0.isBeach ? ` [${t.beachTag}]` : '');
         setFootInfo(info);
       }
+      // [ADD] 로그북 탭: 표·그래프 대신 내 로그북(js/logbook.js). 다른 탭에선 숨김
+      const logBox = document.getElementById('log-box');
+      if (logBox) logBox.style.display = 'none';
+      if (activeMode === 'log') {
+        const sb = document.getElementById('shop-box'); if (sb) sb.style.display = 'none';
+        document.getElementById('detailChart').style.display = 'none';
+        legendBox.style.display = 'none';
+        const fcTopL = document.getElementById('fc-top'); if (fcTopL) fcTopL.style.display = 'none';
+        renderModeHead(false);
+        if (logBox && typeof renderLogTab === 'function') renderLogTab(logBox);
+        return;
+      }
       // [ADD] 다이빙샵 탭: 표·그래프 대신 샵 카드
       const shopBox = document.getElementById('shop-box');
       const isShop = activeMode === 'shop';
@@ -1029,7 +1041,7 @@
       activeMode = mode;
       if (selectedStation) selectedStation._userRequested = true; // 버튼을 누른 것도 사용자 요청
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(mode === 'forecast' ? 'btn-ts' : mode === 'depth' ? 'btn-dp' : mode === 'shop' ? 'btn-shop' : 'btn-now').classList.add('active');
+      document.getElementById(mode === 'forecast' ? 'btn-ts' : mode === 'depth' ? 'btn-dp' : mode === 'shop' ? 'btn-shop' : mode === 'log' ? 'btn-log' : 'btn-now').classList.add('active');
       updateChart();
       if (mode === 'forecast' && selectedStation) ensureLiveData(selectedStation);
       if (mode === 'forecast' && selectedStation) ensureVisData(selectedStation);

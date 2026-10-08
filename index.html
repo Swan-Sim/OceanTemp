@@ -181,11 +181,13 @@
         <button class="tab-btn" id="btn-ts" onclick="setMode('forecast')">연간 추이</button>
         <button class="tab-btn" id="btn-dp" onclick="setMode('depth')">수심 프로파일</button>
         <button class="tab-btn" id="btn-shop" onclick="setMode('shop')" style="display:none">샵</button>
+        <button class="tab-btn" id="btn-log" onclick="setMode('log')">로그북</button>
       </div>
 
       <div class="chart-box">
         <div class="now-table" id="now-table"></div>
         <div class="shop-box" id="shop-box" style="display:none"></div>
+        <div class="log-box" id="log-box"></div>
         <canvas id="detailChart"></canvas>
         <div class="chart-legend-overlay" id="chart-legend"></div>
       </div>
@@ -215,6 +217,7 @@
   <script src="js/sport-layer.js"></script>
   <script src="js/label-layout.js"></script>
   <script src="js/account.js"></script>
+  <script src="js/logbook.js"></script>
   <script src="js/save-app.js"></script>
   <script src="js/main.js"></script>
 

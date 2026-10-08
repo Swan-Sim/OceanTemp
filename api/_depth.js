@@ -5,7 +5,39 @@
 //  그 밖(호주·동남아 등): GMRT(Global Multi-Resolution Topography, GEBCO + 다중빔 조사 자료 합본)
 //  결과: 포인트 중심 약 ±1.3km 정격자(z = 고도 m, 음수 = 수심) + 요약(300m 안 최대·평균, 1km 안 최대)
 //  포인트마다 한 번 받으면 Redis에 오래(180일) 저장 - 지형은 거의 안 바뀌어요.
-const { redisPipeline } = require('./_redis');
+const { redisPipeline: redisRaw } = require('./_redis');
+// [ADD] 크고 잘 안 바뀌는 수심·해안선 캐시는 Cloudflare R2에 저장(Redis 256MB 한도 때문). R2 환경변수가 없으면 예전처럼 Redis.
+//  예전에 Redis에 있던 캐시는 처음 읽을 때 R2로 옮기고 Redis에서 지워요(다시 계산 안 하고 용량도 비움).
+const R2 = require('./_r2');
+const BIG_RX = /^(depth:v1:|dshift:|tctl:|reef:|draw:|dtile:|land:|dvec:|isl:)/;
+async function r2Cmd(c) {
+  const [op, key] = c;
+  if (op === 'SET') { const ei = c.indexOf('EX'); await R2.put(key, c[2], ei > 0 ? +c[ei + 1] : 0); return 'OK'; }
+  if (op === 'GET') {
+    const v = await R2.get(key); if (v != null) return v;
+    try { // Redis에 남은 옛 캐시 → R2로 옮기고 Redis에서 지우기
+      const [g, t] = await redisRaw([['GET', key], ['TTL', key]]);
+      if (g && g.result != null) { const ttl = +t.result; await R2.put(key, g.result, ttl > 0 ? ttl : 180 * 86400); await redisRaw([['DEL', key]]).catch(() => {}); return g.result; }
+    } catch (_) {}
+    return null;
+  }
+  if (op === 'EXISTS') { if (await R2.exists(key)) return 1; try { const [e] = await redisRaw([['EXISTS', key]]); return e.result ? 1 : 0; } catch (_) { return 0; } }
+  if (op === 'DEL') { await R2.del(key); await redisRaw([['DEL', key]]).catch(() => {}); return 1; }
+  throw new Error('R2 unsupported ' + op);
+}
+async function redisPipeline(cmds) {
+  if (!R2.on) return redisRaw(cmds);
+  const out = new Array(cmds.length), rest = [], restIdx = [];
+  const big = [];
+  cmds.forEach((c, i) => { if (BIG_RX.test(String(c[1] || ''))) big.push(i); else { rest.push(c); restIdx.push(i); } });
+  const jobs = [];
+  if (rest.length) jobs.push(redisRaw(rest).then(r => r.forEach((x, k) => { out[restIdx[k]] = x; })));
+  if (big.length) jobs.push((async () => { for (let k = 0; k < big.length; k += 16) { // 한 번에 16개씩
+    await Promise.all(big.slice(k, k + 16).map(i => r2Cmd(cmds[i]).then(result => { out[i] = { result }; }, e => { out[i] = { error: String(e.message || e) }; })));
+  } })());
+  await Promise.all(jobs);
+  return out;
+}
 
 const HALF_LAT = 0.012; // 약 1.33km
 const KEY_VER = 'depth:v1:';

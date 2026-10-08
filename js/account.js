@@ -12,6 +12,8 @@
     logout: '로그아웃', del: '회원 탈퇴', delAsk: '계정과 즐겨찾기를 모두 지울까요? 되돌릴 수 없어요.', close: '닫기',
     favOn: '즐겨찾기에 넣었어요', favOff: '즐겨찾기에서 뺐어요', favNeed: '즐겨찾기는 로그인하면 쓸 수 있어요', favNo: '이 지점은 즐겨찾기할 수 없어요',
     lv: (l) => `Lv.${l}`, toNext: (n) => `다음 레벨까지 ${n} 크레딧`, maxLv: '최고 레벨', credits: '크레딧', last: '마지막', admin: 'Admin', creditHint: '로그인·즐겨찾기 등 활동하면 크레딧이 쌓이고 레벨이 올라가요.',
+    nTitle: '📢 회원가입 기능이 추가됐어요', nSub: '간편 로그인(Google·카카오·네이버·Facebook)으로 가입할 수 있어요.',
+    nItems: ['정점별 즐겨찾기', '회원 포인트/등급 기능 추가', '로그북 작성 기능 (준비 중)'], nBtn: '로그인하기', nHide: '다시 보지 않기',
     err: { cancelled: '로그인을 취소했어요', state: '로그인 시간이 지났어요. 다시 시도해 주세요', provider: '로그인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요', provider_off: '지금은 이 로그인을 쓸 수 없어요' }
   } : {
     login: 'Log in', title: 'Sign in', sub: 'Save favorite spots and see them on any device.',
@@ -21,6 +23,8 @@
     logout: 'Log out', del: 'Delete account', delAsk: 'Delete your account and favorites? This cannot be undone.', close: 'Close',
     favOn: 'Added to favorites', favOff: 'Removed from favorites', favNeed: 'Log in to save favorites', favNo: 'This point cannot be saved',
     lv: (l) => `Lv.${l}`, toNext: (n) => `${n} credits to next level`, maxLv: 'Max level', credits: 'Credits', last: 'Last', admin: 'Admin', creditHint: 'Earn credits by being active to level up.',
+    nTitle: '📢 Member sign-up is here', nSub: 'Sign in with Google, Kakao, Naver or Facebook.',
+    nItems: ['Favorites for each spot', 'Member points & levels', 'Logbook (coming soon)'], nBtn: 'Sign in', nHide: "Don't show again",
     err: { cancelled: 'Sign-in cancelled', state: 'Sign-in expired. Please try again', provider: 'Sign-in failed. Please try again later', provider_off: 'This sign-in is not available' }
   };
   const PNAME = { google: 'Google', kakao: 'Kakao', naver: 'Naver', facebook: 'Facebook' };
@@ -56,6 +60,13 @@
   #fav-bar button{pointer-events:auto;flex:0 0 auto;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;height:28px;padding:0 11px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(11,17,32,.82);color:#e2e8f0;font-size:12px;cursor:pointer;backdrop-filter:blur(6px)}
   #fav-bar button.last{border-color:rgba(125,211,252,.5);color:#7dd3fc}
   body.detail-mode #fav-bar{top:50px}
+  #acct-notice{position:fixed;z-index:3900;width:300px;max-width:calc(100vw - 24px);background:#0B1120;border:1px solid rgba(255,176,0,.45);border-radius:14px;padding:14px 16px 12px;color:#f1f5f9;font-size:13.5px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:none}
+  #acct-notice.show{display:block}
+  #acct-notice h4{margin:0 0 4px;font-size:15px;padding-right:22px} #acct-notice .n-sub{color:#94a3b8;font-size:12px;margin-bottom:8px}
+  #acct-notice ul{margin:0 0 10px;padding-left:18px} #acct-notice li{margin:3px 0}
+  #acct-notice .n-x{position:absolute;right:8px;top:6px;background:none;border:0;color:#94a3b8;font-size:20px;cursor:pointer}
+  #acct-notice .n-row{display:flex;gap:8px} #acct-notice .n-row button{flex:1;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#cbd5e1;cursor:pointer;font-size:12.5px}
+  #acct-notice .n-row .n-go{background:#FFB000;border-color:#FFB000;color:#111;font-weight:700}
   .a-lv{margin:2px 0 10px;font-size:12px;color:#94a3b8} .a-lv .bar{height:6px;border-radius:99px;background:#1e293b;overflow:hidden;margin:5px 0} .a-lv .bar i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#FFB000)}
   .a-lv b{color:#FFB000;font-size:13px}
   .a-adm{display:block;text-align:center;margin-top:12px;height:34px;line-height:34px;border-radius:8px;border:1px solid rgba(255,176,0,.5);color:#FFB000;text-decoration:none;font-weight:700}`;
@@ -71,7 +82,7 @@
   async function load() {
     try { const j = await fetch('/api/shops?svc=auth&a=me', { credentials: 'same-origin', cache: 'no-store' }).then(r => r.json()); me = { user: j.user || null, favs: j.favs || [], providers: j.providers || [], prefs: j.prefs || {} }; }
     catch (_) {}
-    favSet = new Set(me.favs); paintBtn(); paintStar(); paintAdmin(); paintFavBar(); applyPrefs();
+    favSet = new Set(me.favs); paintBtn(); paintStar(); paintAdmin(); paintFavBar(); applyPrefs(); if (me.user) hideNotice(); else showNotice();
   }
   // ── 설정 저장: 온도 단위·마지막으로 본 포인트를 계정에 저장하고 다른 기기에서도 이어서 ──
   function applyPrefs() {
@@ -133,7 +144,7 @@
       if (more.length) h += `<div class="a-sec">${T.link}</div><div class="a-small">${pbtns(more)}</div>`;
       h += `<div class="a-row"><button class="a-out">${T.logout}</button><button class="a-del">${T.del}</button></div>`;
     }
-    box.innerHTML = h; ov.classList.add('show');
+    hideNotice(); box.innerHTML = h; ov.classList.add('show');
     // 사용자 버튼 바로 아래에 드롭다운으로 열기(화면을 어둡게 하지 않음)
     const r = btn ? btn.getBoundingClientRect() : { bottom: 56, right: window.innerWidth - 12 };
     const bw = Math.min(340, window.innerWidth - 24), lx = r.left != null ? r.left : window.innerWidth - bw - 12; // 버튼 왼쪽 끝에 맞춰 오른쪽으로 펼치고, 화면 밖으로 나가면 안으로 당김
@@ -146,7 +157,31 @@
     const out = box.querySelector('.a-out'); if (out) out.onclick = async () => { try { await post('logout'); } catch (_) {} close(); await load(); };
     const del = box.querySelector('.a-del'); if (del) del.onclick = async () => { if (!confirm(T.delAsk)) return; try { await post('delete'); } catch (_) {} close(); await load(); };
   }
+  // ── 공지: 로그인 버튼 바로 아래(계정 창이 열리는 자리)에 한 번 보여줌. 닫으면 기억 ──
+  const NOTICE_ID = 'n-member-2026-10';
+  const nGet = () => { try { return localStorage.getItem(NOTICE_ID); } catch (_) { return null; } };
+  const nSet = (v) => { try { localStorage.setItem(NOTICE_ID, v); } catch (_) {} };
+  function placeNotice(n) {
+    const r = btn ? btn.getBoundingClientRect() : { bottom: 56, left: window.innerWidth - 312 }, bw = Math.min(300, window.innerWidth - 24);
+    n.style.top = Math.round(r.bottom + 8) + 'px'; n.style.left = Math.max(12, Math.min(Math.round(r.left), window.innerWidth - bw - 12)) + 'px';
+  }
+  function showNotice() {
+    if (nGet() || (me.user && me.user.id)) return; // 이미 닫았거나 로그인한 사람은 안 보여줌
+    let n = document.getElementById('acct-notice');
+    if (!n) {
+      n = document.createElement('div'); n.id = 'acct-notice';
+      n.innerHTML = `<button class="n-x" aria-label="${T.close}">×</button><h4>${T.nTitle}</h4><div class="n-sub">${T.nSub}</div><ul>${T.nItems.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="n-row"><button class="n-hide">${T.nHide}</button><button class="n-go">${T.nBtn}</button></div>`;
+      document.body.appendChild(n);
+      const hide = (perm) => { n.classList.remove('show'); if (perm) nSet('1'); };
+      n.querySelector('.n-x').onclick = () => hide(false);
+      n.querySelector('.n-hide').onclick = () => hide(true);
+      n.querySelector('.n-go').onclick = () => { hide(true); open(); };
+      window.addEventListener('resize', () => placeNotice(n));
+    }
+    placeNotice(n); n.classList.add('show');
+  }
   function close() { const ov = document.getElementById('acct-ov'); if (ov) ov.classList.remove('show'); }
+  function hideNotice() { const n = document.getElementById('acct-notice'); if (n) n.classList.remove('show'); }
 
   // ── ★ 즐겨찾기 ──
   let star;

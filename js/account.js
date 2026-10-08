@@ -113,11 +113,14 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    const ctr = document.querySelector('.map-controls');
-    if (ctr) { btn = document.createElement('button'); btn.className = 'ctrl-btn'; btn.id = 'btn-account'; btn.type = 'button'; btn.style.overflow = 'hidden'; btn.style.padding = '0'; btn.onclick = open;
-      const before = document.getElementById('btn-spot-add'); before ? ctr.insertBefore(btn, before) : ctr.appendChild(btn); paintBtn(); }
+    // [CHANGE] 로그인 버튼 위치: 위쪽 줄 내 위치(나침반 모양) 버튼 왼쪽. 없으면 예전처럼 오른쪽 버튼 줄
+    const loc = document.getElementById('btn-locate'), ctr = document.querySelector('.map-controls');
+    if (loc || ctr) { btn = document.createElement('button'); btn.className = loc ? 'ctrl-btn top-btn' : 'ctrl-btn'; btn.id = 'btn-account'; btn.type = 'button'; btn.style.overflow = 'hidden'; btn.style.padding = '0'; btn.onclick = open;
+      if (loc) loc.parentNode.insertBefore(btn, loc);
+      else { const before = document.getElementById('btn-spot-add'); before ? ctr.insertBefore(btn, before) : ctr.appendChild(btn); }
+      paintBtn(); }
     const bar = document.querySelector('.tab-bar');
-    if (bar) { star = document.createElement('button'); star.className = 'tab-btn tab-fav'; star.type = 'button'; star.title = '★'; star.onclick = toggleFav; bar.appendChild(star); paintStar(); }
+    if (bar) { star = document.createElement('button'); star.className = 'tab-btn tab-fav'; star.type = 'button'; star.title = KO ? '이 포인트 즐겨찾기' : 'Favorite this spot'; star.onclick = toggleFav; bar.appendChild(star); paintStar(); }
     // 고른 포인트가 바뀌면 ★ 다시 그리기
     if (typeof selectStation === 'function') { const orig = selectStation; selectStation = function (st, o) { const r = orig.apply(this, arguments); paintStar(); return r; }; }
     // 로그인 실패하고 돌아왔으면 안내

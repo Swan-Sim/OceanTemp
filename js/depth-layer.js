@@ -38,9 +38,9 @@
       });
       // [CHANGE] 숫자 후보: 모든 등심선(10m 간격) 위 점들 - 화면에서 몇 m 선인지 바로 알 수 있게
       const lbl = []; Object.keys(d.lines || {}).forEach(k => (d.lines[k] || []).forEach(ln => ln.forEach((p, i) => { if (i % 6 === 3) lbl.push([p[0], p[1], +k]); })));
-      // [ADD] 섬·바위 육지: 수심 띠·등심선 위에 불투명하게 덮어서 물속에 잠긴 것처럼 보이지 않게(OSM 해안선, 반지름 15m 이상)
+      // [CHANGE] 섬·바위(OSM 해안선, 반지름 15m 이상): 서버가 섬 안쪽은 수심 띠·등심선에서 빼 두었어요. 여기선 해안선만 흰 선으로(안쪽은 투명 → 위성 사진 그대로)
       const land = d.land || [];
-      land.forEach(r => layers.push(L.polygon(r, { stroke: true, color: '#fff', weight: 1, opacity: 0.9, fillColor: '#d8cfae', fillOpacity: 0.96, interactive: false, smoothFactor: 0.3, renderer: dRend() })));
+      land.forEach(r => layers.push(L.polygon(r, { stroke: true, color: '#fff', weight: 1, opacity: 0.85, fill: false, interactive: false, smoothFactor: 0.3, renderer: dRend() })));
       const inLand = (la, lo) => land.some(r => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > lo) !== (b[1] > lo) && la < (b[0] - a[0]) * (lo - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; });
       const lb2 = land.length ? lbl.filter(p => !inLand(p[0], p[1])) : lbl;
       return { st: 'ok', grp: L.layerGroup(layers), lbl: lb2.length ? lb2 : (land.length ? [] : (d.lbl || [])), coarse: !!cz };

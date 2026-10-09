@@ -628,16 +628,16 @@ function thin(pts, tol) { // 가까운 점 빼기(약 2m)
 //  본토처럼 타일 밖으로 이어지는 열린 선은 건드리지 않아요(그쪽은 수심 자료의 육지 값을 그대로 씀). 실패하면 던져서 짧게만 저장.
 const LAND_MIN_AREA = 700;
 async function landFor(x, y, t) {
-  const ck = `land:v1:${x}_${y}`;
+  const ck = `land:v2:${x}_${y}`, pb = { s: t.s - DTILE_PAD, n: t.n + DTILE_PAD, w: t.w - DTILE_PAD, e: t.e + DTILE_PAD }; // 격자 범위(타일+여유)까지 저장
   try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {}
-  const P = 0.004, lines = await coastLines({ s: t.s - P, n: t.n + P, w: t.w - P, e: t.e + P });
+  const P = DTILE_PAD + 0.002, lines = await coastLines({ s: t.s - P, n: t.n + P, w: t.w - P, e: t.e + P });
   const kx = Math.cos((t.s + t.n) / 2 * Math.PI / 180) * 111320, ky = 111320, rings = [];
   for (const l of lines) {
     if (l.length < 4 || l[0][0] !== l[l.length - 1][0] || l[0][1] !== l[l.length - 1][1]) continue; // 닫힌 고리만
     let a2 = 0; for (let i = 1; i < l.length; i++) a2 += (l[i - 1][1] * kx) * (l[i][0] * ky) - (l[i][1] * kx) * (l[i - 1][0] * ky);
     if (!(a2 > 0)) continue; // 시계방향 = 안쪽이 바다(호수·만) → 육지 아님
     if (a2 / 2 < LAND_MIN_AREA) continue;
-    const c = clipRing(l.slice(0, -1), t); if (c.length < 3) continue;
+    const c = clipRing(l.slice(0, -1), pb); if (c.length < 3) continue;
     const th = thin(c, 1.5e-5); if (th.length >= 3) rings.push(th);
   }
   const out = { r: rings };
@@ -669,6 +669,17 @@ async function depthVec(x, y, opt = {}) {
       const fi = (R - 1 - r) / U, fj = c / U, i = Math.min(g.rows - 2, Math.floor(fi)), j = Math.min(g.cols - 2, Math.floor(fj)), a = fi - i, b = fj - j;
       V[r * C + c] = -(gz(i, j) * (1 - a) * (1 - b) + gz(i, j + 1) * (1 - a) * b + gz(i + 1, j) * a * (1 - b) + gz(i + 1, j + 1) * a * b);
     }
+    // [ADD] 섬·바위(OSM 해안선 고리) 안쪽 칸은 육지로 표시 → 수심 띠·등심선이 섬 위로 안 올라가요(위성 사진 섬은 그대로 보임, 해안선만 흰 선).
+    //  칸보다 작은 바위는 가운데 칸 하나라도 육지로. 해안선 서버가 실패하면 표시 없이 짧게만 저장해 곧 다시 시도.
+    let landRings = null, landErr = false;
+    try { landRings = (await landFor(x, y, t)).r; } catch (_) { landErr = true; }
+    if (landRings && landRings.length) {
+      const inRing = (ring, la, lo) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a[1] > lo) !== (b[1] > lo) && la < (b[0] - a[0]) * (lo - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
+      landRings.forEach(ring => { let s0 = 90, n0 = -90, w0 = 180, e0 = -180, cl = 0, co = 0; ring.forEach(p => { s0 = Math.min(s0, p[0]); n0 = Math.max(n0, p[0]); w0 = Math.min(w0, p[1]); e0 = Math.max(e0, p[1]); cl += p[0]; co += p[1]; });
+        const r0 = Math.max(0, Math.floor((laN - n0) / dla) - 1), r1 = Math.min(R - 1, Math.ceil((laN - s0) / dla) + 1), c0 = Math.max(0, Math.floor((w0 - g.lo0) / dlo) - 1), c1 = Math.min(C - 1, Math.ceil((e0 - g.lo0) / dlo) + 1); let hit = 0;
+        for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (inRing(ring, laN - r * dla, g.lo0 + c * dlo)) { V[r * C + c] = -3; hit++; }
+        if (!hit) { const r = Math.round((laN - cl / ring.length) / dla), c = Math.round((co / ring.length - g.lo0) / dlo); if (r >= 0 && r < R && c >= 0 && c < C) V[r * C + c] = -3; } });
+    }
     const toLL = (p) => [laN - (p[1] - 0.5) * dla, g.lo0 + (p[0] - 0.5) * dlo];
     const { contours } = require('./_contours');
     const maxD = Math.max(...V);
@@ -699,9 +710,9 @@ async function depthVec(x, y, opt = {}) {
     out = { ok: true, v: 2, x, y, tile: t, pf: d.pf || '', src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, raw: !!d.raw || undefined, coastFixed: d.coastFixed, kp: d.kp, fixErr: d.fixErr, shift: d.shift || null, full: true, sf2: true, sf3: true, sf4: true, sf5: true, sf6: true, sf7: true, sf8: true, sh5: true, d150: true, tmp: !!(d.coarse && !d.coastFixed) || undefined,
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
-    // [ADD] 섬·바위 육지(수심 위에 덮어 그림). 해안선 서버 실패 시 표시 없이 짧게만 저장해 곧 다시 시도
-    try { const ld = await landFor(x, y, t); out.ld = true; if (ld.r.length) out.Ld = ld.r.map(enc).filter(a => a.length >= 6); }
-    catch (_) { out.landErr = true; out.tmp = true; }
+    // 해안선 그리기용(투명, 흰 선만): 타일 안쪽으로 잘라 저장
+    out.ld = !landErr || undefined; if (landErr) { out.landErr = true; out.tmp = true; }
+    if (landRings && landRings.length) { const ld = landRings.map(rg => thin(clipRing(rg, t), 1.5e-5)).filter(rg => rg.length >= 3).map(enc).filter(a => a.length >= 6); if (ld.length) out.Ld = ld; }
     out.at = Date.now();
   }
   try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String((out.coarse && !out.coastFixed) || out.landErr ? 3600 : 180 * 86400)]]); } catch (_) {}

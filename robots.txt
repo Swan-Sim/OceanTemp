@@ -1,3 +1,20 @@
+# SEO 분석 회사 수집 로봇 - 검색 노출과 무관, 서버 부담만 커서 막음
+User-agent: SemrushBot
+User-agent: SemrushBot-SA
+User-agent: SemrushBot-BA
+User-agent: SemrushBot-SI
+User-agent: SemrushBot-SWA
+User-agent: SemrushBot-CT
+User-agent: SiteAuditBot
+User-agent: AhrefsBot
+User-agent: AhrefsSiteAudit
+User-agent: MJ12bot
+User-agent: DotBot
+User-agent: BLEXBot
+User-agent: DataForSeoBot
+User-agent: serpstatbot
+Disallow: /
+
 User-agent: *
 Allow: /
 Disallow: /admin/

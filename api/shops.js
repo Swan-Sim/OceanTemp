@@ -32,8 +32,7 @@ async function notifyAdmin(subject, html) {
 
 async function lookupToken(t) {
   if (!t || typeof t !== 'string' || t.length > 100) return null;
-  let [v] = await R(['HGET', K.tok, S.sha(t)]);
-  if (!v) { try { v = await require('./_owner').otkLookup(S.sha(t)); } catch (_) {} } // [ADD] 샵 주인이 계정 창에서 받은 하루짜리 수정 링크
+  const [v] = await R(['HGET', K.tok, S.sha(t)]);
   if (!v) return null;
   const [kind, id] = [v.slice(0, 1), v.slice(2)];
   return { kind, id, hash: S.sha(t) };
@@ -131,7 +130,7 @@ module.exports = async function handler(req, res) {
 
     if (svc === 'spots') {
       // [CHANGE] 전체 포인트 목록(관리 페이지에서 관리 · 옮기기 전엔 구글 시트+사용자 등록+기본 포인트). 앱·샵·포인트 등록 페이지가 이걸 읽어요
-      const spots = (await S.allSpots(S.baseOf(req))).map(s => ({ no: s.no, country: s.country, name: s.name, label: s.label, lat: s.lat, lon: s.lon, network: s.network, depth: s.depth, face: s.face ?? undefined, pTop: s.pTop ?? undefined, pMax: s.pMax ?? undefined, pRun: s.pRun ?? undefined, pR: s.pR ?? undefined, pDir: s.pDir ?? undefined, pSpan: s.pSpan ?? undefined, pRun2: s.pRun2 ?? undefined }));
+      const spots = (await S.allSpots(S.baseOf(req))).map(s => ({ no: s.no, country: s.country, name: s.name, label: s.label, lat: s.lat, lon: s.lon, network: s.network, depth: s.depth, face: s.face ?? undefined, prof: S.normProf(s) || undefined }));
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=86400');
       return res.status(200).json({ ok: true, spots });
     }
@@ -147,8 +146,7 @@ module.exports = async function handler(req, res) {
       if (!b.agree || b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' }); // [CHANGE] 약관 동의 필수
       const id = 'n' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
       const { token, hash } = S.newToken();
-      const uid = await require('./_auth').sessionUid(req).catch(() => null); // [ADD] 로그인 회원이면 승인 때 크레딧
-      const rq = { id, type: 'new', data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now(), tok: hash, terms: S.TERMS_VERSION, termsAt: Date.now(), uid: uid || '' };
+      const rq = { id, type: 'new', data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now(), tok: hash, terms: S.TERMS_VERSION, termsAt: Date.now() };
       await R(['HSET', K.req, id, JSON.stringify(rq)], ['HSET', K.tok, hash, 'r:' + id]);
       const base = S.baseOf(req), url = S.editUrl(base, token);
       await notifyAdmin(`[otemp] 새 샵 등록 요청: ${f.name}`, `<p>${S.esc(f.name)} (${S.esc(mail)})</p><p><a href="${base}/admin/#shops">관리 페이지에서 확인</a></p>`);
@@ -192,7 +190,6 @@ module.exports = async function handler(req, res) {
         const rq = JSON.parse(raw);
         if (rq.terms !== S.TERMS_VERSION && b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' });
         Object.assign(rq, { data: f, email: mail, memo: S.str(b.memo, 500) || rq.memo, at: Date.now() });
-        if (!rq.uid) rq.uid = (await require('./_auth').sessionUid(req).catch(() => null)) || '';
         if (b.terms === S.TERMS_VERSION) { rq.terms = S.TERMS_VERSION; rq.termsAt = Date.now(); }
         await R(['HSET', K.req, tk.id, JSON.stringify(rq)]);
         return send(res, 200, { ok: true, status: 'pending_new' });
@@ -202,7 +199,7 @@ module.exports = async function handler(req, res) {
       const s = JSON.parse(raw);
       // [ADD] 아직 지금 약관에 동의하지 않은 샵(가져오기·관리자 추가·예전 약관)은 수정할 때 동의 받기
       if (s.terms !== S.TERMS_VERSION && b.terms !== S.TERMS_VERSION) return send(res, 400, { ok: false, error: 'need_agree' });
-      const rq = { id: 'e' + tk.id, type: 'edit', shopId: tk.id, data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now(), uid: (await require('./_auth').sessionUid(req).catch(() => null)) || '' };
+      const rq = { id: 'e' + tk.id, type: 'edit', shopId: tk.id, data: f, email: mail, memo: S.str(b.memo, 500), at: Date.now() };
       if (b.terms === S.TERMS_VERSION) { rq.terms = S.TERMS_VERSION; rq.termsAt = Date.now(); }
       await R(['HSET', K.req, rq.id, JSON.stringify(rq)]);
       await notifyAdmin(`[otemp] 샵 수정 요청: ${s.name}`, `<p>${S.esc(s.name)} → ${S.esc(f.name)}</p><p><a href="${S.baseOf(req)}/admin/#shops">관리 페이지에서 확인</a></p>`);
@@ -260,8 +257,7 @@ module.exports = async function handler(req, res) {
       const f = S.spotFields(b);
       if (!f.name || f.lat == null || f.lon == null) return send(res, 400, { ok: false, error: 'need_name_pos' });
       const id = 'p' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
-      const uid = await require('./_auth').sessionUid(req).catch(() => null); // [ADD] 로그인 회원이면 승인 때 크레딧
-      await R(['HSET', K.spotreq, id, JSON.stringify({ id, data: f, email: S.email(b.email), at: Date.now(), uid: uid || '' })]);
+      await R(['HSET', K.spotreq, id, JSON.stringify({ id, data: f, email: S.email(b.email), at: Date.now() })]);
       await notifyAdmin(`[otemp] 새 정점 등록 요청: ${f.name}`, `<p>${S.esc(f.name)} ${f.lat}, ${f.lon}</p><p><a href="${S.baseOf(req)}/admin/#spots">관리 페이지에서 확인</a></p>`);
       return send(res, 200, { ok: true });
     }

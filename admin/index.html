@@ -144,9 +144,6 @@
         </form><div class="muted" id="siteMsg"></div></div>
       <div class="card"><h2>지금 설정</h2><div class="kv" id="setInfo"></div>
         <div class="actions"><button id="testMailBtn">알림 이메일로 테스트 메일 보내기</button></div><div class="muted" id="testMailMsg"></div></div>
-      <div class="card"><h2>Redis 용량</h2>
-        <div class="muted" style="margin-bottom:8px">무료 한도(256MB)를 넘으면 포인트 등록·로그인·통계 저장이 막혀요. 수심·해안선 같은 캐시는 지워도 필요할 때 다시 만들어져요(포인트·샵·회원·통계는 지울 수 없음).</div>
-        <div class="actions"><button id="redisScanBtn">용량 살펴보기</button></div><div class="muted" id="redisMsg"></div><div id="redisTbl"></div></div>
       <div class="card"><h2>알림 이메일 바꾸기</h2>
         <div class="muted" style="margin-bottom:8px">새 등록·수정 요청, 이의 제기, 이메일 없는 샵의 수정 링크, 만료 안내가 이 주소로 가요. 비우고 저장하면 Vercel의 ADMIN_EMAIL 값으로 돌아가요.</div>
         <form id="emailForm" class="ed" style="border-color:var(--line)">
@@ -173,7 +170,6 @@
         <h2>회원 목록 <span class="muted" id="uCount" style="font-size:12px;font-weight:400"></span></h2>
         <div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap"><input class="f" id="uQ" placeholder="이름 · 이메일 · 회원 ID 검색" style="flex:1;min-width:180px"><button id="uSearch">검색</button></div>
         <div class="hint" id="uMergeBar" style="display:none;color:#7dd3fc"></div>
-        <div id="uClaims"></div>
         <table id="uList"></table>
         <div class="row" style="margin-top:10px;gap:8px;justify-content:center"><button id="uPrev">이전</button><span class="muted" id="uPage"></span><button id="uNext">다음</button></div>
         <div class="hint">이메일은 개인정보라 목록에는 일부만 보여요(검색은 전체 이메일로 돼요). 차단하면 바로 로그아웃되고 다시 로그인할 수 없어요. 삭제는 되돌릴 수 없어요.</div>
@@ -386,7 +382,6 @@
   const PN = { google: '구글', kakao: '카카오', naver: '네이버', facebook: '페이스북' };
   async function loadUsers() {
     try { uData = await api('users', { q: $('uQ').value, page: uPage }); } catch (_) { return; }
-    loadClaims();
     const st = uData.stats;
     $('uKpis').innerHTML = [['전체 회원', st.total], ['최근 7일 신규', st.new7], ['최근 30일 신규', st.new30], ['30일 내 접속', st.active30], ['즐겨찾기 사용', st.withFav], ['관리자', st.admins || 0]]
       .map(([l, v]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('') + (st.blocked ? `<div class="kpi"><div class="v">${st.blocked}</div><div class="l">차단됨</div></div>` : '');
@@ -394,40 +389,27 @@
     $('uProv').innerHTML = Object.entries(st.byProvider).sort((a, z) => z[1] - a[1]).map(([p, n]) => `<span class="chip">${esc(PN[p] || p)} ${n} <span class="muted">(${Math.round(n / tot * 100)}%)</span></span>`).join('') || '<span class="muted">아직 없어요</span>';
     $('uTop').innerHTML = uData.topFavs.map(t => `<tr><td>${esc(spotNames[t.no] || ('#' + t.no))}</td><td class="n">${t.n}명</td></tr>`).join('') || '<tr><td class="muted">아직 즐겨찾기가 없어요</td></tr>';
     $('uCount').textContent = `${uData.total}명`;
-    $('uList').innerHTML = '<tr><th class="n" style="text-align:left">회원</th><th class="n" style="text-align:left">로그인</th><th class="n">가입</th><th class="n">최근 접속</th><th class="n">레벨·크레딧</th><th class="n">즐겨찾기</th><th class="n" style="text-align:left">샵·풀장 주인</th><th></th></tr>' + (uData.items.map(u => {
+    $('uList').innerHTML = '<tr><th class="n" style="text-align:left">회원</th><th class="n" style="text-align:left">로그인</th><th class="n">가입</th><th class="n">최근 접속</th><th class="n">레벨·크레딧</th><th class="n">즐겨찾기</th><th></th></tr>' + (uData.items.map(u => {
       const fav = u.favs.map(no => esc(spotNames[no] || ('#' + no))).join(', ');
       const merge = uMergeFrom ? (uMergeFrom === u.id ? '<span class="muted">합칠 계정</span>' : `<button data-um-to="${esc(u.id)}">여기로 합치기</button>`) : `<button data-um="${esc(u.id)}" title="중복 계정을 이 계정으로 합치려면 먼저 합칠 쪽을 누르세요">합치기</button>`;
       return `<tr style="${u.blocked ? 'opacity:.55' : ''}"><td><div style="display:flex;gap:8px;align-items:center">${u.avatar ? `<img src="${esc(u.avatar)}" referrerpolicy="no-referrer" width="28" height="28" style="border-radius:50%;object-fit:cover">` : '<span style="width:28px;height:28px;border-radius:50%;background:#1e293b;display:inline-block"></span>'}<div><b>${esc(u.name || '(이름 없음)')}</b>${u.role === 'admin' ? ' <span class="tag">관리자</span>' : ''}${u.blocked ? ' <span class="tag off">차단</span>' : ''}<div class="muted" title="${esc(u.id)}">${esc(u.email || '이메일 없음')} · ID ${esc(u.id.slice(0, 6))}…</div></div></div></td>`
-        + `<td>${u.providers.map(p => `<span class="tag off">${esc(PN[p] || p)}</span>`).join(' ')}</td><td class="n">${fmtD(u.created)}</td><td class="n">${fmtD(u.last)}</td><td class="n">Lv.${u.level} · ${u.credits}<br><button data-uc="${esc(u.id)}" title="크레딧 수동 조정">조정</button></td><td class="n" title="${fav}">${u.favCount}</td><td>${(u.shops || []).map(s => `<span class="tag">${s.type === 'pool' ? '🏊' : s.type === 'liveaboard' ? '🚢' : '🏪'} ${esc(s.name)} <a href="#" data-unown="${esc(s.id)}" title="연결 해제" style="color:#f87171;text-decoration:none">×</a></span>`).join(' ')} <button data-own="${esc(u.id)}" title="이 회원을 샵·풀장 주인으로 연결">+ 샵 연결</button></td>`
+        + `<td>${u.providers.map(p => `<span class="tag off">${esc(PN[p] || p)}</span>`).join(' ')}</td><td class="n">${fmtD(u.created)}</td><td class="n">${fmtD(u.last)}</td><td class="n">Lv.${u.level} · ${u.credits}<br><button data-uc="${esc(u.id)}" title="크레딧 수동 조정">조정</button></td><td class="n" title="${fav}">${u.favCount}</td>`
         + `<td class="act">${merge} <button data-ur="${esc(u.id)}" data-role="${u.role === 'admin' ? '' : 'admin'}">${u.role === 'admin' ? '관리자 해제' : '관리자 지정'}</button> <button data-ub="${esc(u.id)}" data-on="${u.blocked ? 0 : 1}">${u.blocked ? '차단 해제' : '차단'}</button> <button data-ud="${esc(u.id)}" style="color:#f87171">삭제</button></td></tr>`;
-    }).join('') || '<tr><td class="muted" colspan="8">회원이 없어요</td></tr>');
+    }).join('') || '<tr><td class="muted" colspan="7">회원이 없어요</td></tr>');
     const pages = Math.max(1, Math.ceil(uData.total / uData.per));
     $('uPage').textContent = `${uPage + 1} / ${pages}`; $('uPrev').disabled = uPage <= 0; $('uNext').disabled = uPage >= pages - 1;
     const mb = $('uMergeBar');
     if (uMergeFrom) { const f = uData.items.find(x => x.id === uMergeFrom); mb.style.display = ''; mb.innerHTML = `합칠 계정: <b>${esc(f ? f.name : uMergeFrom)}</b> → 남길 계정 행의 "여기로 합치기"를 누르세요. <button id="uMergeCancel">취소</button>`; $('uMergeCancel').onclick = () => { uMergeFrom = null; loadUsers(); }; }
     else mb.style.display = 'none';
   }
-  // [ADD] 샵 소유권 주장 요청(지도에서 회원이 보냄) - 승인하면 그 회원이 샵 주인으로 연결돼요
-  async function loadClaims() {
-    const box = $('uClaims'); if (!box) return;
-    let j; try { j = await api('claims'); } catch (_) { return; }
-    const c = j.claims || [];
-    box.innerHTML = c.length ? `<div class="hint" style="color:#fbbf24;margin:6px 0">샵 소유권 주장 ${c.length}건</div><table>` + c.map(x => `<tr><td><b>${esc(x.shopName)}</b> <span class="muted">#${esc(x.shopId)}</span></td><td>${esc(x.userName)}<div class="muted">${esc(x.userEmail || '이메일 없음')}${x.contact ? ' · ' + esc(x.contact) : ''}</div></td><td>${esc(x.msg || '')}</td><td class="n">${fmtD(x.at)}</td><td class="act"><button data-ca="${esc(x.id)}">승인</button> <button data-cr="${esc(x.id)}" style="color:#f87171">거절</button></td></tr>`).join('') + '</table>' : '';
-    box.querySelectorAll('[data-ca],[data-cr]').forEach(btn => btn.onclick = async () => {
-      const ap = !!btn.dataset.ca; if (ap && !confirm('승인하면 이 회원이 샵 주인으로 연결돼요. 승인할까요?')) return;
-      try { await api(ap ? 'claimApprove' : 'claimReject', { id: btn.dataset.ca || btn.dataset.cr }); } catch (_) {} loadClaims(); loadUsers(); });
-  }
   $('uSearch').onclick = () => { uPage = 0; loadUsers(); };
   $('uQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { uPage = 0; loadUsers(); } });
   $('uPrev').onclick = () => { if (uPage > 0) { uPage--; loadUsers(); } };
   $('uNext').onclick = () => { uPage++; loadUsers(); };
   $('uList').addEventListener('click', async (e) => {
-    const un = e.target.closest('[data-unown]');
-    if (un) { e.preventDefault(); if (!confirm('이 샵과 회원 연결을 끊을까요?')) return; try { await api('ownerSet', { shopId: un.dataset.unown, uid: '' }); } catch (_) {} return loadUsers(); }
     const t = e.target.closest('button'); if (!t) return;
     try {
-      if (t.dataset.own) { const q = prompt('연결할 샵·리브어보드·풀장 번호 또는 이름(일부)', ''); if (!q) return; const r = await api('ownerSet', { q, uid: t.dataset.own }); alert(`${r.shop.name} 주인으로 연결했어요`); }
-      else if (t.dataset.ud) { if (!confirm('이 회원을 삭제할까요? 즐겨찾기·로그인 연결이 모두 지워지고 되돌릴 수 없어요.')) return; await api('userDelete', { id: t.dataset.ud }); }
+      if (t.dataset.ud) { if (!confirm('이 회원을 삭제할까요? 즐겨찾기·로그인 연결이 모두 지워지고 되돌릴 수 없어요.')) return; await api('userDelete', { id: t.dataset.ud }); }
       else if (t.dataset.ub) { if (t.dataset.on === '1' && !confirm('이 회원을 차단할까요? 바로 로그아웃되고 다시 로그인할 수 없어요.')) return; await api('userBlock', { id: t.dataset.ub, on: t.dataset.on === '1' }); }
       else if (t.dataset.ur) { const on = t.dataset.role === 'admin'; if (!confirm(on ? '이 회원에게 관리자 권한을 줄까요? 회원·샵·정점을 관리할 수 있게 돼요.' : '이 회원의 관리자 권한을 뺄까요?')) return; await api('userRole', { id: t.dataset.ur, role: t.dataset.role }); }
       else if (t.dataset.uc) { const v = prompt('크레딧 가감 (예: 10 또는 -5)', '10'); if (v == null) return; await api('userCredit', { id: t.dataset.uc, delta: parseInt(v, 10) || 0 }); }
@@ -446,22 +428,17 @@
     const f = $('siteForm'); if (!f) return;
     try { const c = await api('siteGet'); const n = c.notice || {}, v = c.ver || {};
       f.show.value = n.show || 'guest'; f.title.value = n.title || ''; f.sub.value = n.sub || ''; f.items.value = (n.items || []).join('\n');
-      // [CHANGE] 기간이 비었거나 이미 끝났으면 자동으로 지금 ~ 24시간 뒤
-      if (!n.end || n.end <= Date.now()) { const now = Date.now(); f.start.value = toLocalIn(now); f.end.value = toLocalIn(now + 24 * 3600e3); }
-      else { f.start.value = toLocalIn(n.start || Date.now()); f.end.value = toLocalIn(n.end); } f.vtext.value = v.text == null ? '' : v.text; f.vpos.value = v.pos || 'acct';
+      f.start.value = toLocalIn(n.start); f.end.value = toLocalIn(n.end); f.vtext.value = v.text == null ? '' : v.text; f.vpos.value = v.pos || 'acct';
       f.dfix.value = (c.depthFix || []).map(x => [x.la, x.lo, x.r, x.min, x.name || ''].join(', ')).join('\n');
     } catch (_) {}
   }
   $('siteForm').addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.target, msg = $('siteMsg');
-    if (!f.start.value) f.start.value = toLocalIn(Date.now());
-    if (!f.end.value) f.end.value = toLocalIn(fromLocalIn(f.start.value) + 24 * 3600e3);
     const st = fromLocalIn(f.start.value), en = fromLocalIn(f.end.value);
-    msg.textContent = '저장 중…';
     if (st && en && en <= st) { msg.textContent = '종료 시각이 시작보다 늦어야 해요'; return; }
     try {
       await api('siteSave', { notice: { show: f.show.value, title: f.title.value, sub: f.sub.value, items: f.items.value.split('\n'), start: st, end: en }, ver: { text: f.vtext.value, pos: f.vpos.value }, depthFix: f.dfix.value.split('\n').map(l => l.split(',').map(z => z.trim())).filter(a => a.length >= 4).map(a => ({ la: a[0], lo: a[1], r: a[2], min: a[3], name: a.slice(4).join(',') })) });
-      msg.textContent = `저장했어요 (${new Date().toLocaleTimeString('ko-KR', { hour12: false })}). 사이트에는 최대 1분 안에 반영돼요.`;
+      msg.textContent = '저장했어요. 사이트에는 최대 1분 안에 반영돼요.';
     } catch (_) { msg.textContent = ''; }
   });
   function showSec(name) {
@@ -522,32 +499,6 @@
     const j = await apiQuiet('setPassword', { current: f.current.value, next: f.next.value, confirm: f.confirm.value });
     if (j.ok) { setPw(f.next.value); f.reset(); $('pwMsg').textContent = '바꿨어요. 다음부터 새 비밀번호로 들어오세요.'; loadSettings(); }
     else { $('pwMsg').textContent = ERR[j.error] || '바꾸지 못했어요'; f.current.value = ''; } };
-  // [ADD] Redis 용량 보기·캐시 지우기
-  const REDIS_CACHE = ['draw:', 'dvec:', 'dtile:', 'depth:v1', 'land:', 'reef:', 'isl:', 'tctl:', 'dshift:'];
-  async function redisScan() {
-    const agg = {}; let cursor = '0', loops = 0;
-    $('redisMsg').textContent = '살펴보는 중…'; $('redisTbl').innerHTML = '';
-    do { const r = await apiQuiet('redisUsage', { cursor }); if (!r.ok) { $('redisMsg').textContent = '실패: ' + (r.error || ''); return; }
-      Object.entries(r.agg).forEach(([k, v]) => { const a = agg[k] || (agg[k] = { n: 0, bytes: 0 }); a.n += v.n; a.bytes += v.bytes; });
-      cursor = r.cursor; $('redisMsg').textContent = `살펴보는 중… (${++loops})`; } while (cursor !== '0' && loops < 200);
-    const rows = Object.entries(agg).sort((a, b) => b[1].bytes - a[1].bytes);
-    const tot = rows.reduce((t, r) => t + r[1].bytes, 0);
-    $('redisMsg').textContent = `문자열 키 합계 약 ${(tot / 1048576).toFixed(1)}MB (해시·집합 키는 크기 0으로 표시)`;
-    $('redisTbl').innerHTML = '<table style="width:100%;font-size:13px"><tr><th align="left">접두어</th><th align="right">키 수</th><th align="right">MB</th><th></th></tr>' + rows.slice(0, 40).map(([k, v]) =>
-      `<tr><td>${esc(k)}</td><td align="right">${v.n}</td><td align="right">${(v.bytes / 1048576).toFixed(1)}</td><td align="right">${REDIS_CACHE.some(c => (k + ':').startsWith(c)) ? `<button data-move="${esc(k)}">R2로 옮기기</button> <button data-purge="${esc(k)}">지우기</button>` : ''}</td></tr>`).join('') + '</table>';
-    $('redisTbl').querySelectorAll('[data-move]').forEach(btn => btn.onclick = async () => {
-      const prefix = btn.dataset.move; let cursor = '0', moved = 0, fail = 0, n = 0; btn.disabled = true;
-      do { const r = await apiQuiet('redisMove', { prefix, cursor }); if (!r.ok) { btn.textContent = '실패 ' + (r.error || ''); btn.disabled = false; return; }
-        moved += r.moved; fail += r.fail; cursor = r.cursor; btn.textContent = `${moved}개 옮김…` + (fail ? ` (실패 ${fail}: ${r.lastErr || ''})` : '');
-      } while (cursor !== '0' && ++n < 1000);
-      btn.textContent = `${moved}개 옮김` + (fail ? ` · 실패 ${fail}` : ' ✓'); });
-    $('redisTbl').querySelectorAll('[data-purge]').forEach(btn => btn.onclick = async () => {
-      const prefix = btn.dataset.purge; if (!confirm(prefix + ' 캐시를 모두 지울까요? (필요할 때 다시 만들어져요)')) return;
-      let cursor = '0', del = 0, n = 0; btn.disabled = true;
-      do { const r = await apiQuiet('redisPurge', { prefix, cursor }); if (!r.ok) { btn.textContent = '실패 ' + (r.error || ''); return; } del += r.del; cursor = r.cursor; btn.textContent = `${del}개 지움…`; } while (cursor !== '0' && ++n < 300);
-      btn.textContent = `${del}개 지움`; });
-  }
-  $('redisScanBtn').onclick = redisScan;
   $('testMailBtn').onclick = async () => { const j = await apiQuiet('testMail');
     $('testMailMsg').textContent = j.ok ? (j.sent ? `${j.to}로 보냈어요. 메일함(스팸함 포함)을 확인해 주세요.` : '보내지 못했어요 - 메일 발송(RESEND) 설정을 확인해 주세요.') : (ERR[j.error] || '실패'); };
   const FIELDS = [['name', '샵 이름'], ['spots', '포인트'], ['phone', '전화'], ['kakao', '카카오'], ['whatsapp', 'WhatsApp'], ['instagram', '인스타'], ['web', '웹'], ['address', '주소'], ['lang', '언어'], ['note', '소개']];
@@ -650,27 +601,58 @@
       <label><input type="checkbox" data-k="depth"${s.depth !== false ? ' checked' : ''}> 수심 프로파일 탭 보이기</label>
       <label><input type="checkbox" data-k="show"${s.show !== false ? ' checked' : ''}> 사이트에 보이기</label>
       <label>바다 쪽 방향°(북=0, 비우면 해안선으로 자동)<input class="f" data-k="face" value="${s.face ?? ''}" placeholder="예) 270 = 서쪽이 바다"></label>
-      <div style="grid-column:1/-1;border-top:1px solid rgba(255,255,255,.1);padding-top:8px"><b>현지 지형(수심 지도 보완)</b> <span class="hint">공개 수심 자료가 거친 곳(해외 섬 등)을 다이버가 아는 지형으로 바로잡아요. 바닥 수심을 비우면 안 씀</span>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:flex-end">
-          <label>모양<select class="f" data-prof-preset><option value="">직접 입력</option><option value="5">직벽(수평 5m)</option><option value="30">급경사(30m)</option><option value="150">완경사(150m)</option></select></label>
-          <label>상단 수심 m<input class="f" data-k="pTop" value="${s.pTop ?? ''}" placeholder="2" style="width:70px"></label>
-          <label>바닥 수심 m<input class="f" data-k="pMax" value="${s.pMax ?? ''}" placeholder="예) 45" style="width:70px"></label>
-          <label>수평 거리 m<input class="f" data-k="pRun" value="${s.pRun ?? ''}" placeholder="10" style="width:70px"></label>
-          <label>적용 반경 m<input class="f" data-k="pR" value="${s.pR ?? ''}" placeholder="250" style="width:70px"></label></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:flex-end">
-          <label>완만한 쪽 방향°<input class="f" data-k="pDir" value="${s.pDir ?? ''}" placeholder="예) 135 = 남동" style="width:100px"></label>
-          <label>완만한 범위°<input class="f" data-k="pSpan" value="${s.pSpan ?? ''}" placeholder="90" style="width:70px"></label>
-          <label>그 밖(가파른 쪽) 수평 거리 m<input class="f" data-k="pRun2" value="${s.pRun2 ?? ''}" placeholder="5" style="width:70px"></label></div>
-        <div class="hint">섬처럼 한쪽만 완만하고 나머지는 가파른 곳: 위 "수평 거리"는 완만한 쪽, 여기 "가파른 쪽 수평 거리"는 그 밖. 방향은 해안선에서 바다 쪽을 바라보는 방향(북=0, 동=90, 남=180, 서=270; 시계 4~5시 = 약 135°). 방향을 비우면 모든 방향 같은 경사.</div>
-        <div class="hint">상단(해안·리프 끝)에서 바닥 수심까지 수평 거리 안에 떨어진다고 그려요. 포인트에서 적용 반경까지 그대로, 2배 거리까지 서서히 원래 자료로.</div></div></div>
+      <div style="grid-column:1/-1;border-top:1px solid rgba(255,255,255,.1);padding-top:8px" data-prof>
+        <b>수심 보정 (섬·바위 모양)</b> <span class="hint">공개 수심 자료가 거친 곳을 다이버가 아는 지형으로 바로잡아요. 방향 구간을 하나도 안 넣고 "그 밖 방향"도 비우면 보정 안 함</span>
+        ${profBlock(s)}
+      </div></div>
       <div class="actions" style="margin-top:8px"><button class="primary" data-act="${isNew ? 'sadd' : 'ssave'}">${isNew ? '추가 (번호 자동)' : '저장'}</button><button data-act="scancel">취소</button></div></div>`;
   }
-  // [ADD] 현지 지형 모양 고르면 수평 거리 채우기
-  document.addEventListener('change', (e) => { const sel = e.target.closest && e.target.closest('[data-prof-preset]'); if (!sel || !sel.value) return;
-    const f = sel.closest('[data-sform]'), run = f && f.querySelector('[data-k=pRun]'); if (run) run.value = sel.value; });
+  // [CHANGE] 수심 보정 입력: 방향 구간(시작각~끝각, 경사각, 도달 수심) 여러 줄 + 그 밖 방향. 위쪽에 모양 미리보기(원 위에 구간 색칠).
+  const SLOPES = [['', '직접 입력'], ['80', '직벽 80°'], ['60', '급경사 60°'], ['45', '보통 45°'], ['25', '완만 25°'], ['10', '아주 완만 10°']];
+  function secRow(x) { x = x || {};
+    return `<div data-secrow style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-top:6px">
+      <label>시작각°<input class="f" data-s="a0" value="${x.a0 ?? ''}" placeholder="90" style="width:62px"></label>
+      <label>끝각°(시계방향)<input class="f" data-s="a1" value="${x.a1 ?? ''}" placeholder="180" style="width:62px"></label>
+      <label>경사 °<input class="f" data-s="deg" value="${x.deg ?? ''}" placeholder="45" style="width:56px"></label>
+      <label>모양<select class="f" data-slope>${SLOPES.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select></label>
+      <label>도달 수심 m<input class="f" data-s="max" value="${x.max ?? ''}" placeholder="40" style="width:62px"></label>
+      <button type="button" data-act="secdel">삭제</button><span class="hint" data-secinfo></span></div>`; }
+  function profBlock(s) { const q = s.prof || {};
+    return `<div class="grid2" style="gap:8px;margin-top:6px"><label>시작 수심 m (해안·리프 끝, 보통 0~2)<input class="f" data-k="pTop" value="${q.top ?? ''}" placeholder="0"></label>
+      <label>적용 반경 m (포인트에서 이 거리까지, 섬 전체면 섬 크기+여유)<input class="f" data-k="pR" value="${q.r ?? ''}" placeholder="250"></label></div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px"><svg data-prevsvg width="110" height="110" viewBox="-55 -55 110 110" style="flex:none"></svg>
+        <div class="hint" style="flex:1;min-width:220px">바다를 바라보는 방향으로 구간을 나눠요: <b>북 0° · 동 90° · 남 180° · 서 270°</b>(시계 4~5시 방향 = 약 120~150°). 구간은 시작각에서 시계방향으로 끝각까지예요. <b>경사 °</b>는 수평에 대한 각도 — 45°면 바다 쪽으로 1m 나아갈 때 1m 깊어져요(진할수록 가파름). 한 포인트에 구간을 여러 개 넣어 섬 한 바퀴를 다 보정할 수 있어요.</div></div>
+      <div data-secs>${(q.secs || []).map(secRow).join('')}</div>
+      <div style="margin-top:6px"><button type="button" data-act="secadd">+ 방향 구간 추가</button> <button type="button" data-act="secfull">+ 섬 둘레 전체(0°~360°)</button></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-top:8px"><b style="align-self:center">그 밖 방향</b>
+        <label>경사 °<input class="f" data-k="pElseDeg" value="${q.els ? q.els.deg : ''}" placeholder="비우면 원래 자료" style="width:120px"></label>
+        <label>도달 수심 m<input class="f" data-k="pElseMax" value="${q.els ? q.els.max : ''}" placeholder="40" style="width:70px"></label></div>`; }
+  // 미리보기·설명 갱신
+  function profRefresh(box) { if (!box) return; const svg = box.querySelector('[data-prevsvg]'); if (!svg) return; const top = parseFloat((box.querySelector('[data-k=pTop]') || {}).value) || 0;
+    const col = (deg) => { const t = Math.max(0, Math.min(1, (deg - 5) / 80)); return `hsl(${200 - 20 * t}, 80%, ${70 - 40 * t}%)`; };
+    const pt = (a, r) => { const rad = (a - 90) * Math.PI / 180; return [(r * Math.cos(rad)).toFixed(1), (r * Math.sin(rad)).toFixed(1)]; };
+    const ed = parseFloat((box.querySelector('[data-k=pElseDeg]') || {}).value);
+    let h = `<circle r="46" fill="${ed > 0 ? col(ed) : '#1e293b'}" stroke="#475569"/>`;
+    box.querySelectorAll('[data-secrow]').forEach(r => { const g = (k) => parseFloat(r.querySelector(`[data-s=${k}]`).value), a0 = g('a0'), a1 = g('a1'), dg = g('deg'), mx = g('max'), info = r.querySelector('[data-secinfo]');
+      if ([a0, a1, dg, mx].every(Number.isFinite) && dg >= 5 && dg <= 89) { const w = ((a1 - a0) % 360 + 360) % 360 || 360, run = (mx - top) / Math.tan(dg * Math.PI / 180);
+        info.textContent = `→ ${Math.round(w)}° 폭 · 해안에서 약 ${Math.round(run)}m 나가면 ${mx}m`; if (w >= 360) h += `<circle r="46" fill="${col(dg)}" opacity=".95"/>`; else { const p0 = pt(a0, 46), p1 = pt(a0 + w, 46); h += `<path d="M0 0 L${p0[0]} ${p0[1]} A46 46 0 ${w > 180 ? 1 : 0} 1 ${p1[0]} ${p1[1]} Z" fill="${col(dg)}" stroke="#fff" stroke-width=".6"/>`; } }
+      else info.textContent = ''; });
+    h += `<circle r="9" fill="#d8cfae" stroke="#fff"/><text y="-48" text-anchor="middle" font-size="8" fill="#e2e8f0">N</text>`; svg.innerHTML = h; }
+  document.addEventListener('input', (e) => { const box = e.target.closest && e.target.closest('[data-prof]'); if (box) profRefresh(box); });
+  document.addEventListener('change', (e) => { const sel = e.target.closest && e.target.closest('[data-slope]'); if (!sel) return; if (sel.value) { const r = sel.closest('[data-secrow]'); r.querySelector('[data-s=deg]').value = sel.value; } profRefresh(sel.closest('[data-prof]')); });
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-act=secadd],[data-act=secfull],[data-act=secdel]'); if (!b) return; e.stopPropagation();
+    const box = b.closest('[data-prof]'), act = b.dataset.act;
+    if (act === 'secdel') b.closest('[data-secrow]').remove();
+    else { const wrap = box.querySelector('[data-secs]'); if (wrap.children.length >= 8) return; wrap.insertAdjacentHTML('beforeend', secRow(act === 'secfull' ? { a0: 0, a1: 360 } : {})); }
+    profRefresh(box); }, true);
+  const profInit = () => document.querySelectorAll('[data-prof]:not([data-pv])').forEach(b => { b.setAttribute('data-pv', '1'); profRefresh(b); });
+  new MutationObserver(profInit).observe(document.body, { childList: true, subtree: true });
   function readSpotForm(el) {
     const o = {}; el.querySelectorAll('[data-k]').forEach(i => { o[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.value.trim(); });
     if (o.country !== undefined) { const sel = el.querySelector('select[data-k=country]'); if (sel) o.country = sel.value; }
+    // 수심 보정: 방향 구간 목록 + 그 밖 방향(비우면 null → 서버가 보정 없음/원본 유지로 처리)
+    o.pSec = [...el.querySelectorAll('[data-secrow]')].map(r => { const g = (k) => r.querySelector(`[data-s=${k}]`).value.trim(); return { a0: g('a0'), a1: g('a1'), deg: g('deg'), max: g('max') }; }).filter(x => x.a0 !== '' && x.a1 !== '' && x.deg !== '' && x.max !== '');
+    o.pElse = o.pElseDeg !== '' && o.pElseMax !== '' && o.pElseDeg !== undefined ? { deg: o.pElseDeg, max: o.pElseMax } : null; delete o.pElseDeg; delete o.pElseMax;
     return o;
   }
   function renderSpotList() {

@@ -105,7 +105,7 @@ const hasContact = (f) => !!(f.phone || f.kakao || f.whatsapp || f.instagram || 
 function publicShop(s) {
   return { id: String(s.id), type: shopType(s.type), spots: s.spots || [], name: s.name, phone: s.phone || '', kakao: s.kakao || '', whatsapp: s.whatsapp || '',
     instagram: s.instagram || '', web: s.web || '', address: s.address || '', lang: s.lang || '', note: s.note || '',
-    paid: s.plan === 'paid', checked: s.checked || '', own: s.owner ? 1 : 0, // [ADD] 주인(회원) 연결 여부 - 없으면 지도에 "소유권 주장" 버튼
+    paid: s.plan === 'paid', checked: s.checked || '',
     ...(s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : {}), // [ADD] 샵·리브어보드 위치(있으면)
     ...(shopType(s.type) === 'pool' ? { lat: s.lat, lon: s.lon, depthMax: s.depthMax ?? null, waterTemp: s.waterTemp ?? null, env: s.env || '', uses: s.uses || '', entry: s.entry || '', hours: s.hours || '', price: s.price || '' } : {}) };
 }
@@ -124,10 +124,29 @@ function faceOf(v) { if (v === '' || v == null) return null; const n = +v; retur
 // [ADD] 포인트 현지 지형(수심 지도 보완): 상단 수심·바닥 수심·수평 거리·적용 반경(m). 바닥 수심이 없으면 안 씀
 const numIn = (v, lo, hi) => { if (v === '' || v == null) return null; const n = +v; return Number.isFinite(n) && n >= lo && n <= hi ? +n.toFixed(1) : null; };
 // [ADD] 방향별 경사: pDir = 완만한 쪽이 바라보는 방향(°, 북=0, 해안선의 바다 쪽 법선 기준), pSpan = 완만한 범위(°), pRun2 = 나머지(가파른) 쪽 수평 거리 m
-function profOf(b) { const pMax = numIn(b.pMax, 1, 300); if (pMax == null) return { pTop: null, pMax: null, pRun: null, pR: null, pDir: null, pSpan: null, pRun2: null };
-  const d = numIn(b.pDir, 0, 360), dir = d == null ? null : Math.round(d) % 360;
-  return { pTop: numIn(b.pTop, 0, 100) ?? 2, pMax, pRun: numIn(b.pRun, 1, 2000) ?? 10, pR: numIn(b.pR, 50, 2000) ?? 250,
-    pDir: dir, pSpan: dir == null ? null : (numIn(b.pSpan, 20, 340) ?? 90), pRun2: dir == null ? null : (numIn(b.pRun2, 1, 2000) ?? 5) }; }
+// [CHANGE] 현지 지형(수심 보정) = 시작 수심 + 방향 구간 목록 + 그 밖 방향.
+//  구간: 시작각°~끝각°(시계방향, 북=0·동=90, "해안에서 바다를 바라보는 방향"), 경사각°(수평 대비, 45°면 1m 나아갈 때 1m 깊어짐), 도달 수심 m
+//  그 밖 방향(pElse): 경사각·도달 수심. 비우면 원래 자료 그대로. 예전 형식(pMax·pRun·pDir…)은 읽을 때 같은 모양으로 바꿔요.
+const mod360 = (v) => ((Math.round(v) % 360) + 360) % 360;
+const slopeDeg = (top, max, run) => +(Math.atan((max - top) / Math.max(1, run)) * 180 / Math.PI).toFixed(1);
+function normProf(o) {
+  o = o || {}; const top = numIn(o.pTop, 0, 100);
+  let secs = [], els = null;
+  const sec1 = (x) => { x = x || {}; const a0 = numIn(x.a0, 0, 360), a1 = numIn(x.a1, 0, 360), deg = numIn(x.deg, 5, 89), max = numIn(x.max, 1, 300); return a0 == null || a1 == null || deg == null || max == null ? null : { a0: mod360(a0), a1: a1 === 360 && a0 === 0 ? 360 : mod360(a1), deg, max }; };
+  if (o.pSec !== undefined || o.pElse !== undefined) {
+    secs = (Array.isArray(o.pSec) ? o.pSec : []).map(sec1).filter(Boolean).slice(0, 8);
+    const e = o.pElse && typeof o.pElse === 'object' ? { deg: numIn(o.pElse.deg, 5, 89), max: numIn(o.pElse.max, 1, 300) } : null; els = e && e.deg != null && e.max != null ? e : null;
+  } else { // 예전 형식 → 같은 모양
+    const mx = numIn(o.pMax, 1, 300); if (mx == null) return null; const t = numIn(o.pTop, 0, 100) ?? 2, run = numIn(o.pRun, 1, 2000) ?? 10, d = numIn(o.pDir, 0, 360);
+    if (d == null) els = { deg: Math.min(89, Math.max(5, slopeDeg(t, mx, run))), max: mx };
+    else { const sp = numIn(o.pSpan, 20, 340) ?? 90, run2 = numIn(o.pRun2, 1, 2000) ?? 5; secs = [{ a0: mod360(d - sp / 2), a1: mod360(d + sp / 2), deg: Math.min(89, Math.max(5, slopeDeg(t, mx, run))), max: mx }]; els = { deg: Math.min(89, Math.max(5, slopeDeg(t, mx, run2))), max: mx }; }
+    return { top: t, r: numIn(o.pR, 50, 3000) ?? 250, secs, els };
+  }
+  if (!secs.length && !els) return null;
+  return { top: top ?? 0, r: numIn(o.pR, 50, 3000) ?? 250, secs, els };
+}
+function profOf(b) { const n = normProf(b), L = { pMax: null, pRun: null, pDir: null, pSpan: null, pRun2: null };
+  return n ? { ...L, pTop: n.top, pR: n.r, pSec: n.secs, pElse: n.els } : { ...L, pTop: null, pR: null, pSec: null, pElse: null }; }
 function spotFields(b) {
   b = b || {};
   const lat = +b.lat, lon = +b.lon;
@@ -244,6 +263,6 @@ async function adminEmail() { const c = await adminCfg(); return c.email || proc
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
-module.exports = { adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, MAX_SPOTS_LIVEABOARD, maxSpotsFor, shopType, shopValid, POOL_USES, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
+module.exports = { normProf, adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, MAX_SPOTS_LIVEABOARD, maxSpotsFor, shopType, shopValid, POOL_USES, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
   csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET, BUILTIN_SPOTS,
   allSpots, legacySpots, normSpot, cleanName, spotsMigrated, nextSpotNo, clearSpotsMemo, MIGRATED_KEY };

@@ -5,39 +5,7 @@
 //  그 밖(호주·동남아 등): GMRT(Global Multi-Resolution Topography, GEBCO + 다중빔 조사 자료 합본)
 //  결과: 포인트 중심 약 ±1.3km 정격자(z = 고도 m, 음수 = 수심) + 요약(300m 안 최대·평균, 1km 안 최대)
 //  포인트마다 한 번 받으면 Redis에 오래(180일) 저장 - 지형은 거의 안 바뀌어요.
-const { redisPipeline: redisRaw } = require('./_redis');
-// [ADD] 크고 잘 안 바뀌는 수심·해안선 캐시는 Cloudflare R2에 저장(Redis 256MB 한도 때문). R2 환경변수가 없으면 예전처럼 Redis.
-//  예전에 Redis에 있던 캐시는 처음 읽을 때 R2로 옮기고 Redis에서 지워요(다시 계산 안 하고 용량도 비움).
-const R2 = require('./_r2');
-const BIG_RX = /^(depth:v1:|dshift:|tctl:|reef:|draw:|dtile:|land:|dvec:|isl:)/;
-async function r2Cmd(c) {
-  const [op, key] = c;
-  if (op === 'SET') { const ei = c.indexOf('EX'); await R2.put(key, c[2], ei > 0 ? +c[ei + 1] : 0); return 'OK'; }
-  if (op === 'GET') {
-    const v = await R2.get(key); if (v != null) return v;
-    try { // Redis에 남은 옛 캐시 → R2로 옮기고 Redis에서 지우기
-      const [g, t] = await redisRaw([['GET', key], ['TTL', key]]);
-      if (g && g.result != null) { const ttl = +t.result; await R2.put(key, g.result, ttl > 0 ? ttl : 180 * 86400); await redisRaw([['DEL', key]]).catch(() => {}); return g.result; }
-    } catch (_) {}
-    return null;
-  }
-  if (op === 'EXISTS') { if (await R2.exists(key)) return 1; try { const [e] = await redisRaw([['EXISTS', key]]); return e.result ? 1 : 0; } catch (_) { return 0; } }
-  if (op === 'DEL') { await R2.del(key); await redisRaw([['DEL', key]]).catch(() => {}); return 1; }
-  throw new Error('R2 unsupported ' + op);
-}
-async function redisPipeline(cmds) {
-  if (!R2.on) return redisRaw(cmds);
-  const out = new Array(cmds.length), rest = [], restIdx = [];
-  const big = [];
-  cmds.forEach((c, i) => { if (BIG_RX.test(String(c[1] || ''))) big.push(i); else { rest.push(c); restIdx.push(i); } });
-  const jobs = [];
-  if (rest.length) jobs.push(redisRaw(rest).then(r => r.forEach((x, k) => { out[restIdx[k]] = x; })));
-  if (big.length) jobs.push((async () => { for (let k = 0; k < big.length; k += 16) { // 한 번에 16개씩
-    await Promise.all(big.slice(k, k + 16).map(i => r2Cmd(cmds[i]).then(result => { out[i] = { result }; }, e => { out[i] = { error: String(e.message || e) }; })));
-  } })());
-  await Promise.all(jobs);
-  return out;
-}
+const { redisPipeline } = require('./_redis');
 
 const HALF_LAT = 0.012; // 약 1.33km
 const KEY_VER = 'depth:v1:';
@@ -45,9 +13,7 @@ const KEY_VER = 'depth:v1:';
 //  보정은 칸마다 외부 서버(Overpass)에 의존해서, 일부 칸만 실패하면 이웃 칸과 위치가 어긋나 네모난 이음새가 생겼어요(예: 멕시코 소코로).
 //  원본 그대로면 모든 칸이 같은 규칙이라 이음새가 없어요. 대신 해안 가까운 곳은 원본 자료(약 450m 칸) 정확도만큼 위성 사진 해안선과 어긋날 수 있어요.
 //  예전 방식으로 되돌리려면 false로 바꾸세요.
-// [CHANGE] 다시 false: 해안선(OSM)에 맞춘 위치 보정을 켜요(섬·해안과 등고선이 어긋나는 문제). 보정에 실패한 칸은 1시간만 저장하고 다시 시도해서
-//  이음새가 오래 남지 않게 해요. 예전에 "원래 위치"로 저장된 칸(raw)은 읽을 때 다시 계산해요.
-const RAW_COARSE = false;
+const RAW_COARSE = true;
 const SRC = {
   khoa: { name: '국립해양조사원 자연과학용 수심', short: 'KHOA', res: 150, license: '공공누리 제1유형' },
   emodnet: { name: 'EMODnet Bathymetry DTM', short: 'EMODnet', res: 115, license: 'CC BY 4.0' },
@@ -187,7 +153,7 @@ async function depthAt(lat, lon, opt = {}) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const ck = KEY_VER + lat + '_' + lon;
   const SF = await sigFor(box(lat, lon)), profs = SF.profs; let pf = SF.sig; // [ADD] 포인트 현지 지형 + 최소 수심 구역(바뀌면 다시 계산)
-  if (!opt.fresh) { try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && !o.sf8) && !(RAW_COARSE ? (o.coarse && !o.raw) : !!o.raw) && (o.pf || '') === pf) return o; } } catch (_) {} } // [FIX] 해외(GMRT) 옛 저장본은 위치 보정·가짜 육지 지우기 전이라 다시 계산
+  if (!opt.fresh) { try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && !o.sf8) && !(RAW_COARSE && o.coarse && !o.raw) && (o.pf || '') === pf) return o; } } catch (_) {} } // [FIX] 해외(GMRT) 옛 저장본은 위치 보정·가짜 육지 지우기 전이라 다시 계산
   const order = inKorea(lat, lon) ? [fromKhoa, fromGmrt] : inEmodnet(lat, lon) ? [fromEmodnet, fromGmrt] : inUsArea(lat, lon) ? [fromNoaa, fromGmrt] : [fromNoaa, fromGmrt];
   const errors = [];
   for (const fn of order) {
@@ -482,15 +448,14 @@ async function profSpots() {
   if (profMemo && Date.now() - profMemo.at < 60e3) return profMemo.list;
   let list = [];
   try { const [{ result }] = await redisPipeline([['HGETALL', 'spots:extra']]); const a = result || [];
-    for (let i = 1; i < a.length; i += 2) { try { const o = JSON.parse(a[i]); const mx = +o.pMax, la = +o.lat, lo = +o.lon;
-      if (!(mx > 0) || !Number.isFinite(la) || !Number.isFinite(lo) || o.show === false) continue;
-      list.push({ no: +o.no, lat: la, lon: lo, top: Math.max(0, +o.pTop || 0), max: mx, run: Math.max(1, +o.pRun || 10), r: Math.max(50, +o.pR || 250),
-        dir: o.pDir == null || o.pDir === '' || !Number.isFinite(+o.pDir) ? null : ((+o.pDir % 360) + 360) % 360, span: Math.max(20, Math.min(340, +o.pSpan || 90)), run2: Math.max(1, +o.pRun2 || 5) }); } catch (_) {} } } catch (_) { return profMemo ? profMemo.list : []; }
+    for (let i = 1; i < a.length; i += 2) { try { const o = JSON.parse(a[i]); const la = +o.lat, lo = +o.lon; const pf = require('./_store').normProf(o);
+      if (!pf || !Number.isFinite(la) || !Number.isFinite(lo) || o.show === false) continue;
+      list.push({ no: +o.no, lat: la, lon: lo, top: pf.top, r: pf.r, secs: pf.secs, els: pf.els }); } catch (_) {} } } catch (_) { return profMemo ? profMemo.list : []; }
   profMemo = { at: Date.now(), list }; return list;
 }
 // 이 영역(위도·경도 상자)에 영향을 주는 포인트 지형 목록의 짧은 표시(앱 js/depth-layer.js와 같은 계산) - 바뀌면 다시 그림
 function profIn(list, b) { const E = 0.02; return list.filter(p => p.lat >= b.s - E && p.lat <= b.n + E && p.lon >= b.w - E && p.lon <= b.e + E); }
-function profSig(ps) { const str = ps.map(p => `${p.no}:${p.top}/${p.max}/${p.run}/${p.r}` + (p.dir != null ? `/${Math.round(p.dir)}/${p.span}/${p.run2}` : '')).sort().join(','); if (!str) return ''; let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36); }
+function profSig(ps) { const str = ps.map(p => `${p.no}:${p.top}/${p.r}/${p.secs.map(x => [x.a0, x.a1, x.deg, x.max].join(',')).join(';')}/${p.els ? [p.els.deg, p.els.max].join(',') : ''}`).sort().join('|'); if (!str) return ''; let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36); }
 // [ADD] 최소 수심 구역(관리자 입력, Redis site:cfg의 depthFix): 원 안 바다는 min m보다 얕지 않게(바깥 25%는 서서히). 육지·해안 칸은 그대로.
 let fixMemo = null;
 async function fixSpots() {
@@ -521,19 +486,21 @@ function applyProfiles(g, ps, segs) {
   const near = (px, py, R) => { let best = Infinity, bb = 0; for (const q of S) { const dx = q[2] - q[0], dy = q[3] - q[1];
     if (Math.min(q[0], q[2]) - R > px || Math.max(q[0], q[2]) + R < px || Math.min(q[1], q[3]) - R > py || Math.max(q[1], q[3]) + R < py) continue;
     const L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((px - q[0]) * dx + (py - q[1]) * dy) / L2)), d = Math.hypot(px - q[0] - dx * t, py - q[1] - dy * t); if (d < best) { best = d; bb = (Math.atan2(dy, -dx) * 180 / Math.PI + 360) % 360; } } return best < Infinity ? { d: best, bear: bb } : null; }; // bear = 바다 쪽(선의 오른쪽) 법선 방향, 북=0 시계방향
-  let n = 0;
+  let n = 0; const F = 15; // 구간 가장자리 15°는 이웃 구간과 부드럽게 섞기
+  const run = (par, top) => Math.max(1, (par.max - top) / Math.tan(par.deg * Math.PI / 180)); // 경사각 → 수평 거리
+  const angOut = (b, a0, a1) => { const w = ((a1 - a0 + 360) % 360) || 360, d = ((b - a0 + 360) % 360); return d <= w ? 0 : Math.min(d - w, 360 - d); }; // 구간 밖이면 가장 가까운 끝까지의 각도
   for (const p of ps) {
-    const sx = (p.lon - g.lo0) * kx, sy = (p.lat - g.la0) * ky, reach = 2 * p.r;
+    const sx = (p.lon - g.lo0) * kx, sy = (p.lat - g.la0) * ky, reach = 2 * p.r, maxRun = Math.max(...p.secs.map(x => run(x, p.top)), p.els ? run(p.els, p.top) : 0), maxDepth = Math.max(...p.secs.map(x => x.max), p.els ? p.els.max : 0);
     for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) {
       const px = c * g.dlo * kx, py = r * g.dla * ky, ds = Math.hypot(px - sx, py - sy); if (ds >= reach) continue;
       const i = r * g.cols + c, v = g.z[i]; if (v == null || v >= 0) continue; // 육지는 그대로
       const w = ds <= p.r ? 1 : 0.5 * (1 + Math.cos(Math.PI * (ds - p.r) / p.r));
-      const nr = near(px, py, Math.max(p.run, p.dir != null ? p.run2 : 0) + 650); if (!nr) continue; const dc = nr.d;
-      let run = p.run; // [ADD] 방향별 경사: 완만한 방향(±범위/2, 가장자리 25°는 부드럽게)은 수평 거리 run, 나머지는 run2
-      if (p.dir != null) { const a = Math.abs(((nr.bear - p.dir + 540) % 360) - 180), half = p.span / 2, F = 25, s = a <= half ? 1 : a >= half + F ? 0 : 0.5 * (1 + Math.cos(Math.PI * (a - half) / F)); run = p.run2 + (p.run - p.run2) * s; }
-      if (!(dc <= run + 600)) continue;
-      const orig = -v;
-      const target = dc <= run ? p.top + (p.max - p.top) * dc / run : Math.max(orig, p.max * Math.max(0, Math.min(1, 1 - (dc - run - 150) / 450))); // 바닥 뒤 150m까지 바닥 수심 유지 → 600m에서 원래 자료
+      const nr = near(px, py, maxRun + 650); if (!nr) continue; const dc = nr.d, orig = -v;
+      // 해안선에서 바다를 바라보는 방향(nr.bear)이 어느 구간에 드는지 → 구간별 가중치(가장자리 부드럽게). 모자란 몫은 "그 밖 방향"
+      const ws = p.secs.map(x => { const a = angOut(nr.bear, x.a0, x.a1); return a <= 0 ? 1 : a >= F ? 0 : 0.5 * (1 + Math.cos(Math.PI * a / F)); });
+      let sum = ws.reduce((m, x) => m + x, 0); const we = Math.max(0, 1 - sum); if (sum > 1) { for (let k = 0; k < ws.length; k++) ws[k] /= sum; sum = 1; }
+      const tgt = (par) => { const rn = run(par, p.top); if (!(dc <= rn + 600)) return orig; return dc <= rn ? p.top + (par.max - p.top) * dc / rn : Math.max(orig, par.max * Math.max(0, Math.min(1, 1 - (dc - rn - 150) / 450))); }; // 바닥 뒤 150m 유지 → 600m에서 원래 자료
+      let target = 0; p.secs.forEach((x, k) => { if (ws[k] > 0) target += ws[k] * tgt(x); }); target += (we > 0 ? we * (p.els ? tgt(p.els) : orig) : 0);
       g.z[i] = -(w * target + (1 - w) * orig); n++;
     }
   }
@@ -584,7 +551,7 @@ function decGrid(m, b64) {
 }
 async function rawSet(x, y, r) {
   try { const g = r.grid, o = { v: 1, src: r.src, res: r.res, hiFrac: r.hiFrac, nullLand: !!r.nullLand, la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: encGrid(g), at: Date.now() };
-    await redisPipeline([['SET', RAW_KEY(x, y), JSON.stringify(o), 'EX', String(30 * 86400)]]); } catch (_) {}
+    await redisPipeline([['SET', RAW_KEY(x, y), JSON.stringify(o), 'EX', String(180 * 86400)]]); } catch (_) {}
 }
 async function rawGet(x, y) {
   try { const [{ result }] = await redisPipeline([['GET', RAW_KEY(x, y)]]); if (!result) return null; const o = JSON.parse(result); if (o.src === 'khoa' && !o.kp) return null; // 쪽이 빠졌을 수 있는 옛 국립해양조사원 원본은 다시 받기
@@ -684,10 +651,10 @@ async function depthVec(x, y, opt = {}) {
   const needRaw = opt.fill ? !(await redisPipeline([['EXISTS', RAW_KEY(x, y)]]).then(r => r[0].result).catch(() => 1)) : false;
   let old = null; // 다시 계산이 실패하면(국립해양조사원 하루 한도 등) 예전 그림이라도 보여주기
   const curPf = (await sigFor(tileBox(x, y))).sig;
-  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf8) || (RAW_COARSE ? (o.coarse && !o.raw) : !!o.raw))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']) || ((!o.empty && !o.ld || (o.Ld && !o.ld2)) && !(o.landErr && Date.now() - (o.at || 0) < 600e3)); let stale2 = stale;
+  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf8) || (RAW_COARSE && o.coarse && !o.raw))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']) || (!o.empty && !o.ld && !(o.landErr && Date.now() - (o.at || 0) < 600e3)); let stale2 = stale;
     // [ADD] 2·5m 얕은 등심선 추가 전 저장본: 10m보다 얕은 곳이 있고 원본 격자가 저장돼 있을 때만 다시 그림(외부 서버 다시 안 부르게)
     if (!stale2 && !o.sh5 && o.F && o.F.some(f => f[0] === 1)) { try { const [{ result: ex }] = await redisPipeline([['EXISTS', RAW_KEY(x, y)]]); if (ex) stale2 = true; } catch (_) {} }
-    if (!stale2) { o._c = 'hit'; return o; } old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+    if (!stale2) return o; old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
   const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return old ? Object.assign({}, old, { tmp: true }) : d; // tmp → 짧게만 캐시하고 다음에 다시 시도
   const t = d.tile;
@@ -733,19 +700,7 @@ async function depthVec(x, y, opt = {}) {
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
     // [ADD] 섬·바위 육지(수심 위에 덮어 그림). 해안선 서버 실패 시 표시 없이 짧게만 저장해 곧 다시 시도
-    // [FIX] 정밀 수심 자료(해양조사원·NOAA·EMODnet)가 그 자리를 깊은 바다(3m 넘게)로 보면 OSM 섬 모양이 어긋난 것 → 덮지 않음
-    //  (OSM 해안선이 위성사진·수심과 100m가량 밀려 있는 곳에서, 실제 섬은 바다로 보이고 바다에 육지가 덮이던 문제). 거친 자료(GMRT)는 OSM이 기준이라 그대로.
-    const ringOk = (ring) => {
-      if (d.src === 'gmrt') return true;
-      let s0 = Infinity, n0 = -Infinity, w0 = Infinity, e0 = -Infinity; ring.forEach(p => { s0 = Math.min(s0, p[0]); n0 = Math.max(n0, p[0]); w0 = Math.min(w0, p[1]); e0 = Math.max(e0, p[1]); });
-      const inR = (la, lo) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a[0] > la) !== (b[0] > la) && lo < (b[1] - a[1]) * (la - a[0]) / (b[0] - a[0]) + a[1]) c = !c; } return c; };
-      let tot = 0, deep = 0;
-      const r0 = Math.max(0, Math.floor((s0 - g.la0) / g.dla)), r1 = Math.min(g.rows - 1, Math.ceil((n0 - g.la0) / g.dla)), c0 = Math.max(0, Math.floor((w0 - g.lo0) / g.dlo)), c1 = Math.min(g.cols - 1, Math.ceil((e0 - g.lo0) / g.dlo));
-      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { if (!inR(g.la0 + r * g.dla, g.lo0 + c * g.dlo)) continue; tot++; const v = g.z[r * g.cols + c]; if (v != null && v < -3) deep++; }
-      if (!tot) { const la = (s0 + n0) / 2, lo = (w0 + e0) / 2, r = Math.round((la - g.la0) / g.dla), c = Math.round((lo - g.lo0) / g.dlo); if (r < 0 || c < 0 || r >= g.rows || c >= g.cols) return true; const v = g.z[r * g.cols + c]; return !(v != null && v < -3); }
-      return deep / tot <= 0.6;
-    };
-    try { const ld = await landFor(x, y, t); out.ld = true; out.ld2 = true; const rs = ld.r.filter(ringOk); if (rs.length) out.Ld = rs.map(enc).filter(a => a.length >= 6); }
+    try { const ld = await landFor(x, y, t); out.ld = true; if (ld.r.length) out.Ld = ld.r.map(enc).filter(a => a.length >= 6); }
     catch (_) { out.landErr = true; out.tmp = true; }
     out.at = Date.now();
   }
@@ -765,7 +720,7 @@ function joinSegs(segs) {
 
 // 저장된 값만(없으면 null) - 페이지가 느려지지 않게
 async function depthCached(lat, lon) {
-  try { const [{ result }] = await redisPipeline([['GET', KEY_VER + (+(+lat).toFixed(4)) + '_' + (+(+lon).toFixed(4))]]); if (!result) return null; const o = JSON.parse(result); return (o.src === 'gmrt' && !o.sf8) || (RAW_COARSE ? (o.coarse && !o.raw) : !!o.raw) ? null : o; } catch (_) { return null; } // 보정 전·옛 방식 저장본은 없는 셈
+  try { const [{ result }] = await redisPipeline([['GET', KEY_VER + (+(+lat).toFixed(4)) + '_' + (+(+lon).toFixed(4))]]); if (!result) return null; const o = JSON.parse(result); return (o.src === 'gmrt' && !o.sf8) || (RAW_COARSE && o.coarse && !o.raw) ? null : o; } catch (_) { return null; } // 보정 전·옛 방식 저장본은 없는 셈
 }
 
 // [ADD] 정점 주변 섬 모양(흐름 지형 반영용): 반경 약 3km 안 해안선 중 닫힌 것(섬)만, 점 수를 줄여서. 180일 저장

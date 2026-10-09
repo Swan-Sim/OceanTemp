@@ -29,9 +29,6 @@ module.exports = async function admin(req, res) {
   const svc = String(req.query.svc), b = bodyOf(req), base = S.baseOf(req);
   const ok = (o) => res.status(200).json({ ok: true, ...(o || {}) });
   const bad = (e) => res.status(400).json({ ok: false, error: e });
-  // [ADD] 크레딧: 요청 보낸 회원(승인 때) 또는 지금 로그인한 관리자 본인(직접 추가·수정 때)
-  const meUid = async () => { try { return await require('./_auth').sessionUid(req); } catch (_) { return null; } };
-  const give = async (uid, key) => { if (uid) { try { await C.award(R, uid, key); } catch (_) {} } };
 
   // [ADD] 관리자 설정: 비밀번호·알림 이메일 바꾸기
   if (svc === 'settings') {
@@ -62,54 +59,6 @@ module.exports = async function admin(req, res) {
     if (old && old !== mail) await S.sendMail(old, '[otemp] 관리자 알림 이메일이 바뀌었어요', `<p>알림 이메일이 ${S.esc(mail || '(환경변수 값)')}(으)로 바뀌었어요.</p>`);
     return ok({ email: c.email || process.env.ADMIN_EMAIL || '' });
   }
-  // [ADD] Redis 용량 보기: 키를 훑어 앞부분(접두어)별 개수·크기(문자열 키 기준) 합계. 한 번에 ~8초씩, cursor로 이어서
-  if (svc === 'redisUsage') {
-    let cur = String(b.cursor || '0'); const t0 = Date.now(), agg = {};
-    do {
-      const [sc] = await R(['SCAN', cur, 'COUNT', '1000']); cur = String(sc[0]); const keys = sc[1] || [];
-      if (keys.length) {
-        const out = await require('./_redis').redisPipeline(keys.map(k => ['STRLEN', k]));
-        keys.forEach((k, i) => { const pf = k.split(':').slice(0, 2).join(':'); const a = agg[pf] || (agg[pf] = { n: 0, bytes: 0 }); a.n++; const v = out[i] && out[i].result; if (typeof v === 'number') a.bytes += v + k.length; });
-      }
-    } while (cur !== '0' && Date.now() - t0 < 8000);
-    return ok({ cursor: cur, agg });
-  }
-  // [ADD] 수심·해안선 캐시를 Redis → Cloudflare R2로 옮기기(남은 만료 기간 유지, 옮긴 것만 Redis에서 지움). 한 번에 ~8초씩, cursor로 이어서
-  if (svc === 'redisMove') {
-    const R2 = require('./_r2'), raw = require('./_redis').redisPipeline;
-    if (!R2.on) return bad('no_r2');
-    const CACHE = ['draw:', 'dvec:', 'dtile:', 'depth:v1:', 'land:', 'reef:', 'isl:', 'tctl:', 'dshift:'];
-    const pf = String(b.prefix || '');
-    if (!CACHE.some(c => (pf + ':').startsWith(c) || pf.startsWith(c))) return bad('not_cache');
-    let cur = String(b.cursor || '0'), moved = 0, fail = 0, lastErr = ''; const t0 = Date.now();
-    do {
-      const [sc] = await R(['SCAN', cur, 'MATCH', pf + ':*', 'COUNT', '200']); cur = String(sc[0]); const keys = sc[1] || [];
-      for (let i = 0; i < keys.length; i += 16) {
-        const part = keys.slice(i, i + 16);
-        const got = await raw(part.flatMap(k => [['GET', k], ['TTL', k]]));
-        const done = [];
-        await Promise.all(part.map(async (k, j) => {
-          const v = got[2 * j] && got[2 * j].result, ttl = +(got[2 * j + 1] && got[2 * j + 1].result);
-          if (v == null) return;
-          try { await R2.put(k, v, ttl > 0 ? ttl : 180 * 86400); done.push(k); } catch (e) { fail++; lastErr = String(e.message || e); }
-        }));
-        if (done.length) { await raw([['DEL', ...done]]); moved += done.length; }
-      }
-    } while (cur !== '0' && Date.now() - t0 < 8000);
-    return ok({ cursor: cur, moved, fail, lastErr });
-  }
-  // [ADD] 다시 만들 수 있는 캐시(수심·해안선 등)만 지우기. 포인트·샵·회원·통계는 못 지움
-  if (svc === 'redisPurge') {
-    const CACHE = ['draw:', 'dvec:', 'dtile:', 'depth:v1:', 'land:', 'reef:', 'isl:', 'tctl:', 'dshift:'];
-    const pf = String(b.prefix || '');
-    if (!CACHE.some(c => (pf + ':').startsWith(c) || pf.startsWith(c))) return bad('not_cache');
-    let cur = String(b.cursor || '0'), del = 0; const t0 = Date.now();
-    do {
-      const [sc] = await R(['SCAN', cur, 'MATCH', pf + ':*', 'COUNT', '1000']); cur = String(sc[0]); const keys = sc[1] || [];
-      for (let i = 0; i < keys.length; i += 500) { await R(['DEL', ...keys.slice(i, i + 500)]); del += Math.min(500, keys.length - i); }
-    } while (cur !== '0' && Date.now() - t0 < 8000);
-    return ok({ cursor: cur, del });
-  }
   if (svc === 'testMail') {
     const to = await S.adminEmail();
     if (!to) return bad('no_email');
@@ -123,7 +72,7 @@ module.exports = async function admin(req, res) {
     // [CHANGE] 포인트: 옮긴 뒤엔 전체(숨김 포함), 옮기기 전엔 시트+사용자 등록을 합쳐 보여주고(시트 것은 수정 불가 표시)
     const migrated = await S.spotsMigrated();
     const spotList = migrated ? Object.values(spots) : (await S.allSpots(S.baseOf(req), { hidden: true, fresh: true })).map(s => ({ ...s, ...(spots[s.no] || { sheet: true }) }));
-    return ok({ shops: Object.values(shops).map(strip), reqs: Object.values(reqs).map(({ tok, ...r }) => r), spots: spotList, spotsMigrated: migrated, spotreqs: Object.values(spotreqs), reports: Object.values(reports) });
+    return ok({ shops: Object.values(shops).map(strip), reqs: Object.values(reqs).map(({ tok, ...r }) => r), spots: spotList.map(s => ({ ...s, prof: S.normProf(s) || undefined })), spotsMigrated: migrated, spotreqs: Object.values(spotreqs), reports: Object.values(reports) });
   }
   // [ADD] 구글 시트 정점을 관리 페이지(Redis)로 한 번에 옮기기 - 이미 있는 번호는 그대로 두고 없는 것만 추가
   if (svc === 'spotsMigrate') {
@@ -140,19 +89,15 @@ module.exports = async function admin(req, res) {
     S.clearSpotsMemo();
     return ok({ added, total: list.length });
   }
-  // [ADD] 관리자가 새 포인트를 바로 추가(/admin, /spot 관리자 모드 공용)
-  //  [CHANGE] 시트 이전 여부와 상관없이 등록, 번호는 시트·등록 포인트 모두와 안 겹치게
+  // [ADD] 관리자가 새 포인트를 바로 추가
   if (svc === 'spotAdd') {
+    if (!(await S.spotsMigrated())) return bad('migrate_first');
     const f = S.spotFields(b);
-    if (!f.name || f.lat == null || f.lon == null) return bad('need_name_pos');
-    const extra = await S.hgetallJSON(K.spots);
-    let base0 = 0; try { base0 = await S.nextSpotNo(S.baseOf(req)); } catch (_) {}
-    const nums = [base0, ...Object.keys(extra).map(Number).map(n => n + 1)].filter(Number.isFinite);
-    const no = Math.max(1, ...nums);
-    const spot = { no, ...f, network: S.str(b.network, 40) || 'Beach/local', depth: b.depth !== false, show: b.show !== false && b.show !== 'false', email: '', created: Date.now() };
+    if (!f.name || f.lat == null || f.lon == null) return bad('need_name_latlon');
+    const no = await S.nextSpotNo(S.baseOf(req));
+    const spot = { no, ...f, network: S.str(b.network, 40) || 'Beach/local', depth: b.depth !== false, show: b.show !== false, created: Date.now() };
     await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['DEL', 'sp:list']);
     S.clearSpotsMemo();
-    await give(await meUid(), 'spotAdd');
     return ok({ no });
   }
 
@@ -170,7 +115,6 @@ module.exports = async function admin(req, res) {
       const shop = { id, ...data, email: rq.email, plan, expires: S.dateStr(b.expires) || S.defaultExpires(plan), terms: rq.terms || '', termsAt: rq.termsAt || 0,
         show: true, checked: ym(), created: Date.now(), updated: Date.now(), tok: rq.tok };
       await R(['HSET', K.shops, id, JSON.stringify(shop)], ['HSET', K.tok, rq.tok, 's:' + id], ['HDEL', K.req, rq.id]);
-      await give(rq.uid, 'shopAdd');
       await S.sendMail(rq.email, '[otemp.app] 샵이 등록됐어요 / Your shop is live',
         `<p>${S.esc(shop.name)} 정보가 사이트에 올라갔어요. 고칠 때는 처음 받은 수정 링크를 쓰거나, ${base}/shop/ 에서 이메일로 새 링크를 받으세요.</p>`);
       return ok({ id });
@@ -181,10 +125,8 @@ module.exports = async function admin(req, res) {
     Object.assign(shop, data, { email: rq.email || shop.email, checked: ym(), updated: Date.now() });
     if (rq.terms) { shop.terms = rq.terms; shop.termsAt = rq.termsAt; }
     await R(['HSET', K.shops, String(shop.id), JSON.stringify(shop)], ['HDEL', K.req, rq.id]);
-    await give(rq.uid, 'shopEdit');
     return ok({ id: shop.id });
   }
-  if (await require('./_owner').adminAction(svc, b, ok, bad)) return; // [ADD] 샵 소유자 연결·소유권 주장 승인(api/_owner.js)
   if (svc === 'shopReject') {
     const [raw] = await R(['HGET', K.req, String(b.reqId)]);
     if (!raw) return bad('no_request');
@@ -208,7 +150,6 @@ module.exports = async function admin(req, res) {
       show: b.show !== false, checked: S.str(b.checked, 10) || shop.checked || ym(), updated: Date.now() });
     await R(['HSET', K.shops, id, JSON.stringify(shop)]);
     // [ADD] 이메일 없이 새로 넣은 샵은 수정 링크를 관리자에게
-    await give(await meUid(), isNew ? 'shopAdd' : 'shopEdit'); // [ADD] 관리자 직접 추가·수정 크레딧
     if (isNew && !shop.email) { const links = await linksToAdmin([shop], base); return ok({ id, links }); }
     return ok({ id });
   }
@@ -308,7 +249,17 @@ module.exports = async function admin(req, res) {
     const no = Math.max(await S.nextSpotNo(S.baseOf(req)), 0, ...Object.keys(extra).map(Number).map(n => n + 1));
     const spot = { no, ...f, network: 'Beach/user', depth: true, show: true, email: rq.email || '', created: Date.now() };
     await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['HDEL', K.spotreq, rq.id], ['DEL', 'sp:list']);
-    await give(rq.uid, 'spotAdd');
+    S.clearSpotsMemo();
+    return ok({ no });
+  }
+  // [ADD] 관리자 바로 등록(승인 대기 없이, 하루 한도 없음) - /spot/ 화면에서 관리자로 로그인된 상태일 때
+  if (svc === 'spotAdd') {
+    const f = S.spotFields(b);
+    if (!f.name || f.lat == null || f.lon == null) return bad('need_name_pos');
+    const extra = await S.hgetallJSON(K.spots);
+    const no = Math.max(await S.nextSpotNo(S.baseOf(req)), 0, ...Object.keys(extra).map(Number).map(n => n + 1));
+    const spot = { no, ...f, network: 'Beach/user', depth: true, show: true, email: '', created: Date.now() };
+    await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['DEL', 'sp:list']);
     S.clearSpotsMemo();
     return ok({ no });
   }
@@ -354,7 +305,6 @@ module.exports = async function admin(req, res) {
     if (b.depth !== undefined) spot.depth = b.depth !== false;
     await R(['HSET', K.spots, no, JSON.stringify(spot)], ['DEL', 'sp:list']);
     S.clearSpotsMemo();
-    await give(await meUid(), 'spotEdit');
     return ok();
   }
   if (svc === 'spotDelete') { await R(['HDEL', K.spots, String(parseInt(b.no, 10))], ['DEL', 'sp:list']); S.clearSpotsMemo(); return ok(); }
@@ -378,8 +328,7 @@ module.exports = async function admin(req, res) {
     list.sort((a, z) => (z.last || z.created || 0) - (a.last || a.created || 0));
     const total = list.length, per = 50, page = Math.max(0, parseInt(b.page, 10) || 0);
     const mask = (e) => { e = String(e || ''); const i = e.indexOf('@'); return i < 1 ? '' : e.slice(0, Math.min(2, i)) + '***' + e.slice(i); }; // 목록에는 이메일 일부만(개인정보)
-    const ownOf = {}; Object.values(await S.hgetallJSON(K.shops)).forEach(s => { if (s.owner) (ownOf[s.owner] = ownOf[s.owner] || []).push({ id: String(s.id), name: s.name, type: S.shopType(s.type) }); }); // [ADD] 회원별 내 샵
-    const items = list.slice(page * per, page * per + per).map(u => ({ shops: ownOf[u.id] || [], id: u.id, name: u.name || '', avatar: u.avatar || '', email: mask(u.email), created: u.created || 0, last: u.last || 0,
+    const items = list.slice(page * per, page * per + per).map(u => ({ id: u.id, name: u.name || '', avatar: u.avatar || '', email: mask(u.email), created: u.created || 0, last: u.last || 0,
       providers: (u.logins || []).map(l => l.p), favCount: favOf[u.id].length, favs: favOf[u.id].map(Number).filter(Boolean).slice(0, 30), blocked: !!u.blocked,
       role: u.role === 'admin' ? 'admin' : '', credits: crOf(u.id), level: C.info(crOf(u.id)).level }));
     return ok({ stats, topFavs, items, total, page, per });

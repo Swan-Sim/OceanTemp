@@ -1,0 +1,18 @@
+yaml
+name: Warm depth tiles
+on:
+  schedule:
+    - cron: '41 10 * * *'
+  workflow_dispatch:
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node scripts/warm-depth.mjs
+        env:
+          BUDGET_MIN: '300'

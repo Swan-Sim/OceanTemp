@@ -138,6 +138,10 @@
           <label>노출 종료</label><input class="f" type="datetime-local" name="end">
           <label>소프트웨어 버전 표시</label><input class="f" name="vtext" maxlength="24" placeholder="V:B1008">
           <label>버전 노출 위치</label><select class="f" name="vpos"><option value="acct">로그인/계정 창 맨 아래</option><option value="bl">화면 왼쪽 아래</option><option value="br">화면 오른쪽 아래</option><option value="off">표시 안 함</option></select>
+          <label style="display:block;margin-top:6px"><b>수심 보정 적용 해제</b> <span class="hint">(체크하면 그 보정을 끄고 공개 수심 자료 그대로 그려요. 입력값은 지워지지 않아요)</span></label>
+          <label><input type="checkbox" name="offProf"> 포인트별 현지 지형 보정 끄기</label>
+          <label><input type="checkbox" name="offFix"> 최소 수심 구역 끄기</label>
+          <label><input type="checkbox" name="offLand"> 섬·바위 육지(해안선) 표시 끄기</label>
           <label>최소 수심 구역 (한 줄에 하나: 위도, 경도, 반경m, 최소수심m, 이름)</label><textarea class="f" name="dfix" rows="3" placeholder="37.8225, -122.3690, 500, 7, Treasure Island"></textarea>
           <div class="muted">공개 수심 자료가 너무 얕게 나오는 곳을 현지에서 확인한 값으로 바로잡아요. 원 안의 바다는 최소수심보다 얕아지지 않고, 육지·해안 바로 옆은 그대로예요. 저장하면 해당 지역 수심이 다시 그려져요.</div>
           <span></span><div><button class="primary" type="submit">저장</button></div>
@@ -429,6 +433,7 @@
     try { const c = await api('siteGet'); const n = c.notice || {}, v = c.ver || {};
       f.show.value = n.show || 'guest'; f.title.value = n.title || ''; f.sub.value = n.sub || ''; f.items.value = (n.items || []).join('\n');
       f.start.value = toLocalIn(n.start); f.end.value = toLocalIn(n.end); f.vtext.value = v.text == null ? '' : v.text; f.vpos.value = v.pos || 'acct';
+      f.offProf.checked = !!(c.depthOff && c.depthOff.prof); f.offFix.checked = !!(c.depthOff && c.depthOff.fix); f.offLand.checked = !!(c.depthOff && c.depthOff.land);
       f.dfix.value = (c.depthFix || []).map(x => [x.la, x.lo, x.r, x.min, x.name || ''].join(', ')).join('\n');
     } catch (_) {}
   }
@@ -437,7 +442,7 @@
     const st = fromLocalIn(f.start.value), en = fromLocalIn(f.end.value);
     if (st && en && en <= st) { msg.textContent = '종료 시각이 시작보다 늦어야 해요'; return; }
     try {
-      await api('siteSave', { notice: { show: f.show.value, title: f.title.value, sub: f.sub.value, items: f.items.value.split('\n'), start: st, end: en }, ver: { text: f.vtext.value, pos: f.vpos.value }, depthFix: f.dfix.value.split('\n').map(l => l.split(',').map(z => z.trim())).filter(a => a.length >= 4).map(a => ({ la: a[0], lo: a[1], r: a[2], min: a[3], name: a.slice(4).join(',') })) });
+      await api('siteSave', { notice: { show: f.show.value, title: f.title.value, sub: f.sub.value, items: f.items.value.split('\n'), start: st, end: en }, ver: { text: f.vtext.value, pos: f.vpos.value }, depthOff: { prof: f.offProf.checked, fix: f.offFix.checked, land: f.offLand.checked }, depthFix: f.dfix.value.split('\n').map(l => l.split(',').map(z => z.trim())).filter(a => a.length >= 4).map(a => ({ la: a[0], lo: a[1], r: a[2], min: a[3], name: a.slice(4).join(',') })) });
       msg.textContent = '저장했어요. 사이트에는 최대 1분 안에 반영돼요.';
     } catch (_) { msg.textContent = ''; }
   });
@@ -603,6 +608,7 @@
       <label>바다 쪽 방향°(북=0, 비우면 해안선으로 자동)<input class="f" data-k="face" value="${s.face ?? ''}" placeholder="예) 270 = 서쪽이 바다"></label>
       <div style="grid-column:1/-1;border-top:1px solid rgba(255,255,255,.1);padding-top:8px" data-prof>
         <b>수심 보정 (섬·바위 모양)</b> <span class="hint">공개 수심 자료가 거친 곳을 다이버가 아는 지형으로 바로잡아요. 방향 구간을 하나도 안 넣고 "그 밖 방향"도 비우면 보정 안 함</span>
+        <label style="display:block;margin:6px 0"><input type="checkbox" data-k="pOn"${s.pOff ? '' : ' checked'}> 이 포인트의 수심 보정 적용 (해제하면 아래 입력값은 남기고 적용만 꺼요)</label>
         ${profBlock(s)}
       </div></div>
       <div class="actions" style="margin-top:8px"><button class="primary" data-act="${isNew ? 'sadd' : 'ssave'}">${isNew ? '추가 (번호 자동)' : '저장'}</button><button data-act="scancel">취소</button></div></div>`;
@@ -652,6 +658,7 @@
     if (o.country !== undefined) { const sel = el.querySelector('select[data-k=country]'); if (sel) o.country = sel.value; }
     // 수심 보정: 방향 구간 목록 + 그 밖 방향(비우면 null → 서버가 보정 없음/원본 유지로 처리)
     o.pSec = [...el.querySelectorAll('[data-secrow]')].map(r => { const g = (k) => r.querySelector(`[data-s=${k}]`).value.trim(); return { a0: g('a0'), a1: g('a1'), deg: g('deg'), max: g('max') }; }).filter(x => x.a0 !== '' && x.a1 !== '' && x.deg !== '' && x.max !== '');
+    o.pOff = o.pOn === false; delete o.pOn;
     o.pElse = o.pElseDeg !== '' && o.pElseMax !== '' && o.pElseDeg !== undefined ? { deg: o.pElseDeg, max: o.pElseMax } : null; delete o.pElseDeg; delete o.pElseMax;
     return o;
   }

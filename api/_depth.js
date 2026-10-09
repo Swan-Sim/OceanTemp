@@ -449,7 +449,7 @@ async function profSpots() {
   let list = [];
   try { const [{ result }] = await redisPipeline([['HGETALL', 'spots:extra']]); const a = result || [];
     for (let i = 1; i < a.length; i += 2) { try { const o = JSON.parse(a[i]); const la = +o.lat, lo = +o.lon; const pf = require('./_store').normProf(o);
-      if (!pf || !Number.isFinite(la) || !Number.isFinite(lo) || o.show === false) continue;
+      if (!pf || o.pOff || !Number.isFinite(la) || !Number.isFinite(lo) || o.show === false) continue;
       list.push({ no: +o.no, lat: la, lon: lo, top: pf.top, r: pf.r, secs: pf.secs, els: pf.els }); } catch (_) {} } } catch (_) { return profMemo ? profMemo.list : []; }
   profMemo = { at: Date.now(), list }; return list;
 }
@@ -457,18 +457,21 @@ async function profSpots() {
 function profIn(list, b) { const E = 0.02; return list.filter(p => p.lat >= b.s - E && p.lat <= b.n + E && p.lon >= b.w - E && p.lon <= b.e + E); }
 function profSig(ps) { const str = ps.map(p => `${p.no}:${p.top}/${p.r}/${p.secs.map(x => [x.a0, x.a1, x.deg, x.max].join(',')).join(';')}/${p.els ? [p.els.deg, p.els.max].join(',') : ''}`).sort().join('|'); if (!str) return ''; let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36); }
 // [ADD] 최소 수심 구역(관리자 입력, Redis site:cfg의 depthFix): 원 안 바다는 min m보다 얕지 않게(바깥 25%는 서서히). 육지·해안 칸은 그대로.
-let fixMemo = null;
-async function fixSpots() {
-  if (fixMemo && Date.now() - fixMemo.at < 60e3) return fixMemo.list;
-  let list = [];
-  try { const [{ result }] = await redisPipeline([['GET', 'site:cfg']]); const c = result ? JSON.parse(result) : {}; list = (Array.isArray(c.depthFix) ? c.depthFix : []).filter(f => f && Number.isFinite(+f.la) && Number.isFinite(+f.lo) && +f.r > 0 && +f.min > 0).map(f => ({ la: +f.la, lo: +f.lo, r: +f.r, min: +f.min })); }
-  catch (_) { return fixMemo ? fixMemo.list : []; }
-  fixMemo = { at: Date.now(), list }; return list;
+let fixMemo = null; // 사이트 설정(site:cfg): 최소 수심 구역 목록 + 보정 끄기 스위치
+async function siteDepthCfg() {
+  if (fixMemo && Date.now() - fixMemo.at < 60e3) return fixMemo;
+  let list = [], off = { prof: false, fix: false, land: false };
+  try { const [{ result }] = await redisPipeline([['GET', 'site:cfg']]); const c = result ? JSON.parse(result) : {}; list = (Array.isArray(c.depthFix) ? c.depthFix : []).filter(f => f && Number.isFinite(+f.la) && Number.isFinite(+f.lo) && +f.r > 0 && +f.min > 0).map(f => ({ la: +f.la, lo: +f.lo, r: +f.r, min: +f.min }));
+    off = { prof: !!(c.depthOff && c.depthOff.prof), fix: !!(c.depthOff && c.depthOff.fix), land: !!(c.depthOff && c.depthOff.land) }; }
+  catch (_) { return fixMemo || { list, off }; }
+  fixMemo = { at: Date.now(), list, off }; return fixMemo;
 }
+async function fixSpots() { const c = await siteDepthCfg(); return c.off.fix ? [] : c.list; }
+const offSig = (o) => (o.prof ? 'p' : '') + (o.fix ? 'f' : '') + (o.land ? 'l' : '');
 function fixIn(list, b) { const E = 0.05; return list.filter(f => f.la >= b.s - E && f.la <= b.n + E && f.lo >= b.w - E && f.lo <= b.e + E); }
 function fixSig(fs) { const str = fs.map(f => `${f.la}/${f.lo}/${f.r}/${f.min}`).sort().join(','); if (!str) return ''; let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return 'f' + h.toString(36); }
 // 포인트 지형 + 최소 수심 구역의 합친 표시와 목록
-async function sigFor(b) { const profs = profIn(await profSpots(), b), fixes = fixIn(await fixSpots(), b); return { profs, fixes, sig: profSig(profs) + fixSig(fixes) }; }
+async function sigFor(b) { const c = await siteDepthCfg(), profs = c.off.prof ? [] : profIn(await profSpots(), b), fixes = c.off.fix ? [] : fixIn(c.list, b); return { profs, fixes, sig: profSig(profs) + fixSig(fixes) + (offSig(c.off) ? 'o' + offSig(c.off) : ''), off: c.off }; }
 function applyFixes(g, fixes) {
   if (!fixes || !fixes.length) return 0;
   const kx = Math.cos((g.la0 + (g.rows - 1) * g.dla / 2) * Math.PI / 180) * 111320, ky = 111320; let n = 0;
@@ -672,7 +675,7 @@ async function depthVec(x, y, opt = {}) {
     // [ADD] 섬·바위(OSM 해안선 고리) 안쪽 칸은 육지로 표시 → 수심 띠·등심선이 섬 위로 안 올라가요(위성 사진 섬은 그대로 보임, 해안선만 흰 선).
     //  칸보다 작은 바위는 가운데 칸 하나라도 육지로. 해안선 서버가 실패하면 표시 없이 짧게만 저장해 곧 다시 시도.
     let landRings = null, landErr = false;
-    try { landRings = (await landFor(x, y, t)).r; } catch (_) { landErr = true; }
+    try { if (!(await siteDepthCfg()).off.land) landRings = (await landFor(x, y, t)).r; } catch (_) { landErr = true; }
     if (landRings && landRings.length) {
       const inRing = (ring, la, lo) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a[1] > lo) !== (b[1] > lo) && la < (b[0] - a[0]) * (lo - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
       landRings.forEach(ring => { let s0 = 90, n0 = -90, w0 = 180, e0 = -180, cl = 0, co = 0; ring.forEach(p => { s0 = Math.min(s0, p[0]); n0 = Math.max(n0, p[0]); w0 = Math.min(w0, p[1]); e0 = Math.max(e0, p[1]); cl += p[0]; co += p[1]; });

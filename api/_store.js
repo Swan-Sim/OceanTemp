@@ -145,7 +145,7 @@ function normProf(o) {
   if (!secs.length && !els) return null;
   return { top: top ?? 0, r: numIn(o.pR, 50, 3000) ?? 250, secs, els };
 }
-function profOf(b) { const n = normProf(b), L = { pMax: null, pRun: null, pDir: null, pSpan: null, pRun2: null };
+function profOf(b) { const n = normProf(b), L = { pOff: (b.pOff === true || /^(y|yes|true|1)$/i.test(String(b.pOff == null ? '' : b.pOff))) ? true : null, pMax: null, pRun: null, pDir: null, pSpan: null, pRun2: null };
   return n ? { ...L, pTop: n.top, pR: n.r, pSec: n.secs, pElse: n.els } : { ...L, pTop: null, pR: null, pSec: null, pElse: null }; }
 function spotFields(b) {
   b = b || {};

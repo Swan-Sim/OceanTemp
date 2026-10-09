@@ -57,7 +57,7 @@
       return '&p=' + h.toString(36);
     }
     // [ADD] 관리자 "최소 수심 구역"이 바뀌면 주소가 바뀌게(서버 api/_site.js depthFix, 계정 js/account.js가 읽어 옴)
-    const fixParam = () => { const f = window.otDepthFix || []; if (!f.length) return ''; const str = f.map(x => `${x.la}/${x.lo}/${x.r}/${x.min}`).sort().join(','); let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return '&f=' + h.toString(36); };
+    const fixParam = () => { const f = window.otDepthFix || [], o = window.otDepthOff || {}, off = (o.prof ? 'p' : '') + (o.fix ? 'f' : '') + (o.land ? 'l' : ''); if (!f.length && !off) return ''; const str = f.map(x => `${x.la}/${x.lo}/${x.r}/${x.min}`).sort().join(',') + '#' + off; let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return '&f=' + h.toString(36); };
     let lastFix = fixParam();
     window.addEventListener('otemp:site', () => { const n = fixParam(); if (n === lastFix) return; lastFix = n; dTiles.forEach(tl => { if (tl.grp && leafletMap) leafletMap.removeLayer(tl.grp); }); dTiles.clear(); dQueue = []; refreshDepthLayers(); });
     function loadNext() {

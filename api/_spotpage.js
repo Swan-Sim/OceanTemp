@@ -672,6 +672,9 @@ async function count(req, no) {
     if (bot) {
       const country = req.headers['x-vercel-ip-country'] || '??';
       cmds.push(['HINCRBY', `b:pn:${day}`, `${bot.cat}|${no}`, 1], ['HINCRBY', `b:n:${day}`, bot.name, 1], ['HINCRBY', `b:h:${day}`, `${bot.cat}|${hour}`, 1], ['HINCRBY', `b:c:${day}`, `${bot.cat}|${country}`, 1]);
+      // [FIX] 포인트 페이지 봇도 도시별로 기록(전엔 국가만 세서 도시 합계가 모자랐음)
+      let city = req.headers['x-vercel-ip-city'] || ''; try { city = decodeURIComponent(city); } catch (_) {}
+      cmds.push(['HINCRBY', `b:ct:${day}`, `${bot.cat}|${country}|${city || '?'}`, 1]);
     } else {
       cmds.push(['HINCRBY', `pg:${day}`, String(no), 1]);
       if (no !== 'index') cmds.push(['HINCRBY', `sv:${day}`, String(no), 1], ['EXPIRE', `sv:${day}`, String(800 * 86400)]); // 샵 실적의 "조회"에도 포함

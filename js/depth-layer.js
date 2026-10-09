@@ -20,7 +20,7 @@
     const DFILL = { 1: ['#a5f3fc', 0.10], 5: ['#7dd3fc', 0.12], 10: ['#38bdf8', 0.09], 20: ['#0ea5e9', 0.09], 30: ['#0284c7', 0.09], 40: ['#0369a1', 0.09], 50: ['#075985', 0.09], 60: ['#0c4a6e', 0.1], 80: ['#082f49', 0.1], 100: ['#041e33', 0.12], 120: ['#03182b', 0.12], 150: ['#021224', 0.14] };
     // 서버 압축 형식(v2): 좌표 = 타일 안 0~4096 정수, 앞 점과의 차이만 → [위도, 경도]로 되돌리기
     // [ADD] 위성 사진 섬이 등고선보다 약 200m 북쪽에 있어서, 그려진 수심(띠·등고선·해안선·숫자)을 전체적으로 남쪽으로 내려요. 값을 바꾸려면 아래 숫자(미터)만 고치세요.
-    const DEPTH_SHIFT_SOUTH_M = 200, SH = DEPTH_SHIFT_SOUTH_M / 111320;
+    const SH = 0 /* 남쪽 이동은 서버에서 먼저 처리 */;
     function decodeTile(d) {
       const t = d.tile, dec = (a) => { const o = []; let x = 0, y = 0; for (let i = 0; i < a.length; i += 2) { x += a[i]; y += a[i + 1]; o.push([t.n - y / 4096 * (t.n - t.s) - SH, t.w + x / 4096 * (t.e - t.w)]); } return o; };
       return { fills: (d.F || []).map(([dd, polys]) => ({ d: dd, p: polys.map(poly => poly.map(dec)) })),
@@ -68,7 +68,7 @@
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=23${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}`).then(r => r.json()).then(d => {
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=24${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}`).then(r => r.json()).then(d => {
           if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
           else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });

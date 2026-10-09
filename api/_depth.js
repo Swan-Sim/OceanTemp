@@ -325,7 +325,10 @@ async function areaControls(x, y) {
 }
 // [ADD] 해안선 = 수심 0m. 거친 자료(약 450m 간격)는 작은 섬 바로 옆이 50m로 뭉개져 있어서, 해안선에서 500m 안쪽만
 //  "해안선 0m ↔ 500m 지점의 원래 수심" 사이를 거리에 비례해 이어 줘요(그 바깥은 원래 값 그대로). 해안선 안쪽(선의 왼쪽)은 육지로.
-const SHORE_W = 500;
+const SHORE_W = 500, SHORE_W2 = 1400;
+// [CHANGE] 해안선에서 멀어질수록 깊어지는 정도를 "원래 수심"에 따라 달리 해요: 30m 이하는 예전처럼 500m 안에서, 60m 가까운 곳은 1400m까지 천천히,
+//  70m부터 서서히 원래 자료로, 120m 이상은 원래 자료 그대로. → 5·10m뿐 아니라 20~50m 등심선도 섬 모양을 따라 점진적으로 내려가고, 50~100m는 원래 자료로 이어져요(거친 자료의 계단 모양이 안 보임).
+const taperW = (o) => SHORE_W + (SHORE_W2 - SHORE_W) * Math.max(0, Math.min(1, (o - 30) / 30));
 function shoreTaper(g, segs) {
   if (!segs.length) return 0;
   const lat0 = g.la0 + (g.rows - 1) * g.dla / 2, kx = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 111320;
@@ -337,14 +340,15 @@ function shoreTaper(g, segs) {
   for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) {
     const px = c * g.dlo * kx, py = r * g.dla * ky, bx = Math.floor(px / B), by = Math.floor(py / B);
     let best = Infinity, side = 0;
-    for (let ix = bx - 3; ix <= bx + 3; ix++) for (let iy = by - 3; iy <= by + 3; iy++) { const L = bins.get(key(ix, iy)); if (!L) continue;
+    for (let ix = bx - 6; ix <= bx + 6; ix++) for (let iy = by - 6; iy <= by + 6; iy++) { const L = bins.get(key(ix, iy)); if (!L) continue;
       for (const i of L) { const s = S[i], dx = s[2] - s[0], dy = s[3] - s[1], L2 = dx * dx + dy * dy || 1, tt = Math.max(0, Math.min(1, ((px - s[0]) * dx + (py - s[1]) * dy) / L2));
         const d = Math.hypot(px - s[0] - dx * tt, py - s[1] - dy * tt); if (d < best) { best = d; side = dx * (py - s[1]) - dy * (px - s[0]); } } }
-    if (!(best < SHORE_W)) continue;
+    if (!(best < SHORE_W2)) continue;
     const i = r * g.cols + c, v = g.z[i];
-    if (side > 0) { if (v == null || v < 0) { g.z[i] = 2; changed++; } continue; } // 육지
-    const f = best / SHORE_W; // 0(해안선) ~ 1(500m)
-    g.z[i] = v == null || v >= 0 ? -Math.max(0.5, 10 * f) : Math.min(-0.5, v * f); changed++;
+    if (side > 0) { if (best < SHORE_W && (v == null || v < 0)) { g.z[i] = 2; changed++; } continue; } // 육지
+    if (v == null || v >= 0) { if (best < SHORE_W) { g.z[i] = -Math.max(0.5, 10 * best / SHORE_W); changed++; } continue; } // 물인데 자료가 육지 값
+    const o = -v, sOrig = Math.max(0, Math.min(1, (o - 70) / 50)), f0 = Math.min(1, best / taperW(o)), f = f0 + (1 - f0) * sOrig; // 70m 넘으면 서서히 원래 값으로
+    const nv = -Math.max(0.5, o * f); if (nv !== v) { g.z[i] = nv; changed++; }
   }
   return changed;
 }

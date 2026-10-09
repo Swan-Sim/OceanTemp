@@ -532,7 +532,6 @@
     function renderNowTable(box) {
       const st = selectedStation;
       let d = st._hourlyCache;
-      if (d && !d._obs && typeof runObsMerge === 'function') runObsMerge(st); // [FIX] 실측을 아직 못 합쳤으면 다시 시도
       const hasObs = d && d._obs && d._obs.sources.length;
       // [CHANGE] 일본 기상청 조위표를 썼으면 출처에 "JMA"도 표시
       const jmaTxt = d && d._tidePred === 'jma' ? 'JMA · ' : '';
@@ -892,8 +891,22 @@
       } else {
         const dep = selectedStation._depth; // 수심 자료(js/shops.js가 받아 둠)
         const data = getDepthProfile(selectedStation.curTemp, selectedStation.isBeach, dep && dep.max1k);
+        // [ADD] 수온약층(SCM) 표시: 표층이 충분히 따뜻하고(20°C 이상 = 여름~가을 성층 가능) 30m보다 깊은 구간이 있을 때만, 30m부터 아래를 띠로 칠하고 설명을 붙여요.
+        //  이 그래프는 표층 수온으로 만든 모델 추정이라 층의 깊이(30m)도 모델 값이에요(실측 아님) - 설명에도 그렇게 적어요.
+        const i30 = data.depths.indexOf(30), warm = Number.isFinite(selectedStation.curTemp) && selectedStation.curTemp >= 20;
+        let scm = null;
+        if (warm && i30 >= 0 && i30 < data.depths.length - 1) {
+          const j = data.depths.findIndex(d => d >= 40), iEnd = data.depths.reduce((m, d, i) => d <= 100 ? i : m, i30);
+          if (j > 0) scm = { i0: i30, i1: Math.max(iEnd, j), drop: +(data.profile[i30] - data.profile[j]).toFixed(1), span: data.depths[j] - 30, deeperT: data.profile[j] };
+        }
+        const scmPlugin = { id: 'scmBand', beforeDatasetsDraw(ch) {
+          if (!scm) return; const { ctx, chartArea: ca, scales: { x } } = ch, x0 = x.getPixelForValue(scm.i0), x1 = x.getPixelForValue(scm.i1);
+          ctx.save(); ctx.fillStyle = 'rgba(125,211,252,0.10)'; ctx.fillRect(x0, ca.top, x1 - x0, ca.bottom - ca.top);
+          ctx.strokeStyle = 'rgba(125,211,252,0.8)'; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x0, ca.top); ctx.lineTo(x0, ca.bottom); ctx.stroke();
+          ctx.setLineDash([]); ctx.fillStyle = '#7DD3FC'; ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillText('SCM', x0 + 4, ca.top + 11); ctx.restore(); } };
         chartInstance = new Chart(chartCanvas, {
           type: 'line',
+          plugins: [scmPlugin],
           data: {
             labels: data.depths.map(d => `${d}m`),
             datasets: [{ label: t.chartDepthLabel, data: data.profile, borderColor: '#FFB000', backgroundColor: 'rgba(255, 176, 0, 0.10)', fill: true, tension: 0.2, pointRadius: 3, pointHitRadius: 20 }]
@@ -914,6 +927,7 @@
         });
         legendBox.innerHTML = `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>` +
           `<div class="item"><span class="swatch" style="background:#FFB000;"></span>${t.chartDepthLabel}</div>` +
+          (scm ? `<div class="item" style="color:#7DD3FC;display:block;width:100%;line-height:1.45;"><b>${t.scmTitle}</b> ${t.scmText(scm.span, scm.drop)}</div>` : '') +
           (dep && dep.max1k ? `<div class="item" style="color:#7DD3FC;">${t.depthNear ? t.depthNear(dep.max300, dep.max1k) : `수심: 300m 안 ~${dep.max300 ?? '–'}m · 1km 안 ~${dep.max1k}m`}</div>` : '');
       }
     }

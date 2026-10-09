@@ -11,14 +11,15 @@ const num = (v, lo, hi, d = 1) => { if (v === '' || v == null) return null; cons
 function clean(b) {
   const no = parseInt(b.no, 10); if (!(no > 0 && no < 100000)) return { error: 'bad_no' };
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(b.date)) ? String(b.date) : null; if (!date) return { error: 'bad_date' };
-  const type = b.diverType === 'tec' ? 'tec' : 'rec'; // 기본은 레크리에이션
+  const type = (b.type === 'tec' || b.diverType === 'tec') ? 'tec' : 'rec'; // 기본은 레크리에이션 [FIX] 화면은 type으로 보냄
   const e = {
     no, date, type,
     tod: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.tod)) ? String(b.tod) : '', // 다이빙 시작 시각(HH:MM)
     tank: type === 'tec' && TANKS[b.tank] ? String(b.tank) : '',
     depthMax: num(b.depthMax, 0, 332), depthAvg: num(b.depthAvg, 0, 332), mins: num(b.mins, 0, 1500, 0),
     fill: num(b.fill, 0, 400, 0), remain: num(b.remain, 0, 400, 0),
-    weight: num(b.weight, 0, 60), suit: num(b.suit, 0, 12),
+    weight: num(b.weight, 0, 60), suit: b.suit === 'dry' ? 'dry' : num(b.suit, 0, 12), // [CHANGE] 0 = 슈트 없이, 'dry' = 드라이슈트
+    tempAuto: !!b.tempAuto && b.temp !== '' && b.temp != null, // 수온을 자동 추정값 그대로 썼는지
     temp: num(b.temp, -3, 45), vis: num(b.vis, 0, 100, 0),
     buddy: txt(b.buddy, 60), notes: txt(b.notes, 600)
   };
@@ -36,7 +37,8 @@ module.exports = async function logbook(a, b, uid, R, json) {
     all.sort((x, y) => (y.date || '').localeCompare(x.date || '') || (y.at || 0) - (x.at || 0));
     const no = parseInt(b.no, 10);
     const items = no > 0 ? all.filter(x => x.no === no) : all;
-    json(200, { ok: true, items: items.slice(0, 200), total: all.length, last: all[0] || null }); return true; // last: 가장 최근 기록(웨이트·슈트·탱크 미리 채우기용)
+    const lim = Math.max(1, Math.min(200, parseInt(b.limit, 10) || 200)); // [ADD] 회원정보 최근 기록용(limit=3)
+    json(200, { ok: true, items: items.slice(0, lim), total: all.length, last: all[0] || null }); return true; // last: 가장 최근 기록(웨이트·슈트·탱크 미리 채우기용)
   }
   if (a === 'logsave') {
     const r = clean(b); if (r.error) { json(400, { ok: false, error: r.error }); return true; }

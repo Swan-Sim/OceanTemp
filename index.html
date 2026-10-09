@@ -136,10 +136,11 @@
           </div>
         </div>
         <button class="ctrl-btn" onclick="zoomOut()">−</button>
-        <button class="ctrl-btn" onclick="toggleMoonTide()" title="달·조석 격자 켜기/끄기" id="btn-moon">
+        <!-- [CHANGE] 달·전체화면 버튼 숨김(코드가 id를 찾으니 지우지 않고 감춤) -->
+        <button class="ctrl-btn" onclick="toggleMoonTide()" title="달·조석 격자 켜기/끄기" id="btn-moon" style="display:none">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M14.5 2.5a9.5 9.5 0 1 0 7 15.9A8 8 0 0 1 14.5 2.5z"/></svg>
         </button>
-        <button class="ctrl-btn" onclick="toggleFullscreen()" title="전체화면" style="font-size: 13px;" id="btn-fullscreen">⛶</button>
+        <button class="ctrl-btn" onclick="toggleFullscreen()" title="전체화면" style="font-size: 13px;display:none" id="btn-fullscreen">⛶</button>
         <!-- [ADD] 홈 화면에 추가(휴대폰) / 즐겨찾기(컴퓨터) - js/save-app.js -->
         <button class="ctrl-btn" id="btn-save" style="display:none" title="홈 화면에 추가"></button>
         <!-- [ADD] 다이빙 포인트(정점) 등록 요청 - 상세 지도에서 누르면 지금 지도 가운데 좌표를 넘겨줘요 -->

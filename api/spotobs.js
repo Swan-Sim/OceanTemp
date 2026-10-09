@@ -312,6 +312,35 @@ module.exports = async function handler(req, res) {
       res.setHeader('Cache-Control', 'public, s-maxage=2592000, max-age=86400'); return res.status(200).json(r); }
     catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(200).json({ ok: false, error: String(e && e.message || e).slice(0, 120) }); }
   }
+  // [ADD] 위성사진 수심(SDB) 시험판 - 관리자만. /api/spotobs?svc=sdbview&lat=..&lon=..(&km=1.5&months=12&cloud=60&min=3&json=1)
+  //  그림: [위성사진 실제 색 | 위성 수심 | 지금 쓰는 거친 수심(GMRT)] - 흰 선 = 5·10·20m, 빨간 십자 = 포인트. 자료는 Copernicus Data Space(Sentinel-2) 무료 계정을 써요.
+  if (svc === 'sdbview') {
+    try {
+      let admin = false; try { admin = await require('./_auth').isAdminReq(req); } catch (_) {}
+      if (!admin) { const pw = req.headers['x-admin-password'] || ''; if (pw) { try { admin = await require('./_store').checkAdminPw(pw); } catch (_) {} } }
+      if (!admin) return res.status(401).json({ ok: false, error: 'admin_only (관리자로 로그인한 브라우저에서 열어 주세요)' });
+      const q = req.query, lat = +q.lat, lon = +q.lon; if (!(Math.abs(lat) <= 85 && Math.abs(lon) <= 180)) return res.status(400).json({ ok: false, error: 'lat, lon 필요' });
+      const cl = (v, a, b, d) => { v = +v; return Number.isFinite(v) ? Math.max(a, Math.min(b, v)) : d; };
+      const km = cl(q.km, 0.5, 4, 1.5), months = cl(q.months, 1, 36, 12), cloud = cl(q.cloud, 10, 100, 60), minN = Math.round(cl(q.min, 1, 30, 3));
+      const SDB = require('./_sdb'), D = require('./_depth'), kx = 111320 * Math.cos(lat * Math.PI / 180), dLat = km * 1000 / 111320, dLon = km * 1000 / kx;
+      const box = { s: lat - dLat, n: lat + dLat, w: lon - dLon, e: lon + dLon }, N = Math.round(2 * km * 100); // 10m 한 칸
+      const [pngBuf, gm] = await Promise.all([SDB.fetchComposite(box, N, N, months, cloud), D._t.fromGmrt(box, { mask: false }).catch(() => null)]);
+      const img = SDB.pngDecode(pngBuf), n = img.W * img.H, ref = new Float32Array(n).fill(NaN), land = new Uint8Array(n), refZ = new Float32Array(n).fill(NaN);
+      if (gm && gm.grid) { const g = gm.grid;
+        for (let y = 0; y < img.H; y++) for (let x = 0; x < img.W; x++) { const la = box.n - (y + 0.5) / img.H * (box.n - box.s), lo = box.w + (x + 0.5) / img.W * (box.e - box.w);
+          const fi = (la - g.la0) / g.dla, fj = (lo - g.lo0) / g.dlo, i = Math.max(0, Math.min(g.rows - 2, Math.floor(fi))), j = Math.max(0, Math.min(g.cols - 2, Math.floor(fj))), a = Math.max(0, Math.min(1, fi - i)), c = Math.max(0, Math.min(1, fj - j));
+          const v = [g.z[i * g.cols + j], g.z[i * g.cols + j + 1], g.z[(i + 1) * g.cols + j], g.z[(i + 1) * g.cols + j + 1]]; if (v.some(t => t == null)) continue;
+          const z = v[0] * (1 - a) * (1 - c) + v[1] * (1 - a) * c + v[2] * a * (1 - c) + v[3] * a * c, k = y * img.W + x;
+          if (z < 0) { ref[k] = -z; refZ[k] = -z; } else land[k] = 1; } }
+      const r = SDB.analyze(img, gm ? ref : null, { minN, maxZ: 22 });
+      const info = Object.assign({ ok: !r.err, box, size: N + 'x' + N + ' (10m)', months, cloud, minN, gmrt: !!gm }, r.err ? { error: r.err, detail: r } : r.info);
+      if (q.json === '1' || r.err) return res.status(r.err ? 200 : 200).json(info);
+      const S = N <= 300 ? 2 : 1, cross = [img.W / 2, img.H / 2];
+      const out = SDB.sideBySide(SDB.sideBySide(SDB.trueColor(img, S), SDB.panel(r.Z, img.W, img.H, S, null, cross)), SDB.panel(refZ, img.W, img.H, S, land, cross));
+      res.setHeader('Content-Type', 'image/png'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('x-ot-sdb', encodeURIComponent(JSON.stringify(r.info)));
+      return res.status(200).send(SDB.pngEncode(out.w, out.h, out.rgb));
+    } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).replace(/client_secret=[^&\s]+/g, '***').slice(0, 400) }); }
+  }
   if (svc === 'dtile' || svc === 'dvec') {
     try {
       const D = require('./_depth'), r = svc === 'dvec' ? await D.depthVec(req.query.x, req.query.y, { fill: req.query.fill === '1', mode: ['1', '2', '3'].includes(String(req.query.m)) ? +req.query.m : 0 }) : await D.depthTile(req.query.x, req.query.y);

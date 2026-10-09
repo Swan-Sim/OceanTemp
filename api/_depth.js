@@ -571,20 +571,23 @@ async function depthTile(x, y, opt = {}) {
   const order = inKorea(lat, lon) ? [fromKhoa, fromGmrt] : inEmodnet(lat, lon) ? [fromEmodnet, fromGmrt] : [fromNoaa, fromGmrt];
   let out = null; const errors = [];
   // [ADD] 원본 격자 저장본(raw)이 있으면 외부 서버에 다시 묻지 않고 그걸로 그려요(그리는 방식만 바꿀 때 몇 분이면 전체 다시 그리기)
-  const SF = await sigFor(t), profs = SF.profs; let pf = SF.sig; // [ADD] 포인트 현지 지형 + 최소 수심 구역
+  // [ADD] 시안 보기(opt.mode): 1 = 섬 육지·방향 경사·최소 수심 구역 넣기 전 / 2 = 거친 수심 원래 위치 방식 넣기 전 / 3 = 현지 지형 입력 생기기 전. 0(기본)은 지금 방식.
+  const MODE = opt.mode | 0, rawC = MODE ? MODE === 1 : RAW_COARSE;
+  const SF = await sigFor(t), uni = (p) => ({ ...p, secs: [], els: p.els || (p.secs[0] ? { deg: p.secs[0].deg, max: p.secs[0].max } : null) }); // 옛 방식 = 한 가지 경사만
+  const profs = MODE === 3 ? [] : MODE ? SF.profs.map(uni).filter(p => p.els) : SF.profs; let pf = (MODE ? 'm' + MODE : '') + (MODE === 3 ? '' : SF.sig); // [ADD] 포인트 현지 지형 + 최소 수심 구역
   const finish = async (r) => {
     const g = r.grid; if (!g.z.some(v => v != null && v < 0)) return { ok: true, x, y, tile: t, src: r.src, empty: true, pf }; // 바다 없음
     const coarse = r.src === 'gmrt' && !(r.hiFrac >= 0.5);
     let coastFixed, shift = null, fixErr;
-    if (coarse && RAW_COARSE) { coastFixed = true; } // 원래 위치 그대로(위 RAW_COARSE 설명)
+    if (coarse && rawC) { coastFixed = true; } // 원래 위치 그대로(위 RAW_COARSE 설명)
     else if (coarse) { // 거친 자료만: 칸별 해안선 기준 이동량을 부드럽게 이어서 위치만 옮기기
       try { const sh = await warpByShiftField(g, x, y); coastFixed = true; shift = sh ? { dx: Math.round(sh[0]), dy: Math.round(sh[1]), moved: !!(sh[0] || sh[1]) } : null;
         landFix(g, g._segsAll || []); shoreTaper(g, g._segs || []); delete g._segs; delete g._segsAll;
         try { reefFix(g, await reefSegs(x, y)); } catch (_) {} } // 리프 자료 실패는 그냥 넘어감(다음에 다시)
       catch (e) { coastFixed = false; fixErr = String(e && e.message || e).slice(0, 100); } }
     if (profs.length) { try { const A = await areaControls(x, y); applyProfiles(g, profs, A.segsAll); } catch (_) { pf = ''; } } // 해안선 실패 → 표시 비워서 다음에 다시
-    if (SF.fixes.length) applyFixes(g, SF.fixes); // [ADD] 최소 수심 구역(관리자)
-    return { ok: true, x, y, tile: t, pf, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, kp: !!r.kp, coarse, raw: coarse && RAW_COARSE, coastFixed, fixErr, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, fromRaw: !!r.fromRaw,
+    if (SF.fixes.length && !MODE) applyFixes(g, SF.fixes); // [ADD] 최소 수심 구역(관리자)
+    return { ok: true, x, y, tile: t, pf, src: r.src, srcShort: SRC[r.src].short, res: r.res, nullLand: !!r.nullLand, kp: !!r.kp, coarse, raw: coarse && rawC, coastFixed, fixErr, shift: shift && shift.moved ? [shift.dx, shift.dy] : null, fromRaw: !!r.fromRaw,
       grid: { la0: g.la0, lo0: g.lo0, dla: g.dla, dlo: g.dlo, rows: g.rows, cols: g.cols, z: g.z.map(v => v == null ? null : Math.round(v)) } };
   };
   const raw = opt.noRaw ? null : await rawGet(x, y);
@@ -649,16 +652,17 @@ async function landFor(x, y, t) {
 }
 async function depthVec(x, y, opt = {}) {
   x = parseInt(x, 10); y = parseInt(y, 10);
-  const ck = 'dvec:v2:' + x + '_' + y;
+  const MODE = opt.mode | 0, rawC = MODE ? MODE === 1 : RAW_COARSE;
+  const ck = 'dvec:v2:' + x + '_' + y + (MODE ? ':m' + MODE : '');
   // [ADD] fill=1: 그림은 있는데 원본 격자 저장본이 없으면 한 번 다시 받아 원본을 저장(이후엔 외부 서버 없이 다시 그리기)
   const needRaw = opt.fill ? !(await redisPipeline([['EXISTS', RAW_KEY(x, y)]]).then(r => r[0].result).catch(() => 1)) : false;
   let old = null; // 다시 계산이 실패하면(국립해양조사원 하루 한도 등) 예전 그림이라도 보여주기
-  const curPf = (await sigFor(tileBox(x, y))).sig;
-  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf8) || (RAW_COARSE && o.coarse && !o.raw))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']) || (!o.empty && !o.ld && !(o.landErr && Date.now() - (o.at || 0) < 600e3)); let stale2 = stale;
+  const curPf = (MODE ? 'm' + MODE : '') + (MODE === 3 ? '' : (await sigFor(tileBox(x, y))).sig) ;
+  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf8) || (rawC && o.coarse && !o.raw))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']) || (!o.empty && !o.ld && !(o.landErr && Date.now() - (o.at || 0) < 600e3)); let stale2 = stale;
     // [ADD] 2·5m 얕은 등심선 추가 전 저장본: 10m보다 얕은 곳이 있고 원본 격자가 저장돼 있을 때만 다시 그림(외부 서버 다시 안 부르게)
     if (!stale2 && !o.sh5 && o.F && o.F.some(f => f[0] === 1)) { try { const [{ result: ex }] = await redisPipeline([['EXISTS', RAW_KEY(x, y)]]); if (ex) stale2 = true; } catch (_) {} }
     if (!stale2) return o; old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
-  const d = await depthTile(x, y, { noStore: true, fresh: true }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
+  const d = await depthTile(x, y, { noStore: true, fresh: true, mode: MODE }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   if (!d || !d.ok) return old ? Object.assign({}, old, { tmp: true }) : d; // tmp → 짧게만 캐시하고 다음에 다시 시도
   const t = d.tile;
   let out = { ok: true, x, y, tile: t, src: d.src, empty: true, pf: d.pf || '' };
@@ -675,7 +679,7 @@ async function depthVec(x, y, opt = {}) {
     // [ADD] 섬·바위(OSM 해안선 고리) 안쪽 칸은 육지로 표시 → 수심 띠·등심선이 섬 위로 안 올라가요(위성 사진 섬은 그대로 보임, 해안선만 흰 선).
     //  칸보다 작은 바위는 가운데 칸 하나라도 육지로. 해안선 서버가 실패하면 표시 없이 짧게만 저장해 곧 다시 시도.
     let landRings = null, landErr = false;
-    try { if (!(await siteDepthCfg()).off.land) landRings = (await landFor(x, y, t)).r; } catch (_) { landErr = true; }
+    try { if (!MODE && !(await siteDepthCfg()).off.land) landRings = (await landFor(x, y, t)).r; } catch (_) { landErr = true; }
     if (landRings && landRings.length) {
       const inRing = (ring, la, lo) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a[1] > lo) !== (b[1] > lo) && la < (b[0] - a[0]) * (lo - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
       landRings.forEach(ring => { let s0 = 90, n0 = -90, w0 = 180, e0 = -180, cl = 0, co = 0; ring.forEach(p => { s0 = Math.min(s0, p[0]); n0 = Math.max(n0, p[0]); w0 = Math.min(w0, p[1]); e0 = Math.max(e0, p[1]); cl += p[0]; co += p[1]; });

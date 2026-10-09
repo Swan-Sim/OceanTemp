@@ -314,9 +314,8 @@ module.exports = async function handler(req, res) {
   }
   if (svc === 'dtile' || svc === 'dvec') {
     try {
-      const D = require('./_depth'), r = svc === 'dvec' ? await D.depthVec(req.query.x, req.query.y, { fill: req.query.fill === '1' }) : await D.depthTile(req.query.x, req.query.y);
+      const D = require('./_depth'), r = svc === 'dvec' ? await D.depthVec(req.query.x, req.query.y, { fill: req.query.fill === '1', mode: ['1', '2', '3'].includes(String(req.query.m)) ? +req.query.m : 0 }) : await D.depthTile(req.query.x, req.query.y);
       if (!r) return res.status(400).json({ ok: false });
-      if (svc === 'dvec') res.setHeader('x-ot-depth', r._c === 'hit' ? 'stored' : 'computed'); delete r._c; // [ADD] 저장본을 썼는지(stored) 새로 그렸는지(computed) - 개발자도구 네트워크 탭에서 확인
       res.setHeader('Cache-Control', r.ok && !r.tmp ? 'public, s-maxage=2592000, max-age=86400' : r.ok ? 'public, s-maxage=600, max-age=300' : r.retry ? 'no-store' : 's-maxage=3600'); // tmp = 해외 위치 보정 실패본(잠깐만 보관 후 다시 시도)
       return res.status(200).json(r);
     } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).replace(/serviceKey=[^&\s]+/g, 'serviceKey=***') }); }

@@ -60,11 +60,13 @@
     const fixParam = () => { const f = window.otDepthFix || [], o = window.otDepthOff || {}, off = (o.prof ? 'p' : '') + (o.fix ? 'f' : '') + (o.land ? 'l' : ''); if (!f.length && !off) return ''; const str = f.map(x => `${x.la}/${x.lo}/${x.r}/${x.min}`).sort().join(',') + '#' + off; let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return '&f=' + h.toString(36); };
     let lastFix = fixParam();
     window.addEventListener('otemp:site', () => { const n = fixParam(); if (n === lastFix) return; lastFix = n; dTiles.forEach(tl => { if (tl.grp && leafletMap) leafletMap.removeLayer(tl.grp); }); dTiles.clear(); dQueue = []; refreshDepthLayers(); });
+    // [ADD] 시안 보기: 주소에 ?dv=1·2·3을 붙이면 옛 방식으로 그린 수심 지도를 따로 불러와요(1 섬 육지·방향 경사 전 · 2 거친 수심 원래 위치 전 · 3 현지 지형 입력 전)
+    const DV_MODE = (() => { try { const v = new URLSearchParams(location.search).get('dv'); return ['1', '2', '3'].includes(v) ? v : ''; } catch (_) { return ''; } })();
     function loadNext() {
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=20${profParam(+x, +y)}${fixParam()}`).then(r => r.json()).then(d => {
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=20${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}`).then(r => r.json()).then(d => {
           if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
           else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });

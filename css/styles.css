@@ -417,6 +417,8 @@
     #bottom-sheet > * { pointer-events: auto; }
     #bottom-sheet > .tab-bar { pointer-events: none; }
     #bottom-sheet > .tab-bar .tab-btn { pointer-events: auto; }
+    /* [FIX] "탭 버튼 사이·아래 호박색 줄 뒤로 지구본/지도가 비쳐 보여" - 탭 줄 뒤에 불투명한 회색을 깔아요(버튼 둥근 모서리·양 끝 여백 포함) */
+    #bottom-sheet > .tab-bar { background: #1E2533; }
     .disclaimer-bar { bottom: 33px; }
 
     /* [ADD] 국립해양조사원 실측 칸 표시: 숫자 아래 작은 하늘색 점 */

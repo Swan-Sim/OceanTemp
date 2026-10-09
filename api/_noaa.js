@@ -123,7 +123,9 @@ module.exports = async function handler(req, res) {
     if (req.query.svc === 'ndbc') {
       const id = String(req.query.id || '');
       if (!/^[A-Za-z0-9]{3,8}$/.test(id)) return res.status(400).json({ ok: false, error: 'id 필요' });
-      const rows = await ndbcRecent(id);
+      // [FIX] NDBC 실시간 파일 이름은 대문자(FTPC1.txt) - 소문자 id(ftpc1)면 404 → 502가 났어요. 자료가 없는 관측소는 오류 대신 빈 결과를 1시간 캐시
+      let rows;
+      try { rows = await ndbcRecent(id.toUpperCase()); } catch (e) { return send({ ok: false, id, error: 'no_data', rows: [] }, 3600); }
       return send({ ok: true, id, ms: Date.now() - t0, count: rows.length, rows }, 1200);
     }
     if (req.query.svc === 'wtclim') {

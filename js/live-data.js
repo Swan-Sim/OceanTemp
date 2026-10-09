@@ -303,7 +303,14 @@
     // "한 번의 요청"으로 같이 받아서 오늘 기준 앞뒤 2일만 씁니다.
     // 해안 가까이에선 모델 해상도(수 km) 한계로 실제 항구 조위표와 차이가
     // 날 수 있어서, 화면에도 "참고용"으로 표시합니다.
-    async function fetchStationHourly(station) {
+    // [FIX] 같은 정점을 동시에 두 번 부르면(첫 화면 자동 선택 + 표 그리기) 나중 결과가 실측을 합친 앞 결과를 덮어써서
+    //  처음 열 때 모델 값만 보이곤 했어요 → 진행 중인 요청을 같이 씀
+    function fetchStationHourly(station) {
+      if (station._hourlyCache) return Promise.resolve(station._hourlyCache);
+      if (!station._hourlyP) station._hourlyP = fetchStationHourly0(station).finally(() => { station._hourlyP = null; });
+      return station._hourlyP;
+    }
+    async function fetchStationHourly0(station) {
       if (station._hourlyCache) return station._hourlyCache;
       const lat = station.coords[1], lon = station.coords[0];
       // [ADD] "바람·파도도 같이" 요청 반영 - 파고/풍랑/너울은 같은 해양 API
@@ -378,14 +385,21 @@
       if (seoulSrc) { result._obs = { sources: [seoulSrc] }; result._inland = true; station.curTemp = +temp[temp.length - 1].y.toFixed(1); }
       station._hourlyCache = result;
       // [ADD] 한국·미국 정점이면 근처 관측소 실측을 뒤이어 불러와 지금까지 칸을 실측으로 바꿔요(표는 먼저 그려짐)
+      runObsMerge(station);
+      return result;
+    }
+    // [FIX] 실측 합치기가 처음에 실패(관측소 서버 지연 등)하면 그 정점은 끝까지 모델 값만 보였어요 → 표를 다시 그릴 때 최대 3번까지 다시 시도
+    function runObsMerge(station) {
+      const d = station._hourlyCache;
+      if (!d || d._obs || station._obsBusy || (station._obsTries || 0) >= 3 || Date.now() - (station._obsLast || 0) < 5000) return;
+      station._obsBusy = true; station._obsTries = (station._obsTries || 0) + 1; station._obsLast = Date.now();
       mergeNearbyObs(station).then(ok => {
         if (!ok) return;
         if (selectedStation === station && typeof updateChart === 'function') {
           const el = document.getElementById('st-temp'); if (el) el.innerText = formatTemp(station.curTemp);
           updateChart();
         }
-      }).catch(e => console.warn('[obs] 실측 합치기 실패:', e));
-      return result;
+      }).catch(e => console.warn('[obs] 실측 합치기 실패:', e)).finally(() => { station._obsBusy = false; });
     }
 
     // [ADD] 위성 수온 격자(1°, 360×180)를 한 번만 받아서 앱 전체가 같이 씁니다

@@ -532,6 +532,7 @@
     function renderNowTable(box) {
       const st = selectedStation;
       let d = st._hourlyCache;
+      if (d && !d._obs && typeof runObsMerge === 'function') runObsMerge(st); // [FIX] 실측을 아직 못 합쳤으면 다시 시도
       const hasObs = d && d._obs && d._obs.sources.length;
       // [CHANGE] 일본 기상청 조위표를 썼으면 출처에 "JMA"도 표시
       const jmaTxt = d && d._tidePred === 'jma' ? 'JMA · ' : '';

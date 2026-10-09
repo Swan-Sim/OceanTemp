@@ -28,24 +28,26 @@
         land: (d.Ld || []).map(dec),
         lbl: (d.lb || []).map(([x, y, k]) => [t.n - y / 4096 * (t.n - t.s) - SH, t.w + x / 4096 * (t.e - t.w), k]) };
     }
-    function buildTile(d) {
-      if (d.v === 2) d = Object.assign({}, d, decodeTile(d));
-      const layers = [];
+    // [ADD] 두 단계 그리기: 'lite'(먼 화면·처음 받자마자: 점을 1/3로 줄이고 10·20·30·40m 선만) → 'full'(확대 14 이상, 가만히 있을 때 바꿔 끼움: 모든 선·숫자)
+    const decim = (a, k) => k <= 1 ? a : a.filter((p, i) => i % k === 0 || i === a.length - 1);
+    function buildTile(d, full) {
+      const layers = [], K = full ? 1 : 3, SF = full ? 0.3 : 1.5;
       const cz = d.coarse; // 거친 자료(해외 일부): 서버에서 해안선에 맞춰 평행 이동한 뒤라 다른 지역과 같은 모양으로 그림
-      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1]; layers.push(L.polygon(f.p, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: 0.3, renderer: dRend() })); });
-      Object.keys(d.lines || {}).forEach(k => {
+      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1], pp = full ? f.p : f.p.map(poly => poly.map(r => decim(r, K)).filter(r => r.length >= 3)).filter(poly => poly.length); if (pp.length) layers.push(L.polygon(pp, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: SF, renderer: dRend() })); });
+      const LN = {}; Object.keys(d.lines || {}).forEach(k => { if (full || ['10', '20', '30', '40'].includes(k)) LN[k] = full ? d.lines[k] : d.lines[k].map(l => decim(l, 2)).filter(l => l.length > 1); });
+      Object.keys(LN).forEach(k => {
         const strong = k === '10' || k === '20' || k === '30' || k === '40'; // [CHANGE] 다이빙 계획에 중요한 10·20·30·40m를 진하게
         const shallow = +k < 10; // [ADD] 2·5m: 가는 점선
-        layers.push(L.polyline(d.lines[k], { color: '#fff', weight: strong ? 1.6 : shallow ? 0.9 : 0.8, opacity: strong ? 0.85 : shallow ? 0.6 : 0.4, dashArray: shallow ? '3 4' : null, interactive: false, smoothFactor: 0.3, renderer: dRend() }));
+        layers.push(L.polyline(LN[k], { color: '#fff', weight: strong ? 1.6 : shallow ? 0.9 : 0.8, opacity: strong ? 0.85 : shallow ? 0.6 : 0.4, dashArray: shallow ? '3 4' : null, interactive: false, smoothFactor: SF, renderer: dRend() }));
       });
       // [CHANGE] 숫자 후보: 모든 등심선(10m 간격) 위 점들 - 화면에서 몇 m 선인지 바로 알 수 있게
-      const lbl = []; Object.keys(d.lines || {}).forEach(k => (d.lines[k] || []).forEach(ln => ln.forEach((p, i) => { if (i % 6 === 3) lbl.push([p[0], p[1], +k]); })));
+      const lbl = []; Object.keys(LN).forEach(k => (LN[k] || []).forEach(ln => ln.forEach((p, i) => { if (i % (full ? 6 : 3) === (full ? 3 : 1)) lbl.push([p[0], p[1], +k]); })));
       // [CHANGE] 섬·바위(OSM 해안선, 반지름 15m 이상): 서버가 섬 안쪽은 수심 띠·등심선에서 빼 두었어요. 여기선 해안선만 흰 선으로(안쪽은 투명 → 위성 사진 그대로)
-      const land = d.land || [];
+      const land = full ? (d.land || []) : (d.land || []).map(r => decim(r, 2)).filter(r => r.length > 2);
       land.forEach(r => layers.push(L.polygon(r, { stroke: true, color: '#fff', weight: 1, opacity: 0.85, fill: false, interactive: false, smoothFactor: 0.3, renderer: dRend() })));
       const inLand = (la, lo) => land.some(r => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > lo) !== (b[1] > lo) && la < (b[0] - a[0]) * (lo - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; });
       const lb2 = land.length ? lbl.filter(p => !inLand(p[0], p[1])) : lbl;
-      return { st: 'ok', grp: L.layerGroup(layers), lbl: lb2.length ? lb2 : (land.length ? [] : (d.lbl || [])), coarse: !!cz };
+      return { grp: L.layerGroup(layers), lbl: lb2.length ? lb2 : (land.length ? [] : (d.lbl || [])) };
     }
 
     // [ADD] 포인트 현지 지형(관리자 입력)이 이 타일에 걸리면 주소에 짧은 표시를 붙여요(서버 api/_depth.js profSig와 같은 계산) - 바꾸면 바로 새로 그림
@@ -64,12 +66,31 @@
     window.addEventListener('otemp:site', () => { const n = fixParam(); if (n === lastFix) return; lastFix = n; dTiles.forEach(tl => { if (tl.grp && leafletMap) leafletMap.removeLayer(tl.grp); }); dTiles.clear(); dQueue = []; refreshDepthLayers(); });
     // [ADD] 시안 보기: 주소에 ?dv=1·2·3을 붙이면 옛 방식으로 그린 수심 지도를 따로 불러와요(1 섬 육지·방향 경사 전 · 2 거친 수심 원래 위치 전 · 3 현지 지형 입력 전)
     const DV_MODE = (() => { try { const v = new URLSearchParams(location.search).get('dv'); return ['1', '2', '3'].includes(v) ? v : ''; } catch (_) { return ''; } })();
+    // [ADD] 타일 그림 방식 바꿔 끼우기: 확대 14 이상이면 full, 아니면 lite. 한 번 만든 그림은 보관(다시 줌아웃하면 가벼운 걸로 즉시 교체)
+    function setMode(tl, m) {
+      if (!tl.raw || tl.mode === m) return;
+      const old = tl.grp, wasOn = !!(old && leafletMap && leafletMap.hasLayer(old)); if (wasOn) leafletMap.removeLayer(old);
+      const c = tl['c_' + m] || (tl['c_' + m] = buildTile(tl.raw, m === 'full'));
+      tl.grp = c.grp; tl.lbl = c.lbl; tl.mode = m;
+      if (leafletMap && (wasOn || (depthOn && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM))) tl.grp.addTo(leafletMap);
+    }
+    let syncTimer = null;
+    function syncModes() {
+      clearTimeout(syncTimer);
+      if (!leafletMap || !depthOn) return;
+      const m = leafletMap.getZoom() >= 14 ? 'full' : 'lite', vb = leafletMap.getBounds().pad(0.3), todo = [];
+      dTiles.forEach(tl => { if (!tl.raw || tl.mode === m) return; const t = tl.raw.tile; if (m === 'full' && t && !vb.intersects(L.latLngBounds([t.s, t.w], [t.n, t.e]))) return; todo.push(tl); });
+      if (!todo.length) return;
+      let i = 0;
+      const step = () => { const t0 = performance.now(); while (i < todo.length && performance.now() - t0 < 10) setMode(todo[i++], m); placeDepthLabels(); if (i < todo.length) syncTimer = setTimeout(step, 30); };
+      syncTimer = setTimeout(step, m === 'full' ? 300 : 0); // 가까이 볼 땐 지도가 멈춘 뒤(0.3초)에 교체
+    }
     function loadNext() {
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
         fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=26${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}`).then(r => r.json()).then(d => {
-          if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { const tl = buildTile(d); dTiles.set(key, tl); if (depthOn && leafletMap && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM) tl.grp.addTo(leafletMap); placeDepthLabels(); }
+          if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { if (d.v === 2) d = Object.assign({}, d, decodeTile(d)); const tl = { st: 'ok', raw: d, coarse: !!d.coarse, lbl: [] }; dTiles.set(key, tl); setMode(tl, 'lite'); placeDepthLabels(); syncModes(); }
           else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
           else dTiles.set(key, { st: 'none' });
         }).catch(() => dTiles.delete(key)).finally(() => { dActive--; loadNext(); });
@@ -119,6 +140,7 @@
           .slice(0, dTiles.size - DTILE_MAX).forEach(([k]) => { const tl = dTiles.get(k); if (tl.st === 'load') return; if (tl.grp) leafletMap.removeLayer(tl.grp); dTiles.delete(k); });
       }
       placeDepthLabels();
+      syncModes();
     }
 
     // 지도 오른쪽 아래 "수심" 켜기/끄기 버튼(확대 12 이상에서만 보임)

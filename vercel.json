@@ -53,6 +53,10 @@
       "destination": "/api/world?_h=track"
     },
     {
+      "source": "/api/hycom",
+      "destination": "/api/world?_h=hycom"
+    },
+    {
       "source": "/auth/start/:p(google|kakao|naver|facebook)",
       "destination": "/api/shops?svc=auth&a=start&p=:p"
     },

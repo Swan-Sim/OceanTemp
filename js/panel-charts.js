@@ -890,20 +890,33 @@
         ` + visLegend;
       } else {
         const dep = selectedStation._depth; // 수심 자료(js/shops.js가 받아 둠)
-        const data = getDepthProfile(selectedStation.curTemp, selectedStation.isBeach, dep && dep.max1k);
-        // [ADD] 수온약층(SCM) 표시: 표층이 충분히 따뜻하고(20°C 이상 = 여름~가을 성층 가능) 30m보다 깊은 구간이 있을 때만, 30m부터 아래를 띠로 칠하고 설명을 붙여요.
-        //  이 그래프는 표층 수온으로 만든 모델 추정이라 층의 깊이(30m)도 모델 값이에요(실측 아님) - 설명에도 그렇게 적어요.
-        const i30 = data.depths.indexOf(30), warm = Number.isFinite(selectedStation.curTemp) && selectedStation.curTemp >= 20;
+        const st0 = selectedStation, hy = st0._hy && st0._hy.ok ? st0._hy : null;
+        // [ADD] 실제 수심별 수온(HYCOM 해양 모델, /api/hycom): 받아지면 공식 추정 대신 이걸 그려요. 처음 한 번만 받고 끝나면 다시 그림
+        if (!st0._hy && !st0._hyBusy && st0.coords) { st0._hyBusy = true;
+          fetch(`/api/hycom?lat=${st0.coords[1]}&lon=${st0.coords[0]}`).then(r => r.json()).catch(() => ({ ok: false })).then(j => { st0._hy = j; st0._hyBusy = false; if (activeMode === 'depth' && selectedStation === st0 && j && j.ok) updateChart(); }); }
+        let data;
+        if (hy) { // 이 정점 근처 최대 수심(알면)까지만, 모르면 100m까지(연안 다이빙 범위)
+          const lim = Math.max(30, Math.min(300, dep && dep.max1k ? dep.max1k + 10 : 100)), idx = hy.depths.map((d, i) => i).filter(i => hy.depths[i] <= lim && hy.temps[i] != null);
+          data = { depths: idx.map(i => hy.depths[i]), profile: idx.map(i => hy.temps[i]) };
+        } else data = getDepthProfile(selectedStation.curTemp, selectedStation.isBeach, dep && dep.max1k);
+        // [ADD] 수온약층 표시: HYCOM이면 실제 계산한 위·아래 경계(기울기 0.08°C/m 이상일 때만), 못 받았으면 표층 20°C 이상일 때 30m부터를 모델 추정으로.
+        //  ("수온약층"과 "클로로필 최대층(SCM)"은 같은 층이 아니라서 이름은 수온약층만 써요)
         let scm = null;
-        if (warm && i30 >= 0 && i30 < data.depths.length - 1) {
-          const j = data.depths.findIndex(d => d >= 40), iEnd = data.depths.reduce((m, d, i) => d <= 100 ? i : m, i30);
-          if (j > 0) scm = { i0: i30, i1: Math.max(iEnd, j), drop: +(data.profile[i30] - data.profile[j]).toFixed(1), span: data.depths[j] - 30, deeperT: data.profile[j] };
+        if (hy) {
+          if (hy.tc) { const near = (d) => data.depths.reduce((m, x, i) => Math.abs(x - d) < Math.abs(data.depths[m] - d) ? i : m, 0); const i0 = near(hy.tc.top), i1 = near(hy.tc.base);
+            if (i1 > i0) scm = { i0, i1, top: hy.tc.top, base: hy.tc.base, drop: hy.tc.drop, grad: hy.tc.grad, real: true }; }
+        } else {
+          const i30 = data.depths.indexOf(30), warm = Number.isFinite(selectedStation.curTemp) && selectedStation.curTemp >= 20;
+          if (warm && i30 >= 0 && i30 < data.depths.length - 1) {
+            const j = data.depths.findIndex(d => d >= 40), iEnd = data.depths.reduce((m, d, i) => d <= 100 ? i : m, i30);
+            if (j > 0) scm = { i0: i30, i1: Math.max(iEnd, j), top: 30, base: data.depths[j], drop: +(data.profile[i30] - data.profile[j]).toFixed(1), real: false };
+          }
         }
         const scmPlugin = { id: 'scmBand', beforeDatasetsDraw(ch) {
           if (!scm) return; const { ctx, chartArea: ca, scales: { x } } = ch, x0 = x.getPixelForValue(scm.i0), x1 = x.getPixelForValue(scm.i1);
           ctx.save(); ctx.fillStyle = 'rgba(125,211,252,0.10)'; ctx.fillRect(x0, ca.top, x1 - x0, ca.bottom - ca.top);
           ctx.strokeStyle = 'rgba(125,211,252,0.8)'; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x0, ca.top); ctx.lineTo(x0, ca.bottom); ctx.stroke();
-          ctx.setLineDash([]); ctx.fillStyle = '#7DD3FC'; ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillText('SCM', x0 + 4, ca.top + 11); ctx.restore(); } };
+          ctx.setLineDash([]); ctx.fillStyle = '#7DD3FC'; ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(t.scmLabel, x0 + 4, ca.top + 11); ctx.restore(); } };
         chartInstance = new Chart(chartCanvas, {
           type: 'line',
           plugins: [scmPlugin],
@@ -925,9 +938,10 @@
             }
           }
         });
-        legendBox.innerHTML = `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>` +
+        legendBox.innerHTML = (hy ? '' : `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>`) +
           `<div class="item"><span class="swatch" style="background:#FFB000;"></span>${t.chartDepthLabel}</div>` +
-          (scm ? `<div class="item" style="color:#7DD3FC;display:block;width:100%;line-height:1.45;"><b>${t.scmTitle}</b> ${t.scmText(scm.span, scm.drop)}</div>` : '') +
+          (hy ? `<div class="item" style="color:#7DD3FC;">${t.hycomSrc(hy.time, hy.grid.km)}</div>` : '') +
+          (scm ? `<div class="item" style="color:#7DD3FC;display:block;width:100%;line-height:1.45;"><b>${scm.real ? t.scmTitleReal(scm.top, scm.base) : t.scmTitle}</b> ${scm.real ? t.scmTextReal(scm.top, scm.base, scm.drop) : t.scmText(scm.base - scm.top, scm.drop)}</div>` : '') +
           (dep && dep.max1k ? `<div class="item" style="color:#7DD3FC;">${t.depthNear ? t.depthNear(dep.max300, dep.max1k) : `수심: 300m 안 ~${dep.max300 ?? '–'}m · 1km 안 ~${dep.max1k}m`}</div>` : '');
       }
     }

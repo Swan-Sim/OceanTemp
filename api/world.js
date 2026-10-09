@@ -5,7 +5,8 @@ const H = {
   noaa: () => require('./_noaa'),
   sst: () => require('./_sst'),
   visibility: () => require('./_visibility'),
-  track: () => require('./_track')
+  track: () => require('./_track'),
+  hycom: () => require('./_hycom')
 };
 module.exports = async function handler(req, res) {
   const k = String((req.query || {})._h || '');

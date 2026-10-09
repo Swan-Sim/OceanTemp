@@ -184,6 +184,7 @@ module.exports = async function admin(req, res) {
     await give(rq.uid, 'shopEdit');
     return ok({ id: shop.id });
   }
+  if (await require('./_owner').adminAction(svc, b, ok, bad)) return; // [ADD] 샵 소유자 연결·소유권 주장 승인(api/_owner.js)
   if (svc === 'shopReject') {
     const [raw] = await R(['HGET', K.req, String(b.reqId)]);
     if (!raw) return bad('no_request');
@@ -377,7 +378,8 @@ module.exports = async function admin(req, res) {
     list.sort((a, z) => (z.last || z.created || 0) - (a.last || a.created || 0));
     const total = list.length, per = 50, page = Math.max(0, parseInt(b.page, 10) || 0);
     const mask = (e) => { e = String(e || ''); const i = e.indexOf('@'); return i < 1 ? '' : e.slice(0, Math.min(2, i)) + '***' + e.slice(i); }; // 목록에는 이메일 일부만(개인정보)
-    const items = list.slice(page * per, page * per + per).map(u => ({ id: u.id, name: u.name || '', avatar: u.avatar || '', email: mask(u.email), created: u.created || 0, last: u.last || 0,
+    const ownOf = {}; Object.values(await S.hgetallJSON(K.shops)).forEach(s => { if (s.owner) (ownOf[s.owner] = ownOf[s.owner] || []).push({ id: String(s.id), name: s.name, type: S.shopType(s.type) }); }); // [ADD] 회원별 내 샵
+    const items = list.slice(page * per, page * per + per).map(u => ({ shops: ownOf[u.id] || [], id: u.id, name: u.name || '', avatar: u.avatar || '', email: mask(u.email), created: u.created || 0, last: u.last || 0,
       providers: (u.logins || []).map(l => l.p), favCount: favOf[u.id].length, favs: favOf[u.id].map(Number).filter(Boolean).slice(0, 30), blocked: !!u.blocked,
       role: u.role === 'admin' ? 'admin' : '', credits: crOf(u.id), level: C.info(crOf(u.id)).level }));
     return ok({ stats, topFavs, items, total, page, per });

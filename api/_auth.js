@@ -201,7 +201,8 @@ module.exports = async function auth(req, res) {
     const [favs] = await R(['SMEMBERS', 'ufav:' + uid]);
     const [cr, pf] = await R(['HGET', 'ucred:v1', uid], ['HGET', 'uprefs:v1', uid]);
     let prefs = {}; try { prefs = pf ? JSON.parse(pf) : {}; } catch (_) {}
-    return json(200, { ok: true, user: { ...publicUser(user), ...C.info(cr) }, prefs, favs: (favs || []).map(Number).filter(Boolean), providers: on });
+    let own = { owned: [], ownSuggest: [] }; try { own = await require('./_owner').forUser(uid, user); } catch (_) {} // [ADD] 내 샵 + 이메일이 같은 샵(주인인지 물어봄)
+    return json(200, { ok: true, user: { ...publicUser(user), ...C.info(cr) }, prefs, favs: (favs || []).map(Number).filter(Boolean), providers: on, ...own });
   }
 
   if (a === 'fbdelete' && req.method === 'POST') { // 메타 → 이 사용자 데이터 지워달라는 요청
@@ -218,6 +219,11 @@ module.exports = async function auth(req, res) {
   if (!uid) return json(401, { ok: false, error: 'login_required' });
   const b = bodyOf(req);
 
+  if (a === 'ownAccept' || a === 'ownSkip' || a === 'ownClaim' || a === 'ownEdit') { // [ADD] 샵 소유자 연결(api/_owner.js)
+    const user = await getUser(uid); if (!user) return json(401, { ok: false, error: 'login_required' });
+    const notify = async (sub, html) => { const to = await S.adminEmail(); if (to) await S.sendMail(to, sub, html); };
+    if (await require('./_owner').userAction(a, b, uid, user, json, baseOf(req), notify)) return;
+  }
   if (a === 'logs' || a === 'logsave' || a === 'logdel') { if (await require('./_logbook')(a, b, uid, R, json)) return; } // [ADD] 다이빙 로그북(api/_logbook.js)
   if (a === 'logout') {
     const t = cookies(req).ot_s, h = sha(t);

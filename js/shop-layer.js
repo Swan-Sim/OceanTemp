@@ -27,7 +27,7 @@
         return `<div class="sp-card"><div class="sp-h"><b>${esc(s.name)}</b>${s.paid ? `<span class="shop-badge">${esc(t.shopPartner || '제휴')}</span>` : ''}</div>
           <div class="sp-t">${esc(TYPE_NAME[s.type] ? TYPE_NAME[s.type]() : '')}${s.lang ? ' · ' + esc(langLabel(s.lang)) : ''}</div>
           ${s.note ? `<div class="sp-note">${esc(s.note)}</div>` : ''}${body}
-          <a class="shop-report" href="/shop/report/?id=${encodeURIComponent(s.id)}" target="_blank" rel="noopener">${esc(t.shopReport || '이의 제기')}</a></div>`;
+          <a class="shop-report" href="/shop/report/?id=${encodeURIComponent(s.id)}" target="_blank" rel="noopener">${esc(t.shopReport || '이의 제기')}</a>${s.own ? '' : ` <a class="shop-report shop-claim" href="#" data-claim="${esc(s.id)}" data-name="${esc(s.name)}">${esc(lang === 'ko' ? '소유권 주장' : 'Claim ownership')}</a>`}</div>`;
       }
 
       function build(list) {
@@ -57,6 +57,8 @@
               d.onclick = () => { on = !on; try { localStorage.setItem('otemp.shopLayer', on ? '1' : '0'); } catch (_) {} sync(); }; btn = d; return d; } });
             new Ctl({ position: 'bottomright' }).addTo(leafletMap);
             leafletMap.on('zoomend', sync);
+            // [ADD] 주인이 없는 샵 팝업의 "소유권 주장" → 로그인 회원이 관리자에게 요청(js/account.js)
+            leafletMap.on('popupopen', (ev) => { const el = ev.popup.getElement(); const a = el && el.querySelector('[data-claim]'); if (a) a.onclick = (e) => { e.preventDefault(); if (window.otAccount) window.otAccount.claim(a.dataset.claim, a.dataset.name); }; });
             loadShops().then(build);
           }
           setTimeout(sync, 300);

@@ -105,7 +105,7 @@ const hasContact = (f) => !!(f.phone || f.kakao || f.whatsapp || f.instagram || 
 function publicShop(s) {
   return { id: String(s.id), type: shopType(s.type), spots: s.spots || [], name: s.name, phone: s.phone || '', kakao: s.kakao || '', whatsapp: s.whatsapp || '',
     instagram: s.instagram || '', web: s.web || '', address: s.address || '', lang: s.lang || '', note: s.note || '',
-    paid: s.plan === 'paid', checked: s.checked || '',
+    paid: s.plan === 'paid', checked: s.checked || '', own: s.owner ? 1 : 0, // [ADD] 주인(회원) 연결 여부 - 없으면 지도에 "소유권 주장" 버튼
     ...(s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : {}), // [ADD] 샵·리브어보드 위치(있으면)
     ...(shopType(s.type) === 'pool' ? { lat: s.lat, lon: s.lon, depthMax: s.depthMax ?? null, waterTemp: s.waterTemp ?? null, env: s.env || '', uses: s.uses || '', entry: s.entry || '', hours: s.hours || '', price: s.price || '' } : {}) };
 }

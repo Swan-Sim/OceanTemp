@@ -8,7 +8,7 @@
     login: '로그인', title: '간편 로그인', sub: '즐겨찾기한 포인트를 어느 기기에서든 볼 수 있어요.',
     google: 'Google로 계속하기', kakao: '카카오로 계속하기', naver: '네이버로 계속하기', facebook: 'Facebook으로 계속하기',
     none: '로그인 준비 중이에요.', agree: '계속하면 <a href="/privacy/" target="_blank" rel="noopener">개인정보처리방침</a>에 동의하는 것으로 봐요.',
-    hello: (n) => `${n}님`, linked: '연결된 로그인', link: '다른 계정 연결', recentLogs: '최근 로그북', noLogs: '아직 쓴 기록이 없어요. 포인트를 고르고 아래 로그북 탭에서 써 보세요.', favs: '즐겨찾기 포인트', noFav: '아직 없어요. 포인트를 고르고 아래 ☆를 눌러보세요.',
+    hello: (n) => `${n}님`, linked: '연결된 로그인', link: '다른 계정 연결', myShops: '내 샵·풀장', ownEdit: '정보 수정', ownAsk: (n) => `가입한 이메일이 '${n}' 등록 이메일과 같아요.\n이 곳의 주인(관리자)이신가요?\n\n확인 = 내 계정에 연결 / 취소 = 아니에요`, ownDone: (n) => `${n}을(를) 내 계정에 연결했어요`, claimLogin: '소유권 주장은 로그인하면 할 수 있어요', claimAsk: (n) => `'${n}'의 주인이신가요?\n관리자가 확인할 수 있게 한 줄 남겨 주세요(직책, 연락처 등)`, claimSent: '보냈어요. 관리자가 확인하면 연결돼요', claimMine: '이미 내 샵이에요', claimHas: '이미 주인이 연결된 곳이에요', claimFail: '보내지 못했어요. 잠시 후 다시 해 주세요', recentLogs: '최근 로그북', noLogs: '아직 쓴 기록이 없어요. 포인트를 고르고 아래 로그북 탭에서 써 보세요.', favs: '즐겨찾기 포인트', noFav: '아직 없어요. 포인트를 고르고 아래 ☆를 눌러보세요.',
     logout: '로그아웃', del: '회원 탈퇴', delAsk: '계정과 즐겨찾기를 모두 지울까요? 되돌릴 수 없어요.', close: '닫기',
     favOn: '즐겨찾기에 넣었어요', favOff: '즐겨찾기에서 뺐어요', favNeed: '즐겨찾기는 로그인하면 쓸 수 있어요', favNo: '이 지점은 즐겨찾기할 수 없어요',
     lv: (l) => `Lv.${l}`, toNext: (n) => `다음 레벨까지 ${n} 크레딧`, maxLv: '최고 레벨', credits: '크레딧', last: '마지막', admin: 'Admin', creditHint: '로그인·즐겨찾기 등 활동하면 크레딧이 쌓이고 레벨이 올라가요.',
@@ -19,7 +19,7 @@
     login: 'Log in', title: 'Sign in', sub: 'Save favorite spots and see them on any device.',
     google: 'Continue with Google', kakao: 'Continue with Kakao', naver: 'Continue with Naver', facebook: 'Continue with Facebook',
     none: 'Sign-in is coming soon.', agree: 'By continuing you agree to the <a href="/privacy/?lang=en" target="_blank" rel="noopener">Privacy Policy</a>.',
-    hello: (n) => n, linked: 'Linked accounts', link: 'Link another account', recentLogs: 'Recent logbook', noLogs: 'No entries yet. Pick a spot and open the Logbook tab below.', favs: 'Favorite spots', noFav: 'None yet. Pick a spot and tap ☆ below.',
+    hello: (n) => n, linked: 'Linked accounts', link: 'Link another account', myShops: 'My shops', ownEdit: 'Edit info', ownAsk: (n) => `Your sign-in email matches '${n}'.\nAre you the owner or manager?\n\nOK = link to my account / Cancel = no`, ownDone: (n) => `${n} is now linked to your account`, claimLogin: 'Log in to claim ownership', claimAsk: (n) => `Do you own '${n}'?\nLeave a short note for the admin (your role, contact)`, claimSent: 'Sent. It will be linked after admin review', claimMine: 'Already yours', claimHas: 'This place already has an owner', claimFail: 'Could not send. Please try again', recentLogs: 'Recent logbook', noLogs: 'No entries yet. Pick a spot and open the Logbook tab below.', favs: 'Favorite spots', noFav: 'None yet. Pick a spot and tap ☆ below.',
     logout: 'Log out', del: 'Delete account', delAsk: 'Delete your account and favorites? This cannot be undone.', close: 'Close',
     favOn: 'Added to favorites', favOff: 'Removed from favorites', favNeed: 'Log in to save favorites', favNo: 'This point cannot be saved',
     lv: (l) => `Lv.${l}`, toNext: (n) => `${n} credits to next level`, maxLv: 'Max level', credits: 'Credits', last: 'Last', admin: 'Admin', creditHint: 'Earn credits by being active to level up.',
@@ -83,10 +83,28 @@
     const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.error || r.status); return j;
   }
   async function load() {
-    try { const j = await fetch('/api/shops?svc=auth&a=me', { credentials: 'same-origin', cache: 'no-store' }).then(r => r.json()); me = { user: j.user || null, favs: j.favs || [], providers: j.providers || [], prefs: j.prefs || {} }; }
+    try { const j = await fetch('/api/shops?svc=auth&a=me', { credentials: 'same-origin', cache: 'no-store' }).then(r => r.json()); me = { user: j.user || null, favs: j.favs || [], providers: j.providers || [], prefs: j.prefs || {}, owned: j.owned || [], ownSuggest: j.ownSuggest || [] }; }
     catch (_) {}
     favSet = new Set(me.favs); paintBtn(); paintStar(); paintAdmin(); paintFavBar(); applyPrefs(); await loadSite(); paintVer(); showNotice();
     try { window.dispatchEvent(new Event('otemp:account')); } catch (_) {}
+    askOwner();
+  }
+  // [ADD] 가입 이메일이 샵·풀장 등록 이메일과 같으면 주인인지 물어보고 연결(아니라고 하면 다시 안 물어봐요)
+  let asking = false;
+  async function askOwner() {
+    if (asking || !me.user || !(me.ownSuggest || []).length) return; asking = true;
+    for (const s of me.ownSuggest) {
+      const yes = confirm(T.ownAsk(s.name));
+      try { await post(yes ? 'ownAccept' : 'ownSkip', { id: s.id }); if (yes) toast(T.ownDone(s.name)); } catch (_) {}
+    }
+    asking = false; if (me.ownSuggest.length) { me.ownSuggest = []; load(); }
+  }
+  // [ADD] 지도 샵 팝업의 "소유권 주장"
+  async function claimShop(id, name) {
+    if (!me.user) { toast(T.claimLogin); return open(); }
+    const msg = prompt(T.claimAsk(name), ''); if (msg == null) return;
+    try { const j = await post('ownClaim', { id, msg }); toast(j.already ? T.claimMine : T.claimSent); }
+    catch (e) { toast(String(e.message) === 'has_owner' ? T.claimHas : T.claimFail); }
   }
   // ── 설정 저장: 온도 단위·마지막으로 본 포인트를 계정에 저장하고 다른 기기에서도 이어서 ──
   function applyPrefs() {
@@ -111,10 +129,14 @@
     b.innerHTML = me.user ? chips.join('') : '';
     b.classList.toggle('show', !!(me.user && chips.length));
     b.querySelectorAll('button').forEach(x => x.onclick = () => goTo(stationByNo(+x.dataset.no)));
+    // [FIX] 로그인 정보가 포인트 목록보다 먼저 오면 즐겨찾기를 못 찾아 바가 안 보였어요 → 포인트 목록이 올 때까지 다시 그리기
+    const want = me.user && (me.favs.length || (me.prefs && me.prefs.last));
+    const ready = typeof stations !== 'undefined' && stations && stations.length && me.favs.every(n => stationByNo(n)); // 사용자 등록 포인트는 목록에 늦게 붙어서 다 찾을 때까지
+    if (want && !ready) { paintFavBar._n = (paintFavBar._n || 0) + 1; if (paintFavBar._n < 120) setTimeout(paintFavBar, 500); } else paintFavBar._n = 0;
   }
   function goTo(s) { if (!s) return; try { selectStation(s); showDetailMap(s.coords[1], s.coords[0], typeof SPOT_ZOOM === 'number' ? SPOT_ZOOM : 16); } catch (_) {} }
 
-  window.otAccount = { user: () => me.user, open: () => open(), reload: () => load() }; // 로그북 등 다른 파일이 쓰는 입구
+  window.otAccount = { user: () => me.user, open: () => open(), reload: () => load(), claim: (id, name) => claimShop(id, name), owns: (id) => (me.owned || []).some(s => s.id === String(id)) }; // 로그북 등 다른 파일이 쓰는 입구
 
   // ── 오른쪽 버튼 ──
   let btn;
@@ -146,6 +168,7 @@
       h += `<div class="a-sec">${T.favs}</div>`;
       const favs = me.favs.map(stationByNo).filter(Boolean);
       h += favs.length ? favs.map(s => `<button class="a-fav" data-no="${s.no}">★ ${esc(s.name)}</button>`).join('') : `<div class="a-sub">${T.noFav}</div>`;
+      if ((me.owned || []).length) h += `<div class="a-sec">${T.myShops}</div>` + me.owned.map(s => `<button class="a-fav" data-own="${esc(s.id)}">${s.type === 'pool' ? '🏊' : s.type === 'liveaboard' ? '🚢' : '🏪'} ${esc(s.name)} <span style="color:#7dd3fc">· ${T.ownEdit}</span></button>`).join(''); // [ADD] 내 샵·풀장
       h += `<div class="a-sec">${T.recentLogs}</div><div id="a-logs"><div class="a-sub">…</div></div>`; // [ADD] 로그북 최신 3개
       h += `<div class="a-sec">${T.linked}</div><div class="a-tags">${u.providers.map(p => `<span>${PNAME[p] || p}</span>`).join('')}</div>`;
       if (more.length) h += `<div class="a-sec">${T.link}</div><div class="a-small">${pbtns(more)}</div>`;
@@ -162,6 +185,9 @@
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); }); }
     box.querySelector('.a-x').onclick = close;
     box.querySelectorAll('.a-fav').forEach(b => b.onclick = () => { const s = stationByNo(+b.dataset.no); if (!s) return; close(); goTo(s); });
+    box.querySelectorAll('[data-own]').forEach(b => b.onclick = async () => {
+      const w = window.open('about:blank', '_blank'); // 팝업 차단 피하려고 먼저 열기
+      try { const j = await post('ownEdit', { id: b.dataset.own }); if (w) w.location = j.url; else location.href = j.url; } catch (_) { if (w) w.close(); toast(T.claimFail); } });
     const lb = box.querySelector('#a-logs');
     if (lb) post('logs', { limit: 3 }).then(j => {
       const it = (j.items || []).slice(0, 3);

@@ -32,7 +32,8 @@ async function notifyAdmin(subject, html) {
 
 async function lookupToken(t) {
   if (!t || typeof t !== 'string' || t.length > 100) return null;
-  const [v] = await R(['HGET', K.tok, S.sha(t)]);
+  let [v] = await R(['HGET', K.tok, S.sha(t)]);
+  if (!v) { try { v = await require('./_owner').otkLookup(S.sha(t)); } catch (_) {} } // [ADD] 샵 주인이 계정 창에서 받은 하루짜리 수정 링크
   if (!v) return null;
   const [kind, id] = [v.slice(0, 1), v.slice(2)];
   return { kind, id, hash: S.sha(t) };

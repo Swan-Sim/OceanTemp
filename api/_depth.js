@@ -154,7 +154,7 @@ async function depthAt(lat, lon, opt = {}) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const ck = KEY_VER + lat + '_' + lon;
   const SF = await sigFor(box(lat, lon)), profs = SF.profs; let pf = SF.sig; // [ADD] 포인트 현지 지형 + 최소 수심 구역(바뀌면 다시 계산)
-  if (!opt.fresh) { try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && !o.sf10) && !rawStale(o, RAW_COARSE) && (o.pf || '') === pf) return o; } } catch (_) {} } // [FIX] 해외(GMRT) 옛 저장본은 위치 보정·가짜 육지 지우기 전이라 다시 계산
+  if (!opt.fresh) { try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); if (!(o.src === 'gmrt' && !o.sf11) && !rawStale(o, RAW_COARSE) && (o.pf || '') === pf) return o; } } catch (_) {} } // [FIX] 해외(GMRT) 옛 저장본은 위치 보정·가짜 육지 지우기 전이라 다시 계산
   const order = inKorea(lat, lon) ? [fromKhoa, fromGmrt] : inEmodnet(lat, lon) ? [fromEmodnet, fromGmrt] : inUsArea(lat, lon) ? [fromNoaa, fromGmrt] : [fromNoaa, fromGmrt];
   const errors = [];
   for (const fn of order) {
@@ -164,7 +164,7 @@ async function depthAt(lat, lon, opt = {}) {
       if (fn === fromGmrt) { // [FIX] 지도 수심 타일과 똑같이: 해안선 기준 위치 보정 + 해안선 0m 연결(옮길 여유만큼 넓게 받아서 보정 후 잘라냄)
         const P = 0.02; r = await fn({ s: bx.s - P, n: bx.n + P, w: bx.w - P, e: bx.e + P });
         if (!r) continue;
-        fix.coarse = !(r.hiFrac >= 0.5); fix.sf4 = true; fix.sf5 = true; fix.sf6 = true; fix.sf7 = true; fix.sf10 = true;
+        fix.coarse = !(r.hiFrac >= 0.5); fix.sf4 = true; fix.sf5 = true; fix.sf6 = true; fix.sf7 = true; fix.sf11 = true;
         if (fix.coarse && RAW_COARSE) { fix.raw = true; fix.coastFixed = true; }
         else if (fix.coarse) {
           const n = 2 ** DTILE_Z, tx = Math.floor((lon + 180) / 360 * n), rr = lat * Math.PI / 180, ty = Math.floor((1 - Math.log(Math.tan(rr) + 1 / Math.cos(rr)) / Math.PI) / 2 * n);
@@ -329,47 +329,63 @@ const SHORE_W = 500, SHORE_W2 = 1400;
 // [CHANGE] 해안선에서 멀어질수록 깊어지는 정도를 "원래 수심"에 따라 달리 해요: 30m 이하는 예전처럼 500m 안에서, 60m 가까운 곳은 1400m까지 천천히,
 //  70m부터 서서히 원래 자료로, 120m 이상은 원래 자료 그대로. → 5·10m뿐 아니라 20~50m 등심선도 섬 모양을 따라 점진적으로 내려가고, 50~100m는 원래 자료로 이어져요(거친 자료의 계단 모양이 안 보임).
 const taperW = (o) => SHORE_W + (SHORE_W2 - SHORE_W) * Math.max(0, Math.min(1, (o - 30) / 30));
-// [CHANGE] 섬 급경사 모양: 해안선→10m는 예전 그대로(해안선에 잘 맞음), 10m→50m는 가까운 곳(STEEP_RUN m)에서 급하게(벽), 50m→100m는 원래 자료 기울기에 맞춰요.
-//  주변 1km 안에 깊은 바다(70m+)가 없으면(넓은 얕은 대지) 벽을 만들지 않고 이전 방식 그대로. 거리 900~1400m 사이에서 원래 자료로 이어져요.
-const STEEP_RUN = 60, NEAR_D = 10, WALL_D = 50, DEEP_REF_M = 1000;
+// [CHANGE] 섬 급경사 모양(거리 기준, 칸마다 원래 수심에 흔들리지 않게):
+//  ① 해안선 0m → 10m: 예전과 같은 자리(d10 = 10×500/원래수심, 80~300m 사이로 제한)
+//  ② 10m → 50m: d10 바로 바깥 STEEP_RUN(60m) 안에서 급경사(벽)
+//  ③ 50m → 100m: 원래 자료의 기울기 모양을 그대로 늘려서, 벽 바닥에서 50m로 시작해 원래 자료의 100m 선에서 100m로 끝나요(턱·평평한 곳 없이 완만히).
+//     100m보다 깊은 곳은 원래 값 그대로. 해안에서 2~3km 사이에서 원래 자료로 이어 붙여요.
+//  주변 1km 안에 깊은 바다(70m+)가 없으면(넓은 얕은 대지) 벽을 만들지 않고 이전 방식 그대로.
+const STEEP_RUN = 60, NEAR_D = 10, WALL_D = 50, DEEP_D = 100, DEEP_REF_M = 1000, D10_MIN = 80, D10_MAX = 300, FAR0 = 2000, FAR1 = 3000;
+function chamfer(D, R, C, ax, ay, V) { // V(선택): 가장 가까운 출발점의 값을 함께 이어 받음 // 격자 거리 변환(앞·뒤 두 번 훑기): D = 0(출발점) / Infinity → 가장 가까운 출발점까지 거리(m, 근사)
+  const ad = Math.hypot(ax, ay);
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { const i = r * C + c; let v = D[i];
+    const tk = (j, w) => { if (D[j] + w < v) { v = D[j] + w; if (V) V[i] = V[j]; } }; if (c > 0) tk(i - 1, ax); if (r > 0) { tk(i - C, ay); if (c > 0) tk(i - C - 1, ad); if (c < C - 1) tk(i - C + 1, ad); } D[i] = v; }
+  for (let r = R - 1; r >= 0; r--) for (let c = C - 1; c >= 0; c--) { const i = r * C + c; let v = D[i];
+    const tk = (j, w) => { if (D[j] + w < v) { v = D[j] + w; if (V) V[i] = V[j]; } }; if (c < C - 1) tk(i + 1, ax); if (r < R - 1) { tk(i + C, ay); if (c < C - 1) tk(i + C + 1, ad); if (c > 0) tk(i + C - 1, ad); } D[i] = v; }
+  return D;
+}
 function shoreTaper(g, segs) {
   if (!segs.length) return 0;
   const lat0 = g.la0 + (g.rows - 1) * g.dla / 2, kx = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 111320;
   const S = segs.map(s => [(s[1] - g.lo0) * kx, (s[0] - g.la0) * ky, (s[3] - g.lo0) * kx, (s[2] - g.la0) * ky]);
-  const B = 250, bins = new Map(), key = (a, b) => a + '_' + b;
+  const B = 250, bins = new Map(), key = (a, b) => a * 65536 + b;
   S.forEach((s, i) => { const n = Math.max(1, Math.ceil(Math.hypot(s[2] - s[0], s[3] - s[1]) / (B / 2)));
     for (let k = 0; k <= n; k++) { const kk = key(Math.floor((s[0] + (s[2] - s[0]) * k / n) / B), Math.floor((s[1] + (s[3] - s[1]) * k / n) / B)); (bins.get(kk) || bins.set(kk, []).get(kk)).push(i); } });
-  const R = g.rows, C = g.cols, N = R * C, D = new Float32Array(N).fill(Infinity), SD = new Int8Array(N);
-  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
-    const px = c * g.dlo * kx, py = r * g.dla * ky, bx = Math.floor(px / B), by = Math.floor(py / B);
+  const R = g.rows, C = g.cols, N = R * C, D = new Float32Array(N).fill(Infinity), SD = new Int8Array(N), ax = g.dlo * kx, ay = g.dla * ky;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { // 해안선까지 정확한 거리(1.5km 안)
+    const px = c * ax, py = r * ay, bx = Math.floor(px / B), by = Math.floor(py / B);
     let best = Infinity, side = 0;
     for (let ix = bx - 6; ix <= bx + 6; ix++) for (let iy = by - 6; iy <= by + 6; iy++) { const L = bins.get(key(ix, iy)); if (!L) continue;
       for (const i of L) { const s = S[i], dx = s[2] - s[0], dy = s[3] - s[1], L2 = dx * dx + dy * dy || 1, tt = Math.max(0, Math.min(1, ((px - s[0]) * dx + (py - s[1]) * dy) / L2));
         const d = Math.hypot(px - s[0] - dx * tt, py - s[1] - dy * tt); if (d < best) { best = d; side = dx * (py - s[1]) - dy * (px - s[0]); } } }
     D[r * C + c] = best; SD[r * C + c] = side > 0 ? 1 : 0;
   }
+  chamfer(D, R, C, ax, ay); // 1.5km 밖은 이어서 근사 거리
+  // 벽 아래(50m 지점)의 원래 수심 = 가장 가까운 "벽 바닥" 칸의 원래 값을 주변으로 이어 받음 → 방향마다 다르게
+  const OF = new Float32Array(N).fill(NaN), DF = new Float32Array(N).fill(Infinity), band = Math.max(ax, ay);
+  for (let i = 0; i < N; i++) { const v = g.z[i]; if (SD[i] || v == null || v >= 0) continue; const o = -v, dw = Math.max(D10_MIN, Math.min(D10_MAX, NEAR_D * SHORE_W / o)) + STEEP_RUN;
+    if (D[i] >= dw && D[i] <= dw + band) { DF[i] = 0; OF[i] = o; } }
+  chamfer(DF, R, C, ax, ay, OF);
   // 주변 1km 안 가장 깊은 값(깊은 바다가 가까운지)
-  const rc = Math.max(1, Math.round(DEEP_REF_M / (g.dlo * kx))), rr = Math.max(1, Math.round(DEEP_REF_M / (g.dla * ky)));
+  const rc = Math.max(1, Math.round(DEEP_REF_M / ax)), rr = Math.max(1, Math.round(DEEP_REF_M / ay));
   const M0 = new Float32Array(N), M1 = new Float32Array(N);
   for (let i = 0; i < N; i++) { const v = g.z[i]; M0[i] = v != null && v < 0 ? -v : 0; }
   for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { let m = 0; for (let k = Math.max(0, c - rc); k <= Math.min(C - 1, c + rc); k++) m = Math.max(m, M0[r * C + k]); M1[r * C + c] = m; }
   const M = new Float32Array(N);
   for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) { let m = 0; for (let k = Math.max(0, r - rr); k <= Math.min(R - 1, r + rr); k++) m = Math.max(m, M1[k * C + c]); M[r * C + c] = m; }
   const cl = (x) => Math.max(0, Math.min(1, x));
-  // 벽(50m) 바로 바깥의 원래 수심 대표값(150~400m 거리 중앙값) → 원래 기울기는 그대로 두고 그만큼만 깊게 옮겨서 벽에 이어 붙임(평평한 구간이 안 생기게)
-  const ring = []; for (let i = 0; i < N; i++) if (!SD[i] && D[i] >= 150 && D[i] <= 400 && g.z[i] != null && g.z[i] < 0) ring.push(-g.z[i]);
-  ring.sort((x, y) => x - y); const o0 = ring.length >= 20 ? ring[ring.length >> 1] : 30, shift = Math.max(0, WALL_D - o0);
   let changed = 0;
   for (let i = 0; i < N; i++) {
-    const d = D[i]; if (!(d < SHORE_W2)) continue; const v = g.z[i];
-    if (SD[i]) { if (d < SHORE_W && (v == null || v < 0)) { g.z[i] = 2; changed++; } continue; } // 육지
+    const d = D[i]; if (!(d < FAR1)) continue; const v = g.z[i];
+    if (SD[i] && d < SHORE_W2) { if (d < SHORE_W && (v == null || v < 0)) { g.z[i] = 2; changed++; } continue; } // 육지
     if (v == null || v >= 0) { if (d < SHORE_W) { g.z[i] = -Math.max(0.5, 10 * d / SHORE_W); changed++; } continue; } // 물인데 자료가 육지 값
     const o = -v, f0 = Math.min(1, d / taperW(o)), zOld = Math.max(0.5, o * (f0 + (1 - f0) * cl((o - 70) / 50))); // 이전 방식(점진)
-    const z1 = o * Math.min(1, d / SHORE_W); let zs;
-    const d10 = o > NEAR_D ? NEAR_D * SHORE_W / o : Infinity; // 예전 방식으로 10m가 되는 거리
-    if (d <= d10) zs = z1;
-    else { const dw = d10 + STEEP_RUN; zs = NEAR_D + (WALL_D - NEAR_D) * cl((d - d10) / STEEP_RUN); // 10→50m 급경사
-      if (d > dw) { const zfar = Math.max(WALL_D, o + shift * (1 - cl((d - 600) / 800))); zs = WALL_D + (zfar - WALL_D) * cl((d - dw) / 100); } } // 50m 이후: 원래 기울기를 따라 이어감(점점 원래 값으로)
+    const d10 = Math.max(D10_MIN, Math.min(D10_MAX, NEAR_D * SHORE_W / o)), dw = d10 + STEEP_RUN; let zs;
+    if (d <= d10) zs = NEAR_D * d / d10; // ① 0→10m
+    else if (d <= dw) zs = NEAR_D + (WALL_D - NEAR_D) * (d - d10) / STEEP_RUN; // ② 10→50m 벽
+    else { const of = OF[i]; // ③ 50→100m: 원래 자료 모양 그대로 늘려서 "벽 바닥(원래 of m) = 50m, 원래 100m = 100m"에 맞춤
+      zs = o >= DEEP_D ? o : !(of < WALL_D) ? Math.max(WALL_D, o) : Math.max(WALL_D, WALL_D + (DEEP_D - WALL_D) * (o - of) / (DEEP_D - of));
+      zs = o + (zs - o) * (1 - cl((d - FAR0) / (FAR1 - FAR0))); }
     const ws = cl((M[i] - 40) / 30), nv = -Math.max(0.5, zOld + (zs - zOld) * ws); // 주변에 깊은 바다가 없으면 벽 없음
     if (nv !== v) { g.z[i] = nv; changed++; }
   }
@@ -694,7 +710,7 @@ async function depthVec(x, y, opt = {}) {
   const needRaw = opt.fill ? !(await redisPipeline([['EXISTS', RAW_KEY(x, y)]]).then(r => r[0].result).catch(() => 1)) : false;
   let old = null; // 다시 계산이 실패하면(국립해양조사원 하루 한도 등) 예전 그림이라도 보여주기
   const curPf = (MODE ? 'm' + MODE : '') + (MODE === 3 ? '' : (await sigFor(tileBox(x, y))).sig) ;
-  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf10) || rawStale(o, rawC))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']) || (!o.empty && !o.ld && !(o.landErr && Date.now() - (o.at || 0) < 600e3)); let stale2 = stale;
+  if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf11) || rawStale(o, rawC))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']) || (!o.empty && !o.ld && !(o.landErr && Date.now() - (o.at || 0) < 600e3)); let stale2 = stale;
     // [ADD] 2·5m 얕은 등심선 추가 전 저장본: 10m보다 얕은 곳이 있고 원본 격자가 저장돼 있을 때만 다시 그림(외부 서버 다시 안 부르게)
     if (!stale2 && !o.sh5 && o.F && o.F.some(f => f[0] === 1)) { try { const [{ result: ex }] = await redisPipeline([['EXISTS', RAW_KEY(x, y)]]); if (ex) stale2 = true; } catch (_) {} }
     if (!stale2) return o; old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
@@ -750,7 +766,7 @@ async function depthVec(x, y, opt = {}) {
     // 좌표를 타일 안 0~4096 정수로 바꾸고 앞 점과의 차이만 적어서 크기를 4~5배 줄임(앱에서 되돌림)
     const QX = (lo) => Math.round((lo - t.w) / (t.e - t.w) * 4096), QY = (la) => Math.round((t.n - la) / (t.n - t.s) * 4096);
     const enc = (pts) => { const o = []; let px = 0, py = 0; pts.forEach((p, i) => { const x1 = QX(p[1]), y1 = QY(p[0]); if (i && x1 === px && y1 === py) return; o.push(x1 - px, y1 - py); px = x1; py = y1; }); return o; };
-    out = { ok: true, v: 2, x, y, tile: t, pf: d.pf || '', src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, raw: !!d.raw || undefined, coastFixed: d.coastFixed, kp: d.kp, fixErr: d.fixErr, shift: d.shift || null, full: true, sf2: true, sf3: true, sf4: true, sf5: true, sf6: true, sf7: true, sf10: true, sh5: true, d150: true, tmp: !!(d.coarse && !d.coastFixed) || undefined,
+    out = { ok: true, v: 2, x, y, tile: t, pf: d.pf || '', src: d.src, srcShort: d.srcShort, res: d.res, coarse: !!d.coarse, raw: !!d.raw || undefined, coastFixed: d.coastFixed, kp: d.kp, fixErr: d.fixErr, shift: d.shift || null, full: true, sf2: true, sf3: true, sf4: true, sf5: true, sf6: true, sf7: true, sf11: true, sh5: true, d150: true, tmp: !!(d.coarse && !d.coastFixed) || undefined,
       F: fills.map(f => [f.d, f.p.map(poly => poly.map(enc))]), Ln: Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(enc).filter(a => a.length >= 4)])),
       lb: lbl.map(p => [QX(p[1]), QY(p[0]), p[2]]) };
     // 해안선 그리기용(투명, 흰 선만): 타일 안쪽으로 잘라 저장
@@ -774,7 +790,7 @@ function joinSegs(segs) {
 
 // 저장된 값만(없으면 null) - 페이지가 느려지지 않게
 async function depthCached(lat, lon) {
-  try { const [{ result }] = await redisPipeline([['GET', KEY_VER + (+(+lat).toFixed(4)) + '_' + (+(+lon).toFixed(4))]]); if (!result) return null; const o = JSON.parse(result); return (o.src === 'gmrt' && !o.sf10) || rawStale(o, RAW_COARSE) ? null : o; } catch (_) { return null; } // 보정 전·옛 방식 저장본은 없는 셈
+  try { const [{ result }] = await redisPipeline([['GET', KEY_VER + (+(+lat).toFixed(4)) + '_' + (+(+lon).toFixed(4))]]); if (!result) return null; const o = JSON.parse(result); return (o.src === 'gmrt' && !o.sf11) || rawStale(o, RAW_COARSE) ? null : o; } catch (_) { return null; } // 보정 전·옛 방식 저장본은 없는 셈
 }
 
 // [ADD] 정점 주변 섬 모양(흐름 지형 반영용): 반경 약 3km 안 해안선 중 닫힌 것(섬)만, 점 수를 줄여서. 180일 저장

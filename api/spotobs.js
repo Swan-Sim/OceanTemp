@@ -321,7 +321,7 @@ module.exports = async function handler(req, res) {
       if (!admin) return res.status(401).json({ ok: false, error: 'admin_only (관리자로 로그인한 브라우저에서 열어 주세요)' });
       const q = req.query, lat = +q.lat, lon = +q.lon; if (!(Math.abs(lat) <= 85 && Math.abs(lon) <= 180)) return res.status(400).json({ ok: false, error: 'lat, lon 필요' });
       const cl = (v, a, b, d) => { v = +v; return Number.isFinite(v) ? Math.max(a, Math.min(b, v)) : d; };
-      const km = cl(q.km, 0.5, 4, 1.5), months = cl(q.months, 1, 36, 12), cloud = cl(q.cloud, 10, 100, 60), minN = Math.round(cl(q.min, 1, 30, 3));
+      const km = cl(q.km, 0.5, 4, 1.5), months = cl(q.months, 1, 36, 12), cloud = cl(q.cloud, 10, 100, 60), minN = Math.round(cl(q.min, 1, 30, 3)), smooth = Math.round(cl(q.smooth, 0, 5, 2));
       const SDB = require('./_sdb'), D = require('./_depth'), kx = 111320 * Math.cos(lat * Math.PI / 180), dLat = km * 1000 / 111320, dLon = km * 1000 / kx;
       const box = { s: lat - dLat, n: lat + dLat, w: lon - dLon, e: lon + dLon }, N = Math.round(2 * km * 100); // 10m 한 칸
       const [pngBuf, gm] = await Promise.all([SDB.fetchComposite(box, N, N, months, cloud), D._t.fromGmrt(box, { mask: false }).catch(() => null)]);
@@ -332,8 +332,8 @@ module.exports = async function handler(req, res) {
           const v = [g.z[i * g.cols + j], g.z[i * g.cols + j + 1], g.z[(i + 1) * g.cols + j], g.z[(i + 1) * g.cols + j + 1]]; if (v.some(t => t == null)) continue;
           const z = v[0] * (1 - a) * (1 - c) + v[1] * (1 - a) * c + v[2] * a * (1 - c) + v[3] * a * c, k = y * img.W + x;
           if (z < 0) { ref[k] = -z; refZ[k] = -z; } else land[k] = 1; } }
-      const r = SDB.analyze(img, gm ? ref : null, { minN, maxZ: 22 });
-      const info = Object.assign({ ok: !r.err, box, size: N + 'x' + N + ' (10m)', months, cloud, minN, gmrt: !!gm }, r.err ? { error: r.err, detail: r } : r.info);
+      const r = SDB.analyze(img, gm ? ref : null, { minN, maxZ: 22, smooth });
+      const info = Object.assign({ ok: !r.err, box, size: N + 'x' + N + ' (10m)', months, cloud, minN, smooth, gmrt: !!gm }, r.err ? { error: r.err, detail: r } : r.info);
       if (q.json === '1' || r.err) return res.status(r.err ? 200 : 200).json(info);
       const S = N <= 300 ? 2 : 1, cross = [img.W / 2, img.H / 2];
       const out = SDB.sideBySide(SDB.sideBySide(SDB.trueColor(img, S), SDB.panel(r.Z, img.W, img.H, S, null, cross)), SDB.panel(refZ, img.W, img.H, S, land, cross));

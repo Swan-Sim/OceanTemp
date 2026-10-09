@@ -103,11 +103,17 @@ function analyze(img, ref, opt) {
   if (!(m1 > 0)) return { err: 'no_calibration', nOk, fitN, deepBy, Bd, Gd };
   const Z = new Float32Array(n).fill(NaN);
   for (let i = 0; i < n; i++) if (ok[i]) { const x = X[i]; Z[i] = x !== x ? maxZ : Math.max(0, Math.min(maxZ, m0 + m1 * x)); }
-  // 3×3 평균으로 거친 점 줄이기(값 없는 칸은 건너뜀)
+  // 잡음 줄이기: ① 반경 r 중앙값(점잡음·물결 반짝임 제거, 경계는 유지) ② 3×3 평균(부드럽게)
+  const r = opt.smooth == null ? 2 : Math.max(0, Math.min(5, Math.round(opt.smooth)));
+  let M = Z;
+  if (r > 0) { M = new Float32Array(n).fill(NaN); const buf = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (Z[i] !== Z[i]) continue; buf.length = 0;
+      for (let dy = -r; dy <= r; dy++) { const yy = y + dy; if (yy < 0 || yy >= H) continue; for (let dx = -r; dx <= r; dx++) { const xx = x + dx; if (xx < 0 || xx >= W) continue; const v = Z[yy * W + xx]; if (v === v) buf.push(v); } }
+      buf.sort((p, q) => p - q); M[i] = buf[buf.length >> 1]; } }
   const S = new Float32Array(n).fill(NaN);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (Z[i] !== Z[i]) continue; let s = 0, c = 0;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = y + dy, xx = x + dx; if (yy < 0 || xx < 0 || yy >= H || xx >= W) continue; const v = Z[yy * W + xx]; if (v === v) { s += v; c++; } }
-    S[i] = c ? s / c : Z[i]; }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (M[i] !== M[i]) continue; let s = 0, c = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = y + dy, xx = x + dx; if (yy < 0 || xx < 0 || yy >= H || xx >= W) continue; const v = M[yy * W + xx]; if (v === v) { s += v; c++; } }
+    S[i] = c ? s / c : M[i]; }
   const nm = []; for (let i = 0; i < n; i++) if (ok[i]) nm.push(Nc[i]);
   return { Z: S, info: { px: nOk, scenes_median: median(nm), scenes_max: Math.max(...nm), deepBy, deepBlue: +Bd.toFixed(4), deepGreen: +Gd.toFixed(4), fitPixels: fitN, depth_m_per_ratio: +m1.toFixed(2), offset_m: +m0.toFixed(2), r2: +r2.toFixed(3), rmse_vs_ref_m: +rmse.toFixed(2) } };
 }

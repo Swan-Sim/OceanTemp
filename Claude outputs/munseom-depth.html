@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>문섬 수심 시안 · otemp.app</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+:root{--bg:#020617;--card:#0b1329;--line:#1e2a47;--txt:#e2e8f0;--dim:#94a3b8;--acc:#38bdf8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:13px/1.5 -apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;padding:20px 16px 40px}
+h1{font-size:18px;margin:0 0 4px}.lead{color:var(--dim);margin:0 0 16px;font-size:12.5px;max-width:1100px}
+.wrap{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;width:520px;max-width:100%}
+.card h2{font-size:15px;margin:0 0 2px}.sub{font-size:11.5px;color:var(--dim);margin:0 0 10px}
+.mapbox{position:relative;width:100%;aspect-ratio:480/492;border-radius:8px;overflow:hidden;background:#0a1a30}
+.mapbox canvas,.mapbox svg{position:absolute;inset:0;width:100%;height:100%}
+.readout{position:absolute;left:8px;bottom:8px;background:rgba(2,6,23,.8);border:1px solid #334155;border-radius:6px;padding:3px 8px;font-size:11.5px;pointer-events:none}
+.legend{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--dim);margin:8px 0 0}
+.legend .bar{flex:1;height:8px;border-radius:4px}
+.prof{margin-top:12px}.prof h3{font-size:12px;margin:0 0 4px;color:#cbd5e1}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.fact{background:#0f1a36;border-radius:8px;padding:7px 9px}.fact b{display:block;font-size:16px}.fact span{font-size:10.5px;color:var(--dim)}
+.wait{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--dim);font-size:12.5px;padding:20px;height:100%;gap:8px}
+.wait b{color:#fde68a}
+.notes{margin-top:22px;max-width:1060px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.notes h2{font-size:14px;margin:0 0 6px}.notes li{margin:3px 0;color:#cbd5e1}
+text.cl{font-size:9px;fill:#e0f2fe;paint-order:stroke;stroke:#0b1329;stroke-width:2.5px}
+</style></head><body>
+<h1>문섬 수심 시안: GEBCO와 국립해양조사원 비교</h1>
+<p class="lead">문섬 주변 약 9 × 9km 범위예요. 색은 수심, 선은 10m 간격 등심선이고 30·40·60m 선은 진하게 표시했어요. 지도 위에 마우스를 올리면(휴대폰은 누르면) 그 지점 수심이 나와요. 점선은 문섬을 동서로 지나는 단면이에요.</p>
+<div class="wrap" id="wrap"></div>
+<div class="notes">
+<h2>보면서 확인할 점</h2>
+<ul>
+<li><b>GEBCO</b>: 칸이 약 400 × 460m라 문섬(폭 약 500m)이 사라지고 그 자리가 60~70m로 나와요. 섶섬만 한 점으로 보여요. 해외 포인트의 "대략 주변 수심" 정도로만 쓸 수 있어요.</li>
+<li><b>국립해양조사원</b>: 150m 간격이라 문섬이 얕은 둔덕으로 솟고, 서귀포항 방파제와 새섬 쪽 얕은 곳, 문섬 남쪽으로 60m까지 떨어지는 경사가 보여요. 다만 150m 칸 평균이라 단면에서 문섬 꼭대기가 수면까지 올라오지 않고, 직벽은 완만하게 뭉개져요.</li>
+<li>둘 다 <b>항해·다이빙 계획용 정밀 해도가 아니에요.</b> 테크니컬 다이빙에는 "대략의 최대 수심과 경사 방향" 참고로만 쓰고, 실제 계획은 다이브 컴퓨터, 현지 가이드, 해도를 기준으로 해야 한다는 안내를 같이 붙일게요.</li>
+<li>포인트마다 수심을 직접 넣는 대신 "포인트 반경 300m 안의 최대 수심과 평균 수심"을 자동 계산해서 보여줄 수 있어요.</li>
+</ul>
+</div>
+<script>
+const GEBCO = {"la0": 33.1896, "lo0": 126.5229, "d": 0.004166667, "rows": 20, "cols": 24, "z": [-95, -95, -95, -95, -95, -94, -94, -94, -100, -96, -96, -96, -97, -97, -96, -96, -96, -96, -97, -97, -98, -98, -98, -98, -95, -96, -96, -99, -100, -94, -94, -95, -98, -94, -94, -94, -97, -97, -96, -96, -96, -96, -95, -95, -95, -95, -95, -95, -95, -97, -96, -96, -96, -95, -95, -95, -96, -91, -91, -90, -96, -96, -97, -97, -97, -98, -94, -94, -94, -98, -97, -97, -95, -97, -96, -96, -96, -95, -95, -95, -94, -91, -91, -90, -95, -96, -95, -95, -95, -96, -94, -94, -94, -96, -95, -95, -62, -99, -95, -93, -93, -93, -93, -92, -90, -88, -88, -88, -94, -94, -93, -92, -92, -93, -93, -92, -94, -92, -91, -92, -60, -51, -57, -74, -77, -92, -90, -88, -87, -87, -87, -85, -84, -85, -87, -89, -89, -90, -89, -86, -77, -78, -78, -77, -55, -56, -58, -66, -66, -68, -85, -81, -80, -83, -83, -82, -82, -82, -83, -84, -84, -83, -84, -82, -71, -56, -56, -58, -23, -57, -62, -67, -67, -67, -66, -77, -75, -79, -79, -80, -80, -80, -80, -78, -78, -78, -74, -68, -59, -51, -51, -49, -24, -32, -37, -41, -44, -65, -62, -64, -71, -72, -72, -68, -70, -71, -65, -58, -58, -60, -60, -58, -51, -46, -46, -42, -19, -25, -28, -29, -30, -65, -62, -64, -71, -72, -72, -68, -70, -71, -65, -58, -58, -60, -60, -58, -51, -46, -46, -42, -11, -17, -19, -17, -16, -15, -51, -56, -60, -56, -56, -44, -51, -57, -53, -50, -50, -49, 44, -49, -40, -38, -38, -37, 0, -8, -9, -6, -6, -9, -40, -48, -53, -34, -34, -24, -33, -53, -51, -13, -14, -13, -13, -11, -37, -36, -36, -34, 18, 13, 11, 11, 10, 22, -38, 0, 39, -7, -7, -9, -13, -16, -12, -8, 8, 14, 15, 12, 7, -5, -7, -34, 40, 42, 53, 59, 62, 72, 91, 67, 53, 26, 25, 6, 4, 2, 13, 5, 14, 26, 27, 21, 16, 20, 9, -4, 67, 60, 67, 94, 102, 71, 67, 52, 46, 57, 55, 48, 47, 42, 39, 36, 28, 36, 35, 30, 24, 15, 14, 2, 105, 98, 95, 104, 98, 61, 61, 57, 57, 68, 63, 57, 66, 68, 61, 68, 57, 47, 43, 37, 30, 20, 19, 17, 138, 132, 131, 124, 112, 87, 79, 77, 76, 76, 70, 68, 78, 82, 80, 78, 70, 55, 51, 42, 31, 24, 25, 24, 172, 163, 159, 145, 124, 105, 93, 90, 85, 84, 76, 80, 89, 92, 90, 84, 77, 65, 55, 44, 39, 32, 33, 32, 215, 195, 182, 172, 153, 142, 121, 99, 92, 89, 85, 92, 100, 99, 94, 91, 89, 81, 75, 60, 52, 49, 47, 46, 243, 222, 203, 194, 180, 168, 142, 118, 115, 110, 119, 114, 116, 109, 104, 99, 99, 95, 94, 89, 92, 78, 65, 61]};
+const KHOA = {"la0": 33.1875, "lo0": 126.5208, "dla": 0.00135, "dlo": 0.0016, "rows": 62, "cols": 60, "hex": "ff6162626061636362626163636262636363646464646464646463636363626364646464646464656465656565656565656565666666666666666666ff6264625e636362615f5d62626062626263636363636364646363636363626363636363636364646364646565656565656565666666666666666666ff6065635f63625f616262626060615f6162626262626363636363636262626262626262626363636363636364656565656464656565656565656565ff64656463636062616163636261615c6161616161616263636363636362616162626262636363636363636363646464646463646464646464646364ff63646264626062606163636362625f6161616161616162626262626262616162626262626363636363636363636364646363636364646363636363ff6262606363626260636464646463626261616161616161616161626262616262626262626262626262636363636363636362636363636363636363ff5f6061606161615c636464646464636261616060606060606060616161616161616161616262626262626262626262626262626262626262626262ff5f616162616162646464646464636363626160605f5f5f5f5f60606060606161616161616161616161626262626262626261626262626262626262ff646463646465656666646464646363636362605f5f5e5e5e5f5f5f5f5f5f6161616160606060606061616161616161626261626262626262626262ff656868696a676668676665646464646363626160605e5e5e5e5e5e5e5e5e6061616160606060606061616161616161616261626262626262626262ff63686b6b6a68676a69676565646464636363626261605e5e5d5d5d5d5d5e5e60616061606060606060616161616161616261626262626261616162ff6265696967666a6868686665646463636363626261615f5e5d5c5c5c5c5d5d5e5f6060606060606060606061616162626261616261616161616161ff5a585d60616263636465646463636362626262616160605f5d5c5b5b5b5c5c5d5e5e5f5f5f5f5f6060606061616162626160616160606060606060ff4d4954595b5d5d5e5f60616162616161616061616060605f5e5c5b5a5a5a5b5c5d5d5e5e5f5f5f606060606161616161606060606060605f5f605fff3b3a49535558595a5b5d5e5f5f606060605f5f605f5f5f5f5e5d5b5a59595a5b5c5d5d5e5e5f5f5f5f60606161616160605f606060605f5e5e5e5eff33343e4d4f52545555575a5d5d5e5e5e5e5e5e5e5e5e5e5e5e5d5b595958595a5b5c5d5d5e5e5e5f5f606060606060606060606060605f5d5c5b5bff33343a484a4b4d4c4b4b505a5c5b5b5c5c5c5d5d5d5d5d5d5d5c5b59585758595a5b5b5c5c5d5e5e5f5f5f5f5f5f5f5f605f6060605f5e5c5b5a5a35353842454748474748484a535958585859595a5b5b5b5c5c5b5b5a585757575859595a5b5b5b5d5d5d5e5e5e5e5e5e5f5f5e5e5f5d5b5a5958585833333c4143444543454547494c56565555555657585959595a59595857565656575758595959595b5c5c5c5c5c5d5d5d5d5d5d5c5b514f50505252533434373e40414140434547484b52535353535354555656575757575756555555565656575757585a5a5a5a5a5b5b5b5b5b5b5a5853464143424b4848363632353a3d3a3d4245484a4b4d515151515151525354545555565555555555555555555556585858585858585858585858575349413f3c3c40403a31313030303634394145484a4b4c5050504f4f505051525253545455555555555555555554555656565656565555555454545349413f3d38373634322e2e2f2f2f2f3034414547494b4c4e4e4e4e4e4e4f4f505152535454555555555555545454545555555555545454535353514d45403b3a39353231312e2e2e2f2e2d2e303c4346484a4b4c4c4c4c4c4d4d4e4f50515253545555555555545354545454545555555554545352514e4a4644393736343130312d2d2d2e2e2d2d2e323f454648494a4a4a4a4b4b4c4d4e4f5152545555555555545352535354545554545555545452504e4c4948443b3736323130312b2b2c2d2e2c2c2e30354243444545464647494a4b4c4d4e515254545555555453515051525454555454535353524f4d4c4b4a49453c3635353131312929292b2c2b2c3132333c404040414243444647494a4b4d4f5153534f484b51504f4d4f505353524e4a4a4d4d4c4b4949494847433937353533302d26262428282a2e303132343c3c3d3e3f404142444647484a4c4e4f40311c23474c4b494a4b51504d40383a4242424544444643413739353431302c2d2323232526272a2c2f30313438393a3b3c3e3f404244454749494611311c2335474645454b4c49433837363739373e40403e3c3733323333312f2f2f20202022232526282b2e303234353738393a3c3d3f41424445453d11ffff193d444442414544413c373635353534363b3b3934322f2a2e2f2f2e2c2d1c1c1e2021232323262b2d2f30313334353638393b3d3e4041423e3430293c4041403f3e403e3b3835343433333131332a282525292a2b2b2c2c2b2b19191b1d1e2021222226282c2d2d2d2f303133343638393b3b393532302d363c3c3a39383c39373433323232302e2c28ffffff092124272728282929161618191b1c1d1f202224262828292a2b2c2d2f30333436342f28231d1d283335333238373532323030302d2d29241fffff050917142223242426261313151517191a1b1c1e1f22232424252727292a2b2e30302d26201d081118222d2b2b31312f2e2e2d2d2d22252018160e06050b10101c20202022221010121213151617181a1c1f202021222324242527282727211716160d0d181222252525262b2a2a2a29291d1816130f0e0606090c0f171a1b1c191d0b0b0e0f101213141515181a1c1d1d1e201f2021201b1114110c1616150a0a12121f2025262626262625251a0f0d0b0906010306090b0e111515151609090c0c0d0e10111010141519191a1b1a141919160c0d0d070cffff12080aff0d1a1b20222223232222211a0d0803040100010307090a0b0a0b0f100707090a0b0b0c0c080b0f14151615140f0c0c0f0c0708070205ff061208ff081016181c1e202020201e1d0f0a0401ffffffff02040707060608090a04040405060705040302070e11120d06060404090602080102050506ffff03060f1318191b1d1d1e191816130701ffffffffffffff0300010205060503030101ffffffffffff05050709ffffffff05050602ff01ff0405ffff0000060e101416171a1b1b080b080a03ffffffffffffffffffff0201020203ffffffffffffffffffffffffffffffffffffffffffffffffff02ffffff00000b0c0d0d0c110f18110404030405ffffffffffffffffffffffffffff00ffffffffffffffffffffffffffffffffffffffffffffffffff02ffffffff000b08060d0c0e0f0d0902030101ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff080606080807ff00010200ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff02ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+const MUN = { lat: 33.2276, lon: 126.5672 };
+const SPOTS = [{ n: '문섬', lat: 33.2276, lon: 126.5672 }, { n: '섶섬', lat: 33.2290, lon: 126.6010 }];
+const B = { s: 33.1896, n: 33.2688, w: 126.5229, e: 126.6150 };
+
+// 격자: { lats(남→북), lons(서→동), z[r][c] 고도(m, 음수=수심) }
+function gridFromGebco(g) {
+  const lats = Array.from({ length: g.rows }, (_, i) => g.la0 + i * g.d), lons = Array.from({ length: g.cols }, (_, j) => g.lo0 + j * g.d);
+  const z = lats.map((_, i) => lons.map((_, j) => g.z[i * g.cols + j]));
+  return { lats, lons, z };
+}
+function gridFromKhoa(k) {
+  // 공공데이터포털 원자료(150m, 약간 기울어진 격자)를 위·경도 정격자로 옮긴 값. ff = 자료 없음(육지)
+  const lats = Array.from({ length: k.rows }, (_, i) => k.la0 + i * k.dla), lons = Array.from({ length: k.cols }, (_, j) => k.lo0 + j * k.dlo);
+  const z = lats.map((_, i) => lons.map((_, j) => { const v = parseInt(k.hex.substr((i * k.cols + j) * 2, 2), 16); return v === 255 ? 8 : -v; }));
+  z.forEach(r => { if (r[0] === 8 && r[1] < 0) r[0] = r[1]; }); // 맨 왼쪽 줄은 원자료 범위 밖이라 옆 칸으로
+  return { lats, lons, z };
+}
+function sample(G, lat, lon) {
+  const { lats, lons, z } = G;
+  const fi = (lat - lats[0]) / (lats[lats.length - 1] - lats[0]) * (lats.length - 1), fj = (lon - lons[0]) / (lons[lons.length - 1] - lons[0]) * (lons.length - 1);
+  if (fi < 0 || fj < 0 || fi > lats.length - 1 || fj > lons.length - 1) return NaN;
+  const i = Math.min(lats.length - 2, Math.floor(fi)), j = Math.min(lons.length - 2, Math.floor(fj)), a = fi - i, b = fj - j;
+  return z[i][j] * (1 - a) * (1 - b) + z[i][j + 1] * (1 - a) * b + z[i + 1][j] * a * (1 - b) + z[i + 1][j + 1] * a * b;
+}
+const depthColor = d3.scaleSequential(t => d3.interpolateYlGnBu(0.15 + 0.85 * t)).domain([0, 110]).clamp(true);
+const colorAt = (el) => el >= 0 ? d3.rgb(el > 30 ? '#5b5240' : '#7a6e52') : d3.rgb(depthColor(-el));
+
+function panel(title, sub, G) {
+  const card = document.createElement('div'); card.className = 'card';
+  card.innerHTML = `<h2>${title}</h2><p class="sub">${sub}</p><div class="mapbox"></div>`;
+  document.getElementById('wrap').appendChild(card);
+  const box = card.querySelector('.mapbox');
+  if (!G) {
+    box.innerHTML = `<div class="wait"><b>국립해양조사원 자료 받는 중</b>공공데이터포털에서 "자연과학용 수심정보 조회" 활용신청 후 배포하면,<br>같은 범위 자료를 받아 이 칸을 채워 다시 보내드릴게요.</div>`;
+    return;
+  }
+  const W = 480, H = 492;
+  const X = lon => (lon - B.w) / (B.e - B.w) * W, Y = lat => (B.n - lat) / (B.n - B.s) * H;
+  // 색: 화면 픽셀마다 쌍선형 보간
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; box.appendChild(cv);
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const el = sample(G, B.n - y / H * (B.n - B.s), B.w + x / W * (B.e - B.w)); const c = Number.isFinite(el) ? colorAt(el) : d3.rgb('#0a1a30');
+    const p = (y * W + x) * 4; img.data[p] = c.r; img.data[p + 1] = c.g; img.data[p + 2] = c.b; img.data[p + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  // 등심선(d3-contour, 격자 위가 북쪽이 되게 뒤집기)
+  const rows = G.lats.length, cols = G.lons.length, flat = [];
+  for (let i = rows - 1; i >= 0; i--) for (let j = 0; j < cols; j++) flat.push(G.z[i][j]);
+  const th = [-10, -20, -30, -40, -50, -60, -70, -80, -90, -100];
+  const cs = d3.contours().size([cols, rows]).thresholds(th)(flat);
+  const gx = j => X(G.lons[0] + j / (cols - 1) * (G.lons[cols - 1] - G.lons[0])), gy = i => Y(G.lats[rows - 1] - i / (rows - 1) * (G.lats[rows - 1] - G.lats[0]));
+  const proj = d3.geoTransform({ point(x, y) { this.stream.point(gx(x - 0.5), gy(y - 0.5)); } });
+  const svg = d3.select(box).append('svg').attr('viewBox', `0 0 ${W} ${H}`);
+  svg.selectAll('path.c').data(cs).join('path').attr('d', d3.geoPath(proj)).attr('fill', 'none')
+    .attr('stroke', d => [-30, -40, -60].includes(d.value) ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.35)')
+    .attr('stroke-width', d => [-30, -40, -60].includes(d.value) ? 1.4 : 0.7);
+  // 해안선(0m)
+  svg.selectAll('path.coast').data(d3.contours().size([cols, rows]).thresholds([0])(flat)).join('path').attr('d', d3.geoPath(proj)).attr('fill', 'none').attr('stroke', '#fde68a').attr('stroke-width', 1.2);
+  // 등심선 숫자(30·40·60m)
+  cs.filter(d => [-30, -40, -60].includes(d.value)).forEach(d => {
+    const ring = d.coordinates.map(p => p[0]).sort((a, b) => b.length - a.length)[0]; if (!ring || ring.length < 6) return;
+    const pt = ring[Math.floor(ring.length * 0.3)]; svg.append('text').attr('class', 'cl').attr('x', gx(pt[0] - 0.5)).attr('y', gy(pt[1] - 0.5)).attr('text-anchor', 'middle').text(`${-d.value}m`);
+  });
+  // 단면선과 포인트
+  svg.append('line').attr('x1', X(B.w)).attr('x2', X(B.e)).attr('y1', Y(MUN.lat)).attr('y2', Y(MUN.lat)).attr('stroke', '#f472b6').attr('stroke-dasharray', '4 3').attr('stroke-width', 1.2);
+  SPOTS.forEach(s => {
+    svg.append('circle').attr('cx', X(s.lon)).attr('cy', Y(s.lat)).attr('r', 4.5).attr('fill', '#f43f5e').attr('stroke', '#fff').attr('stroke-width', 1.5);
+    svg.append('text').attr('class', 'cl').attr('x', X(s.lon) + 7).attr('y', Y(s.lat) - 6).style('font-size', '11px').style('font-weight', 700).text(s.n);
+  });
+  // 마우스 위치 수심
+  const ro = document.createElement('div'); ro.className = 'readout'; ro.textContent = '지도를 가리키면 수심 표시'; box.appendChild(ro);
+  const show = (ev) => { const r = box.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
+    const lat = B.n - y * (B.n - B.s), lon = B.w + x * (B.e - B.w), el = sample(G, lat, lon);
+    ro.textContent = !Number.isFinite(el) ? '범위 밖' : el >= 0 ? `육지 (${lat.toFixed(4)}, ${lon.toFixed(4)})` : `수심 약 ${Math.round(-el)}m (${lat.toFixed(4)}, ${lon.toFixed(4)})`; };
+  box.addEventListener('pointermove', show); box.addEventListener('pointerdown', show);
+  // 범례
+  const lg = document.createElement('div'); lg.className = 'legend';
+  lg.innerHTML = `<span>0m</span><div class="bar" style="background:linear-gradient(90deg,${[0, 20, 40, 60, 80, 100].map(v => depthColor(v)).join(',')})"></div><span>100m+</span>`;
+  card.appendChild(lg);
+  // 주변 수치(문섬 반경 300m·1km)
+  const near = (rk) => { let mx = 0, s = 0, n = 0; for (let a = 0; a < 360; a += 10) for (let r = 30; r <= rk; r += 30) {
+      const la = MUN.lat + r / 111320 * Math.cos(a * Math.PI / 180), lo = MUN.lon + r / (111320 * Math.cos(MUN.lat * Math.PI / 180)) * Math.sin(a * Math.PI / 180);
+      const el = sample(G, la, lo); if (Number.isFinite(el) && el < 0) { mx = Math.max(mx, -el); s += -el; n++; } } return { mx, avg: n ? s / n : 0 }; };
+  const n3 = near(300), n10 = near(1000);
+  const f = document.createElement('div'); f.className = 'facts';
+  f.innerHTML = `<div class="fact"><b>${Math.round(n3.mx)}m</b><span>문섬 300m 안 최대</span></div><div class="fact"><b>${Math.round(n3.avg)}m</b><span>문섬 300m 안 평균</span></div><div class="fact"><b>${Math.round(n10.mx)}m</b><span>1km 안 최대</span></div>`;
+  card.appendChild(f);
+  // 단면 그래프
+  const pr = document.createElement('div'); pr.className = 'prof'; pr.innerHTML = '<h3>문섬 동서 단면 (분홍 점선)</h3>'; card.appendChild(pr);
+  const PW = 490, PH = 130, m = { l: 34, r: 8, t: 6, b: 20 };
+  const pts = d3.range(0, 301).map(i => { const lon = B.w + i / 300 * (B.e - B.w); return { lon, km: (lon - MUN.lon) * 111.32 * Math.cos(MUN.lat * Math.PI / 180), el: sample(G, MUN.lat, lon) }; }).filter(p => Number.isFinite(p.el));
+  const px = d3.scaleLinear().domain(d3.extent(pts, p => p.km)).range([m.l, PW - m.r]), py = d3.scaleLinear().domain([-110, 20]).range([PH - m.b, m.t]);
+  const ps = d3.select(pr).append('svg').attr('viewBox', `0 0 ${PW} ${PH}`).style('width', '100%');
+  [-30, -40, -60].forEach(v => ps.append('line').attr('x1', m.l).attr('x2', PW - m.r).attr('y1', py(v)).attr('y2', py(v)).attr('stroke', '#334155').attr('stroke-dasharray', '3 3'));
+  ps.append('path').datum(pts).attr('d', d3.area().x(p => px(p.km)).y0(py(-110)).y1(p => py(Math.min(0, p.el)))).attr('fill', '#334155');
+  ps.append('path').datum(pts).attr('d', d3.area().x(p => px(p.km)).y0(py(0)).y1(p => py(Math.max(0, p.el)))).attr('fill', '#7a6e52');
+  ps.append('path').datum(pts).attr('d', d3.line().x(p => px(p.km)).y(p => py(p.el))).attr('fill', 'none').attr('stroke', '#38bdf8').attr('stroke-width', 1.6);
+  ps.append('line').attr('x1', px(0)).attr('x2', px(0)).attr('y1', m.t).attr('y2', PH - m.b).attr('stroke', '#f43f5e').attr('stroke-width', 1);
+  ps.append('text').attr('x', px(0) + 4).attr('y', m.t + 10).attr('fill', '#fda4af').style('font-size', '10px').text('문섬');
+  ps.append('g').attr('transform', `translate(0,${PH - m.b})`).call(d3.axisBottom(px).ticks(6).tickFormat(d => `${d}km`)).call(g => g.selectAll('text').attr('fill', '#94a3b8')).call(g => g.selectAll('line,path').attr('stroke', '#475569'));
+  ps.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(py).tickValues([0, -30, -60, -90]).tickFormat(d => `${-d}m`)).call(g => g.selectAll('text').attr('fill', '#94a3b8')).call(g => g.selectAll('line,path').attr('stroke', '#475569'));
+}
+panel('GEBCO 2020 (전 세계 공통)', '15초 격자, 약 400 × 460m · 전 세계 어디서나 같은 방식으로 쓸 수 있어요', gridFromGebco(GEBCO));
+panel('국립해양조사원 자연과학용 수심', '150m 격자 · 한국 연안만 · 공공누리 제1유형(출처 표시)', KHOA ? gridFromKhoa(KHOA) : null);
+</script>
+</body></html>

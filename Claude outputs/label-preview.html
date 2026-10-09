@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>정점 이름표 배치 시안</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#0b1220;color:#e2e8f0;font-family:-apple-system,system-ui,sans-serif}
+  #map{position:absolute;inset:0 0 0 0}
+  .bar{position:absolute;z-index:1000;left:50%;top:10px;transform:translateX(-50%);display:flex;gap:6px;background:rgba(15,23,42,.85);padding:6px;border-radius:999px;border:1px solid rgba(255,255,255,.15)}
+  .bar button{background:transparent;color:#cbd5e1;border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}
+  .bar button.on{background:#f59e0b;color:#111;border-color:#f59e0b}
+  .note{position:absolute;z-index:1000;left:10px;right:10px;bottom:12px;background:rgba(15,23,42,.88);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.5}
+  .lf-wrap{position:relative;width:14px;height:14px}
+  .lf-dot{position:absolute;left:0;top:0;width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.85);background:#dc2626;box-sizing:border-box;box-shadow:0 0 4px rgba(0,0,0,.6)}
+  .lf-label{position:absolute;white-space:nowrap;padding:2px 6px;font-size:10.5px;font-weight:600;color:#f8fafc;background:rgba(15,23,42,.72);border:.8px solid rgba(255,255,255,.4);border-radius:4px;text-shadow:0 1px 2px rgba(0,0,0,.8);line-height:14px}
+  .lf-label.diag{left:17px;top:-1px;transform:rotate(-45deg);transform-origin:left center}
+  svg.lead{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+  svg.lead line{stroke:rgba(255,255,255,.75);stroke-width:1}
+</style></head><body>
+<div id="map"></div>
+<div class="bar"><button data-m="A">지금</button><button data-m="B" class="on">B 숨김</button><button data-m="C">C 지시선</button><button data-m="D">D 몰린 곳만 부채꼴</button></div>
+<div class="note" id="note"></div>
+<script>
+const P=[["보홀 팡라오",9.5762,123.7447],["Doljo Point",9.59237,123.72248],["Pungtud Wall",9.57368,123.71327],["Kalipayan",9.54157,123.76065],["Garden Eels",9.54518,123.771],["Black Forest",9.51483,123.68893],["Divers Heaven",9.51842,123.68788],["Cervera Shoal",9.48952,123.84593],["Arco Point",9.57096,123.81849],["ClubHari Beach",9.5471,123.75152],["Napaling",9.61735,123.77108],["Habagat Wreck",9.54013,123.75597],["Cathedral",9.5204,123.6846],["Tawala MPA",9.54887,123.79789],["Hoyo Hoy",9.55352,123.80442],["Sunrise",9.55945,123.81042],["BBC",9.56487,123.81437],["Libaong",9.57502,123.82845],["Danao Wall",9.53998,123.75189],["Bita-Ug",9.53897,123.74107],["Gak-Ang",9.54083,123.72854],["Doljo Housereef",9.5933,123.72562],["Momo Beach",9.59923,123.74468],["Alona House Reef",9.54569,123.77113]];
+const NOTE={A:'지금 방식: 이름표를 모두 45° 사선으로 표시해요. 점이 몰리면 이름표끼리 겹쳐서 읽기 어려워요.',
+ B:'B: 이름표를 가로로 두고 점 주변 8방향(오른쪽·왼쪽·위·아래·대각선) 중 빈 자리에 놓아요. 자리가 없으면 이름표만 숨기고 점은 남겨요. 확대하면 하나씩 다시 나타나요. 고른 정점은 항상 보여요.',
+ C:'C: B처럼 놓되, 바로 옆에 자리가 없으면 점에서 선을 길게 뻗어 빈 곳에 이름표를 달아요. 몰린 정점도 이름이 더 많이 보이지만 선 방향이 제각각이라 조금 복잡해요.',
+ D:'D: 혼자 있는 정점은 B처럼 바로 옆에. 점 3개 이상이 몰린 곳만 무리 가운데에서 바깥쪽으로 부채꼴(방사형)로 펼쳐 선으로 이어요. 펼칠 자리가 없는 이름표만 숨겨요.'};
+const map=L.map('map',{zoomControl:false}).setView([9.565,123.77],13);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18}).addTo(map);
+let mode='B',markers=[];
+const cv=document.createElement('canvas').getContext('2d');cv.font='600 10.5px -apple-system,system-ui,sans-serif';
+const W=t=>Math.ceil(cv.measureText(t).width)+14, H=19, R=7;
+P.forEach(p=>{const m=L.marker([p[1],p[2]],{icon:L.divIcon({className:'',html:'<div class="lf-wrap"><div class="lf-dot"></div></div>',iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);m._name=p[0];markers.push(m);});
+const hit=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+function layout(){
+  const size=map.getSize();
+  const pts=markers.map(m=>({m,p:map.latLngToContainerPoint(m.getLatLng()),w:W(m._name)}));
+  const dots=pts.map(o=>({x:o.p.x-R-1,y:o.p.y-R-1,w:2*R+2,h:2*R+2}));
+  const placed=[];
+  pts.forEach(o=>o.m.getElement().querySelectorAll('.lf-label,svg').forEach(e=>e.remove()));
+  const inView=b=>!(b.x<0||b.y<0||b.x+b.w>size.x||b.y+b.h>size.y), free=b=>inView(b)&&!placed.some(q=>hit(b,q))&&!dots.some(q=>hit(b,q));
+  const put=(o,dx,dy,lead)=>{const el=o.m.getElement().querySelector('.lf-wrap'),lab=document.createElement('div');lab.className='lf-label';lab.textContent=o.m._name;
+    lab.style.left=(7+dx)+'px';lab.style.top=(7+dy)+'px';el.appendChild(lab);
+    if(lead){const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('class','lead');s.setAttribute('width','1');s.setAttribute('height','1');
+      s.innerHTML=`<line x1="7" y1="7" x2="${7+lead[0]}" y2="${7+lead[1]}"/>`;el.prepend(s);}};
+  // [D] 몰린 무리 찾기: 서로 40px 안이면 같은 무리. 3개 이상인 무리만 부채꼴로
+  const done=new Set();
+  if(mode==='D'){
+    const grp=pts.map((o,i)=>i);const f=i=>grp[i]===i?i:(grp[i]=f(grp[i]));
+    pts.forEach((a,i)=>pts.forEach((b,j)=>{if(j>i&&Math.hypot(a.p.x-b.p.x,a.p.y-b.p.y)<40)grp[f(i)]=f(j);}));
+    const cl={};pts.forEach((o,i)=>(cl[f(i)]=cl[f(i)]||[]).push(o));
+    Object.values(cl).filter(c=>c.length>=3).forEach(c=>{
+      const cx=c.reduce((s,o)=>s+o.p.x,0)/c.length,cy=c.reduce((s,o)=>s+o.p.y,0)/c.length;
+      const rad=Math.max(...c.map(o=>Math.hypot(o.p.x-cx,o.p.y-cy)))+42;
+      // 각 점이 무리 가운데에서 놓인 방향 순서대로, 고르게 벌린 각도에 하나씩(선끼리 엇갈리지 않게)
+      c.sort((a,b)=>Math.atan2(a.p.y-cy,a.p.x-cx)-Math.atan2(b.p.y-cy,b.p.x-cx));
+      const a0=Math.atan2(c[0].p.y-cy,c[0].p.x-cx);
+      c.forEach((o,k)=>{let ok=false;
+        for(const extra of [0,22,44])for(const tw of [0,.5,-.5]){if(ok)break;
+          const a=a0+(k+tw)/c.length*2*Math.PI,ex=cx+Math.cos(a)*(rad+extra),ey=cy+Math.sin(a)*(rad+extra);
+          const lx=Math.cos(a)>=0?ex:ex-o.w,b={x:lx,y:ey-H/2,w:o.w,h:H};
+          if(!free(b))continue;placed.push(b);put(o,lx-o.p.x,ey-H/2-o.p.y,[ex-o.p.x,ey-o.p.y]);ok=true;}
+        done.add(o);});
+    });
+  }
+  // 화면 가운데에 가까운 정점부터(가운데 쪽 이름이 먼저 자리 잡게)
+  pts.sort((a,b)=>Math.hypot(a.p.x-size.x/2,a.p.y-size.y/2)-Math.hypot(b.p.x-size.x/2,b.p.y-size.y/2));
+  pts.forEach(o=>{
+    if(done.has(o))return;
+    const el=o.m.getElement().querySelector('.lf-wrap');
+    const lab=document.createElement('div');lab.className='lf-label';lab.textContent=o.m._name;
+    if(mode==='A'){lab.classList.add('diag');lab.style.left='';el.appendChild(lab);return;}
+    const g=4,cands=[[R+g,-H/2],[-R-g-o.w,-H/2],[R,-R-H+2],[R,R-2],[-R-o.w,-R-H+2],[-R-o.w,R-2],[-o.w/2,-R-g-H],[-o.w/2,R+g]];
+    let best=null,lead=null;
+    for(const [dx,dy] of cands){const b={x:o.p.x+dx,y:o.p.y+dy,w:o.w,h:H};
+      if(b.x<0||b.y<0||b.x+b.w>size.x||b.y+b.h>size.y)continue;
+      if(placed.some(q=>hit(b,q))||dots.some(q=>hit(b,q)))continue;best=[dx,dy];placed.push(b);break;}
+    if(!best&&mode==='C'){
+      for(const r of [34,52,72])for(let k=0;k<16&&!best;k++){const a=k/16*2*Math.PI,cx=Math.cos(a)*r,cy=Math.sin(a)*r;
+        const dx=cx>=0?cx:cx-o.w,dy=cy-H/2,b={x:o.p.x+dx,y:o.p.y+dy,w:o.w,h:H};
+        if(b.x<0||b.y<0||b.x+b.w>size.x||b.y+b.h>size.y)continue;
+        if(placed.some(q=>hit(b,q))||dots.some(q=>hit(b,q)))continue;best=[dx,dy];lead=[cx,cy];placed.push(b);}
+    }
+    if(!best)return;
+    lab.style.left=(7+best[0])+'px';lab.style.top=(7+best[1])+'px';el.appendChild(lab);
+    if(lead){const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('class','lead');s.setAttribute('width','1');s.setAttribute('height','1');
+      s.innerHTML=`<line x1="7" y1="7" x2="${7+lead[0]}" y2="${7+lead[1]}"/>`;el.prepend(s);}
+  });
+  document.getElementById('note').textContent=NOTE[mode];
+}
+map.on('zoomend moveend',layout);layout();
+document.querySelectorAll('.bar button').forEach(b=>b.onclick=()=>{mode=b.dataset.m;document.querySelectorAll('.bar button').forEach(x=>x.classList.toggle('on',x===b));layout();});
+</script></body></html>

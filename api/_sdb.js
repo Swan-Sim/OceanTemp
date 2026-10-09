@@ -91,7 +91,8 @@ function analyze(img, ref, opt) {
   for (let i = 0; i < n; i++) { if (!ok[i]) continue; const b = (Bc[i] / 1e4 - Bd) * NSC, g = (Gc[i] / 1e4 - Gd) * NSC; if (b > 1.05 && g > 1.05) X[i] = Math.log(b) / Math.log(g); }
   // 비율 → 미터: 거친 수심 1.5~18m인 픽셀을 비율 순서로 24칸 나눠 칸마다 중앙값을 잡고 직선(최소제곱)으로 맞춤
   const pairs = []; if (ref) for (let i = 0; i < n; i++) if (X[i] === X[i] && ref[i] >= 1.5 && ref[i] <= 18) pairs.push([X[i], ref[i]]);
-  let m1 = NaN, m0 = NaN, r2 = NaN, rmse = NaN, fitN = pairs.length;
+  let m1 = NaN, m0 = NaN, r2 = NaN, rmse = NaN, fitN = pairs.length, calib = 'gmrt';
+  if (pairs.length < 200 && ref) for (let i = 0; i < n; i++) if (X[i] === X[i] && ref[i] >= 0.5 && ref[i] < 1.5 || X[i] === X[i] && ref[i] > 18 && ref[i] <= 30) pairs.push([X[i], ref[i]]);
   if (pairs.length >= 200) {
     pairs.sort((a, b) => a[0] - b[0]); const K = 24, per = Math.floor(pairs.length / K), px = [], py = [];
     for (let k = 0; k < K; k++) { const seg = pairs.slice(k * per, k === K - 1 ? pairs.length : (k + 1) * per); px.push(median(seg.map(s => s[0]))); py.push(median(seg.map(s => s[1]))); }
@@ -100,7 +101,12 @@ function analyze(img, ref, opt) {
     m1 = sxy / sxx; m0 = my - m1 * mx; r2 = sxy * sxy / (sxx * syy);
     let se = 0; for (const [x, y] of pairs) se += (m0 + m1 * x - y) ** 2; rmse = Math.sqrt(se / pairs.length);
   }
-  if (!(m1 > 0)) return { err: 'no_calibration', nOk, fitN, deepBy, Bd, Gd };
+  if (opt.m1 > 0) { m1 = +opt.m1; m0 = +opt.m0 || 0; calib = 'manual'; r2 = NaN; rmse = NaN; }
+  else if (!(m1 > 0)) { // 거친 수심이 위성과 안 맞는 곳(작은 섬 등): 비율 분포로 대략 맞춤(1m=하위 3%, 18m=상위 97%) - 참고용
+    const xs = []; for (let i = 0; i < n; i++) if (X[i] === X[i]) xs.push(X[i]);
+    if (xs.length < 200) return { err: 'no_calibration', nOk, fitN, deepBy, Bd, Gd };
+    const x1 = pct(xs, 0.03), x2 = pct(xs, 0.97); if (!(x2 > x1)) return { err: 'no_calibration', nOk, fitN, deepBy, Bd, Gd };
+    m1 = 17 / (x2 - x1); m0 = 1 - m1 * x1; calib = 'uncalibrated(분포 맞춤)'; r2 = NaN; rmse = NaN; }
   const Z = new Float32Array(n).fill(NaN);
   for (let i = 0; i < n; i++) if (ok[i]) { const x = X[i]; Z[i] = x !== x ? maxZ : Math.max(0, Math.min(maxZ, m0 + m1 * x)); }
   // 잡음 줄이기: ① 반경 r 중앙값(점잡음·물결 반짝임 제거, 경계는 유지) ② 3×3 평균(부드럽게)
@@ -115,7 +121,7 @@ function analyze(img, ref, opt) {
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = y + dy, xx = x + dx; if (yy < 0 || xx < 0 || yy >= H || xx >= W) continue; const v = M[yy * W + xx]; if (v === v) { s += v; c++; } }
     S[i] = c ? s / c : M[i]; }
   const nm = []; for (let i = 0; i < n; i++) if (ok[i]) nm.push(Nc[i]);
-  return { Z: S, info: { px: nOk, scenes_median: median(nm), scenes_max: Math.max(...nm), deepBy, deepBlue: +Bd.toFixed(4), deepGreen: +Gd.toFixed(4), fitPixels: fitN, depth_m_per_ratio: +m1.toFixed(2), offset_m: +m0.toFixed(2), r2: +r2.toFixed(3), rmse_vs_ref_m: +rmse.toFixed(2) } };
+  return { Z: S, info: { px: nOk, scenes_median: median(nm), scenes_max: Math.max(...nm), deepBy, deepBlue: +Bd.toFixed(4), deepGreen: +Gd.toFixed(4), fitPixels: fitN, calib, depth_m_per_ratio: +m1.toFixed(2), offset_m: +m0.toFixed(2), r2: +r2.toFixed(3), rmse_vs_ref_m: +rmse.toFixed(2) } };
 }
 
 // ── 그림: 깊이 → 색(0m 연한 하늘색 → 30m 진한 남색), 5·10·20m 등심선, 가운데 포인트 십자 ──

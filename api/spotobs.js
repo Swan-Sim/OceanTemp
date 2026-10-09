@@ -332,7 +332,7 @@ module.exports = async function handler(req, res) {
           const v = [g.z[i * g.cols + j], g.z[i * g.cols + j + 1], g.z[(i + 1) * g.cols + j], g.z[(i + 1) * g.cols + j + 1]]; if (v.some(t => t == null)) continue;
           const z = v[0] * (1 - a) * (1 - c) + v[1] * (1 - a) * c + v[2] * a * (1 - c) + v[3] * a * c, k = y * img.W + x;
           if (z < 0) { ref[k] = -z; refZ[k] = -z; } else land[k] = 1; } }
-      const r = SDB.analyze(img, gm ? ref : null, { minN, maxZ: 22, smooth });
+      const r = SDB.analyze(img, gm ? ref : null, { minN, maxZ: 22, smooth, m1: q.m1, m0: q.m0 });
       const info = Object.assign({ ok: !r.err, box, size: N + 'x' + N + ' (10m)', months, cloud, minN, smooth, gmrt: !!gm }, r.err ? { error: r.err, detail: r } : r.info);
       if (q.json === '1' || r.err) return res.status(r.err ? 200 : 200).json(info);
       const S = N <= 300 ? 2 : 1, cross = [img.W / 2, img.H / 2];

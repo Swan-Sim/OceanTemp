@@ -114,7 +114,7 @@
   }
   function goTo(s) { if (!s) return; try { selectStation(s); showDetailMap(s.coords[1], s.coords[0], typeof SPOT_ZOOM === 'number' ? SPOT_ZOOM : 16); } catch (_) {} }
 
-  window.otAccount = { user: () => me.user, open: () => open(), reload: () => load() }; // 로그북 등 다른 파일이 쓰는 입구
+  window.otAccount = { prefs: () => me.prefs, setPrefs: (p) => { if (p) me.prefs = p; }, user: () => me.user, open: () => open(), reload: () => load() }; // 로그북 등 다른 파일이 쓰는 입구
 
   // ── 오른쪽 버튼 ──
   let btn;

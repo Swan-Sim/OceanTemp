@@ -57,6 +57,7 @@ module.exports = async function logbook(a, b, uid, R, json) {
     e.id = id; e.upd = Date.now();
     const P = require('./_photos'); // [ADD] 사진(최대 4장, 내 것만) · pub = 지도에 공개
     e.photos = await P.owned(R, uid, b.photos); e.pub = !!b.pub && e.photos.length > 0;
+    e.use = !!b.use; e.open = !!b.open; // 동의: 정보 사용(익명 통계) · 기록 공개
     await R(['HSET', key, id, JSON.stringify(e)]);
     try { await P.sync(R, uid, oldE, e); } catch (_) {}
     let gain = 0; if (!b.id) gain = await C.award(R, uid, 'log'); // 새로 쓸 때만 크레딧(수정은 안 쳐줘요)

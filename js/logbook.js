@@ -10,6 +10,7 @@
     date: '날짜', tod: '시작 시각 (HH:MM)', kind: '다이버 종류', rec: '레크레이션', tec: '텍다이버', tank: '탱크 종류', dmax: '최대수심 (m)', davg: '평균수심 (m)', mins: '다이빙 시간 (분)',
     fill: '충전 압력 (bar)', remain: '잔압 (bar)', weight: '웨이트 (kg)', suit: '슈트 두께 (mm)', temp: '수온 (°C)', vis: '시야 (m)', buddy: '버디', notes: '메모',
     used: '사용량', sac: '분당 소비량', sacU: 'bar/분 (수면 환산)', rmv: 'L/분', needCalc: '충전·잔압·평균수심·시간을 넣으면 분당 공기소비량이 계산돼요',
+    consTitle: '동의 설정 (한 번 정하면 계속 유지돼요)', consUse: '정보 사용 동의 - 내 수온·시야 기록을 익명 통계(시야 보정 등)에 써도 돼요', consOpen: '기록 공개 동의 - 이 기록을 다른 사람에게 보여도 돼요', consPhoto: '사진 공개 동의 - 지도에 공개 (포인트 이름 아래 작은 사진으로 보여요)',
     photos: '사진', photoMax: '최대 4장', photoAdd: '+ 사진', photoPub: '지도에 공개 (포인트 이름 아래 작은 사진으로 보여요)', photoBusy: '올리는 중…', photoFail: '사진을 올리지 못했어요', photoBig: '사진이 너무 커요', photoDelAdm: '이 사진 삭제(관리자)',
     al80: '80cf 탱크 기준', suitNone: '슈트 없이', suitDry: '드라이슈트', tempAuto: (sst, d, t) => `자동: 수면 ${sst}°C → ${d}m 약 ${t}°C (추정)`, tempAutoS: (sst) => `자동: 수면 ${sst}°C (추정)`, tempNo: '이 날짜 수온 자료가 없어요 - 직접 넣어 주세요', tempBusy: '수온 불러오는 중…', visAuto: (v) => `위성 추정 ${v}m - 실제와 다르면 ±로 고쳐 주세요`,
     prev: (d) => `지난 기록(${d})에서 불러왔어요`, save: '저장', cancel: '취소', edit: '수정', del: '삭제', delAsk: '이 기록을 지울까요?', saved: '저장했어요', gain: (n) => ` · 크레딧 +${n}`,
@@ -21,6 +22,7 @@
     date: 'Date', tod: 'Start time (HH:MM)', kind: 'Diver type', rec: 'Recreational', tec: 'Technical', tank: 'Tank', dmax: 'Max depth (m)', davg: 'Avg depth (m)', mins: 'Dive time (min)',
     fill: 'Start pressure (bar)', remain: 'End pressure (bar)', weight: 'Weight (kg)', suit: 'Suit (mm)', temp: 'Water temp (°C)', vis: 'Visibility (m)', buddy: 'Buddy', notes: 'Notes',
     used: 'Used', sac: 'SAC', sacU: 'bar/min (surface)', rmv: 'L/min', needCalc: 'Enter pressures, average depth and time to get your air consumption',
+    consTitle: 'Consents (saved once, kept for next time)', consUse: 'Data use - my temp/visibility entries may be used in anonymous stats (e.g. visibility calibration)', consOpen: 'Public log - this entry may be shown to others', consPhoto: 'Public photos - show on the map (small thumbnail under the spot name)',
     photos: 'Photos', photoMax: 'up to 4', photoAdd: '+ Photo', photoPub: 'Show on the map (small thumbnail under the spot name)', photoBusy: 'Uploading…', photoFail: 'Could not upload the photo', photoBig: 'Photo is too large', photoDelAdm: 'Delete this photo (admin)',
     al80: '80cf tank', suitNone: 'No suit', suitDry: 'Drysuit', tempAuto: (sst, d, t) => `Auto: surface ${sst}°C → ~${t}°C at ${d} m (estimate)`, tempAutoS: (sst) => `Auto: surface ${sst}°C (estimate)`, tempNo: 'No water temp data for this date - enter it yourself', tempBusy: 'Loading water temp…', visAuto: (v) => `Satellite estimate ${v} m - adjust with ±`,
     prev: (d) => `Filled from your last entry (${d})`, save: 'Save', cancel: 'Cancel', edit: 'Edit', del: 'Delete', delAsk: 'Delete this entry?', saved: 'Saved', gain: (n) => ` · +${n} credits`,
@@ -133,6 +135,17 @@
     const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) { const er = new Error(j.error || r.status); er.code = j.error; er.status = r.status; throw er; } return j;
   }
   const acct = () => window.otAccount || {};
+  // 동의 3가지(정보 사용 · 기록 공개 · 사진 공개)는 따로 고르고, 한 번 정하면 계정(없으면 이 브라우저)에 남겨 다음 기록에도 그대로 써요
+  const CKEY = 'otemp.logconsent';
+  function savedConsent() {
+    let c = null; try { const p = acct().prefs && acct().prefs(); c = p && p.consent; } catch (_) {}
+    if (!c) { try { c = JSON.parse(localStorage.getItem(CKEY) || 'null'); } catch (_) {} }
+    return { use: !!(c && c.use), open: !!(c && c.open), photo: !!(c && c.photo) };
+  }
+  function saveConsent(c) {
+    try { localStorage.setItem(CKEY, JSON.stringify(c)); } catch (_) {}
+    post('prefs', { consent: c }).then(j => { if (j && j.prefs && acct().setPrefs) acct().setPrefs(j.prefs); }).catch(() => {});
+  }
   const nowStr = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   const todayStr = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 
@@ -189,7 +202,7 @@
 
   function openForm(e) {
     const L = state.last, base = e || { date: todayStr(), tod: nowStr(), type: L ? L.type : 'rec', tank: L ? L.tank : '', weight: L ? L.weight : null, suit: L ? L.suit : null };
-    state.form = { id: e ? e.id : '', v: Object.assign({}, base), photos: e && e.photos ? e.photos.slice() : [], pub: !!(e && e.pub), prev: {}, busy: false, hint: !e && L ? T.prev(L.date) : '',
+    state.form = { id: e ? e.id : '', v: Object.assign({}, base), photos: e && e.photos ? e.photos.slice() : [], pub: e ? !!e.pub : savedConsent().photo, use: e ? !!e.use : savedConsent().use, open: e ? !!e.open : savedConsent().open, prev: {}, busy: false, hint: !e && L ? T.prev(L.date) : '',
       tempManual: !!(e && e.temp != null && !e.tempAuto), visManual: !!(e && e.vis != null) }; draw();
   }
   function drawForm() {
@@ -197,6 +210,11 @@
     const fld = (k, label, type, extra) => `<div><label>${label}</label><input name="${k}" type="${type || 'number'}" ${type === 'text' || type === 'date' ? '' : 'inputmode="decimal" step="any"'} value="${val(v[k])}" ${extra || ''}></div>`;
     box.innerHTML = `<form class="log-form" id="log-form">`
       + (f.hint ? `<div class="log-hint">${esc(f.hint)}</div>` : '')
+      + `<div class="full"><label>${T.photos} (${T.photoMax})</label><div class="log-ph" id="log-ph"></div><input type="file" id="log-file" accept="image/*" multiple hidden></div>`
+      + `<div class="full log-cons"><div class="log-sub" style="margin-bottom:4px">${T.consTitle}</div>`
+      + `<label class="log-pub"><input type="checkbox" id="log-cuse"${f.use ? ' checked' : ''}><span>${T.consUse}</span></label>`
+      + `<label class="log-pub"><input type="checkbox" id="log-copen"${f.open ? ' checked' : ''}><span>${T.consOpen}</span></label>`
+      + `<label class="log-pub"><input type="checkbox" id="log-pub"${f.pub ? ' checked' : ''}><span>${T.consPhoto}</span></label></div>`
       + fld('date', T.date, 'date') + fld('tod', T.tod, 'text', 'maxlength="5" placeholder="09:30" pattern="([01][0-9]|2[0-3]):[0-5][0-9]"') + `<div class="full"><label>${T.kind}</label><select name="type"><option value="rec"${v.type !== 'tec' ? ' selected' : ''}>${T.rec}</option><option value="tec"${v.type === 'tec' ? ' selected' : ''}>${T.tec}</option></select></div>`
       + (v.type === 'tec' ? `<div class="full"><label>${T.tank}</label><select name="tank"><option value="">—</option>${Object.keys(VOL).map(k => `<option value="${k}"${v.tank === k ? ' selected' : ''}>${esc(T.tanks[k])}</option>`).join('')}</select></div>` : '')
       + fld('depthMax', T.dmax) + fld('depthAvg', T.davg) + fld('mins', T.mins) + fld('weight', T.weight)
@@ -206,7 +224,6 @@
       + `<div><label>${T.vis}</label><div class="log-step"><button type="button" data-vis="-1">−</button><input name="vis" type="number" inputmode="decimal" step="1" value="${val(v.vis)}"><button type="button" data-vis="1">+</button></div><div class="log-sub" id="log-vis-hint"></div></div>`
       + fld('buddy', T.buddy, 'text', 'maxlength="60"')
       + `<div class="full"><label>${T.notes}</label><textarea name="notes" maxlength="600">${esc(v.notes || '')}</textarea></div>`
-      + `<div class="full"><label>${T.photos} (${T.photoMax})</label><div class="log-ph" id="log-ph"></div><input type="file" id="log-file" accept="image/*" multiple hidden><label class="log-pub"><input type="checkbox" id="log-pub"${f.pub ? ' checked' : ''}><span>${T.photoPub}</span></label></div>`
       + `<div class="log-calc off" id="log-calc"></div>`
       + `<div class="full" style="display:flex;gap:8px"><button type="button" class="log-btn" id="log-cancel" style="flex:1">${T.cancel}</button><button type="submit" class="log-btn pri" style="flex:2">${T.save}</button></div>`
       + `<div class="log-msg full" id="log-err" style="color:#f87171"></div></form>`;
@@ -256,13 +273,15 @@
       }
       f.busy = false; if (form.isConnected) drawPh();
     };
-    pubEl.onchange = () => { f.pub = pubEl.checked; };
+    const cuseEl = box.querySelector('#log-cuse'), copenEl = box.querySelector('#log-copen');
+    const onCons = () => { f.use = cuseEl.checked; f.open = copenEl.checked; f.pub = pubEl.checked; saveConsent({ use: f.use, open: f.open, photo: f.pub }); };
+    cuseEl.onchange = copenEl.onchange = pubEl.onchange = onCons;
     drawPh();
     box.querySelector('#log-cancel').onclick = () => { state.form = null; draw(); };
     form.onsubmit = async (ev) => {
       ev.preventDefault(); if (f.busy) return; const o = read(), err = box.querySelector('#log-err'); err.textContent = '';
       try {
-        const j = await post('logsave', Object.assign({}, o, { no: state.no, id: f.id || undefined, tempAuto: !f.tempManual, photos: f.photos, pub: f.pub }));
+        const j = await post('logsave', Object.assign({}, o, { no: state.no, id: f.id || undefined, tempAuto: !f.tempManual, photos: f.photos, pub: f.pub, use: f.use, open: f.open }));
         const i = (state.items || []).findIndex(x => x.id === j.item.id); if (i >= 0) state.items[i] = j.item; else (state.items = state.items || []).unshift(j.item);
         state.items.sort((a, z) => (z.date || '').localeCompare(a.date || '') || (z.at || 0) - (a.at || 0)); state.last = state.items[0] || j.item;
         try { window.dispatchEvent(new Event('otemp:photos')); } catch (_) {} state.form = null; state.msg = T.saved + (j.gain ? T.gain(j.gain) : ''); if (j.gain && acct().reload) acct().reload(); draw();

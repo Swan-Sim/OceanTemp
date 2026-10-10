@@ -1068,6 +1068,9 @@
     function setMode(mode) {
       if (mode === 'forecast' && activeMode !== 'forecast') forecastView = 'temp'; // [FIX] 90일 추이는 항상 수온·시야 화면부터
       activeMode = mode;
+      // 로그북은 즐겨찾기 줄 바로 아래까지 크게 펼쳐요
+      try { const fb = document.getElementById('fav-bar'), r = fb && fb.classList.contains('show') ? fb.getBoundingClientRect() : null;
+        document.documentElement.style.setProperty('--log-top', (r ? Math.round(r.bottom + 6) : 56) + 'px'); document.body.classList.toggle('log-open', mode === 'log'); } catch (_) {}
       if (selectedStation) selectedStation._userRequested = true; // 버튼을 누른 것도 사용자 요청
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(mode === 'forecast' ? 'btn-ts' : mode === 'depth' ? 'btn-dp' : mode === 'shop' ? 'btn-shop' : mode === 'log' ? 'btn-log' : 'btn-now').classList.add('active');

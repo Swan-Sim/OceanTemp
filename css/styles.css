@@ -666,3 +666,8 @@ body:not(.detail-mode) .nt-sel { display: none; }
 /* [FIX] 상세 지도(밝은 위성사진)에서 선택 탭 테두리가 배경에 묻히던 것 - 상세 지도일 때만 더 밝은 호박색 */
 body.detail-mode { --tab-line: #C48A14; }
 
+
+/* 로그북 탭: 즐겨찾기 줄 아래까지 크게 */
+body.log-open #bottom-sheet { position: fixed; left: 0; right: 0; bottom: 0; top: var(--log-top, 56px); margin-top: 0; z-index: 60; display: flex; flex-direction: column; background: var(--ui-bg); pointer-events: auto; }
+body.log-open #bottom-sheet .chart-box { flex: 1 1 auto; height: auto; min-height: 0; }
+body.log-open #bottom-sheet .station-foot { display: none; }

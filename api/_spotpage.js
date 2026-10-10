@@ -212,13 +212,15 @@ async function fetchVisYear(lat, lon, y) {
   const out = byMonth.map(a => a.length ? +median(a).toFixed(1) : null);
   return out.some(v => v != null) ? out : 'nodata';
 }
-async function climVisFor(lat, lon) {
+async function climVisFor(lat, lon, opt) {
+  opt = opt || {};
   const key = `clim:vis:${lat.toFixed(2)}_${lon.toFixed(2)}`;
   let c = { years: {}, fail: {} };
   try { const [v] = await S.R(['GET', key]); if (v) c = JSON.parse(v); } catch (_) {}
   c.years = c.years || {}; c.fail = c.fail || {};
   const Y = new Date().getUTCFullYear(), want = [1, 2, 3, 4, 5].map(k => Y - k);
   const missing = want.filter(y => !c.years[y] && !(c.fail[y] && Date.now() - c.fail[y] < 3 * 3600e3)).slice(0, 2);
+  if (missing.length && opt.cacheOnly) return null; // [ADD] 페이지 첫 화면: 받아야 할 게 있으면 기다리지 않음
   if (missing.length) {
     const got = await Promise.all(missing.map(y => fetchVisYear(lat, lon, y).catch(() => null)));
     missing.forEach((y, i) => { if (got[i]) c.years[y] = got[i]; else c.fail[y] = Date.now(); });
@@ -231,7 +233,8 @@ async function climVisFor(lat, lon) {
   return { months, years: ys.length, from: Math.min(...ys), to: Math.max(...ys) };
 }
 
-async function climFor(lat, lon) {
+async function climFor(lat, lon, opt) {
+  opt = opt || {};
   const key = `clim:crw:${lat.toFixed(2)}_${lon.toFixed(2)}`;
   let c = { years: {}, fail: {} };
   try { const [v] = await S.R(['GET', key]); if (v) c = JSON.parse(v); } catch (_) {}
@@ -239,6 +242,7 @@ async function climFor(lat, lon) {
   const Y = new Date().getUTCFullYear();
   const want = [1, 2, 3, 4, 5].map(k => Y - k);
   const missing = want.filter(y => !c.years[y] && !(c.fail[y] && Date.now() - c.fail[y] < 3 * 3600e3)).slice(0, 2);
+  if (missing.length && opt.cacheOnly) return null;
   if (missing.length) {
     const got = await Promise.all(missing.map(y => fetchClimYear(lat, lon, y)));
     missing.forEach((y, i) => { if (got[i]) c.years[y] = got[i]; else c.fail[y] = Date.now(); });
@@ -322,6 +326,7 @@ async function dataFor(st, all, opt) {
   opt = opt || {}; const key = `sp:d:${st.no}`; let o = null;
   try { const [v] = await S.R(['GET', key]); if (v) o = JSON.parse(v); } catch (_) {}
   if (o) { const fresh = Date.now() - o.at < (o.visMissing ? 600 : DATA_TTL) * 1000; if (fresh && !opt.force) return o; if (opt.quick) { o.stale = true; return o; } }
+  if (opt.cacheOnly) return null;
   const d = await build(st, all, opt);
   if (d.now.sst != null || d.obs) { try { await S.R(['SET', key, JSON.stringify(d), 'EX', String(12 * 3600)]); } catch (_) {} }
   return d;
@@ -475,6 +480,7 @@ a{color:inherit}.wrap{max-width:760px;margin:0 auto;padding:16px 16px 48px}
 .crumb{font-size:12px;color:var(--dim);margin:14px 0 4px}.crumb a{text-decoration:none}
 h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em;line-height:1.3}
 .sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+.pend{color:var(--muted);font-size:13px;display:flex;align-items:center;gap:10px;min-height:52px}.spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 0.8s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}
 .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0 10px}
 .c{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
 .c .l{font-size:11.5px;color:var(--muted)}.c .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}.c .v small{font-size:12px;font-weight:600;color:var(--muted)}
@@ -583,8 +589,12 @@ x.strokeStyle='rgba(244,63,94,.6)';x.setLineDash([4,3]);x.beginPath();x.moveTo(0
 var ro=document.getElementById('dro');function sh(e){var r=c.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*W,py=(e.clientY-r.top)/r.height*H,v=Z[Math.max(0,Math.min(H-1,Math.round(py)))*W+Math.max(0,Math.min(W-1,Math.round(px)))];ro.textContent=isNaN(v)?'–':v>=0?D.land:D.depth+' ~'+Math.round(-v)+'m'}c.addEventListener('pointermove',sh);c.addEventListener('pointerdown',sh)})();</script>`;
 }
 
-function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm) {
-  const t = T[lang];
+function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm, opt) {
+  opt = opt || {}; const t = T[lang];
+  // [ADD] 아직 못 받은 자료는 자리만 잡아 두고(빙글 도는 표시) 페이지를 먼저 보여줘요. 브라우저가 svc=parts 로 받아 채워요.
+  const pend = { now: !d, clim: !clim, depth: !depth, near: !d };
+  if (!d) d = { tz: 'UTC', at: Date.now(), now: {}, days: [], water: 'sea', near: [], pending: true };
+  const SPIN = `<div class="card pend"><span class="spin"></span>${{ ko: '불러오는 중…', ja: '読み込み中…' }[lang] || 'Loading…'}</div>`;
   const st = { ...st0, name: nameIn(st0, lang) };
   const cname = regionName(st.cc, lang, st.country);
   const tz = d.tz;
@@ -594,6 +604,7 @@ function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm) 
   const visToday = d.vis && d.vis[d.today];
   const inland = d.water === 'inland';
   const title = inland ? t.titleIn(st.name, nowT) : t.title(st.name, nowT);
+  const partW = (k, html, pendHtml) => `<div data-part="${k}"${pend[k] ? ' class="pending"' : ''}>${pend[k] ? (pendHtml == null ? SPIN : pendHtml) : html}</div>`;
   const description = inland ? t.descIn(st.name, cname, nowT) : t.desc(st.name, cname, nowT, visToday ? fmtVis(visToday.v) : null, r1(d.now.wave));
   const hrefs = Object.fromEntries(LANGS.map(l => [l, pathOf(l, st)]));
   const deg = (x) => x == null ? '' : t.dir[Math.round(((x % 360) + 360) % 360 / 45) % 8];
@@ -663,17 +674,18 @@ ${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, 
   const body = `${header(lang, hrefs)}
 <nav class="crumb"><a href="/${lang}/s/">${t.links[1]}</a> › <a href="/${lang}/s/#${st.cc || 'xx'}">${esc(cname)}</a> › ${esc(st.name)}</nav>
 <h1>${esc(inland ? t.h1In(st.name) : t.h1(st.name))}</h1>
-<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))} · ${t.upd(fmtDate(d.obs ? d.obs.at : d.at, t.dateFmt))}</p>
+${partW('now', `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))} · ${t.upd(fmtDate(d.obs ? d.obs.at : d.at, t.dateFmt))}</p>
 ${cards}
 ${d.obs && d.obs.kind === 'seoul' ? `<p class="note" style="margin:0 0 10px">${d.obs.extra && d.obs.extra.length ? `${t.trib}: ${d.obs.extra.map(x => `${esc(x.name)} ${x.t}°C`).join(' · ')}<br>` : ''}${t.seoulSrc}</p>` : ''}
 <div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>
-${tide}${days}${climH}${inland ? '' : depthHtml(lang, depth)}${shopHtml}${nearHtml}
+${tide}${days}`, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}
+${partW('clim', climH)}${shopHtml}${partW('depth', inland ? '' : depthHtml(lang, depth), inland ? '' : undefined)}${partW('near', nearHtml, '')}
 <h2>${t.aboutH(esc(st.name))}</h2><p class="txt">${esc(inland ? t.aboutIn(st.name, cname) : t.about(st.name, cname))}</p>
 <div class="foot">${t.foot}<br>© otemp.app · <a href="/">${t.links[0]}</a><a href="/${lang}/s/">${t.links[1]}</a><a href="/shop/">${t.links[2]}</a><a href="/spot/">${t.links[3]}</a></div>
 <script>(function(){var no=${st.no};document.getElementById('share').onclick=function(){var u=location.href.split('#')[0];if(navigator.share){navigator.share({title:document.title,url:u}).catch(function(){})}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){var x=document.getElementById('toast');x.textContent=${JSON.stringify(t.copied)};x.style.display='block';setTimeout(function(){x.style.display='none'},1600)})}};
 var ids=[].slice.call(document.querySelectorAll('[data-shop]')).map(function(a){return a.getAttribute('data-shop')}).filter(function(v,i,a){return a.indexOf(v)===i});
 try{ids.forEach(function(id){navigator.sendBeacon('/api/shops?svc=imp&id='+encodeURIComponent(id)+'&no='+no)})}catch(e){}
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);${warm ? `setTimeout(function(){try{fetch('/api/spotobs?svc=warm&no=${st.no}').catch(function(){})}catch(_){}},1500);` : ''}`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);${warm ? `setTimeout(function(){try{fetch('/api/spotobs?svc=warm&no=${st.no}').catch(function(){})}catch(_){}},1500);` : ''}${Object.values(pend).some(Boolean) ? `fetch('/api/spotobs?svc=parts&no=${st.no}&lang=${lang}').then(function(r){return r.json()}).then(function(j){if(!j||!j.ok)return;Object.keys(j.parts||{}).forEach(function(k){var el=document.querySelector('[data-part="'+k+'"].pending');if(el){el.innerHTML=j.parts[k];el.classList.remove('pending');}});var s=document.querySelector('[data-part="depth"] script');if(s){var n=document.createElement('script');n.textContent=s.textContent;s.parentNode.replaceChild(n,s);}}).catch(function(){});` : ''}`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
 
   const jsonld = [
     { '@context': 'https://schema.org', '@type': 'TouristAttraction', name: st.name, description, url: base + hrefs[lang],
@@ -683,6 +695,7 @@ document.addEventListener('click',function(e){var a=e.target.closest&&e.target.c
       { '@type': 'ListItem', position: 2, name: cname, item: `${base}/${lang}/s/#${st.cc || 'xx'}` },
       { '@type': 'ListItem', position: 3, name: st.name, item: base + hrefs[lang] }] }
   ];
+  if (opt.partsOnly) return { now: body.match(/<div data-part="now"[^>]*>([\s\S]*?)<\/div>\s*<div data-part="clim"/)[1], clim: climH, depth: inland ? '' : depthHtml(lang, depth), near: nearHtml };
   return page({ lang, title, desc: description, canonical: hrefs[lang], alternates: hrefs, jsonld, body, base });
 }
 
@@ -797,17 +810,28 @@ module.exports = async function spotPage(req, res) {
       return res.status(200).json({ ok: true, done: r });
     }
     const T0 = Date.now(), tm = {}, timed = (name, p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]).catch(() => null).then(v => { tm[name] = Date.now() - T0; return v; });
+    // [ADD] svc=parts&no=&lang=: 페이지가 자리만 잡아 둔 칸(지금 상태·월평균·수심·주변)을 제대로 받아 HTML 조각으로 돌려줘요(여기서는 오래 기다려도 돼요)
+    if (svc === 'parts') {
+      res.setHeader('Cache-Control', 'no-store');
+      const [d, shopsAll, clim, climVis, depth] = await Promise.all([
+        dataFor(st, all).catch(() => null), S.hgetallJSON(S.K.shops).catch(() => ({})), climFor(st.lat, st.lon).catch(() => null), climVisFor(st.lat, st.lon).catch(() => null),
+        Promise.race([require('./_depth').depthCached(st.lat, st.lon).then(v => v || require('./_depth').depthAt(st.lat, st.lon)), new Promise(r => setTimeout(() => r(null), 40000))]).catch(() => null)]);
+      if (!d) return res.status(200).json({ ok: false });
+      const parts = renderSpot(lang, st, all, d, [], clim, base, climVis, depth, false, { partsOnly: true });
+      return res.status(200).json({ ok: true, parts });
+    }
+    // 페이지: 저장된 값은 0.6초 안에 오니 그것만 기다리고, 없는 칸은 자리만 두고 바로 보여줘요(브라우저가 svc=parts 로 채움)
+    const QUICK = 600;
     const [d, shopsAll, clim, , climVis, depth] = await Promise.all([
-      timed('data', dataFor(st, all, { quick: true }), 12000),
-      timed('shops', S.hgetallJSON(S.K.shops), 4000),
-      timed('clim', climFor(st.lat, st.lon), 3500),   // 처음 보는 곳은 NOAA에서 몇 년치를 받느라 오래 걸려요 → 이번엔 생략, warm 이 받아 둠
-      timed('count', count(req, st.no), 3000),
-      timed('climvis', climVisFor(st.lat, st.lon), 3500),
-      timed('depth', require('./_depth').depthCached(st.lat, st.lon), 1500)
+      timed('data', dataFor(st, all, { quick: true, cacheOnly: true }), QUICK),
+      timed('shops', S.hgetallJSON(S.K.shops), 1500),
+      timed('clim', climFor(st.lat, st.lon, { cacheOnly: true }), QUICK),
+      timed('count', count(req, st.no), 1500),
+      timed('climvis', climVisFor(st.lat, st.lon, { cacheOnly: true }), QUICK),
+      timed('depth', require('./_depth').depthCached(st.lat, st.lon), QUICK)
     ]);
-    if (!d) { res.setHeader('Cache-Control', 'no-store'); return res.status(503).send('busy'); }
     res.setHeader('Server-Timing', Object.entries(tm).map(([k, v]) => `${k};dur=${v}`).join(', ') + `, total;dur=${Date.now() - T0}`);
-    res.setHeader('X-OT-Warm', d.stale || !clim || !climVis || (!depth && d.water !== 'inland') ? '1' : '0');
+    res.setHeader('X-OT-Warm', d && d.stale ? '1' : '0'); // 오래된 저장본만 warm, 빈 칸은 parts 가 받아요
     const live = Object.values(shopsAll || {}).filter(s => S.isLive(s) && (s.spots || []).map(Number).includes(st.no)).map(S.publicShop);
     const shops = [...live.filter(s => s.paid).sort(() => Math.random() - 0.5), ...live.filter(s => !s.paid).sort(() => Math.random() - 0.5)];
     return sendHtml(res, 200, renderSpot(lang, st, all, d, shops || {}, clim, base, climVis, depth, res.getHeader('X-OT-Warm') === '1'));

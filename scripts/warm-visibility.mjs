@@ -162,3 +162,26 @@ try {
   const j = await (await fetch(`${SITE}/api/spotobs?refresh=1`, { signal: AbortSignal.timeout(90000) })).json();
   console.log(`정점 실측 수온: ${j.count ?? '?'}/${j.of ?? '?'}곳 (${j.ms ?? '?'}ms)`);
 } catch (e) { console.log('정점 실측 수온 실패:', e.message); }
+
+// [ADD] 상세 페이지(/ko/s/번호/이름) 자료 미리 받아 두기: 예보·물때·시야 묶음, 월별 평균 수온·시야, 주변 수심 → 방문자는 빈 칸 없이 바로 봐요
+//  목록은 사이트맵에서(등록된 모든 포인트 번호). 포인트마다 /api/spotobs?svc=warm&no= 한 번(서버가 2분에 한 번만 받아요).
+try {
+  const xml = await (await fetch(`${SITE}/sitemap.xml`, { signal: AbortSignal.timeout(30000) })).text();
+  const nos = [...new Set([...xml.matchAll(/\/ko\/s\/(\d+)\//g)].map(m => +m[1]))];
+  console.log(`상세 페이지 미리 받기: ${nos.length}곳`);
+  let ok = 0, fail = 0, i = 0;
+  const t0 = Date.now();
+  await Promise.all(Array.from({ length: 3 }, async () => { // 3개씩
+    while (i < nos.length && Date.now() - t0 < 40 * 60e3) {
+      const no = nos[i++];
+      try {
+        const r = await fetch(`${SITE}/api/spotobs?svc=warm&no=${no}`, { signal: AbortSignal.timeout(65000) });
+        const j = await r.json().catch(() => ({}));
+        if (j.ok) ok++; else fail++;
+        const bad = (j.done || []).filter(x => /:/.test(x) && !/^depth:cached$/.test(x));
+        if (bad.length) console.log(`  #${no}: ${bad.join(', ')}`);
+      } catch (e) { fail++; console.log(`  #${no} 실패: ${e.message}`); }
+    }
+  }));
+  console.log(`상세 페이지 미리 받기 끝: 성공 ${ok}, 실패 ${fail} (${Math.round((Date.now() - t0) / 1000)}초)`);
+} catch (e) { console.log('상세 페이지 미리 받기 실패:', e.message); }

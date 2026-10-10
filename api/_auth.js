@@ -224,6 +224,8 @@ module.exports = async function auth(req, res) {
     const notify = async (sub, html) => { const to = await S.adminEmail(); if (to) await S.sendMail(to, sub, html); };
     if (await require('./_owner').userAction(a, b, uid, user, json, baseOf(req), notify)) return;
   }
+  if (a === 'photoup') { if (await require('./_photos').upload(b, uid, R, json)) return; } // [ADD] 로그북 사진 올리기(api/_photos.js)
+  if (a === 'phdel') { const user = await getUser(uid); if (!user || user.role !== 'admin') return json(403, { ok: false, error: 'admin_only' }); return json(200, { ok: await require('./_photos').adminDel(R, b.id) }); }
   if (a === 'logs' || a === 'logsave' || a === 'logdel') { if (await require('./_logbook')(a, b, uid, R, json)) return; } // [ADD] 다이빙 로그북(api/_logbook.js)
   if (a === 'logout') {
     const t = cookies(req).ot_s, h = sha(t);

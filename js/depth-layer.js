@@ -85,15 +85,25 @@
       const step = () => { const t0 = performance.now(); while (i < todo.length && performance.now() - t0 < 10) setMode(todo[i++], m); placeDepthLabels(); if (i < todo.length) syncTimer = setTimeout(step, 30); };
       syncTimer = setTimeout(step, m === 'full' ? 300 : 0); // 가까이 볼 땐 지도가 멈춘 뒤(0.3초)에 교체
     }
+    // [FIX] 타일이 영영 비던 문제: 실패(국립해양조사원 일시 오류·서버 시간 초과·네트워크)는 지도를 안 움직여도 15초·45초·2분 뒤 자동으로 다시 받아요(최대 4번).
+    //  응답이 없으면 55초에 끊고(서버 한도 60초), 서버가 "없음"이라고 확실히 답한 칸만 none 으로 둬요.
+    const dFails = new Map(); // key → 실패 횟수
+    const RETRY_MS = [15000, 45000, 120000, 240000];
+    function failTile(key, why) {
+      const n = (dFails.get(key) || 0) + 1; dFails.set(key, n); dTiles.delete(key);
+      if (n > RETRY_MS.length) { dTiles.set(key, { st: 'none', why }); return; }
+      setTimeout(() => { if (!dTiles.has(key) && depthOn && leafletMap && isDetailMode) { dTiles.set(key, { st: 'load' }); dQueue.push(key); loadNext(); } }, RETRY_MS[n - 1]);
+    }
     function loadNext() {
       while (dActive < DTILE_PAR && dQueue.length) {
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=26${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}`).then(r => r.json()).then(d => {
-          if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { if (d.v === 2) d = Object.assign({}, d, decodeTile(d)); const tl = { st: 'ok', raw: d, coarse: !!d.coarse, lbl: [] }; dTiles.set(key, tl); setMode(tl, 'lite'); placeDepthLabels(); syncModes(); }
-          else if (d && d.retry) { dTiles.delete(key); } // 국립해양조사원 일시 실패 → 다음 이동 때 다시
-          else dTiles.set(key, { st: 'none' });
-        }).catch(() => dTiles.delete(key)).finally(() => { dActive--; loadNext(); });
+        const ac = typeof AbortController !== 'undefined' ? new AbortController() : null, tm = setTimeout(() => { try { ac && ac.abort(); } catch (_) {} }, 55000);
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=26${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}`, ac ? { signal: ac.signal } : undefined).then(r => r.json()).then(d => {
+          if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { if (d.v === 2) d = Object.assign({}, d, decodeTile(d)); const tl = { st: 'ok', raw: d, coarse: !!d.coarse, lbl: [] }; dTiles.set(key, tl); setMode(tl, 'lite'); placeDepthLabels(); syncModes(); dFails.delete(key); }
+          else if (d && d.ok && d.empty) dTiles.set(key, { st: 'none' }); // 바다 없음(육지만)
+          else failTile(key, d && d.error || (d && d.retry ? 'retry' : 'fail'));
+        }).catch((e) => failTile(key, String(e && e.name || e))).finally(() => { clearTimeout(tm); dActive--; loadNext(); });
       }
     }
 

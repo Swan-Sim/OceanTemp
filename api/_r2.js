@@ -42,4 +42,13 @@ async function put(key, text, ttlSec) {
   const r = await call('PUT', key, body, extra); if (!r.ok) throw new Error('R2 PUT ' + r.status + ' ' + (await r.text()).slice(0, 200)); return true;
 }
 async function del(key) { const r = await call('DELETE', key); return r.ok || r.status === 404; }
-module.exports = { on, get, put, exists, del, _sign: sign };
+// [ADD] 사진 같은 바이너리 저장/읽기(로그북 사진: lph/{회원}/{사진}_t|_b)
+async function putBin(key, buf, ctype) {
+  const r = await call('PUT', key, buf, { 'content-type': ctype || 'application/octet-stream' });
+  if (!r.ok) throw new Error('R2 PUT ' + r.status + ' ' + (await r.text()).slice(0, 200)); return true;
+}
+async function getBin(key) {
+  const r = await call('GET', key); if (r.status === 404) return null; if (!r.ok) throw new Error('R2 GET ' + r.status);
+  return { buf: Buffer.from(await r.arrayBuffer()), type: r.headers.get('content-type') || 'image/jpeg' };
+}
+module.exports = { on, get, put, exists, del, putBin, getBin, _sign: sign };

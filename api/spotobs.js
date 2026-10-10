@@ -312,6 +312,12 @@ module.exports = async function handler(req, res) {
       res.setHeader('Cache-Control', 'public, s-maxage=2592000, max-age=86400'); return res.status(200).json(r); }
     catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(200).json({ ok: false, error: String(e && e.message || e).slice(0, 120) }); }
   }
+  // [ADD] 로그북 사진: svc=lphoto&id=..&s=t|b (사진 보여주기) · svc=lphotos (지도에 공개된 포인트별 사진 목록)
+  if (svc === 'lphoto') { try { return await require('./_photos').serve(req, res, require('./_store').R); } catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(500).end(); } }
+  if (svc === 'lphotos') {
+    try { const spots = await require('./_photos').index(require('./_store').R); res.setHeader('Cache-Control', 'public, s-maxage=120, max-age=60'); return res.status(200).json({ ok: true, spots }); }
+    catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(200).json({ ok: false, spots: {} }); }
+  }
   // [ADD] 위성사진 수심(SDB) 시험판 - 관리자만. /api/spotobs?svc=sdbview&lat=..&lon=..(&km=1.5&months=12&cloud=60&min=3&json=1)
   //  그림: [위성사진 실제 색 | 위성 수심 | 지금 쓰는 거친 수심(GMRT)] - 흰 선 = 5·10·20m, 빨간 십자 = 포인트. 자료는 Copernicus Data Space(Sentinel-2) 무료 계정을 써요.
   if (svc === 'sdbview') {

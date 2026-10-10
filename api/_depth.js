@@ -57,12 +57,13 @@ async function fromKhoa(b) {
     let it = body.items && body.items.item; if (it && !Array.isArray(it)) it = [it];
     return { total: +body.totalCount || 0, rows: (it || []).map(x => [+x.lat, +x.lot, -(+x.dpwt)]).filter(r => r.every(Number.isFinite)) };
   };
+  const t0 = Date.now(), BUDGET = 30000; // [ADD] 30초 넘으면 포기(서버 60초 한도 안에서 다음 자료로 넘어가게)
   const first = await page(1); if (!first.total) return null;
   // [FIX] 예전엔 나머지 쪽을 한꺼번에(최대 19개) 요청하고 실패한 쪽은 조용히 빼서, 타일 일부가 통째로 비어 "육지"(검은 네모)로 그려졌어요.
   //  → 4개씩 나눠 받고, 실패하면 2번 더 시도, 그래도 실패하면 이 타일은 저장하지 않고 다음에 다시
   const rows = first.rows.slice(), pages = Math.min(40, Math.ceil(first.total / 300)), todo = Array.from({ length: pages - 1 }, (_, i) => i + 2);
   const one = async (no) => { for (let k = 0; ; k++) { try { return await page(no); } catch (e) { if (k >= 2) throw e; await new Promise(r => setTimeout(r, 600 * (k + 1))); } } };
-  for (let i = 0; i < todo.length; i += 4) (await Promise.all(todo.slice(i, i + 4).map(one))).forEach(m => rows.push(...m.rows));
+  for (let i = 0; i < todo.length; i += 4) { if (Date.now() - t0 > BUDGET) throw new Error('khoa timeout ' + rows.length + '/' + first.total); (await Promise.all(todo.slice(i, i + 4).map(one))).forEach(m => rows.push(...m.rows)); }
   if (rows.length < Math.min(first.total, pages * 300) * 0.95) throw new Error(`khoa partial ${rows.length}/${first.total}`);
   if (rows.length < 4) return null;
   // 지도 타일끼리 이어 붙도록 격자 시작점을 전 세계 공통 눈금(위도 0.00135°, 경도 0.0016°)에 맞춤
@@ -633,7 +634,7 @@ async function depthTile(x, y, opt = {}) {
   const b = { s: t.s - DTILE_PAD, n: t.n + DTILE_PAD, w: t.w - DTILE_PAD, e: t.e + DTILE_PAD };
   const bigB = { s: t.s - 0.018, n: t.n + 0.018, w: t.w - 0.018, e: t.e + 0.018 };
   const order = inKorea(lat, lon) ? [fromKhoa, fromGmrt] : inEmodnet(lat, lon) ? [fromEmodnet, fromGmrt] : [fromNoaa, fromGmrt];
-  let out = null; const errors = [];
+  let out = null, tmpSrc = false; const errors = [];
   // [ADD] 원본 격자 저장본(raw)이 있으면 외부 서버에 다시 묻지 않고 그걸로 그려요(그리는 방식만 바꿀 때 몇 분이면 전체 다시 그리기)
   // [ADD] 시안 보기(opt.mode): 1 = 섬 육지·방향 경사·최소 수심 구역 넣기 전 / 2 = 거친 수심 원래 위치 방식 넣기 전 / 3 = 현지 지형 입력 생기기 전. 0(기본)은 지금 방식.
   const MODE = opt.mode | 0, rawC = MODE ? MODE === 1 : RAW_COARSE;
@@ -665,10 +666,12 @@ async function depthTile(x, y, opt = {}) {
     } catch (e) {
       errors.push(fn.name + ': ' + String(e && e.message || e).replace(/serviceKey=[^&\s]+/g, 'serviceKey=***').slice(0, 120));
       // 국립해양조사원이 실패(하루 한도 초과·일시 오류)하면 거친 GMRT로 저장해 버리지 않고 다음에 다시 시도
-      if (fn === fromKhoa) return { ok: false, x, y, retry: true, errors };
+      if (fn === fromKhoa && !opt.fallback) return { ok: false, x, y, retry: true, errors };
+      if (fn === fromKhoa) tmpSrc = true; // [ADD] 임시로 GMRT(저장 안 함, 짧게만 캐시)
     }
   }
   if (!out) return { ok: false, x, y, errors };
+  if (tmpSrc) { out.tmp = true; out.errors = errors; return out; }
   if (!opt.noStore) { try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {} }
   return out;
 }
@@ -726,7 +729,9 @@ async function depthVec(x, y, opt = {}) {
     // [ADD] 2·5m 얕은 등심선 추가 전 저장본: 10m보다 얕은 곳이 있고 원본 격자가 저장돼 있을 때만 다시 그림(외부 서버 다시 안 부르게)
     if (!stale2 && !o.sh5 && o.F && o.F.some(f => f[0] === 1)) { try { const [{ result: ex }] = await redisPipeline([['EXISTS', RAW_KEY(x, y)]]); if (ex) stale2 = true; } catch (_) {} }
     if (!stale2) return o; old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
-  const d = await depthTile(x, y, { noStore: true, fresh: true, mode: MODE }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
+  let d = await depthTile(x, y, { noStore: true, fresh: true, mode: MODE }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
+  // [ADD] 국립해양조사원이 실패했고 예전 그림도 없으면(화면이 비어 보이는 상황) 거친 GMRT로 임시 그림을 만들어요(저장 안 함, 10분만 캐시 → 다음에 다시 KHOA)
+  if (d && !d.ok && d.retry && !old) { try { const f = await depthTile(x, y, { noStore: true, fresh: true, mode: MODE, fallback: true }); if (f && f.ok) d = f; } catch (_) {} }
   if (!d || !d.ok) return old ? Object.assign({}, old, { tmp: true }) : d; // tmp → 짧게만 캐시하고 다음에 다시 시도
   const t = d.tile;
   let out = { ok: true, x, y, tile: t, src: d.src, empty: true, pf: d.pf || '' };
@@ -787,6 +792,7 @@ async function depthVec(x, y, opt = {}) {
     out.at = Date.now();
   }
   if (d.part) out.tmp = true; // 해안선 일부만으로 보정 → 곧 다시
+  if (d.tmp) { out.tmp = true; out.fallback = true; } // [ADD] KHOA 대신 임시 GMRT: 짧게만 저장(아래 bad → 1시간) 뒤 다시 KHOA
   const bad = (o) => !!(o && ((o.coarse && !o.coastFixed) || o.landErr || o.tmp));
   // [FIX] 해안선 서버가 실패해서 새 그림이 덜 보정됐으면, 잘 보정된 예전 그림을 지우지 않고 그대로 보여줘요(1시간 뒤 다시 시도)
   if (bad(out) && old && !bad(old) && !old.empty) return Object.assign({}, old, { tmp: true, keptOld: true });

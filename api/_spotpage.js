@@ -41,9 +41,9 @@ async function getText(url, ms) {
 // [FIX] require(변수)는 Vercel이 배포 묶음에 그 파일을 안 넣어서(정적 분석이 못 찾음) 서버에서 늘 실패 → 시야·NOAA 물때가 비던 원인.
 //  파일 이름을 글자 그대로 적은 require로 바꿔서 묶음에 들어가게
 const API_MODS = {
-  './visibility': () => require('./visibility'),
-  './jmatide': () => require('./jmatide'),
-  './noaa': () => require('./noaa'),
+  './visibility': () => require('./_visibility'), // [FIX] 서버 함수 합칠 때 파일이 _visibility.js 로 바뀌었는데 여기는 옛 이름이라 늘 실패 → 시야·물때가 비던 원인
+  './jmatide': () => require('./_jmatide'),
+  './noaa': () => require('./_noaa'),
   './spotobs': () => require('./spotobs')
 };
 function callApi(mod, query, ms) {
@@ -423,6 +423,42 @@ function f(c) { return (c * 9 / 5 + 32).toFixed(1); }
 const r1 = (v) => v == null ? null : +(+v).toFixed(1);
 const fmtVis = (v) => v == null ? '–' : v >= VIS_MAX - 0.05 ? VIS_MAX + '+' : (v < 10 ? (+v).toFixed(1) : Math.round(v));
 const suitFor = (t) => t < 18 ? '7mm+' : t < 23 ? '5mm' : t < 27 ? '3mm' : '2mm';
+// [ADD] 슈트 두께를 말로: 2mm 쇼티 · 3mm 웻슈트 · 5mm 웻슈트 · 7mm+ (드라이슈트 고려)
+const SUIT_T = {
+  ko: { '2mm': '2mm 쇼티', '3mm': '3mm 웻', '5mm': '5mm 웻', '7mm+': '7mm 이상·드라이', legend: '슈트 = 그 달 평균 수온에 맞는 추천 슈트 두께(2mm 쇼티 ≥27°C · 3mm 웻슈트 23–27°C · 5mm 웻슈트 18–23°C · 7mm 이상 또는 드라이슈트 <18°C). 추위를 타는 정도에 따라 한 단계 두껍게.' },
+  en: { '2mm': '2mm shorty', '3mm': '3mm wet', '5mm': '5mm wet', '7mm+': '7mm+ / dry', legend: 'Suit = suggested wetsuit thickness for that month’s average water temperature (2mm shorty ≥27°C · 3mm wetsuit 23–27°C · 5mm wetsuit 18–23°C · 7mm+ or drysuit <18°C). Go one step thicker if you get cold easily.' },
+  ja: { '2mm': '2mm ショーティ', '3mm': '3mm ウェット', '5mm': '5mm ウェット', '7mm+': '7mm以上・ドライ', legend: 'スーツ＝その月の平均水温に合うスーツの目安（2mmショーティ ≥27°C・3mmウェット 23–27°C・5mmウェット 18–23°C・7mm以上またはドライ <18°C）。寒がりの方は一段厚めに。' }
+};
+// [ADD] 연평균·추천 시즌: 수온·시야 월평균으로 점수(시야 70% + 수온 30%) → 연속된 가장 좋은 달 묶음
+function seasonFor(lang, clim, climVis) {
+  const m = clim.months, vm = climVis && climVis.months; const L = { ko: 0, en: 1, ja: 2 }[lang] || 0;
+  const avgT = +(m.reduce((a, b) => a + b, 0) / 12).toFixed(1);
+  const okV = vm ? vm.filter(v => v != null) : []; const avgV = okV.length ? +(okV.reduce((a, b) => a + b, 0) / okV.length).toFixed(1) : null;
+  const tScore = (t) => t >= 24 ? 1 : t >= 20 ? 0.8 : t >= 16 ? 0.5 : t >= 12 ? 0.25 : 0; // 따뜻할수록 편함
+  const vMax = okV.length ? Math.max(...okV) : 0;
+  const sc = m.map((t, i) => (vm && vm[i] != null && vMax ? 0.7 * vm[i] / vMax : 0.7 * tScore(t)) + 0.3 * tScore(t));
+  const best = Math.max(...sc), good = sc.map(x => x >= best - 0.18); // 최고점에 가까운 달들
+  // 연속 구간(12월→1월 이어짐) 중 가장 긴 것
+  let runs = [], i = 0; const start = good.indexOf(false); if (start < 0) runs = [[0, 11]];
+  else { i = start; for (let k = 0; k < 12; k++) { const j = (start + 1 + k) % 12; if (good[j]) { if (!runs.length || runs[runs.length - 1].e !== (j + 11) % 12) runs.push({ s: j, e: j, n: 1 }); else { runs[runs.length - 1].e = j; runs[runs.length - 1].n++; } } }
+    runs = runs.sort((a, b) => b.n - a.n).map(r => [r.s, r.e]); }
+  const [s0, e0] = runs[0] || [sc.indexOf(best), sc.indexOf(best)];
+  const mon = (k) => lang === 'en' ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][k] : `${k + 1}${lang === 'ja' ? '月' : '월'}`;
+  const range = s0 === e0 ? mon(s0) : `${mon(s0)}–${mon(e0)}`;
+  const idxs = []; for (let k = s0; ; k = (k + 1) % 12) { idxs.push(k); if (k === e0) break; }
+  const tIn = +(idxs.reduce((a, k) => a + m[k], 0) / idxs.length).toFixed(1);
+  const vIn = vm ? (() => { const a = idxs.map(k => vm[k]).filter(v => v != null); return a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1) : null; })() : null;
+  const bestV = vm ? vm.indexOf(vMax) : -1, warm = m.indexOf(Math.max(...m)), cold = m.indexOf(Math.min(...m));
+  const why = {
+    ko: [vIn != null ? `이 기간 시야가 평균 약 ${vIn}m로 연중 가장 맑고` : `이 기간이 연중 가장 따뜻하고`, `수온 ${tIn}°C(${suitFor(tIn)} 슈트)로 ${tIn >= 24 ? '따뜻해요' : tIn >= 18 ? '무난해요' : '차가운 편이에요'}.`,
+      vm && bestV >= 0 ? ` 시야는 ${mon(bestV)}(약 ${vMax}m)에 가장 좋고, 수온은 ${mon(warm)}(${m[warm]}°C)에 가장 높고 ${mon(cold)}(${m[cold]}°C)에 가장 낮아요.` : ` 수온은 ${mon(warm)}(${m[warm]}°C)에 가장 높고 ${mon(cold)}(${m[cold]}°C)에 가장 낮아요.`].join(' '),
+    en: [vIn != null ? `Visibility averages about ${vIn} m then, the clearest of the year,` : `It is the warmest part of the year,`, `with water around ${tIn}°C (${suitFor(tIn)} suit) – ${tIn >= 24 ? 'warm' : tIn >= 18 ? 'comfortable' : 'on the cold side'}.`,
+      vm && bestV >= 0 ? ` Visibility peaks in ${mon(bestV)} (~${vMax} m); water is warmest in ${mon(warm)} (${m[warm]}°C) and coldest in ${mon(cold)} (${m[cold]}°C).` : ` Water is warmest in ${mon(warm)} (${m[warm]}°C) and coldest in ${mon(cold)} (${m[cold]}°C).`].join(' '),
+    ja: [vIn != null ? `この時期は透明度が平均約${vIn}mで年間で最も良く、` : `この時期は年間で最も暖かく、`, `水温${tIn}°C（${suitFor(tIn)}スーツ）で${tIn >= 24 ? '暖かいです' : tIn >= 18 ? '快適です' : 'やや冷たいです'}。`,
+      vm && bestV >= 0 ? `透明度は${mon(bestV)}（約${vMax}m）が最も良く、水温は${mon(warm)}（${m[warm]}°C）が最高、${mon(cold)}（${m[cold]}°C）が最低です。` : `水温は${mon(warm)}（${m[warm]}°C）が最高、${mon(cold)}（${m[cold]}°C）が最低です。`].join('')
+  }[lang];
+  return { avgT, avgV, range, why };
+}
 const tempColor = (t) => t < 10 ? '#6366f1' : t < 16 ? '#3b82f6' : t < 20 ? '#0e9488' : t < 24 ? '#84cc16' : t < 27 ? '#facc15' : '#f97316';
 
 // ───────── HTML ─────────
@@ -593,13 +629,16 @@ ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.d
     climH = `<h2>${climVis ? t.climH : t.climHTemp}</h2><div class="card">
 <div class="months">${m.map((v, i) => `<div class="bar" style="height:${((v - floor) / span * 100).toFixed(0)}%;background:${tempColor(v)}" title="${t.month(i)} ${v}°C"><span>${Math.round(v)}°</span></div>`).join('')}</div>
 <div class="ml">${m.map((_, i) => `<span>${t.month(i)}</span>`).join('')}</div>
-<div class="suit">${m.map(v => `<span>${suitFor(v)}</span>`).join('')}</div>
+<div class="suit">${m.map(v => `<span>${(SUIT_T[lang] || SUIT_T.en)[suitFor(v)]}</span>`).join('')}</div>
 <p class="txt">${t.climTxt(esc(st.name), t.month(hi), m[hi], t.month(lo), m[lo])}</p>
 <table style="margin-top:6px"><tr><th></th>${m.map((_, i) => `<th>${t.month(i)}</th>`).join('')}</tr>
 <tr><td style="font-size:11px;color:var(--muted);white-space:nowrap">${t.rowTemp}</td>${m.map(v => `<td style="font-size:11.5px">${v}</td>`).join('')}</tr>
 ${climVis ? `<tr><td style="font-size:11px;color:var(--sky);white-space:nowrap">${t.rowVis}</td>${climVis.months.map(v => `<td style="font-size:11.5px;color:var(--sky)">${v == null ? '–' : fmtVis(v)}</td>`).join('')}</tr>` : ''}</table>
 ${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, i]).filter(x => x[0] != null); const b = ok.reduce((a, x) => x[0] > a[0] ? x : a), w = ok.reduce((a, x) => x[0] < a[0] ? x : a); return `<p class="txt">${t.visTxt(t.month(b[1]), fmtVis(b[0]), t.month(w[1]), fmtVis(w[0]))}</p>`; })() : ''}
-<p class="note">${t.climNote(clim.years, clim.from, clim.to)}${climVis ? ' · ' + t.visClimNote(climVis.years, climVis.from, climVis.to) : ''} · ${t.suit}: ${lang === 'ko' ? '참고용' : lang === 'ja' ? '目安' : 'rough guide'}</p></div>`;
+<p class="note">${t.climNote(clim.years, clim.from, clim.to)}${climVis ? ' · ' + t.visClimNote(climVis.years, climVis.from, climVis.to) : ''} · ${(SUIT_T[lang] || SUIT_T.en).legend}</p></div>`;
+    // [ADD] 연평균 수온·시야 + 추천 시즌과 이유
+    try { const sz = seasonFor(lang, clim, climVis), L = { ko: ['연평균 수온', '연평균 시야', '추천 시즌', '이유'], en: ['Avg water temp (year)', 'Avg visibility (year)', 'Best season', 'Why'], ja: ['年平均水温', '年平均透明度', 'おすすめシーズン', '理由'] }[lang] || [];
+      climH = `<h2>${{ ko: '한눈에 보기', en: 'At a glance', ja: 'ひと目で' }[lang] || 'At a glance'}</h2><div class="card"><div class="cards"><div class="c"><div class="l">${L[0]}</div><div class="v">${sz.avgT}<small>°C</small></div></div>${sz.avgV != null ? `<div class="c"><div class="l">${L[1]}</div><div class="v">${fmtVis(sz.avgV)}<small>m</small></div></div>` : ''}<div class="c"><div class="l">${L[2]}</div><div class="v" style="font-size:18px">${sz.range}</div></div></div><p class="txt" style="margin-top:8px"><b>${L[3]}:</b> ${sz.why}</p></div>` + climH; } catch (_) {}
   }
 
   const LANGN = (code) => { try { return new Intl.DisplayNames([code], { type: 'language' }).of(code); } catch (_) { return code; } };
@@ -630,7 +669,7 @@ ${tide}${days}${climH}${inland ? '' : depthHtml(lang, depth)}${shopHtml}${nearHt
 <script>(function(){var no=${st.no};document.getElementById('share').onclick=function(){var u=location.href.split('#')[0];if(navigator.share){navigator.share({title:document.title,url:u}).catch(function(){})}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){var x=document.getElementById('toast');x.textContent=${JSON.stringify(t.copied)};x.style.display='block';setTimeout(function(){x.style.display='none'},1600)})}};
 var ids=[].slice.call(document.querySelectorAll('[data-shop]')).map(function(a){return a.getAttribute('data-shop')}).filter(function(v,i,a){return a.indexOf(v)===i});
 try{ids.forEach(function(id){navigator.sendBeacon('/api/shops?svc=imp&id='+encodeURIComponent(id)+'&no='+no)})}catch(e){}
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);${depth ? '' : `setTimeout(function(){try{fetch('/api/spotobs?svc=depth&lat=${st.lat}&lon=${st.lon}&lite=1').catch(function(){})}catch(_){}},4000);`}`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
 
   const jsonld = [
     { '@context': 'https://schema.org', '@type': 'TouristAttraction', name: st.name, description, url: base + hrefs[lang],
@@ -743,7 +782,8 @@ module.exports = async function spotPage(req, res) {
     const norm = (x) => { let v = String(x || ''); for (let i = 0; i < 3; i++) { try { const d = decodeURIComponent(v); if (d === v) break; v = d; } catch (_) { break; } } return v.normalize('NFC').toLowerCase(); };
     if (!q.lang || (q.slug !== undefined && norm(q.slug) !== norm(st.slug))) { res.setHeader('Location', want); res.setHeader('Cache-Control', 'no-store'); return res.status(q.lang ? 301 : 302).end(); }
     // [ADD] 주변 수심: 저장된 값이 없으면 처음 한 번 받아요(9초 넘으면 이번엔 건너뛰고 다음 방문 때)
-    const depthP = require('./_depth').depthCached(st.lat, st.lon).then(v => v || Promise.race([require('./_depth').depthAt(st.lat, st.lon), new Promise(r => setTimeout(() => r(null), 9000))])).catch(() => null);
+    // [CHANGE] 페이지가 느려져서 수심은 저장된 값만 써요(없으면 이번엔 생략, 아래 페이지 끝 스크립트가 백그라운드로 받아 두어 다음 방문엔 나와요)
+    const depthP = Promise.race([require('./_depth').depthCached(st.lat, st.lon), new Promise(r => setTimeout(() => r(null), 2500))]).catch(() => null);
     const [d, shopsAll, clim, , climVis, depth] = await Promise.all([
       dataFor(st, all),
       S.hgetallJSON(S.K.shops).catch(() => ({})),

@@ -42,8 +42,8 @@ module.exports = async function logbook(a, b, uid, R, json) {
   }
   if (a === 'logsave') {
     const r = clean(b); if (r.error) { json(400, { ok: false, error: r.error }); return true; }
-    const e = r.e; let id = txt(b.id, 20).replace(/[^\w]/g, '');
-    if (id) { const [old] = await R(['HGET', key, id]); if (!old) { json(404, { ok: false, error: 'not_found' }); return true; } try { e.at = JSON.parse(old).at; } catch (_) {} }
+    const e = r.e; let id = txt(b.id, 20).replace(/[^\w]/g, ''), oldE = null;
+    if (id) { const [old] = await R(['HGET', key, id]); if (!old) { json(404, { ok: false, error: 'not_found' }); return true; } try { oldE = JSON.parse(old); e.at = oldE.at; } catch (_) {} }
     else {
       // 연속 저장 제한: 새 기록은 10초에 한 번만(SET NX EX가 이미 있으면 거절)
       const [lock] = await R(['SET', 'ulogt:' + uid, '1', 'NX', 'EX', String(GAP_SECONDS)]);
@@ -55,13 +55,18 @@ module.exports = async function logbook(a, b, uid, R, json) {
       id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); e.at = Date.now();
     }
     e.id = id; e.upd = Date.now();
+    const P = require('./_photos'); // [ADD] 사진(최대 4장, 내 것만) · pub = 지도에 공개
+    e.photos = await P.owned(R, uid, b.photos); e.pub = !!b.pub && e.photos.length > 0;
     await R(['HSET', key, id, JSON.stringify(e)]);
+    try { await P.sync(R, uid, oldE, e); } catch (_) {}
     let gain = 0; if (!b.id) gain = await C.award(R, uid, 'log'); // 새로 쓸 때만 크레딧(수정은 안 쳐줘요)
     json(200, { ok: true, item: e, gain }); return true;
   }
   if (a === 'logdel') {
     const id = txt(b.id, 20).replace(/[^\w]/g, ''); if (!id) { json(400, { ok: false, error: 'no_id' }); return true; }
-    await R(['HDEL', key, id]); json(200, { ok: true }); return true;
+    const [old] = await R(['HGET', key, id]); await R(['HDEL', key, id]);
+    try { if (old) await require('./_photos').sync(R, uid, JSON.parse(old), null); } catch (_) {}
+    json(200, { ok: true }); return true;
   }
   return false;
 };

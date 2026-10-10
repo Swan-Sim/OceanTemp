@@ -10,6 +10,7 @@
     date: '날짜', tod: '시작 시각 (HH:MM)', kind: '다이버 종류', rec: '레크레이션', tec: '텍다이버', tank: '탱크 종류', dmax: '최대수심 (m)', davg: '평균수심 (m)', mins: '다이빙 시간 (분)',
     fill: '충전 압력 (bar)', remain: '잔압 (bar)', weight: '웨이트 (kg)', suit: '슈트 두께 (mm)', temp: '수온 (°C)', vis: '시야 (m)', buddy: '버디', notes: '메모',
     used: '사용량', sac: '분당 소비량', sacU: 'bar/분 (수면 환산)', rmv: 'L/분', needCalc: '충전·잔압·평균수심·시간을 넣으면 분당 공기소비량이 계산돼요',
+    photos: '사진', photoMax: '최대 4장', photoAdd: '+ 사진', photoPub: '지도에 공개 (포인트 이름 아래 작은 사진으로 보여요)', photoBusy: '올리는 중…', photoFail: '사진을 올리지 못했어요', photoBig: '사진이 너무 커요', photoDelAdm: '이 사진 삭제(관리자)',
     al80: '80cf 탱크 기준', suitNone: '슈트 없이', suitDry: '드라이슈트', tempAuto: (sst, d, t) => `자동: 수면 ${sst}°C → ${d}m 약 ${t}°C (추정)`, tempAutoS: (sst) => `자동: 수면 ${sst}°C (추정)`, tempNo: '이 날짜 수온 자료가 없어요 - 직접 넣어 주세요', tempBusy: '수온 불러오는 중…', visAuto: (v) => `위성 추정 ${v}m - 실제와 다르면 ±로 고쳐 주세요`,
     prev: (d) => `지난 기록(${d})에서 불러왔어요`, save: '저장', cancel: '취소', edit: '수정', del: '삭제', delAsk: '이 기록을 지울까요?', saved: '저장했어요', gain: (n) => ` · 크레딧 +${n}`,
     err: { bad_date: '날짜를 확인해 주세요', avg_gt_max: '평균수심이 최대수심보다 클 수 없어요', remain_gt_fill: '잔압이 충전 압력보다 클 수 없어요', too_many: '기록이 너무 많아요', bad_no: '이 지점은 쓸 수 없어요', too_fast: '너무 빨라요. 10초 뒤에 다시 저장해 주세요', daily_limit: '하루(24시간)에 30건까지 쓸 수 있어요' },
@@ -20,6 +21,7 @@
     date: 'Date', tod: 'Start time (HH:MM)', kind: 'Diver type', rec: 'Recreational', tec: 'Technical', tank: 'Tank', dmax: 'Max depth (m)', davg: 'Avg depth (m)', mins: 'Dive time (min)',
     fill: 'Start pressure (bar)', remain: 'End pressure (bar)', weight: 'Weight (kg)', suit: 'Suit (mm)', temp: 'Water temp (°C)', vis: 'Visibility (m)', buddy: 'Buddy', notes: 'Notes',
     used: 'Used', sac: 'SAC', sacU: 'bar/min (surface)', rmv: 'L/min', needCalc: 'Enter pressures, average depth and time to get your air consumption',
+    photos: 'Photos', photoMax: 'up to 4', photoAdd: '+ Photo', photoPub: 'Show on the map (small thumbnail under the spot name)', photoBusy: 'Uploading…', photoFail: 'Could not upload the photo', photoBig: 'Photo is too large', photoDelAdm: 'Delete this photo (admin)',
     al80: '80cf tank', suitNone: 'No suit', suitDry: 'Drysuit', tempAuto: (sst, d, t) => `Auto: surface ${sst}°C → ~${t}°C at ${d} m (estimate)`, tempAutoS: (sst) => `Auto: surface ${sst}°C (estimate)`, tempNo: 'No water temp data for this date - enter it yourself', tempBusy: 'Loading water temp…', visAuto: (v) => `Satellite estimate ${v} m - adjust with ±`,
     prev: (d) => `Filled from your last entry (${d})`, save: 'Save', cancel: 'Cancel', edit: 'Edit', del: 'Delete', delAsk: 'Delete this entry?', saved: 'Saved', gain: (n) => ` · +${n} credits`,
     err: { bad_date: 'Check the date', avg_gt_max: 'Average depth cannot exceed max depth', remain_gt_fill: 'End pressure cannot exceed start pressure', too_many: 'Too many entries', bad_no: 'Not available for this spot', too_fast: 'Too fast - wait 10 seconds and save again', daily_limit: 'Up to 30 entries per 24 hours' },
@@ -82,8 +84,36 @@
   .log-calc.off{background:#111a30;border-color:rgba(255,255,255,.1);color:#94a3b8}
   .log-hint{grid-column:1/-1;color:#7dd3fc;font-size:11.5px}
   .log-sub{font-size:10.5px;color:#7dd3fc;margin-top:2px;line-height:1.35}
+  .log-ph{display:flex;flex-wrap:wrap;gap:6px;align-items:center} .log-ph .pt{position:relative;width:62px;height:62px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.2);background:#111a30}
+  .log-ph .pt img{width:100%;height:100%;object-fit:cover;display:block} .log-ph .pt b{position:absolute;top:1px;right:1px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:12px;line-height:20px;text-align:center;cursor:pointer}
+  .log-ph .add{width:62px;height:62px;border-radius:8px;border:1px dashed rgba(255,255,255,.35);background:transparent;color:#cbd5e1;font-size:12px;cursor:pointer;padding:0}
+  .log-ph .busy{color:#7dd3fc;font-size:11.5px} .log-pub{display:flex;gap:6px;align-items:flex-start;margin-top:6px;font-size:11.5px;color:#cbd5e1;line-height:1.4} .log-pub input{width:auto;height:auto;margin-top:2px}
+  .log-phs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px} .log-phs img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.2);cursor:zoom-in}
+  .ot-pv{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px;cursor:zoom-out}
+  .ot-pv img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:6px} .ot-pv button{height:32px;padding:0 14px;border-radius:8px;border:1px solid rgba(248,113,113,.5);background:transparent;color:#f87171;cursor:pointer}
   .log-step{display:flex;gap:4px} .log-step input{flex:1;min-width:0;text-align:center} .log-step button{flex:0 0 32px;height:32px;border-radius:7px;border:1px solid rgba(255,255,255,.18);background:#111a30;color:#e2e8f0;font-size:16px;cursor:pointer;padding:0}`;
   document.head.appendChild(css);
+
+  // [ADD] 사진: 올릴 때 브라우저에서 두 장으로 줄여요 - 작은 썸네일(긴 변 320px) + 인스타그램용 큰 사진(원본 비율, 긴 변 1350px)
+  const phUrl = (id, sz) => `/api/spotobs?svc=lphoto&id=${encodeURIComponent(id)}&s=${sz}`;
+  async function loadImg(file) {
+    if (window.createImageBitmap) { try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (_) {} }
+    return await new Promise((ok, no) => { const u = URL.createObjectURL(file), im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = u; });
+  }
+  function toJpeg(img, max, q, limit) {
+    const w = img.width || img.naturalWidth, h = img.height || img.naturalHeight, k = Math.min(1, max / Math.max(w, h)), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k)); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+    let d = c.toDataURL('image/jpeg', q); while (d.length * 0.75 > limit && q > 0.5) { q -= 0.08; d = c.toDataURL('image/jpeg', q); } return d;
+  }
+  async function compressPhoto(file) { const img = await loadImg(file); return { t: toJpeg(img, 320, 0.78, 80 * 1024), b: toJpeg(img, 1350, 0.85, 860 * 1024) }; }
+  // 큰 사진 보기(지도 썸네일·기록에서 같이 써요). 관리자는 지우기 버튼도 보여요.
+  window.otPhotoView = function (id) {
+    const u = acct().user && acct().user(), adm = !!(u && u.role === 'admin');
+    const o = document.createElement('div'); o.className = 'ot-pv'; o.innerHTML = `<img src="${phUrl(id, 'b')}" alt="">` + (adm ? `<button type="button">${T.photoDelAdm}</button>` : '');
+    o.onclick = (ev) => { if (ev.target.tagName === 'BUTTON') return; o.remove(); };
+    const bt = o.querySelector('button'); if (bt) bt.onclick = async () => { try { await post('phdel', { id }); window.dispatchEvent(new Event('otemp:photos')); } catch (_) {} o.remove(); };
+    document.body.appendChild(o);
+  };
 
   // 분당 공기소비량 계산 → { used, sac, rmv } (계산할 수 없으면 null)
   function calc(e) {
@@ -146,11 +176,12 @@
           e.temp != null ? `${T.temp}: ${e.temp}` : '', e.vis != null ? `${T.vis}: ${e.vis}` : '', e.buddy ? `${T.buddy}: ${esc(e.buddy)}` : '',
           e.fill != null && e.remain != null ? `${e.fill} → ${e.remain} bar` : ''].filter(Boolean).join('<br>')}`
         + (c && c.sac != null ? `<br><span style="color:#a7f3d0">${calcHTML(e)}</span>` : '') + (e.notes ? `<br>📝 ${esc(e.notes)}` : '')
+        + ((e.photos || []).length ? `<div class="log-phs">${e.photos.map(id => `<img src="${phUrl(id, 't')}" data-ph="${esc(id)}" loading="lazy" alt="">`).join('')}</div>` : '')
         + `<div class="row"><button class="log-btn" data-edit="${esc(e.id)}">${T.edit}</button><button class="log-btn red" data-del="${esc(e.id)}">${T.del}</button></div></div></div>`;
     });
     box.innerHTML = h;
     box.querySelector('#log-add').onclick = () => { state.msg = ''; openForm(null); };
-    box.querySelectorAll('.log-card').forEach(c => c.onclick = (ev) => { if (ev.target.closest('button')) return; c.classList.toggle('open'); });
+    box.querySelectorAll('.log-card').forEach(c => c.onclick = (ev) => { if (ev.target.closest('button')) return; const ph = ev.target.closest('[data-ph]'); if (ph) { window.otPhotoView(ph.dataset.ph); return; } c.classList.toggle('open'); });
     box.querySelectorAll('[data-edit]').forEach(b2 => b2.onclick = () => openForm((state.items || []).find(x => x.id === b2.dataset.edit)));
     box.querySelectorAll('[data-del]').forEach(b2 => b2.onclick = async () => {
       if (!confirm(T.delAsk)) return; try { await post('logdel', { id: b2.dataset.del }); state.items = state.items.filter(x => x.id !== b2.dataset.del); } catch (_) {} draw(); });
@@ -158,7 +189,7 @@
 
   function openForm(e) {
     const L = state.last, base = e || { date: todayStr(), tod: nowStr(), type: L ? L.type : 'rec', tank: L ? L.tank : '', weight: L ? L.weight : null, suit: L ? L.suit : null };
-    state.form = { id: e ? e.id : '', v: Object.assign({}, base), hint: !e && L ? T.prev(L.date) : '',
+    state.form = { id: e ? e.id : '', v: Object.assign({}, base), photos: e && e.photos ? e.photos.slice() : [], pub: !!(e && e.pub), prev: {}, busy: false, hint: !e && L ? T.prev(L.date) : '',
       tempManual: !!(e && e.temp != null && !e.tempAuto), visManual: !!(e && e.vis != null) }; draw();
   }
   function drawForm() {
@@ -175,6 +206,7 @@
       + `<div><label>${T.vis}</label><div class="log-step"><button type="button" data-vis="-1">−</button><input name="vis" type="number" inputmode="decimal" step="1" value="${val(v.vis)}"><button type="button" data-vis="1">+</button></div><div class="log-sub" id="log-vis-hint"></div></div>`
       + fld('buddy', T.buddy, 'text', 'maxlength="60"')
       + `<div class="full"><label>${T.notes}</label><textarea name="notes" maxlength="600">${esc(v.notes || '')}</textarea></div>`
+      + `<div class="full"><label>${T.photos} (${T.photoMax})</label><div class="log-ph" id="log-ph"></div><input type="file" id="log-file" accept="image/*" multiple hidden><label class="log-pub"><input type="checkbox" id="log-pub"${f.pub ? ' checked' : ''}><span>${T.photoPub}</span></label></div>`
       + `<div class="log-calc off" id="log-calc"></div>`
       + `<div class="full" style="display:flex;gap:8px"><button type="button" class="log-btn" id="log-cancel" style="flex:1">${T.cancel}</button><button type="submit" class="log-btn pri" style="flex:2">${T.save}</button></div>`
       + `<div class="log-msg full" id="log-err" style="color:#f87171"></div></form>`;
@@ -207,11 +239,30 @@
     box.querySelectorAll('[data-vis]').forEach(b2 => b2.onclick = () => { const c = num(form.vis.value) || 0; form.vis.value = Math.max(0, Math.min(100, c + (+b2.dataset.vis))); f.visManual = true; f.v.vis = form.vis.value; });
     autoTemp(); autoVis();
     form.type.addEventListener('change', () => { f.v = Object.assign(f.v, read()); drawForm(); }); // 텍다이버면 탱크 선택이 나타나요
+    // 사진 칸: 고르면 바로 줄여서 올려요
+    const phEl = box.querySelector('#log-ph'), fileEl = box.querySelector('#log-file'), pubEl = box.querySelector('#log-pub'), errEl = () => box.querySelector('#log-err');
+    const drawPh = () => {
+      phEl.innerHTML = f.photos.map(id => `<div class="pt"><img src="${f.prev[id] || phUrl(id, 't')}" alt=""><b data-rm="${esc(id)}">×</b></div>`).join('')
+        + (f.busy ? `<span class="busy">${T.photoBusy}</span>` : (f.photos.length < 4 ? `<button type="button" class="add" id="log-padd">${T.photoAdd}</button>` : ''));
+      phEl.querySelectorAll('[data-rm]').forEach(x => x.onclick = () => { f.photos = f.photos.filter(i => i !== x.dataset.rm); drawPh(); });
+      const ad = phEl.querySelector('#log-padd'); if (ad) ad.onclick = () => fileEl.click();
+    };
+    fileEl.onchange = async () => {
+      const files = [...fileEl.files].slice(0, 4 - f.photos.length); fileEl.value = ''; if (!files.length) return;
+      f.busy = true; drawPh();
+      for (const fl of files) {
+        try { const c = await compressPhoto(fl), j = await post('photoup', { t: c.t, b: c.b }); f.photos.push(j.id); f.prev[j.id] = c.t; if (errEl()) errEl().textContent = ''; }
+        catch (e3) { if (errEl()) errEl().textContent = e3.code === 'too_big' ? T.photoBig : T.photoFail; }
+      }
+      f.busy = false; if (form.isConnected) drawPh();
+    };
+    pubEl.onchange = () => { f.pub = pubEl.checked; };
+    drawPh();
     box.querySelector('#log-cancel').onclick = () => { state.form = null; draw(); };
     form.onsubmit = async (ev) => {
-      ev.preventDefault(); const o = read(), err = box.querySelector('#log-err'); err.textContent = '';
+      ev.preventDefault(); if (f.busy) return; const o = read(), err = box.querySelector('#log-err'); err.textContent = '';
       try {
-        const j = await post('logsave', Object.assign({}, o, { no: state.no, id: f.id || undefined, tempAuto: !f.tempManual }));
+        const j = await post('logsave', Object.assign({}, o, { no: state.no, id: f.id || undefined, tempAuto: !f.tempManual, photos: f.photos, pub: f.pub }));
         const i = (state.items || []).findIndex(x => x.id === j.item.id); if (i >= 0) state.items[i] = j.item; else (state.items = state.items || []).unshift(j.item);
         state.items.sort((a, z) => (z.date || '').localeCompare(a.date || '') || (z.at || 0) - (a.at || 0)); state.last = state.items[0] || j.item;
         state.form = null; state.msg = T.saved + (j.gain ? T.gain(j.gain) : ''); if (j.gain && acct().reload) acct().reload(); draw();

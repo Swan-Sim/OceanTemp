@@ -1119,7 +1119,7 @@
       // [CHANGE] 범례를 화면 어디로든(지도·지구 위까지) 옮길 수 있게: 치우지 않았을 땐 body에 붙인 떠 있는 상자(position:fixed)로,
       //  위치는 "그래프 상자 오른쪽 위" 기준으로 얼마나 옮겼는지(off)만 기억. 화면 밖으로는 안 나가게. 그래프가 안 보이면(시트 닫힘 등) 같이 숨김
       const anchor = () => { const pr = chartBox.getBoundingClientRect(); return { pr, x: pr.right - 2, y: pr.top + (chartBox.classList.contains('with-head') ? 26 : 2) }; };
-      const clampXY = (x, y, bw, bh) => [Math.min(window.innerWidth - bw - 4, Math.max(4, x)), Math.min(window.innerHeight - bh - 4, Math.max(4, y))];
+      const clampXY = (x, y, bw, bh) => [bw + 8 > window.innerWidth ? 4 : Math.min(window.innerWidth - bw - 4, Math.max(4, x)), Math.min(window.innerHeight - bh - 4, Math.max(4, y))]; // [FIX] 창보다 넓으면 왼쪽 끝에 붙여 머리줄이 보이게
       const place = () => {
         if (docked) { box.classList.remove('floating'); box.style.left = box.style.top = ''; box.style.display = ''; if (box.parentElement !== chartBox.parentElement || box.previousElementSibling !== chartBox) chartBox.after(box); box.style.transform = 'none'; return; }
         if (box.parentElement !== document.body) document.body.appendChild(box);

@@ -637,7 +637,7 @@ var ro=document.getElementById('dro');function sh(e){var r=c.getBoundingClientRe
 function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm, opt) {
   opt = opt || {}; const t = T[lang];
   // [ADD] 아직 못 받은 자료는 자리만 잡아 두고(빙글 도는 표시) 페이지를 먼저 보여줘요. 브라우저가 svc=parts 로 받아 채워요.
-  const pend = { now: !d, clim: !clim, depth: !depth, near: !d };
+  const pend = { now: !d, clim: !clim || (!climVis && !d), depth: !depth, near: !d }; // 연평균 시야가 없으면 현재 시야로 대신 보여주려고 d 가 올 때까지 기다려요
   if (!d) d = { tz: 'UTC', at: Date.now(), now: {}, days: [], water: 'sea', near: [], pending: true };
   const SPIN = `<div class="card pend"><span class="spin"></span>${{ ko: '불러오는 중…', ja: '読み込み中…' }[lang] || 'Loading…'}</div>`;
   const st = { ...st0, name: nameIn(st0, lang) };
@@ -691,7 +691,7 @@ ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.d
     const recBar = (i) => sz && sz.rec[i];
     // [CHANGE] "한눈에 보기" + "월별 평균 수온"을 한 카드로: 왼쪽 위 추천 시즌 → 연평균 수온·시야·플랑크톤 → 월별 그래프(추천 달 호박색, 나머지는 채도 낮게) → 슈트 → 표
     climH = `<h2>${{ ko: '한눈에 보기', en: 'At a glance', ja: 'ひと目で' }[lang] || 'At a glance'}</h2><div class="card">
-${sz ? `<div class="cards g4"><div class="c amb"><div class="l">${L[0]}</div><div class="v" style="font-size:19px">${sz.range}</div></div><div class="c"><div class="l">${L[1]}</div><div class="v">${sz.avgT}<small>°C</small></div></div><div class="c"><div class="l">${L[2]}</div><div class="v">${sz.avgV != null ? fmtVis(sz.avgV) : '–'}<small>m</small></div></div><div class="c"><div class="l">${L[3]}</div><div class="v" style="font-size:12.5px;font-weight:600;white-space:normal;line-height:1.35">${esc(sz.chlTxt)}</div></div></div>
+${sz ? `<div class="cards g4"><div class="c amb"><div class="l">${L[0]}</div><div class="v" style="font-size:19px">${sz.range}</div></div><div class="c"><div class="l">${L[1]}</div><div class="v">${sz.avgT}<small>°C</small></div></div>${sz.avgV != null ? `<div class="c"><div class="l">${L[2]}</div><div class="v">${fmtVis(sz.avgV)}<small>m</small></div></div>` : (() => { const cv = d && d.vis && d.vis[d.today]; return `<div class="c"><div class="l">${{ ko: '시야 (현재·위성)', en: 'Visibility (now, satellite)', ja: '透明度（現在・衛星）' }[lang]}</div><div class="v">${cv ? fmtVis(cv.v) : '–'}<small>m</small></div><div class="s">${{ ko: '연평균은 준비 중', en: 'yearly average pending', ja: '年平均は準備中' }[lang]}</div></div>`; })()}<div class="c"><div class="l">${L[3]}</div><div class="v" style="font-size:12.5px;font-weight:600;white-space:normal;line-height:1.35">${esc(sz.chlTxt)}</div></div></div>
 <p class="txt" style="margin-top:4px"><b>${L[4]}:</b> ${sz.why}</p>` : ''}
 <div class="months">${m.map((v, i) => `<div class="bar${recBar(i) ? ' rec' : ' dim'}" style="height:${((v - floor) / span * 100).toFixed(0)}%;background:${recBar(i) ? '#FFB000' : tempColor(v)}" title="${t.month(i)} ${v}°C"><span>${Math.round(v)}°</span></div>`).join('')}</div>
 <div class="ml">${m.map((_, i) => `<span${recBar(i) ? ' style="color:#FFB000;font-weight:700"' : ''}>${t.month(i)}</span>`).join('')}</div>

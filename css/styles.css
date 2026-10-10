@@ -448,6 +448,10 @@
     /* [ADD] 범례 머리줄: 눌러서 접기/펴기, 끌어서 옮기기 (나머지 범례 글자는 그래프 터치를 막지 않게 그대로 통과) */
     /* 범례 전체가 손잡이: 어디든 잡고 끌기, 탭하면 접기/펴기. 머리줄은 높이를 안 차지하게 오른쪽 위 작은 아이콘 두 개로 */
     .chart-legend-overlay { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+    /* [FIX] 범례가 창보다 넓으면 밖으로 나가 읽지도 닫지도 못하던 문제: 떠 있을 땐 창 너비 안에서 줄바꿈 */
+    .chart-legend-overlay.floating { max-width: calc(100vw - 12px); box-sizing: border-box; }
+    .chart-legend-overlay.floating .item { white-space: normal; }
+    .chart-legend-overlay.floating .lg-head { white-space: nowrap; }
     .chart-legend-overlay.dragging { cursor: grabbing; opacity: .92; }
     .chart-legend-overlay .lg-head { position: absolute; top: 3px; right: 3px; display: flex; flex-direction: column; align-items: center; gap: 3px;
       font-size: 9px; font-weight: 600; color: #94A3B8; line-height: 1; }

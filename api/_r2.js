@@ -12,7 +12,7 @@ const enc = (s) => encodeURIComponent(s).replace(/[!'()*]/g, c => '%' + c.charCo
 function sign(method, key, payload, extra, now, o) {
   o = o || {}; const host = o.host || HOST, region = o.region || 'auto', svc = o.service || 's3', sk = o.sk || SK, ak = o.ak || AK;
   const amzDate = (now || new Date()).toISOString().replace(/[:-]|\.\d{3}/g, ''), date = amzDate.slice(0, 8);
-  const path = o.path || ('/' + enc(BUCKET) + '/' + enc(key));
+  const path = o.path || ('/' + enc(BUCKET) + '/' + String(key).split('/').map(enc).join('/'));
   const ph = sha(payload || '');
   const h = Object.assign({ host, 'x-amz-content-sha256': ph, 'x-amz-date': amzDate }, extra || {});
   const names = Object.keys(h).map(n => n.toLowerCase()).sort();

@@ -252,7 +252,7 @@
       f.busy = true; drawPh();
       for (const fl of files) {
         try { const c = await compressPhoto(fl), j = await post('photoup', { t: c.t, b: c.b }); f.photos.push(j.id); f.prev[j.id] = c.t; if (errEl()) errEl().textContent = ''; }
-        catch (e3) { if (errEl()) errEl().textContent = e3.code === 'too_big' ? T.photoBig : T.photoFail; }
+        catch (e3) { if (errEl()) errEl().textContent = e3.code === 'too_big' ? T.photoBig : T.photoFail + ' (' + (e3.code || e3.status || e3.message) + ')'; }
       }
       f.busy = false; if (form.isConnected) drawPh();
     };

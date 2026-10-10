@@ -30,7 +30,7 @@ const CHECK_DS = 'noaacwNPPVIIRSkd490Daily';
 // [CHANGE] 부산항처럼 항구(2~4m)와 바깥 바다(20m+)가 몇 km 사이에 갈리는 곳이 있어서 5km → 3km로 좁힘.
 // 3km 안에도 픽셀 7개쯤이라 튀는 픽셀 하나는 여전히 걸러져요. 값이 없으면 6km, 10km로 넓힘
 const RADII = [0.03, 0.06, 0.1], RCHECK = 0.11;
-const FRESH_MS = 20 * 3600e3, KEEP_SEC = 21 * 86400; // 이어 붙이기 방식이라 오래 보관
+const FRESH_MS = 20 * 3600e3, KEEP_SEC = 400 * 86400; // [CHANGE] 받은 자료는 1년 넘게 보관 - 원본(NOAA)이 막혀도 마지막 받은 값과 날짜를 보여줘요
 
 async function fetchText(url, timeoutMs) {
   const controller = new AbortController();

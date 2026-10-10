@@ -67,7 +67,7 @@
     // [ADD] 시안 보기: 주소에 ?dv=1·2·3을 붙이면 옛 방식으로 그린 수심 지도를 따로 불러와요(1 섬 육지·방향 경사 전 · 2 거친 수심 원래 위치 전 · 3 현지 지형 입력 전)
     const DV_MODE = (() => { try { const v = new URLSearchParams(location.search).get('dv'); return ['1', '2', '3'].includes(v) ? v : ''; } catch (_) { return ''; } })();
     // [ADD] 타일 그림 방식 바꿔 끼우기: 확대 14 이상이면 full, 아니면 lite. 한 번 만든 그림은 보관(다시 줌아웃하면 가벼운 걸로 즉시 교체)
-    function setMode(tl, m) {
+    function setTileMode(tl, m) {
       if (!tl.raw || tl.mode === m) return;
       const old = tl.grp, wasOn = !!(old && leafletMap && leafletMap.hasLayer(old)); if (wasOn) leafletMap.removeLayer(old);
       const c = tl['c_' + m] || (tl['c_' + m] = buildTile(tl.raw, m === 'full'));
@@ -82,7 +82,7 @@
       dTiles.forEach(tl => { if (!tl.raw || tl.mode === m) return; const t = tl.raw.tile; if (m === 'full' && t && !vb.intersects(L.latLngBounds([t.s, t.w], [t.n, t.e]))) return; todo.push(tl); });
       if (!todo.length) return;
       let i = 0;
-      const step = () => { const t0 = performance.now(); while (i < todo.length && performance.now() - t0 < 10) setMode(todo[i++], m); placeDepthLabels(); if (i < todo.length) syncTimer = setTimeout(step, 30); };
+      const step = () => { const t0 = performance.now(); while (i < todo.length && performance.now() - t0 < 10) setTileMode(todo[i++], m); placeDepthLabels(); if (i < todo.length) syncTimer = setTimeout(step, 30); };
       syncTimer = setTimeout(step, m === 'full' ? 300 : 0); // 가까이 볼 땐 지도가 멈춘 뒤(0.3초)에 교체
     }
     // [FIX] 타일이 영영 비던 문제: 실패(국립해양조사원 일시 오류·서버 시간 초과·네트워크)는 지도를 안 움직여도 15초·45초·2분 뒤 자동으로 다시 받아요(최대 4번).
@@ -100,7 +100,7 @@
         dActive++;
         const ac = typeof AbortController !== 'undefined' ? new AbortController() : null, tm = setTimeout(() => { try { ac && ac.abort(); } catch (_) {} }, 55000);
         fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=26${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}`, ac ? { signal: ac.signal } : undefined).then(r => r.json()).then(d => {
-          if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { if (d.v === 2) d = Object.assign({}, d, decodeTile(d)); const tl = { st: 'ok', raw: d, coarse: !!d.coarse, lbl: [] }; dTiles.set(key, tl); setMode(tl, 'lite'); placeDepthLabels(); syncModes(); dFails.delete(key); }
+          if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { if (d.v === 2) d = Object.assign({}, d, decodeTile(d)); const tl = { st: 'ok', raw: d, coarse: !!d.coarse, lbl: [] }; dTiles.set(key, tl); setTileMode(tl, 'lite'); placeDepthLabels(); syncModes(); dFails.delete(key); }
           else if (d && d.ok && d.empty) dTiles.set(key, { st: 'none' }); // 바다 없음(육지만)
           else failTile(key, d && d.error || (d && d.retry ? 'retry' : 'fail'));
         }).catch((e) => failTile(key, String(e && e.name || e))).finally(() => { clearTimeout(tm); dActive--; loadNext(); });

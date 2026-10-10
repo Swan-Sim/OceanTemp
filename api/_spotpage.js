@@ -203,8 +203,9 @@ const KD_DS = 'https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPN20S3AkdSCIDI
 const median = (a) => { const b = a.filter(Number.isFinite).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
 // [ADD] 엽록소(플랑크톤) 월별: 같은 위성(2km 일별)에서 10일 간격으로 받아 달마다 중앙값(mg/m³). 플랑크톤 번성 달 찾기용
 const CHL_DS = 'https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPN20S3ASCIDINEOF2kmDaily.csv';
-async function fetchChlYear(lat, lon, y) {
-  const r = 0.03, q = `chlor_a[(${y}-01-05T12:00:00Z):10:(${y}-12-31T12:00:00Z)][0][(${(lat + r).toFixed(3)}):(${(lat - r).toFixed(3)})][(${(lon - r).toFixed(3)}):(${(lon + r).toFixed(3)})]`;
+async function fetchChlYear(lat, lon, y, r) {
+  r = r || 0.03;
+  const q = `chlor_a[(${y}-01-05T12:00:00Z):10:(${y}-12-31T12:00:00Z)][0][(${(lat + r).toFixed(3)}):(${(lat - r).toFixed(3)})][(${(lon - r).toFixed(3)}):(${(lon + r).toFixed(3)})]`;
   const text = await getText(`${CHL_DS}?${encodeURIComponent(q).replace(/%3A/g, ':').replace(/%2C/g, ',')}`, 9000);
   if (!text) return null;
   const byDate = {};
@@ -212,10 +213,12 @@ async function fetchChlYear(lat, lon, y) {
   const byMonth = Array.from({ length: 12 }, () => []);
   Object.entries(byDate).forEach(([d, a]) => { const m = +d.slice(5, 7) - 1; const k = median(a); if (k) byMonth[m].push(k); });
   const out = byMonth.map(a => a.length ? +median(a).toFixed(2) : null);
-  return out.some(v => v != null) ? out : 'nodata';
+  if (!out.some(v => v != null)) return r < 0.1 ? fetchChlYear(lat, lon, y, 0.1) : 'nodata'; // [ADD] 해안 가까이는 2km 칸이 비어서 → 반경 11km로 다시
+  return out;
 }
-async function fetchVisYear(lat, lon, y) {
-  const r = 0.03, q = `kd_490[(${y}-01-05T12:00:00Z):10:(${y}-12-31T12:00:00Z)][0][(${(lat + r).toFixed(3)}):(${(lat - r).toFixed(3)})][(${(lon - r).toFixed(3)}):(${(lon + r).toFixed(3)})]`;
+async function fetchVisYear(lat, lon, y, r) {
+  r = r || 0.03;
+  const q = `kd_490[(${y}-01-05T12:00:00Z):10:(${y}-12-31T12:00:00Z)][0][(${(lat + r).toFixed(3)}):(${(lat - r).toFixed(3)})][(${(lon - r).toFixed(3)}):(${(lon + r).toFixed(3)})]`;
   const text = await getText(`${KD_DS}?${encodeURIComponent(q).replace(/%3A/g, ':').replace(/%2C/g, ',')}`, 9000);
   if (!text) return null;
   const byDate = {};
@@ -223,7 +226,8 @@ async function fetchVisYear(lat, lon, y) {
   const byMonth = Array.from({ length: 12 }, () => []);
   Object.entries(byDate).forEach(([d, a]) => { const m = +d.slice(5, 7) - 1; const k = median(a); if (k) byMonth[m].push(Math.max(0.5, Math.min(30, 1.7 / k))); });
   const out = byMonth.map(a => a.length ? +median(a).toFixed(1) : null);
-  return out.some(v => v != null) ? out : 'nodata';
+  if (!out.some(v => v != null)) return r < 0.1 ? fetchVisYear(lat, lon, y, 0.1) : 'nodata'; // [ADD] 해안 가까이는 2km 칸이 비어서 → 반경 11km로 다시
+  return out;
 }
 async function climVisFor(lat, lon, opt) {
   opt = opt || {};
@@ -232,17 +236,20 @@ async function climVisFor(lat, lon, opt) {
   try { const [v] = await S.R(['GET', key]); if (v) c = JSON.parse(v); } catch (_) {}
   c.years = c.years || {}; c.fail = c.fail || {}; c.chl = c.chl || {}; c.cfail = c.cfail || {};
   const Y = new Date().getUTCFullYear(), want = [1, 2, 3, 4, 5].map(k => Y - k);
+  const nd = (v) => v === 'nodata'; // 'nodata'는 한 달에 한 번 다시 시도
+  Object.keys(c.years).forEach(y => { if (nd(c.years[y]) && !(c.ndAt && c.ndAt[y] && Date.now() - c.ndAt[y] < 30 * 86400e3)) { delete c.years[y]; } });
   const missing = want.filter(y => !c.years[y] && !(c.fail[y] && Date.now() - c.fail[y] < 3 * 3600e3)).slice(0, 2);
   const missC = want.filter(y => !c.chl[y] && !(c.cfail[y] && Date.now() - c.cfail[y] < 3 * 3600e3)).slice(0, 2); // [ADD] 엽록소도 같이
   if ((missing.length || missC.length) && opt.cacheOnly) return null; // [ADD] 페이지 첫 화면: 받아야 할 게 있으면 기다리지 않음
   if (missing.length || missC.length) {
     const [got, gotC] = await Promise.all([Promise.all(missing.map(y => fetchVisYear(lat, lon, y).catch(() => null))), Promise.all(missC.map(y => fetchChlYear(lat, lon, y).catch(() => null)))]);
-    missing.forEach((y, i) => { if (got[i]) c.years[y] = got[i]; else c.fail[y] = Date.now(); });
+    c.ndAt = c.ndAt || {};
+    missing.forEach((y, i) => { if (got[i]) { c.years[y] = got[i]; if (nd(got[i])) c.ndAt[y] = Date.now(); } else c.fail[y] = Date.now(); });
     missC.forEach((y, i) => { if (gotC[i]) c.chl[y] = gotC[i]; else c.cfail[y] = Date.now(); });
     try { await S.R(['SET', key, JSON.stringify(c), 'EX', String(400 * 86400)]); } catch (_) {}
   }
   const ys = want.filter(y => Array.isArray(c.years[y]) && c.years[y].filter(v => v != null).length >= 8);
-  if (ys.length < 2) return null;
+  if (ys.length < 1) return null; // [CHANGE] 1년치라도 있으면 보여주고(햇수 표시), 더 받아지면 채워요
   const months = Array.from({ length: 12 }, (_, m) => { const v = ys.map(y => c.years[y][m]).filter(x => x != null); return v.length ? +median(v).toFixed(1) : null; });
   if (months.filter(v => v != null).length < 9) return null;
   const cys = want.filter(y => Array.isArray(c.chl[y]) && c.chl[y].filter(v => v != null).length >= 8);

@@ -67,4 +67,10 @@ async function adminDel(R, id) {
   try { await R2.del(`lph/${own}/${id}_t`); await R2.del(`lph/${own}/${id}_b`); } catch (_) {}
   return true;
 }
-module.exports = { upload, owned, sync, serve, index, adminDel, MAX_PHOTOS };
+// 한 포인트의 공개 사진 id(최근 것부터, 최대 n장) - 상세 페이지용
+async function forSpot(R, no, n) {
+  const [arr] = await R(['HGETALL', 'lphoto:pub']), out = [];
+  if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) { try { const v = JSON.parse(arr[i + 1]); if (v && +v.no === +no) out.push([arr[i], v.at || 0]); } catch (_) {} }
+  return out.sort((a, b) => b[1] - a[1]).slice(0, n || 8).map(x => x[0]);
+}
+module.exports = { upload, owned, sync, serve, index, adminDel, forSpot, MAX_PHOTOS };

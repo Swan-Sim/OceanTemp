@@ -499,7 +499,9 @@ function seasonFor(lang, clim, climVis) {
       blTxt ? `${blTxt}はプランクトンの増殖（クロロフィル高）で透明度が落ちるため除外しました。` : ''].filter(Boolean).join('')
   }[lang];
   const basis = { ko: '기준: 시야 55% · 생물 활동 30% · 수온 15%, 플랑크톤 번성 달 제외. 생물 활동은 실측 자료가 없어 그 바다의 따뜻한 철로 추정한 값이에요.', en: 'Basis: visibility 55% · marine-life activity 30% · water temp 15%; plankton-bloom months excluded. Marine-life activity is estimated from the site’s warm season (no direct biodiversity data).', ja: '基準：透明度55%・生物活動30%・水温15%、プランクトン増殖月は除外。生物活動は実測データがないため、その海域の暖かい季節から推定しています。' }[lang];
-  return { avgT, avgV, range, why, basis, bloom: blTxt };
+  const rec = m.map((_, i) => idxs.includes(i));
+  const chlTxt = cm ? ({ ko: blTxt ? `플랑크톤(클로로필) 번성: ${blTxt}` : '플랑크톤 번성 달 없음(클로로필 연중 낮음)', en: blTxt ? `Plankton (chlorophyll) bloom: ${blTxt}` : 'No bloom months (chlorophyll low all year)', ja: blTxt ? `プランクトン（クロロフィル）増殖: ${blTxt}` : '増殖月なし（クロロフィル年中低い）' })[lang] : ({ ko: '클로로필 자료 준비 중', en: 'Chlorophyll data pending', ja: 'クロロフィルデータ準備中' })[lang];
+  return { avgT, avgV, range, why, basis, bloom: blTxt, rec, chlTxt };
 }
 const tempColor = (t) => t < 10 ? '#6366f1' : t < 16 ? '#3b82f6' : t < 20 ? '#0e9488' : t < 24 ? '#84cc16' : t < 27 ? '#facc15' : '#f97316';
 
@@ -513,6 +515,9 @@ a{color:inherit}.wrap{max-width:760px;margin:0 auto;padding:16px 16px 48px}
 .crumb{font-size:12px;color:var(--dim);margin:14px 0 4px}.crumb a{text-decoration:none}
 h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em;line-height:1.3}
 .sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+.h1row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.h1row h1{margin:0}.shopline{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.shopline a{color:var(--accent);text-decoration:none}
+.phrow{display:flex;gap:6px;overflow-x:auto;margin:8px 0 2px;padding-bottom:2px}.phrow img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
+.cards.g4 .c.amb{border-color:#FFB000;background:rgba(255,176,0,.08)}.bar.dim{opacity:.38;filter:saturate(.35)}
 .pend{color:var(--muted);font-size:13px;display:flex;align-items:center;gap:10px;min-height:52px}.spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 0.8s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}
 .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0 10px}
 .c{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
@@ -625,7 +630,7 @@ var ro=document.getElementById('dro');function sh(e){var r=c.getBoundingClientRe
 function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm, opt) {
   opt = opt || {}; const t = T[lang];
   // [ADD] 아직 못 받은 자료는 자리만 잡아 두고(빙글 도는 표시) 페이지를 먼저 보여줘요. 브라우저가 svc=parts 로 받아 채워요.
-  const pend = { glance: !clim, now: !d, clim: !clim, depth: !depth, near: !d };
+  const pend = { now: !d, clim: !clim, depth: !depth, near: !d };
   if (!d) d = { tz: 'UTC', at: Date.now(), now: {}, days: [], water: 'sea', near: [], pending: true };
   const SPIN = `<div class="card pend"><span class="spin"></span>${{ ko: '불러오는 중…', ja: '読み込み中…' }[lang] || 'Loading…'}</div>`;
   const st = { ...st0, name: nameIn(st0, lang) };
@@ -670,23 +675,27 @@ ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.d
 </table>${d.vis ? `<p class="note">${t.visNote(d.visSat)}</p>` : ''}</div>`;
   }
 
-  let climH = '', glanceH = '';
+  let climH = '';
   if (clim) {
     const m = clim.months; const hi = m.indexOf(Math.max(...m)), lo = m.indexOf(Math.min(...m));
     const minV = Math.min(...m), maxV = Math.max(...m), span = Math.max(6, maxV - minV + 4), floor = minV - 2;
-    climH = `<h2>${climVis ? t.climH : t.climHTemp}</h2><div class="card">
-<div class="months">${m.map((v, i) => `<div class="bar" style="height:${((v - floor) / span * 100).toFixed(0)}%;background:${tempColor(v)}" title="${t.month(i)} ${v}°C"><span>${Math.round(v)}°</span></div>`).join('')}</div>
-<div class="ml">${m.map((_, i) => `<span>${t.month(i)}</span>`).join('')}</div>
+    let sz = null; try { sz = seasonFor(lang, clim, climVis); } catch (_) {}
+    const L = { ko: ['추천 시즌', '연평균 수온', '연평균 시야', '플랑크톤', '이유'], en: ['Best season', 'Avg water temp', 'Avg visibility', 'Plankton', 'Why'], ja: ['おすすめシーズン', '年平均水温', '年平均透明度', 'プランクトン', '理由'] }[lang] || [];
+    const recBar = (i) => sz && sz.rec[i];
+    // [CHANGE] "한눈에 보기" + "월별 평균 수온"을 한 카드로: 왼쪽 위 추천 시즌 → 연평균 수온·시야·플랑크톤 → 월별 그래프(추천 달 호박색, 나머지는 채도 낮게) → 슈트 → 표
+    climH = `<h2>${{ ko: '한눈에 보기', en: 'At a glance', ja: 'ひと目で' }[lang] || 'At a glance'}</h2><div class="card">
+${sz ? `<div class="cards g4"><div class="c amb"><div class="l">${L[0]}</div><div class="v" style="font-size:19px">${sz.range}</div></div><div class="c"><div class="l">${L[1]}</div><div class="v">${sz.avgT}<small>°C</small></div></div><div class="c"><div class="l">${L[2]}</div><div class="v">${sz.avgV != null ? fmtVis(sz.avgV) : '–'}<small>m</small></div></div><div class="c"><div class="l">${L[3]}</div><div class="v" style="font-size:12.5px;font-weight:600;white-space:normal;line-height:1.35">${esc(sz.chlTxt)}</div></div></div>
+<p class="txt" style="margin-top:4px"><b>${L[4]}:</b> ${sz.why}</p>` : ''}
+<div class="months">${m.map((v, i) => `<div class="bar${recBar(i) ? ' rec' : ' dim'}" style="height:${((v - floor) / span * 100).toFixed(0)}%;background:${recBar(i) ? '#FFB000' : tempColor(v)}" title="${t.month(i)} ${v}°C"><span>${Math.round(v)}°</span></div>`).join('')}</div>
+<div class="ml">${m.map((_, i) => `<span${recBar(i) ? ' style="color:#FFB000;font-weight:700"' : ''}>${t.month(i)}</span>`).join('')}</div>
 <div class="suit">${m.map(v => `<span>${(SUIT_T[lang] || SUIT_T.en)[suitFor(v)]}</span>`).join('')}</div>
 <p class="txt">${t.climTxt(esc(st.name), t.month(hi), m[hi], t.month(lo), m[lo])}</p>
 <table style="margin-top:6px"><tr><th></th>${m.map((_, i) => `<th>${t.month(i)}</th>`).join('')}</tr>
 <tr><td style="font-size:11px;color:var(--muted);white-space:nowrap">${t.rowTemp}</td>${m.map(v => `<td style="font-size:11.5px">${v}</td>`).join('')}</tr>
-${climVis ? `<tr><td style="font-size:11px;color:var(--sky);white-space:nowrap">${t.rowVis}</td>${climVis.months.map(v => `<td style="font-size:11.5px;color:var(--sky)">${v == null ? '–' : fmtVis(v)}</td>`).join('')}</tr>` : ''}</table>
+${climVis ? `<tr><td style="font-size:11px;color:var(--sky);white-space:nowrap">${t.rowVis}</td>${climVis.months.map(v => `<td style="font-size:11.5px;color:var(--sky)">${v == null ? '–' : fmtVis(v)}</td>`).join('')}</tr>` : ''}
+${climVis && climVis.chl ? `<tr><td style="font-size:11px;color:#86efac;white-space:nowrap">${{ ko: '클로로필 mg/m³', en: 'Chl-a mg/m³', ja: 'クロロフィル mg/m³' }[lang]}</td>${climVis.chl.map(v => `<td style="font-size:11px;color:#86efac">${v == null ? '–' : v}</td>`).join('')}</tr>` : ''}</table>
 ${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, i]).filter(x => x[0] != null); const b = ok.reduce((a, x) => x[0] > a[0] ? x : a), w = ok.reduce((a, x) => x[0] < a[0] ? x : a); return `<p class="txt">${t.visTxt(t.month(b[1]), fmtVis(b[0]), t.month(w[1]), fmtVis(w[0]))}</p>`; })() : ''}
-<p class="note">${t.climNote(clim.years, clim.from, clim.to)}${climVis ? ' · ' + t.visClimNote(climVis.years, climVis.from, climVis.to) : ''} · ${(SUIT_T[lang] || SUIT_T.en).legend}</p></div>`;
-    // [ADD] 연평균 수온·시야 + 추천 시즌과 이유 → 맨 위 'glance' 칸(저장된 월평균만 있으면 바로 보여요)
-    try { const sz = seasonFor(lang, clim, climVis), L = { ko: ['연평균 수온', '연평균 시야', '추천 시즌', '이유'], en: ['Avg water temp (year)', 'Avg visibility (year)', 'Best season', 'Why'], ja: ['年平均水温', '年平均透明度', 'おすすめシーズン', '理由'] }[lang] || [];
-      glanceH = `<h2>${{ ko: '한눈에 보기', en: 'At a glance', ja: 'ひと目で' }[lang] || 'At a glance'}</h2><div class="card"><div class="cards"><div class="c"><div class="l">${L[0]}</div><div class="v">${sz.avgT}<small>°C</small></div></div>${sz.avgV != null ? `<div class="c"><div class="l">${L[1]}</div><div class="v">${fmtVis(sz.avgV)}<small>m</small></div></div>` : ''}<div class="c"><div class="l">${L[2]}</div><div class="v" style="font-size:18px">${sz.range}</div></div></div><p class="txt" style="margin-top:8px"><b>${L[3]}:</b> ${sz.why}</p><p class="note">${sz.basis}</p></div>`; } catch (_) {}
+<p class="note">${t.climNote(clim.years, clim.from, clim.to)}${climVis ? ' · ' + t.visClimNote(climVis.years, climVis.from, climVis.to) : ''} · ${(SUIT_T[lang] || SUIT_T.en).legend}${sz ? ' · ' + sz.basis : ''}</p></div>`;
   }
 
   const LANGN = (code) => { try { return new Intl.DisplayNames([code], { type: 'language' }).of(code); } catch (_) { return code; } };
@@ -698,28 +707,34 @@ ${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, 
     if (s.instagram) b.push(['instagram', s.instagram]); if (s.web) b.push(['web', s.web]);
     return b.map(([k, u, cls]) => `<a ${cls ? `class="${cls}" ` : ''}href="${esc(u)}" data-shop="${esc(s.id)}" data-k="${k}"${k === 'tel' ? '' : ' target="_blank" rel="noopener nofollow"'}>${t.shopBtn[k]}</a>`).join('');
   };
-  const shopHtml = `<h2>${t.shopH(esc(st.name))}</h2><div class="card">${shops.length ? shops.map(s => `<div class="shop"><div class="hd"><b>${esc(s.name)}</b>${s.type === 'liveaboard' ? `<span class="tag">${({ ko: '리브어보드', ja: 'ライブアボード' })[lang] || 'Liveaboard'}</span>` : ''}${s.paid ? `<span class="tag">${t.partner}</span>` : ''}<span class="lg">${esc(shopLang(s))}</span></div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}<div class="bt">${shopBtns(s)}</div></div>`).join('') : `<p class="txt">${t.shopNone}</p>`}
+  // [CHANGE] 근처 샵: 제목 오른쪽 한 줄(이름만, 누르면 샵 연락처 칸으로). 자세한 연락처는 아래 shopHtml 그대로
+  const shopLine = shops.length ? `<span class="shopline">${shops.slice(0, 4).map(s => `<a href="#shops" data-shop="${esc(s.id)}" data-k="name">${esc(s.name)}</a>`).join(' · ')}${shops.length > 4 ? ` <a href="#shops">+${shops.length - 4}</a>` : ''}</span>` : `<span class="shopline"><a href="/shop/?spot=${st.no}">${t.shopReg}</a></span>`;
+  // [ADD] 로그북에 "지도에 공개"로 올린 사진(최근 8장)
+  const photoHtml = opt.photos && opt.photos.length ? `<div class="phrow">${opt.photos.map(id => `<a href="/api/spotobs?svc=lphoto&id=${id}&s=b" target="_blank" rel="noopener"><img src="/api/spotobs?svc=lphoto&id=${id}&s=t" loading="lazy" alt=""></a>`).join('')}</div>` : '';
+  const shopHtml = `<h2 id="shops">${t.shopH(esc(st.name))}</h2><div class="card">${shops.length ? shops.map(s => `<div class="shop"><div class="hd"><b>${esc(s.name)}</b>${s.type === 'liveaboard' ? `<span class="tag">${({ ko: '리브어보드', ja: 'ライブアボード' })[lang] || 'Liveaboard'}</span>` : ''}${s.paid ? `<span class="tag">${t.partner}</span>` : ''}<span class="lg">${esc(shopLang(s))}</span></div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}<div class="bt">${shopBtns(s)}</div></div>`).join('') : `<p class="txt">${t.shopNone}</p>`}
 <p class="txt" style="font-size:12px;margin-top:8px">${t.shopAsk} <a href="/shop/?spot=${st.no}" style="color:var(--accent)">${t.shopReg}</a></p></div>`;
 
   const byNo = Object.fromEntries(all.map(s => [s.no, s]));
   const nearHtml = d.near && d.near.length ? `<h2>${t.nearH}</h2><div class="near">${d.near.filter(x => byNo[x.no]).map(x => `<a href="${pathOf(lang, byNo[x.no])}">${esc(nameIn(byNo[x.no], lang))}<small>${x.d}km${x.t != null ? ` · ${r1(x.t)}°C` : ''}</small></a>`).join('')}</div>` : '';
 
-  const body = `${header(lang, hrefs)}
-<nav class="crumb"><a href="/${lang}/s/">${t.links[1]}</a> › <a href="/${lang}/s/#${st.cc || 'xx'}">${esc(cname)}</a> › ${esc(st.name)}</nav>
-<h1>${esc(inland ? t.h1In(st.name) : t.h1(st.name))}</h1>
-${partW('glance', glanceH)}
-${partW('now', `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))} · ${t.upd(fmtDate(d.obs ? d.obs.at : d.at, t.dateFmt))}</p>
+  const nowInner = `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))} · ${t.upd(fmtDate(d.obs ? d.obs.at : d.at, t.dateFmt))}</p>
 ${cards}
 ${d.obs && d.obs.kind === 'seoul' ? `<p class="note" style="margin:0 0 10px">${d.obs.extra && d.obs.extra.length ? `${t.trib}: ${d.obs.extra.map(x => `${esc(x.name)} ${x.t}°C`).join(' · ')}<br>` : ''}${t.seoulSrc}</p>` : ''}
 <div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>
-${tide}${days}`, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}
-${partW('clim', climH)}${shopHtml}${partW('depth', inland ? '' : depthHtml(lang, depth), inland ? '' : undefined)}${partW('near', nearHtml, '')}
+${tide}${days}`;
+  const body = `${header(lang, hrefs)}
+<nav class="crumb"><a href="/${lang}/s/">${t.links[1]}</a> › <a href="/${lang}/s/#${st.cc || 'xx'}">${esc(cname)}</a> › ${esc(st.name)}</nav>
+<div class="h1row"><h1>${esc(inland ? t.h1In(st.name) : t.h1(st.name))}</h1>${shopLine}</div>
+${photoHtml}
+${partW('clim', climH)}${partW('depth', inland ? '' : depthHtml(lang, depth), inland ? '' : undefined)}
+${partW('now', nowInner, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}
+${shopHtml}${partW('near', nearHtml, '')}
 <h2>${t.aboutH(esc(st.name))}</h2><p class="txt">${esc(inland ? t.aboutIn(st.name, cname) : t.about(st.name, cname))}</p>
 <div class="foot">${t.foot}<br>© otemp.app · <a href="/">${t.links[0]}</a><a href="/${lang}/s/">${t.links[1]}</a><a href="/shop/">${t.links[2]}</a><a href="/spot/">${t.links[3]}</a></div>
 <script>(function(){var no=${st.no};document.getElementById('share').onclick=function(){var u=location.href.split('#')[0];if(navigator.share){navigator.share({title:document.title,url:u}).catch(function(){})}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){var x=document.getElementById('toast');x.textContent=${JSON.stringify(t.copied)};x.style.display='block';setTimeout(function(){x.style.display='none'},1600)})}};
 var ids=[].slice.call(document.querySelectorAll('[data-shop]')).map(function(a){return a.getAttribute('data-shop')}).filter(function(v,i,a){return a.indexOf(v)===i});
 try{ids.forEach(function(id){navigator.sendBeacon('/api/shops?svc=imp&id='+encodeURIComponent(id)+'&no='+no)})}catch(e){}
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);${warm ? `setTimeout(function(){try{fetch('/api/spotobs?svc=warm&no=${st.no}').catch(function(){})}catch(_){}},1500);` : ''}${Object.values(pend).some(Boolean) ? `fetch('/api/spotobs?svc=parts&no=${st.no}&lang=${lang}').then(function(r){return r.json()}).then(function(j){if(!j||!j.ok)return;Object.keys(j.parts||{}).forEach(function(k){var el=document.querySelector('[data-part="'+k+'"].pending');if(el){el.innerHTML=j.parts[k];el.classList.remove('pending');}});var s=document.querySelector('[data-part="depth"] script');if(s){var n=document.createElement('script');n.textContent=s.textContent;s.parentNode.replaceChild(n,s);}}).catch(function(){});` : ''}`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);${warm ? `setTimeout(function(){try{fetch('/api/spotobs?svc=warm&no=${st.no}').catch(function(){})}catch(_){}},1500);` : ''}${Object.values(pend).some(Boolean) ? `(function fill(n){fetch('/api/spotobs?svc=parts&no=${st.no}&lang=${lang}').then(function(r){return r.json()}).then(function(j){if(!j||!j.ok)throw 0;Object.keys(j.parts||{}).forEach(function(k){var el=document.querySelector('[data-part="'+k+'"].pending');if(el){el.innerHTML=j.parts[k];el.classList.remove('pending');var s=el.querySelector('script');if(s){var x=document.createElement('script');x.textContent=s.textContent;s.parentNode.replaceChild(x,s);}}});if(document.querySelector('[data-part].pending'))throw 0;}).catch(function(){if(n<5)setTimeout(function(){fill(n+1)},7000);else document.querySelectorAll('[data-part].pending').forEach(function(el){el.innerHTML='<p class="note">${{ ko: '자료를 아직 받지 못했어요. 잠시 후 새로고침해 주세요.', ja: 'データをまだ取得できていません。しばらくして再読み込みしてください。' }[lang] || 'Data not available yet. Please refresh in a moment.'}</p>';el.classList.remove('pending');});});})(1);` : ''}`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
 
   const jsonld = [
     { '@context': 'https://schema.org', '@type': 'TouristAttraction', name: st.name, description, url: base + hrefs[lang],
@@ -729,7 +744,7 @@ document.addEventListener('click',function(e){var a=e.target.closest&&e.target.c
       { '@type': 'ListItem', position: 2, name: cname, item: `${base}/${lang}/s/#${st.cc || 'xx'}` },
       { '@type': 'ListItem', position: 3, name: st.name, item: base + hrefs[lang] }] }
   ];
-  if (opt.partsOnly) return { glance: glanceH, now: body.match(/<div data-part="now"[^>]*>([\s\S]*?)<\/div>\s*<div data-part="clim"/)[1], clim: climH, depth: inland ? '' : depthHtml(lang, depth), near: nearHtml };
+  if (opt.partsOnly) return { now: nowInner, clim: climH, depth: inland ? '' : depthHtml(lang, depth), near: nearHtml };
   return page({ lang, title, desc: description, canonical: hrefs[lang], alternates: hrefs, jsonld, body, base });
 }
 
@@ -847,28 +862,33 @@ module.exports = async function spotPage(req, res) {
     // [ADD] svc=parts&no=&lang=: 페이지가 자리만 잡아 둔 칸(지금 상태·월평균·수심·주변)을 제대로 받아 HTML 조각으로 돌려줘요(여기서는 오래 기다려도 돼요)
     if (svc === 'parts') {
       res.setHeader('Cache-Control', 'no-store');
-      const [d, shopsAll, clim, climVis, depth] = await Promise.all([
-        dataFor(st, all).catch(() => null), S.hgetallJSON(S.K.shops).catch(() => ({})), climFor(st.lat, st.lon).catch(() => null), climVisFor(st.lat, st.lon).catch(() => null),
-        Promise.race([require('./_depth').depthCached(st.lat, st.lon).then(v => v || require('./_depth').depthAt(st.lat, st.lon)), new Promise(r => setTimeout(() => r(null), 40000))]).catch(() => null)]);
-      if (!d) return res.status(200).json({ ok: false });
-      const parts = renderSpot(lang, st, all, d, [], clim, base, climVis, depth, false, { partsOnly: true });
-      return res.status(200).json({ ok: true, parts });
+      // [FIX] 하나가 오래 걸려도(수심 30초·시야 20초) 다른 칸은 먼저 돌려주고, 못 받은 칸은 missing 으로 알려서 브라우저가 몇 번 더 물어봐요(예전엔 60초 한도에 걸리면 통째로 실패 → 영영 로딩)
+      const TP = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]).catch(() => null);
+      const [d, clim, climVis, depth, photos] = await Promise.all([
+        TP(dataFor(st, all), 22000), TP(climFor(st.lat, st.lon), 15000), TP(climVisFor(st.lat, st.lon), 15000),
+        TP(require('./_depth').depthCached(st.lat, st.lon).then(v => v || require('./_depth').depthAt(st.lat, st.lon)), 30000),
+        TP(require('./_photos').forSpot(S.R, st.no, 8), 2000)]);
+      const missing = []; if (!d) missing.push('now', 'near'); if (!clim) missing.push('clim'); if (!depth) missing.push('depth');
+      const parts = renderSpot(lang, st, all, d, [], clim, base, climVis, depth, false, { partsOnly: true, photos: photos || [] });
+      if (!d) { delete parts.now; delete parts.near; } if (!clim) delete parts.clim; if (!depth) delete parts.depth;
+      return res.status(200).json({ ok: true, parts, missing });
     }
     // 페이지: 저장된 값은 0.6초 안에 오니 그것만 기다리고, 없는 칸은 자리만 두고 바로 보여줘요(브라우저가 svc=parts 로 채움)
     const QUICK = 600;
-    const [d, shopsAll, clim, , climVis, depth] = await Promise.all([
+    const [d, shopsAll, clim, , climVis, depth, photos] = await Promise.all([
       timed('data', dataFor(st, all, { quick: true, cacheOnly: true }), QUICK),
       timed('shops', S.hgetallJSON(S.K.shops), 1500),
       timed('clim', climFor(st.lat, st.lon, { cacheOnly: true }), QUICK),
       timed('count', count(req, st.no), 1500),
       timed('climvis', climVisFor(st.lat, st.lon, { cacheOnly: true }), QUICK),
-      timed('depth', require('./_depth').depthCached(st.lat, st.lon), QUICK)
+      timed('depth', require('./_depth').depthCached(st.lat, st.lon), QUICK),
+      timed('photos', require('./_photos').forSpot(S.R, st.no, 8), QUICK)
     ]);
     res.setHeader('Server-Timing', Object.entries(tm).map(([k, v]) => `${k};dur=${v}`).join(', ') + `, total;dur=${Date.now() - T0}`);
     res.setHeader('X-OT-Warm', d && d.stale ? '1' : '0'); // 오래된 저장본만 warm, 빈 칸은 parts 가 받아요
     const live = Object.values(shopsAll || {}).filter(s => S.isLive(s) && (s.spots || []).map(Number).includes(st.no)).map(S.publicShop);
     const shops = [...live.filter(s => s.paid).sort(() => Math.random() - 0.5), ...live.filter(s => !s.paid).sort(() => Math.random() - 0.5)];
-    return sendHtml(res, 200, renderSpot(lang, st, all, d, shops || {}, clim, base, climVis, depth, res.getHeader('X-OT-Warm') === '1'));
+    return sendHtml(res, 200, renderSpot(lang, st, all, d, shops || [], clim, base, climVis, depth, res.getHeader('X-OT-Warm') === '1', { photos: photos || [] }));
   } catch (e) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(500).send('error: ' + esc(String(e && e.message || e)));

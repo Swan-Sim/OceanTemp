@@ -91,28 +91,27 @@
         }
       }
       g += flow(cs, '#d9f99d', 3, true, R, true) + flow(c5, '#15803d', 4, false, R - 13, false) + flow(c30, '#0a4f24', 5, false, R - 26, false); // 깊은 것이 위에 그려져 머리가 가려지지 않게
-      const box = (x, y, color, title, big, unit, small, hgt) => `<g transform="translate(${x} ${y})">` +
-        `<rect x="0" y="0" width="${hgt ? 166 : 104}" height="${hgt || 40}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
-        `<text x="9" y="17" font-size="11" fill="${color}" font-weight="700">${title} <tspan fill="#fff" font-size="15">${big}</tspan><tspan fill="#cbd5e1" font-size="10"> ${unit}</tspan></text>` +
-        `<text x="9" y="32" font-size="10" fill="#cbd5e1">${small}</text></g>`;
-      let labels = '';
-      if (w && w.speed != null) labels += box(R + 22, -R - 30, '#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s',
-        `${w.dir != null ? windDialDir16(w.dir) + (ko ? '풍' : '') : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`);
+      // [CHANGE] 바람·파도·써지·흐름을 상자 하나로 모음(원 오른쪽 위). 줄마다 색 글자로 구분
+      let labels = '', rows = '', y = 0;
+      const row = (html) => { y += 16; rows += `<text x="9" y="${y}" font-size="10.5" fill="#cbd5e1">${html}</text>`; };
+      const head = (color, name, big, unit, rest) => `<tspan fill="${color}" font-weight="800" font-size="11">${name}</tspan> <tspan fill="#fff" font-weight="800" font-size="13">${big}</tspan><tspan fill="#cbd5e1" font-size="10"> ${unit}</tspan>${rest ? ' <tspan fill="#cbd5e1">' + rest + '</tspan>' : ''}`;
+      if (w && w.speed != null) row(head('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s',
+        `${w.dir != null ? windDialDir16(w.dir) + (ko ? '풍' : '') : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`));
       if (v && v.height != null) {
-        labels += box(R + 22, R - 10, '#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm',
-          `${vdir != null ? windDialDir16(vdir) + (ko ? '쪽' : '') : ''}${v.swellPeriod != null ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`, 56);
+        row(head('#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm',
+          `${vdir != null ? windDialDir16(vdir) + (ko ? '쪽' : '') : ''}${v.swellPeriod != null ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`));
         const s5 = windDialSurge(v, 5), s30 = windDialSurge(v, 30);
-        if (s5 != null) labels += `<text x="${R + 31}" y="${R + 36}" font-size="10" fill="#7dd3fc"><tspan font-weight="700">↕ ${ko ? '써지' : 'Surge'}</tspan> 5m <tspan fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</tspan> · 30m <tspan fill="#fff" font-weight="700">${surgeLevel(s30, ko)}</tspan></text>`;
+        if (s5 != null) row(`<tspan fill="#7dd3fc" font-weight="700">↕ ${ko ? '써지' : 'Surge'}</tspan> 5m <tspan fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</tspan> · 30m <tspan fill="#fff" font-weight="700">${surgeLevel(s30, ko)}</tspan>`);
       }
       if (cs) {
         const kn = (c) => (c.speed / KN).toFixed(1), dirTo = (c) => windDialDir16(c.to);
-        const line = (y, color, name, c) => `<text x="9" y="${y}" font-size="10.5" fill="${color}"><tspan font-weight="700">${name}</tspan> <tspan fill="#fff" font-weight="700">${kn(c)}</tspan>${ko ? '노트' : 'kn'} → ${dirTo(c)}</text>`;
-        labels += `<g transform="translate(${-R - 184} ${-44})"><rect x="0" y="0" width="162" height="${c5 ? 78 : 40}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>` +
-          `<text x="9" y="15" font-size="11" fill="#4ade80" font-weight="800">${ko ? '흐름' : 'Current'}</text>` +
-          line(31, '#d9f99d', ko ? '▷ 수면' : '▷ Surface', cs) +
-          (c5 ? line(46, '#22c55e', ko ? '▶ 수심 5m' : '▶ 5 m', c5) + line(61, '#15803d', ko ? '▶ 수심 30m' : '▶ 30 m', c30) +
-            `<text x="9" y="73" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬·해안에 막혀 약해짐' : 'sheltered, slower') : (ko ? '지형 따라 방향 바뀜' : 'steered by terrain'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>` : '') + `</g>`;
+        const line = (color, name, c) => row(`<tspan fill="${color}" font-weight="700">${name}</tspan> <tspan fill="#fff" font-weight="700">${kn(c)}</tspan>${ko ? '노트' : 'kn'} → ${dirTo(c)}`);
+        y += 4; row(`<tspan fill="#4ade80" font-weight="800" font-size="11">${ko ? '흐름' : 'Current'}</tspan>`);
+        line('#d9f99d', ko ? '▷ 수면' : '▷ Surface', cs);
+        if (c5) { line('#22c55e', ko ? '▶ 수심 5m' : '▶ 5 m', c5); line('#15803d', ko ? '▶ 수심 30m' : '▶ 30 m', c30);
+          y += 12; rows += `<text x="9" y="${y}" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬·해안에 막혀 약해짐' : 'sheltered, slower') : (ko ? '지형 따라 방향 바뀜' : 'steered by terrain'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>`; }
       }
+      if (rows) labels += `<g transform="translate(${R + 22} ${-R - 30})"><rect x="0" y="0" width="214" height="${y + 9}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>${rows}</g>`;
       // [CHANGE] 시각을 잘 보이게: 원 아래 진한 알약 모양
       const tw = Math.max(64, timeLabel.length * 9 + 22), isNowLbl = /^(지금|Now)$/.test(timeLabel);
       labels += `<g transform="translate(0 ${R + 34})"><rect x="${-tw / 2}" y="-14" width="${tw}" height="26" rx="13" fill="rgba(7,11,20,0.92)" stroke="${isNowLbl ? '#FFB000' : '#4ade80'}" stroke-width="1.5"/>` +

@@ -1114,7 +1114,7 @@
       const LG_DOWN_SVG = '<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1v6M2.2 4.4 5 7.2l2.8-2.8M1.5 9h7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       const LG_UP_SVG = '<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 9V3M2.2 5.6 5 2.8l2.8 2.8M1.5 1h7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       let collapsed = store.get('collapsed', window.innerWidth < 600);
-      let docked = true; // 범례는 항상 그래프 바로 아래 한 줄로(떠다니지 않게)
+      let docked = store.get('docked', false);
       let off = store.get('offset', { x: 0, y: 0 });
       // [CHANGE] 범례를 화면 어디로든(지도·지구 위까지) 옮길 수 있게: 치우지 않았을 땐 body에 붙인 떠 있는 상자(position:fixed)로,
       //  위치는 "그래프 상자 오른쪽 위" 기준으로 얼마나 옮겼는지(off)만 기억. 화면 밖으로는 안 나가게. 그래프가 안 보이면(시트 닫힘 등) 같이 숨김
@@ -1143,7 +1143,7 @@
         if (dock) { dock.innerHTML = docked ? LG_UP_SVG : LG_DOWN_SVG; dock.title = docked ? t.legendUndock : t.legendDock; }
         place();
       };
-      const setDocked = (v) => { return; docked = v; store.set('docked', v); if (!v) { off = { x: 0, y: 0 }; store.set('offset', off); } apply(); };
+      const setDocked = (v) => { docked = v; store.set('docked', v); if (!v) { off = { x: 0, y: 0 }; store.set('offset', off); } apply(); };
       const addHead = () => {
         if (!box.firstElementChild || box.querySelector('.lg-head')) return;
         const head = document.createElement('div');

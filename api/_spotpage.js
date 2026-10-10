@@ -201,6 +201,19 @@ async function fetchClimYear(lat, lon, y) {
 //  시야 ≈ 1.7 ÷ Kd490 (앱과 같은 식). 날짜별 반경 약 3km 픽셀 중앙값 → 달별 중앙값. 수온처럼 한 번에 1~2년씩 쌓아요.
 const KD_DS = 'https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPN20S3AkdSCIDINEOF2kmDaily.csv';
 const median = (a) => { const b = a.filter(Number.isFinite).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
+// [ADD] 엽록소(플랑크톤) 월별: 같은 위성(2km 일별)에서 10일 간격으로 받아 달마다 중앙값(mg/m³). 플랑크톤 번성 달 찾기용
+const CHL_DS = 'https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPN20S3ASCIDINEOF2kmDaily.csv';
+async function fetchChlYear(lat, lon, y) {
+  const r = 0.03, q = `chlor_a[(${y}-01-05T12:00:00Z):10:(${y}-12-31T12:00:00Z)][0][(${(lat + r).toFixed(3)}):(${(lat - r).toFixed(3)})][(${(lon - r).toFixed(3)}):(${(lon + r).toFixed(3)})]`;
+  const text = await getText(`${CHL_DS}?${encodeURIComponent(q).replace(/%3A/g, ':').replace(/%2C/g, ',')}`, 9000);
+  if (!text) return null;
+  const byDate = {};
+  text.split('\n').slice(2).forEach(line => { const c = line.split(','); if (c.length < 5) return; const v = parseFloat(c[4]); if (Number.isFinite(v) && v > 0) (byDate[c[0].slice(0, 10)] = byDate[c[0].slice(0, 10)] || []).push(v); });
+  const byMonth = Array.from({ length: 12 }, () => []);
+  Object.entries(byDate).forEach(([d, a]) => { const m = +d.slice(5, 7) - 1; const k = median(a); if (k) byMonth[m].push(k); });
+  const out = byMonth.map(a => a.length ? +median(a).toFixed(2) : null);
+  return out.some(v => v != null) ? out : 'nodata';
+}
 async function fetchVisYear(lat, lon, y) {
   const r = 0.03, q = `kd_490[(${y}-01-05T12:00:00Z):10:(${y}-12-31T12:00:00Z)][0][(${(lat + r).toFixed(3)}):(${(lat - r).toFixed(3)})][(${(lon - r).toFixed(3)}):(${(lon + r).toFixed(3)})]`;
   const text = await getText(`${KD_DS}?${encodeURIComponent(q).replace(/%3A/g, ':').replace(/%2C/g, ',')}`, 9000);
@@ -217,20 +230,24 @@ async function climVisFor(lat, lon, opt) {
   const key = `clim:vis:${lat.toFixed(2)}_${lon.toFixed(2)}`;
   let c = { years: {}, fail: {} };
   try { const [v] = await S.R(['GET', key]); if (v) c = JSON.parse(v); } catch (_) {}
-  c.years = c.years || {}; c.fail = c.fail || {};
+  c.years = c.years || {}; c.fail = c.fail || {}; c.chl = c.chl || {}; c.cfail = c.cfail || {};
   const Y = new Date().getUTCFullYear(), want = [1, 2, 3, 4, 5].map(k => Y - k);
   const missing = want.filter(y => !c.years[y] && !(c.fail[y] && Date.now() - c.fail[y] < 3 * 3600e3)).slice(0, 2);
-  if (missing.length && opt.cacheOnly) return null; // [ADD] 페이지 첫 화면: 받아야 할 게 있으면 기다리지 않음
-  if (missing.length) {
-    const got = await Promise.all(missing.map(y => fetchVisYear(lat, lon, y).catch(() => null)));
+  const missC = want.filter(y => !c.chl[y] && !(c.cfail[y] && Date.now() - c.cfail[y] < 3 * 3600e3)).slice(0, 2); // [ADD] 엽록소도 같이
+  if ((missing.length || missC.length) && opt.cacheOnly) return null; // [ADD] 페이지 첫 화면: 받아야 할 게 있으면 기다리지 않음
+  if (missing.length || missC.length) {
+    const [got, gotC] = await Promise.all([Promise.all(missing.map(y => fetchVisYear(lat, lon, y).catch(() => null))), Promise.all(missC.map(y => fetchChlYear(lat, lon, y).catch(() => null)))]);
     missing.forEach((y, i) => { if (got[i]) c.years[y] = got[i]; else c.fail[y] = Date.now(); });
+    missC.forEach((y, i) => { if (gotC[i]) c.chl[y] = gotC[i]; else c.cfail[y] = Date.now(); });
     try { await S.R(['SET', key, JSON.stringify(c), 'EX', String(400 * 86400)]); } catch (_) {}
   }
   const ys = want.filter(y => Array.isArray(c.years[y]) && c.years[y].filter(v => v != null).length >= 8);
   if (ys.length < 2) return null;
   const months = Array.from({ length: 12 }, (_, m) => { const v = ys.map(y => c.years[y][m]).filter(x => x != null); return v.length ? +median(v).toFixed(1) : null; });
   if (months.filter(v => v != null).length < 9) return null;
-  return { months, years: ys.length, from: Math.min(...ys), to: Math.max(...ys) };
+  const cys = want.filter(y => Array.isArray(c.chl[y]) && c.chl[y].filter(v => v != null).length >= 8);
+  const chl = cys.length ? Array.from({ length: 12 }, (_, m) => { const v = cys.map(y => c.chl[y][m]).filter(x => x != null); return v.length ? +median(v).toFixed(2) : null; }) : null;
+  return { months, years: ys.length, from: Math.min(...ys), to: Math.max(...ys), chl };
 }
 
 async function climFor(lat, lon, opt) {
@@ -438,18 +455,23 @@ const SUIT_T = {
   en: { '2mm': '2mm shorty', '3mm': '3mm wet', '5mm': '5mm wet', '7mm+': '7mm+ / dry', legend: 'Suit = suggested wetsuit thickness for that month’s average water temperature (2mm shorty ≥27°C · 3mm wetsuit 23–27°C · 5mm wetsuit 18–23°C · 7mm+ or drysuit <18°C). Go one step thicker if you get cold easily.' },
   ja: { '2mm': '2mm ショーティ', '3mm': '3mm ウェット', '5mm': '5mm ウェット', '7mm+': '7mm以上・ドライ', legend: 'スーツ＝その月の平均水温に合うスーツの目安（2mmショーティ ≥27°C・3mmウェット 23–27°C・5mmウェット 18–23°C・7mm以上またはドライ <18°C）。寒がりの方は一段厚めに。' }
 };
-// [ADD] 연평균·추천 시즌: 수온·시야 월평균으로 점수(시야 70% + 수온 30%) → 연속된 가장 좋은 달 묶음
+// [ADD] 연평균·추천 시즌. 점수 = 시야 55% + 생물 활동 30% + 수온 편안함 15%, 플랑크톤 번성 달(엽록소가 연중 중앙값의 1.6배↑ & 1 mg/m³↑)은 추천에서 빼요.
+//  생물 활동: 실측 생물다양성 자료가 없어서 "그 바다의 따뜻한 철"(연중 수온 범위에서의 위치)을 대신 써요 - 온대 바다는 난류를 따라 어종이 느는 늦여름~가을이 높고, 열대(연교차 작음)는 연중 비슷.
+//  플랑크톤은 시야를 떨어뜨리므로 생물 활동에 넣지 않아요(사용자 요청).
 function seasonFor(lang, clim, climVis) {
-  const m = clim.months, vm = climVis && climVis.months; const L = { ko: 0, en: 1, ja: 2 }[lang] || 0;
+  const m = clim.months, vm = climVis && climVis.months, cm = climVis && climVis.chl;
   const avgT = +(m.reduce((a, b) => a + b, 0) / 12).toFixed(1);
   const okV = vm ? vm.filter(v => v != null) : []; const avgV = okV.length ? +(okV.reduce((a, b) => a + b, 0) / okV.length).toFixed(1) : null;
-  const tScore = (t) => t >= 24 ? 1 : t >= 20 ? 0.8 : t >= 16 ? 0.5 : t >= 12 ? 0.25 : 0; // 따뜻할수록 편함
-  const vMax = okV.length ? Math.max(...okV) : 0;
-  const sc = m.map((t, i) => (vm && vm[i] != null && vMax ? 0.7 * vm[i] / vMax : 0.7 * tScore(t)) + 0.3 * tScore(t));
-  const best = Math.max(...sc), good = sc.map(x => x >= best - 0.18); // 최고점에 가까운 달들
-  // 연속 구간(12월→1월 이어짐) 중 가장 긴 것
-  let runs = [], i = 0; const start = good.indexOf(false); if (start < 0) runs = [[0, 11]];
-  else { i = start; for (let k = 0; k < 12; k++) { const j = (start + 1 + k) % 12; if (good[j]) { if (!runs.length || runs[runs.length - 1].e !== (j + 11) % 12) runs.push({ s: j, e: j, n: 1 }); else { runs[runs.length - 1].e = j; runs[runs.length - 1].n++; } } }
+  const vMax = okV.length ? Math.max(...okV) : 0, tMin = Math.min(...m), tMax = Math.max(...m), span = tMax - tMin;
+  const comfort = (t) => t >= 24 ? 1 : t >= 20 ? 0.8 : t >= 16 ? 0.5 : t >= 12 ? 0.25 : 0;
+  const bio = (t) => span < 6 ? 0.8 : 0.3 + 0.7 * (t - tMin) / span; // 열대는 연중 비슷, 온대는 따뜻한 철 높게
+  const okC = cm ? cm.filter(v => v != null) : []; const cMed = okC.length ? okC.slice().sort((a, b) => a - b)[okC.length >> 1] : null;
+  const bloom = m.map((_, i) => !!(cm && cm[i] != null && cMed && cm[i] >= 1.6 * cMed && cm[i] >= 1));
+  const sc = m.map((t, i) => (vm && vm[i] != null && vMax ? 0.55 * vm[i] / vMax : 0.55 * comfort(t)) + 0.3 * bio(t) + 0.15 * comfort(t) - (bloom[i] ? 1 : 0));
+  const best = Math.max(...sc), good = sc.map(x => x >= best - 0.15 && x > 0);
+  let runs = []; const start = good.indexOf(false);
+  if (start < 0) runs = [[0, 11]];
+  else { for (let k = 0; k < 12; k++) { const j = (start + 1 + k) % 12; if (good[j]) { if (!runs.length || runs[runs.length - 1].e !== (j + 11) % 12) runs.push({ s: j, e: j, n: 1 }); else { runs[runs.length - 1].e = j; runs[runs.length - 1].n++; } } }
     runs = runs.sort((a, b) => b.n - a.n).map(r => [r.s, r.e]); }
   const [s0, e0] = runs[0] || [sc.indexOf(best), sc.indexOf(best)];
   const mon = (k) => lang === 'en' ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][k] : `${k + 1}${lang === 'ja' ? '月' : '월'}`;
@@ -457,16 +479,27 @@ function seasonFor(lang, clim, climVis) {
   const idxs = []; for (let k = s0; ; k = (k + 1) % 12) { idxs.push(k); if (k === e0) break; }
   const tIn = +(idxs.reduce((a, k) => a + m[k], 0) / idxs.length).toFixed(1);
   const vIn = vm ? (() => { const a = idxs.map(k => vm[k]).filter(v => v != null); return a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1) : null; })() : null;
-  const bestV = vm ? vm.indexOf(vMax) : -1, warm = m.indexOf(Math.max(...m)), cold = m.indexOf(Math.min(...m));
+  const bestV = vm ? vm.indexOf(vMax) : -1, warm = m.indexOf(tMax), cold = m.indexOf(tMin);
+  // 플랑크톤 번성 달 묶기(예: 1–4월)
+  const bl = bloom.map((b, i) => b ? i : -1).filter(i => i >= 0);
+  const blTxt = bl.length ? (() => { const g = []; bl.forEach(i => { const L = g[g.length - 1]; if (L && (L[1] + 1) % 12 === i) L[1] = i; else g.push([i, i]); }); if (g.length > 1 && g[0][0] === 0 && g[g.length - 1][1] === 11) { g[0][0] = g[g.length - 1][0]; g.pop(); } return g.map(([a, b]) => a === b ? mon(a) : `${mon(a)}–${mon(b)}`).join(', '); })() : '';
+  const tropical = span < 6;
   const why = {
-    ko: [vIn != null ? `이 기간 시야가 평균 약 ${vIn}m로 연중 가장 맑고` : `이 기간이 연중 가장 따뜻하고`, `수온 ${tIn}°C(${suitFor(tIn)} 슈트)로 ${tIn >= 24 ? '따뜻해요' : tIn >= 18 ? '무난해요' : '차가운 편이에요'}.`,
-      vm && bestV >= 0 ? ` 시야는 ${mon(bestV)}(약 ${vMax}m)에 가장 좋고, 수온은 ${mon(warm)}(${m[warm]}°C)에 가장 높고 ${mon(cold)}(${m[cold]}°C)에 가장 낮아요.` : ` 수온은 ${mon(warm)}(${m[warm]}°C)에 가장 높고 ${mon(cold)}(${m[cold]}°C)에 가장 낮아요.`].join(' '),
-    en: [vIn != null ? `Visibility averages about ${vIn} m then, the clearest of the year,` : `It is the warmest part of the year,`, `with water around ${tIn}°C (${suitFor(tIn)} suit) – ${tIn >= 24 ? 'warm' : tIn >= 18 ? 'comfortable' : 'on the cold side'}.`,
-      vm && bestV >= 0 ? ` Visibility peaks in ${mon(bestV)} (~${vMax} m); water is warmest in ${mon(warm)} (${m[warm]}°C) and coldest in ${mon(cold)} (${m[cold]}°C).` : ` Water is warmest in ${mon(warm)} (${m[warm]}°C) and coldest in ${mon(cold)} (${m[cold]}°C).`].join(' '),
-    ja: [vIn != null ? `この時期は透明度が平均約${vIn}mで年間で最も良く、` : `この時期は年間で最も暖かく、`, `水温${tIn}°C（${suitFor(tIn)}スーツ）で${tIn >= 24 ? '暖かいです' : tIn >= 18 ? '快適です' : 'やや冷たいです'}。`,
-      vm && bestV >= 0 ? `透明度は${mon(bestV)}（約${vMax}m）が最も良く、水温は${mon(warm)}（${m[warm]}°C）が最高、${mon(cold)}（${m[cold]}°C）が最低です。` : `水温は${mon(warm)}（${m[warm]}°C）が最高、${mon(cold)}（${m[cold]}°C）が最低です。`].join('')
+    ko: [vIn != null ? `이 기간은 시야가 평균 약 ${vIn}m로 연중 가장 맑은 편이고,` : `이 기간은 연중 가장 따뜻한 철이고,`,
+      tropical ? `수온 ${tIn}°C로 연중 비슷하게 따뜻해 생물 활동도 꾸준해요.` : `수온 ${tIn}°C로 ${tIn >= 20 ? '따뜻한 철이라 난류를 따라 어종이 많아지는 때예요.' : '차가운 편이지만 시야가 좋아요.'}`,
+      vm && bestV >= 0 ? `시야는 ${mon(bestV)}(약 ${vMax}m)에 가장 좋고, 수온은 ${mon(warm)}(${m[warm]}°C)에 가장 높고 ${mon(cold)}(${m[cold]}°C)에 가장 낮아요.` : `수온은 ${mon(warm)}(${m[warm]}°C)에 가장 높고 ${mon(cold)}(${m[cold]}°C)에 가장 낮아요.`,
+      blTxt ? `${blTxt}은 플랑크톤 번성(엽록소 높음)으로 시야가 떨어져 추천에서 뺐어요.` : ''].filter(Boolean).join(' '),
+    en: [vIn != null ? `Visibility averages about ${vIn} m then, among the clearest of the year,` : `It is the warmest part of the year,`,
+      tropical ? `and water stays around ${tIn}°C year-round, so marine life is steady.` : `with water around ${tIn}°C – ${tIn >= 20 ? 'the warm season when more species follow the warm currents.' : 'cool, but clear.'}`,
+      vm && bestV >= 0 ? `Visibility peaks in ${mon(bestV)} (~${vMax} m); water is warmest in ${mon(warm)} (${m[warm]}°C) and coldest in ${mon(cold)} (${m[cold]}°C).` : `Water is warmest in ${mon(warm)} (${m[warm]}°C) and coldest in ${mon(cold)} (${m[cold]}°C).`,
+      blTxt ? `${blTxt} are excluded: plankton blooms (high chlorophyll) cut visibility.` : ''].filter(Boolean).join(' '),
+    ja: [vIn != null ? `この時期は透明度が平均約${vIn}mで年間でも良い方で、` : `この時期は年間で最も暖かく、`,
+      tropical ? `水温${tIn}°Cで年中安定し、生き物の活動も安定しています。` : `水温${tIn}°Cで${tIn >= 20 ? '暖流に乗って魚種が増える暖かい季節です。' : 'やや冷たいものの透明度は良好です。'}`,
+      vm && bestV >= 0 ? `透明度は${mon(bestV)}（約${vMax}m）が最も良く、水温は${mon(warm)}（${m[warm]}°C）が最高、${mon(cold)}（${m[cold]}°C）が最低です。` : `水温は${mon(warm)}（${m[warm]}°C）が最高、${mon(cold)}（${m[cold]}°C）が最低です。`,
+      blTxt ? `${blTxt}はプランクトンの増殖（クロロフィル高）で透明度が落ちるため除外しました。` : ''].filter(Boolean).join('')
   }[lang];
-  return { avgT, avgV, range, why };
+  const basis = { ko: '기준: 시야 55% · 생물 활동 30% · 수온 15%, 플랑크톤 번성 달 제외. 생물 활동은 실측 자료가 없어 그 바다의 따뜻한 철로 추정한 값이에요.', en: 'Basis: visibility 55% · marine-life activity 30% · water temp 15%; plankton-bloom months excluded. Marine-life activity is estimated from the site’s warm season (no direct biodiversity data).', ja: '基準：透明度55%・生物活動30%・水温15%、プランクトン増殖月は除外。生物活動は実測データがないため、その海域の暖かい季節から推定しています。' }[lang];
+  return { avgT, avgV, range, why, basis, bloom: blTxt };
 }
 const tempColor = (t) => t < 10 ? '#6366f1' : t < 16 ? '#3b82f6' : t < 20 ? '#0e9488' : t < 24 ? '#84cc16' : t < 27 ? '#facc15' : '#f97316';
 
@@ -592,7 +625,7 @@ var ro=document.getElementById('dro');function sh(e){var r=c.getBoundingClientRe
 function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm, opt) {
   opt = opt || {}; const t = T[lang];
   // [ADD] 아직 못 받은 자료는 자리만 잡아 두고(빙글 도는 표시) 페이지를 먼저 보여줘요. 브라우저가 svc=parts 로 받아 채워요.
-  const pend = { now: !d, clim: !clim, depth: !depth, near: !d };
+  const pend = { glance: !clim, now: !d, clim: !clim, depth: !depth, near: !d };
   if (!d) d = { tz: 'UTC', at: Date.now(), now: {}, days: [], water: 'sea', near: [], pending: true };
   const SPIN = `<div class="card pend"><span class="spin"></span>${{ ko: '불러오는 중…', ja: '読み込み中…' }[lang] || 'Loading…'}</div>`;
   const st = { ...st0, name: nameIn(st0, lang) };
@@ -637,7 +670,7 @@ ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.d
 </table>${d.vis ? `<p class="note">${t.visNote(d.visSat)}</p>` : ''}</div>`;
   }
 
-  let climH = '';
+  let climH = '', glanceH = '';
   if (clim) {
     const m = clim.months; const hi = m.indexOf(Math.max(...m)), lo = m.indexOf(Math.min(...m));
     const minV = Math.min(...m), maxV = Math.max(...m), span = Math.max(6, maxV - minV + 4), floor = minV - 2;
@@ -651,9 +684,9 @@ ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.d
 ${climVis ? `<tr><td style="font-size:11px;color:var(--sky);white-space:nowrap">${t.rowVis}</td>${climVis.months.map(v => `<td style="font-size:11.5px;color:var(--sky)">${v == null ? '–' : fmtVis(v)}</td>`).join('')}</tr>` : ''}</table>
 ${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, i]).filter(x => x[0] != null); const b = ok.reduce((a, x) => x[0] > a[0] ? x : a), w = ok.reduce((a, x) => x[0] < a[0] ? x : a); return `<p class="txt">${t.visTxt(t.month(b[1]), fmtVis(b[0]), t.month(w[1]), fmtVis(w[0]))}</p>`; })() : ''}
 <p class="note">${t.climNote(clim.years, clim.from, clim.to)}${climVis ? ' · ' + t.visClimNote(climVis.years, climVis.from, climVis.to) : ''} · ${(SUIT_T[lang] || SUIT_T.en).legend}</p></div>`;
-    // [ADD] 연평균 수온·시야 + 추천 시즌과 이유
+    // [ADD] 연평균 수온·시야 + 추천 시즌과 이유 → 맨 위 'glance' 칸(저장된 월평균만 있으면 바로 보여요)
     try { const sz = seasonFor(lang, clim, climVis), L = { ko: ['연평균 수온', '연평균 시야', '추천 시즌', '이유'], en: ['Avg water temp (year)', 'Avg visibility (year)', 'Best season', 'Why'], ja: ['年平均水温', '年平均透明度', 'おすすめシーズン', '理由'] }[lang] || [];
-      climH = `<h2>${{ ko: '한눈에 보기', en: 'At a glance', ja: 'ひと目で' }[lang] || 'At a glance'}</h2><div class="card"><div class="cards"><div class="c"><div class="l">${L[0]}</div><div class="v">${sz.avgT}<small>°C</small></div></div>${sz.avgV != null ? `<div class="c"><div class="l">${L[1]}</div><div class="v">${fmtVis(sz.avgV)}<small>m</small></div></div>` : ''}<div class="c"><div class="l">${L[2]}</div><div class="v" style="font-size:18px">${sz.range}</div></div></div><p class="txt" style="margin-top:8px"><b>${L[3]}:</b> ${sz.why}</p></div>` + climH; } catch (_) {}
+      glanceH = `<h2>${{ ko: '한눈에 보기', en: 'At a glance', ja: 'ひと目で' }[lang] || 'At a glance'}</h2><div class="card"><div class="cards"><div class="c"><div class="l">${L[0]}</div><div class="v">${sz.avgT}<small>°C</small></div></div>${sz.avgV != null ? `<div class="c"><div class="l">${L[1]}</div><div class="v">${fmtVis(sz.avgV)}<small>m</small></div></div>` : ''}<div class="c"><div class="l">${L[2]}</div><div class="v" style="font-size:18px">${sz.range}</div></div></div><p class="txt" style="margin-top:8px"><b>${L[3]}:</b> ${sz.why}</p><p class="note">${sz.basis}</p></div>`; } catch (_) {}
   }
 
   const LANGN = (code) => { try { return new Intl.DisplayNames([code], { type: 'language' }).of(code); } catch (_) { return code; } };
@@ -674,6 +707,7 @@ ${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, 
   const body = `${header(lang, hrefs)}
 <nav class="crumb"><a href="/${lang}/s/">${t.links[1]}</a> › <a href="/${lang}/s/#${st.cc || 'xx'}">${esc(cname)}</a> › ${esc(st.name)}</nav>
 <h1>${esc(inland ? t.h1In(st.name) : t.h1(st.name))}</h1>
+${partW('glance', glanceH)}
 ${partW('now', `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))} · ${t.upd(fmtDate(d.obs ? d.obs.at : d.at, t.dateFmt))}</p>
 ${cards}
 ${d.obs && d.obs.kind === 'seoul' ? `<p class="note" style="margin:0 0 10px">${d.obs.extra && d.obs.extra.length ? `${t.trib}: ${d.obs.extra.map(x => `${esc(x.name)} ${x.t}°C`).join(' · ')}<br>` : ''}${t.seoulSrc}</p>` : ''}
@@ -695,7 +729,7 @@ document.addEventListener('click',function(e){var a=e.target.closest&&e.target.c
       { '@type': 'ListItem', position: 2, name: cname, item: `${base}/${lang}/s/#${st.cc || 'xx'}` },
       { '@type': 'ListItem', position: 3, name: st.name, item: base + hrefs[lang] }] }
   ];
-  if (opt.partsOnly) return { now: body.match(/<div data-part="now"[^>]*>([\s\S]*?)<\/div>\s*<div data-part="clim"/)[1], clim: climH, depth: inland ? '' : depthHtml(lang, depth), near: nearHtml };
+  if (opt.partsOnly) return { glance: glanceH, now: body.match(/<div data-part="now"[^>]*>([\s\S]*?)<\/div>\s*<div data-part="clim"/)[1], clim: climH, depth: inland ? '' : depthHtml(lang, depth), near: nearHtml };
   return page({ lang, title, desc: description, canonical: hrefs[lang], alternates: hrefs, jsonld, body, base });
 }
 

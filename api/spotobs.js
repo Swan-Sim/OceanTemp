@@ -300,7 +300,7 @@ async function build(base) {
 module.exports = async function handler(req, res) {
   // [ADD] 포인트별 검색용 페이지·사이트맵(/ko/s/39/문섬, /sitemap.xml) - 함수 개수를 늘리지 않으려고 여기서 처리
   const svc = (req.query || {}).svc;
-  if (svc === 'page' || svc === 'index' || svc === 'sitemap' || svc === 'go') return require('./_spotpage')(req, res);
+  if (svc === 'page' || svc === 'index' || svc === 'sitemap' || svc === 'go' || svc === 'warm') return require('./_spotpage')(req, res);
   // [ADD] 국립해양조사원 자연과학용 수심(150m 격자): /api/spotobs?svc=depth&ymin=..&ymax=..&xmin=..&xmax=..
   //  공공데이터포털 "해양수산부 국립해양조사원_자연과학용 수심정보 조회" 활용신청 필요(KHOA_API_KEY와 같은 키). 범위는 한 변 0.2° 이하.
   //  응답: { ok, n, rows: [[위도, 경도, 수심m(양수=물 깊이)], ...] }. 같은 범위는 30일 저장.

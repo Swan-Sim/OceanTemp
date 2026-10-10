@@ -267,15 +267,17 @@ async function obsNow(st) {
   return null;
 }
 
-async function build(st, all) {
+async function build(st, all, opt) {
+  opt = opt || {}; const VIS_MS = opt.quick ? 5000 : 20000; // [CHANGE] 페이지를 열 때(quick)는 5초만 기다리고, 뒤에서 채우기(warm)는 20초
   const near = all.filter(s => s.no !== st.no).map(s => ({ s, d: km(st.lat, st.lon, s.lat, s.lon) })).filter(x => x.d <= 80).sort((a, b) => a.d - b.d).slice(0, 6);
   const ll = `latitude=${st.lat}&longitude=${st.lon}`;
-  const [mar, wx, nearCur, visJ, obs] = await Promise.all([
+  const [mar, wx, nearCur, visJ, obs, tideP] = await Promise.all([
     getJSON(`${MARINE}?${ll}&current=sea_surface_temperature,wave_height,wave_period&hourly=sea_surface_temperature,wave_height,wave_period,sea_level_height_msl&forecast_days=3&timezone=auto&cell_selection=sea`),
     getJSON(`${WX}?${ll}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m&hourly=wind_speed_10m,wind_gusts_10m,temperature_2m&wind_speed_unit=ms&forecast_days=3&timezone=auto`),
     near.length ? getJSON(`${MARINE}?latitude=${near.map(x => x.s.lat).join(',')}&longitude=${near.map(x => x.s.lon).join(',')}&current=sea_surface_temperature&cell_selection=sea`) : null,
-    callApi('./visibility', { lat: st.lat.toFixed(3), lon: st.lon.toFixed(3), v: '3', fast: '1' }, 15000), // [FIX] fast=1: 오래된 저장본이라도 있으면 바로(갱신은 앱·매일 채우기·페이지 방문자 브라우저가) // [CHANGE] 8초 → 15초(처음 계산하는 곳은 오래 걸려서 시야가 비던 문제)
-    obsNow(st)
+    callApi('./visibility', { lat: st.lat.toFixed(3), lon: st.lon.toFixed(3), v: '3', fast: '1' }, VIS_MS), // [FIX] fast=1: 오래된 저장본이라도 있으면 바로(갱신은 앱·매일 채우기·페이지 방문자 브라우저가) // [CHANGE] 8초 → 15초(처음 계산하는 곳은 오래 걸려서 시야가 비던 문제)
+    obsNow(st),
+    tideFor(st, new Date().toISOString().slice(0, 10)).catch(() => null) // [CHANGE] 물때도 같이(예전엔 다 끝난 뒤 따로 받아서 최대 8초 더 걸렸어요)
   ]);
   const d = { at: Date.now(), tz: (mar && mar.timezone) || (wx && wx.timezone) || 'UTC', off: (mar && mar.utc_offset_seconds) || (wx && wx.utc_offset_seconds) || 0 };
   const localNow = new Date(Date.now() + d.off * 1000).toISOString();
@@ -303,7 +305,7 @@ async function build(st, all) {
   }
   if (d.water === 'sea' && !d.vis) d.visMissing = true;
   // 물때
-  const tide = await tideFor(st, d.today);
+  let tide = tideP; if (tide && d.today !== new Date().toISOString().slice(0, 10)) tide = await tideFor(st, d.today).catch(() => null); // 현지 날짜가 UTC와 다르면 그 날짜로 다시
   if (tide) d.tide = tide;
   else if (mar && mar.hourly && mar.hourly.sea_level_height_msl) {
     const ex = extremesFromHourly(mar.hourly.time, mar.hourly.sea_level_height_msl, d.today);
@@ -315,11 +317,13 @@ async function build(st, all) {
   return d;
 }
 
-async function dataFor(st, all) {
-  const key = `sp:d:${st.no}`;
-  try { const [v] = await S.R(['GET', key]); if (v) { const o = JSON.parse(v); if (Date.now() - o.at < (o.visMissing ? 600 : DATA_TTL) * 1000) return o; } } catch (_) {} // [FIX] 시야를 못 받은 저장본은 10분만 쓰고 다시 받기
-  const d = await build(st, all);
-  if (d.now.sst != null || d.obs) { try { await S.R(['SET', key, JSON.stringify(d), 'EX', String(DATA_TTL)]); } catch (_) {} }
+// [CHANGE] 페이지(quick)는 저장본이 조금 오래됐어도(최대 12시간) 바로 쓰고, 브라우저가 svc=warm 을 불러 뒤에서 새로 받아요. 저장본이 아예 없을 때만 그 자리에서(짧은 시간 한도로) 받아요.
+async function dataFor(st, all, opt) {
+  opt = opt || {}; const key = `sp:d:${st.no}`; let o = null;
+  try { const [v] = await S.R(['GET', key]); if (v) o = JSON.parse(v); } catch (_) {}
+  if (o) { const fresh = Date.now() - o.at < (o.visMissing ? 600 : DATA_TTL) * 1000; if (fresh && !opt.force) return o; if (opt.quick) { o.stale = true; return o; } }
+  const d = await build(st, all, opt);
+  if (d.now.sst != null || d.obs) { try { await S.R(['SET', key, JSON.stringify(d), 'EX', String(12 * 3600)]); } catch (_) {} }
   return d;
 }
 
@@ -579,7 +583,7 @@ x.strokeStyle='rgba(244,63,94,.6)';x.setLineDash([4,3]);x.beginPath();x.moveTo(0
 var ro=document.getElementById('dro');function sh(e){var r=c.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*W,py=(e.clientY-r.top)/r.height*H,v=Z[Math.max(0,Math.min(H-1,Math.round(py)))*W+Math.max(0,Math.min(W-1,Math.round(px)))];ro.textContent=isNaN(v)?'–':v>=0?D.land:D.depth+' ~'+Math.round(-v)+'m'}c.addEventListener('pointermove',sh);c.addEventListener('pointerdown',sh)})();</script>`;
 }
 
-function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth) {
+function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm) {
   const t = T[lang];
   const st = { ...st0, name: nameIn(st0, lang) };
   const cname = regionName(st.cc, lang, st.country);
@@ -669,7 +673,7 @@ ${tide}${days}${climH}${inland ? '' : depthHtml(lang, depth)}${shopHtml}${nearHt
 <script>(function(){var no=${st.no};document.getElementById('share').onclick=function(){var u=location.href.split('#')[0];if(navigator.share){navigator.share({title:document.title,url:u}).catch(function(){})}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){var x=document.getElementById('toast');x.textContent=${JSON.stringify(t.copied)};x.style.display='block';setTimeout(function(){x.style.display='none'},1600)})}};
 var ids=[].slice.call(document.querySelectorAll('[data-shop]')).map(function(a){return a.getAttribute('data-shop')}).filter(function(v,i,a){return a.indexOf(v)===i});
 try{ids.forEach(function(id){navigator.sendBeacon('/api/shops?svc=imp&id='+encodeURIComponent(id)+'&no='+no)})}catch(e){}
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);${depth ? '' : `setTimeout(function(){try{fetch('/api/spotobs?svc=depth&lat=${st.lat}&lon=${st.lon}&lite=1').catch(function(){})}catch(_){}},4000);`}`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);${warm ? `setTimeout(function(){try{fetch('/api/spotobs?svc=warm&no=${st.no}').catch(function(){})}catch(_){}},1500);` : ''}`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
 
   const jsonld = [
     { '@context': 'https://schema.org', '@type': 'TouristAttraction', name: st.name, description, url: base + hrefs[lang],
@@ -783,18 +787,30 @@ module.exports = async function spotPage(req, res) {
     if (!q.lang || (q.slug !== undefined && norm(q.slug) !== norm(st.slug))) { res.setHeader('Location', want); res.setHeader('Cache-Control', 'no-store'); return res.status(q.lang ? 301 : 302).end(); }
     // [ADD] 주변 수심: 저장된 값이 없으면 처음 한 번 받아요(9초 넘으면 이번엔 건너뛰고 다음 방문 때)
     // [CHANGE] 페이지가 느려져서 수심은 저장된 값만 써요(없으면 이번엔 생략, 아래 페이지 끝 스크립트가 백그라운드로 받아 두어 다음 방문엔 나와요)
-    const depthP = Promise.race([require('./_depth').depthCached(st.lat, st.lon), new Promise(r => setTimeout(() => r(null), 2500))]).catch(() => null);
+    // [ADD] svc=warm&no=..: 페이지가 빠지거나 오래된 자료(예보·시야·월평균·수심)를 뒤에서 새로 받아 저장(페이지 끝 스크립트가 불러요)
+    if (svc === 'warm') {
+      res.setHeader('Cache-Control', 'no-store');
+      const lock = await S.R(['SET', 'sp:warm:' + st.no, '1', 'NX', 'EX', '120']).then(r => r[0] === 'OK').catch(() => true); // 2분에 한 번만
+      if (!lock) return res.status(200).json({ ok: true, skipped: true });
+      const r = await Promise.all([dataFor(st, all, { force: true }).then(() => 'data').catch(e => 'data:' + e.message), climFor(st.lat, st.lon).then(() => 'clim').catch(e => 'clim:' + e.message), climVisFor(st.lat, st.lon).then(() => 'vis').catch(e => 'vis:' + e.message),
+        require('./_depth').depthCached(st.lat, st.lon).then(v => v ? 'depth:cached' : require('./_depth').depthAt(st.lat, st.lon).then(() => 'depth')).catch(e => 'depth:' + e.message)]);
+      return res.status(200).json({ ok: true, done: r });
+    }
+    const T0 = Date.now(), tm = {}, timed = (name, p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]).catch(() => null).then(v => { tm[name] = Date.now() - T0; return v; });
     const [d, shopsAll, clim, , climVis, depth] = await Promise.all([
-      dataFor(st, all),
-      S.hgetallJSON(S.K.shops).catch(() => ({})),
-      climFor(st.lat, st.lon).catch(() => null),
-      count(req, st.no),
-      climVisFor(st.lat, st.lon).catch(() => null),
-      depthP
+      timed('data', dataFor(st, all, { quick: true }), 12000),
+      timed('shops', S.hgetallJSON(S.K.shops), 4000),
+      timed('clim', climFor(st.lat, st.lon), 3500),   // 처음 보는 곳은 NOAA에서 몇 년치를 받느라 오래 걸려요 → 이번엔 생략, warm 이 받아 둠
+      timed('count', count(req, st.no), 3000),
+      timed('climvis', climVisFor(st.lat, st.lon), 3500),
+      timed('depth', require('./_depth').depthCached(st.lat, st.lon), 1500)
     ]);
-    const live = Object.values(shopsAll).filter(s => S.isLive(s) && (s.spots || []).map(Number).includes(st.no)).map(S.publicShop);
+    if (!d) { res.setHeader('Cache-Control', 'no-store'); return res.status(503).send('busy'); }
+    res.setHeader('Server-Timing', Object.entries(tm).map(([k, v]) => `${k};dur=${v}`).join(', ') + `, total;dur=${Date.now() - T0}`);
+    res.setHeader('X-OT-Warm', d.stale || !clim || !climVis || (!depth && d.water !== 'inland') ? '1' : '0');
+    const live = Object.values(shopsAll || {}).filter(s => S.isLive(s) && (s.spots || []).map(Number).includes(st.no)).map(S.publicShop);
     const shops = [...live.filter(s => s.paid).sort(() => Math.random() - 0.5), ...live.filter(s => !s.paid).sort(() => Math.random() - 0.5)];
-    return sendHtml(res, 200, renderSpot(lang, st, all, d, shops, clim, base, climVis, depth));
+    return sendHtml(res, 200, renderSpot(lang, st, all, d, shops || {}, clim, base, climVis, depth, res.getHeader('X-OT-Warm') === '1'));
   } catch (e) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(500).send('error: ' + esc(String(e && e.message || e)));

@@ -5,7 +5,9 @@
     //   [ADD] 초록 화살표 = 흐름(정점에서 "흘러가는 쪽"으로). 점선 = 수면 흐름(Copernicus 표층 합성 해류: 조류+해류+바람·파도가 미는 흐름),
     //   실선 = 수심 5m(안전정지, 바람 영향 남음)·30m(거의 조류) 흐름 추정 = 수면 흐름에서 바람이 끄는 몫(바람의 약 3%, 북반구는 바람 방향에서 오른쪽 30°)을 깊이에 따라 줄인 값.
     //   모델 격자가 약 8km라 섬·곶 주변의 국지 흐름(지형 영향)은 반영되지 않아요.
-    let windDialMarker = null, windDialX = null, windDialRaf = 0;
+    let windDialMarker = null, windDialX = null, windDialRaf = 0, windDialLastSize = null;
+    const windDialPos = () => { try { return localStorage.getItem('otemp.dial.pos') || 'E'; } catch (_) { return 'E'; } };
+    document.addEventListener('click', (e) => { const t = e.target && e.target.closest && e.target.closest('[data-dial-pos]'); if (!t) return; e.stopPropagation(); try { localStorage.setItem('otemp.dial.pos', t.getAttribute('data-dial-pos')); } catch (_) {} if (typeof windDialUpdate === 'function') windDialUpdate(); }, true);
     const KN = 0.514444;
     // [ADD] 써지(파도가 지나갈 때 물이 앞뒤로 흔들리는 세기) 추정: 선형 파랑 이론의 물입자 속도 u = πH/T·e^(-kz), k = ω²/g(깊은 바다 가정)
     //  H = 유의파고, T = 파도 주기. 해안에서 파도가 휘거나 얕아지며 커지는 건 반영 안 됨 → 약함/보통/강함 세 단계로만 표시
@@ -139,8 +141,13 @@
       const head = `<rect x="${mx + (MW - tw) / 2}" y="9" width="${tw}" height="24" rx="12" fill="rgba(7,11,20,0.92)" stroke="${tcol}" stroke-width="1.5"/>` +
         `<text x="${mx + MW / 2}" y="26" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${timeLabel}</text>` +
         (tzLabel ? `<text x="${mx + MW / 2}" y="46" font-size="10" fill="#94a3b8" text-anchor="middle">${tzLabel}</text>` : '');
-      labels += `<g transform="translate(${R + 22} ${-R - 30})"><rect x="0" y="0" width="${BW}" height="${yEnd + 10}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>${strip}<g transform="translate(${mx} 0)">${rows}</g>${head}</g>`;
-      const W = 2 * (R + 200), H = 2 * (R + 70);
+      // [ADD] 상자 위치: 원 둘레 8방향(E·W·N·S·NE·NW·SE·SW) 중 고른 곳에. 상자 오른쪽 위 3×3 점을 누르면 옮겨져요(브라우저에 기억)
+      const BH = yEnd + 10, pos = windDialPos(), gap = 22;
+      const PX = { E: [R + gap, -R - 30], W: [-R - gap - BW, -R - 30], N: [-BW / 2, -R - gap - BH], S: [-BW / 2, R + gap],
+        NE: [R + 8, -R - 8 - BH], NW: [-R - 8 - BW, -R - 8 - BH], SE: [R + 8, R + 8], SW: [-R - 8 - BW, R + 8] }[pos] || [R + gap, -R - 30];
+      const grid = ['NW', 'N', 'NE', 'W', '', 'E', 'SW', 'S', 'SE'].map((k, i) => k ? `<rect data-dial-pos="${k}" x="${BW - 30 + (i % 3) * 8}" y="${6 + Math.floor(i / 3) * 8}" width="6" height="6" rx="1" fill="${k === pos ? '#FFB000' : 'rgba(255,255,255,.35)'}" style="pointer-events:auto;cursor:pointer"><title>${k}</title></rect>` : '').join('');
+      labels += `<g transform="translate(${PX[0]} ${PX[1]})"><rect x="0" y="0" width="${BW}" height="${BH}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>${strip}<g transform="translate(${mx} 0)">${rows}</g>${head}${grid}</g>`;
+      const W = 2 * (R + gap + BW + 10), H = 2 * (R + gap + BH + 10); windDialLastSize = [W, H];
       return `<svg width="${W}" height="${H}" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="overflow:visible;pointer-events:none">${g}${labels}</svg>`;
     }
 
@@ -176,7 +183,7 @@
       let raw = null; try { const u = window.otAccount && window.otAccount.user && window.otAccount.user();
         if (u && u.role === 'admin' && cs0 && cs0.bg) raw = { s: cs0.bg, c5: windDialCurrentAt(cs0.bg, w, st.coords[1], 5), c30: windDialCurrentAt(cs0.bg, w, st.coords[1], 30) }; } catch (_) {}
       const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0, raw);
-      const size = [2 * (74 + 200), 2 * (74 + 70)];
+      const size = windDialLastSize || [2 * (74 + 200), 2 * (74 + 70)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];
       // [CHANGE] 나침반·바람·파도·흐름 상자를 포인트 이름표보다 위 층(전용 층, 누르기는 아래로 통과)에 - 이름표에 Surge 글자가 가려지던 문제

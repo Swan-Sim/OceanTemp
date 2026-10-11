@@ -237,7 +237,8 @@ module.exports = async function auth(req, res) {
   if (a === 'fav') {
     const no = parseInt(b.no, 10); if (!(no > 0 && no < 100000)) return json(400, { ok: false, error: 'bad_no' });
     if (b.on === false) await R(['SREM', 'ufav:' + uid, String(no)]);
-    else { const [n] = await R(['SCARD', 'ufav:' + uid]); if (n >= 30) return json(400, { ok: false, error: 'too_many' }); // 즐겨찾기 최대 30개 await R(['SADD', 'ufav:' + uid, String(no)]);
+    else { const [n] = await R(['SCARD', 'ufav:' + uid]); if (n >= 30) return json(400, { ok: false, error: 'too_many' }); // 즐겨찾기 최대 30개
+      await R(['SADD', 'ufav:' + uid, String(no)]);
       const [firstTime] = await R(['SADD', 'ufavseen:' + uid, String(no)]); if (firstTime) await C.award(R, uid, 'fav'); } // 처음 즐겨찾기하는 포인트만 크레딧
     return json(200, { ok: true });
   }

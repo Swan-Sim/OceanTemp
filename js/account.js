@@ -8,7 +8,7 @@
     login: '로그인', title: '간편 로그인', sub: '즐겨찾기한 포인트를 어느 기기에서든 볼 수 있어요.',
     google: 'Google로 계속하기', kakao: '카카오로 계속하기', naver: '네이버로 계속하기', facebook: 'Facebook으로 계속하기',
     none: '로그인 준비 중이에요.', agree: '계속하면 <a href="/privacy/" target="_blank" rel="noopener">개인정보처리방침</a>에 동의하는 것으로 봐요.',
-    hello: (n) => `${n}님`, linked: '연결된 로그인', link: '다른 계정 연결', favs: '즐겨찾기 포인트 (최대 30 · ⋮⋮ 끌어서 순서 바꾸기)', mylogs: '내 로그 (최근 순)', noLog: '아직 기록이 없어요.', more: '불러오는 중…', noFav: '아직 없어요. 포인트를 고르고 아래 ☆를 눌러보세요.',
+    hello: (n) => `${n}님`, linked: '연결된 로그인', link: '다른 계정 연결', favs: '즐겨찾기 포인트', favFull: '즐겨찾기는 최대 30개까지예요. 목록의 휴지통으로 하나를 지운 뒤 추가해 주세요.', favDel: '즐겨찾기에서 지우기', ok: '확인', mylogs: '내 로그 (최근 순)', noLog: '아직 기록이 없어요.', more: '불러오는 중…', noFav: '아직 없어요. 포인트를 고르고 아래 ☆를 눌러보세요.',
     logout: '로그아웃', del: '회원 탈퇴', delAsk: '계정과 즐겨찾기를 모두 지울까요? 되돌릴 수 없어요.', close: '닫기',
     favOn: '즐겨찾기에 넣었어요', favOff: '즐겨찾기에서 뺐어요', favNeed: '즐겨찾기는 로그인하면 쓸 수 있어요', favNo: '이 지점은 즐겨찾기할 수 없어요',
     lv: (l) => `Lv.${l}`, toNext: (n) => `다음 레벨까지 ${n} 크레딧`, maxLv: '최고 레벨', credits: '크레딧', last: '마지막', admin: 'Admin', creditHint: '로그인·즐겨찾기 등 활동하면 크레딧이 쌓이고 레벨이 올라가요.',
@@ -19,7 +19,7 @@
     login: 'Log in', title: 'Sign in', sub: 'Save favorite spots and see them on any device.',
     google: 'Continue with Google', kakao: 'Continue with Kakao', naver: 'Continue with Naver', facebook: 'Continue with Facebook',
     none: 'Sign-in is coming soon.', agree: 'By continuing you agree to the <a href="/privacy/?lang=en" target="_blank" rel="noopener">Privacy Policy</a>.',
-    hello: (n) => n, linked: 'Linked accounts', link: 'Link another account', favs: 'Favorite spots (max 30 · drag ⋮⋮ to reorder)', mylogs: 'My logs (newest first)', noLog: 'No entries yet.', more: 'Loading…', noFav: 'None yet. Pick a spot and tap ☆ below.',
+    hello: (n) => n, linked: 'Linked accounts', link: 'Link another account', favs: 'Favorite spots', favFull: 'You can save up to 30 favorites. Remove one with the trash icon first.', favDel: 'Remove from favorites', ok: 'OK', mylogs: 'My logs (newest first)', noLog: 'No entries yet.', more: 'Loading…', noFav: 'None yet. Pick a spot and tap ☆ below.',
     logout: 'Log out', del: 'Delete account', delAsk: 'Delete your account and favorites? This cannot be undone.', close: 'Close',
     favOn: 'Added to favorites', favOff: 'Removed from favorites', favNeed: 'Log in to save favorites', favNo: 'This point cannot be saved',
     lv: (l) => `Lv.${l}`, toNext: (n) => `${n} credits to next level`, maxLv: 'Max level', credits: 'Credits', last: 'Last', admin: 'Admin', creditHint: 'Earn credits by being active to level up.',
@@ -75,6 +75,9 @@
   #sw-ver.bl{left:8px} #sw-ver.br{right:8px}
   .a-lv{margin:2px 0 10px;font-size:12px;color:#94a3b8} .a-lv .bar{height:6px;border-radius:99px;background:#1e293b;overflow:hidden;margin:5px 0} .a-lv .bar i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#FFB000)}
   .a-lv b{color:#FFB000;font-size:13px}
+  .a-adm-s{margin-left:auto;height:28px;line-height:26px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,176,0,.5);color:#FFB000;text-decoration:none;font-weight:700;font-size:12.5px}
+  .a-fav .tr{flex:0 0 auto;display:inline-flex;align-items:center;padding:3px;border-radius:6px;color:#94a3b8;cursor:pointer} .a-fav .tr:hover{color:#f87171;background:rgba(248,113,113,.12)}
+  #a-pop{position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)} #a-pop div{background:#0B1120;border:1px solid rgba(255,176,0,.5);border-radius:14px;padding:18px 20px 14px;max-width:min(320px,calc(100vw - 40px));color:#f1f5f9;font-size:14px;line-height:1.5;text-align:center} #a-pop button{margin-top:12px;height:32px;padding:0 22px;border-radius:8px;border:1px solid rgba(255,176,0,.6);background:transparent;color:#FFB000;font-weight:700;cursor:pointer}
   .a-adm{display:block;text-align:center;margin-top:12px;height:34px;line-height:34px;border-radius:8px;border:1px solid rgba(255,176,0,.5);color:#FFB000;text-decoration:none;font-weight:700}`;
   document.head.appendChild(css);
 
@@ -149,7 +152,7 @@
   // 내 로그 목록: 최근 순, 5개 높이에 스크롤, 끝에 닿으면 더 불러옴(최대 2000개)
   async function loadLogsInto(list) {
     if (!list) return; const PAGE = 40; let off = 0, total = Infinity, busy = false;
-    const row = (e) => { const s = stationByNo(e.no); return `<button class="a-log" data-no="${e.no}"><b>${esc(e.date || '')}</b><span class="nm">${esc(s ? s.name : '#' + e.no)}</span><span class="dt">${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : 'm') : ''}</span></button>`; };
+    const row = (e) => { const s = stationByNo(e.no); return `<button class="a-log" data-no="${e.no}"><b>${e.seq ? '#' + e.seq + ' · ' : ''}${esc(e.date || '')}</b><span class="nm">${esc(s ? s.name : '#' + e.no)}</span><span class="dt">${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : 'm') : ''}</span></button>`; };
     const more = async () => {
       if (busy || off >= total) return; busy = true;
       try { const j = await post('logs', { no: 0, limit: PAGE, offset: off }); total = j.count != null ? j.count : (j.items || []).length; const sub = list.querySelector('.a-sub'); if (sub) sub.remove();
@@ -170,15 +173,14 @@
       h += `<h3>${T.title}</h3><div class="a-sub">${T.sub}</div>` + (avail.length ? pbtns(avail) : `<p>${T.none}</p>`) + `<div class="a-agree">${T.agree}</div>`;
     } else {
       const u = me.user, more = avail.filter(p => !u.providers.includes(p));
-      h += `<div class="a-me">${u.avatar ? `<img src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer">` : `<div class="a-ph">${ICON_USER}</div>`}<div><h3>${esc(T.hello(u.name))}</h3></div></div>`;
+      h += `<div class="a-me">${u.avatar ? `<img src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer">` : `<div class="a-ph">${ICON_USER}</div>`}<div><h3>${esc(T.hello(u.name))}</h3></div>${u.role === 'admin' ? `<a class="a-adm-s" href="/admin">${T.admin}</a>` : ''}</div>`;
       if (u.level) {
         const span = u.next ? (u.next - u.base) : 1, pct = u.next ? Math.max(0, Math.min(100, Math.round((u.credits - u.base) / span * 100))) : 100;
         h += `<div class="a-lv"><b>${T.lv(u.level)}</b> · ${u.credits} ${T.credits}<div class="bar"><i style="width:${pct}%"></i></div>${u.next ? T.toNext(u.next - u.credits) : T.maxLv}<br>${T.creditHint}</div>`;
       }
-      if (u.role === 'admin') h += `<a class="a-adm" href="/admin">${T.admin}</a>`;
       h += `<div class="a-sec">${T.favs}</div>`;
       const favs = sortedFavs().map(stationByNo).filter(Boolean);
-      h += favs.length ? `<div class="a-list" id="a-favs">${favs.map(s => `<button class="a-fav" data-no="${s.no}"><span class="hd">⋮⋮</span><span class="nm">★ ${esc(s.name)}</span></button>`).join('')}</div>` : `<div class="a-sub">${T.noFav}</div>`;
+      h += favs.length ? `<div class="a-list" id="a-favs">${favs.map(s => `<button class="a-fav" data-no="${s.no}"><span class="hd">⋮⋮</span><span class="nm">★ ${esc(s.name)}</span><span class="tr" role="button" title="${esc(T.favDel)}" aria-label="${esc(T.favDel)}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/></svg></span></button>`).join('')}</div>` : `<div class="a-sub">${T.noFav}</div>`;
       h += `<div class="a-sec">${T.mylogs}</div><div class="a-list" id="a-logs"><div class="a-sub">${T.more}</div></div>`;
       h += `<div class="a-sec">${T.linked}</div><div class="a-tags">${u.providers.map(p => `<span>${PNAME[p] || p}</span>`).join('')}</div>`;
       if (more.length) h += `<div class="a-sec">${T.link}</div><div class="a-small">${pbtns(more)}</div>`;
@@ -194,7 +196,7 @@
       document.addEventListener('pointerdown', (e) => { const o = document.getElementById('acct-ov'); if (!o || !o.classList.contains('show')) return; if (e.target.closest('#acct-box') || (btn && btn.contains(e.target))) return; close(); }, true);
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); }); }
     box.querySelector('.a-x').onclick = close;
-    box.querySelectorAll('.a-fav').forEach(b => b.onclick = (e) => { if (e.target.closest('.hd') || dragMoved) return; const s = stationByNo(+b.dataset.no); if (!s) return; close(); goTo(s); });
+    box.querySelectorAll('.a-fav').forEach(b => b.onclick = async (e) => { if (e.target.closest('.hd') || dragMoved) return; if (e.target.closest('.tr')) { const no = +b.dataset.no; try { await post('fav', { no, on: false }); favSet.delete(no); me.favs = [...favSet]; b.remove(); paintStar(); paintFavBar(); } catch (_) {} return; } const s = stationByNo(+b.dataset.no); if (!s) return; close(); goTo(s); });
     setupFavDrag(box.querySelector('#a-favs'));
     loadLogsInto(box.querySelector('#a-logs'));
     const out = box.querySelector('.a-out'); if (out) out.onclick = async () => { try { await post('logout'); } catch (_) {} close(); await load(); };
@@ -241,13 +243,15 @@
   let star;
   const curNo = () => (typeof selectedStation !== 'undefined' && selectedStation && selectedStation.no) || null;
   function paintStar() { if (!star) return; const no = curNo(); star.style.display = no ? '' : 'none'; const on = !!(no && favSet.has(no)); star.classList.toggle('on', on); star.textContent = on ? '★' : '☆'; }
+  function popup(msg) { let d = document.getElementById('a-pop'); if (d) d.remove(); d = document.createElement('div'); d.id = 'a-pop'; d.innerHTML = `<div>${esc(msg)}<br><button type="button">${T.ok}</button></div>`; d.onclick = (e) => { if (e.target === d || e.target.tagName === 'BUTTON') d.remove(); }; document.body.appendChild(d); }
   async function toggleFav() {
     const no = curNo(); if (!no) return toast(T.favNo);
     if (!me.user) { toast(T.favNeed); return open(); }
     const on = !favSet.has(no);
+    if (on && favSet.size >= 30) return popup(T.favFull);
     on ? favSet.add(no) : favSet.delete(no); paintStar(); // 먼저 바꿔 보이고, 실패하면 되돌림
     try { const j = await post('fav', { no, on }); me.favs = [...favSet]; paintFavBar(); toast(on ? T.favOn : T.favOff); }
-    catch (_) { on ? favSet.delete(no) : favSet.add(no); paintStar(); }
+    catch (err) { on ? favSet.delete(no) : favSet.add(no); paintStar(); if (on && err && err.message === 'too_many') popup(T.favFull); }
   }
 
   document.addEventListener('DOMContentLoaded', () => {

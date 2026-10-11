@@ -21,7 +21,8 @@ function clean(b) {
     weight: num(b.weight, 0, 60), suit: b.suit === 'dry' ? 'dry' : num(b.suit, 0, 12), // [CHANGE] 0 = 슈트 없이, 'dry' = 드라이슈트
     tempAuto: !!b.tempAuto && b.temp !== '' && b.temp != null, // 수온을 자동 추정값 그대로 썼는지
     temp: num(b.temp, -3, 45), vis: num(b.vis, 0, 100, 0),
-    buddy: txt(b.buddy, 60), notes: txt(b.notes, 600)
+    buddy: txt(b.buddy, 60), notes: txt(b.notes, 600),
+    seq: num(b.seq, 1, 99999, 0) // 로그 번호(사용자가 고칠 수 있음)
   };
   if (e.depthAvg != null && e.depthMax != null && e.depthAvg > e.depthMax) return { error: 'avg_gt_max' };
   if (e.fill != null && e.remain != null && e.remain > e.fill) return { error: 'remain_gt_fill' };
@@ -34,11 +35,17 @@ module.exports = async function logbook(a, b, uid, R, json) {
   if (a === 'logs') {
     const [arr] = await R(['HGETALL', key]); const all = [];
     if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) { try { all.push(JSON.parse(arr[i + 1])); } catch (_) {} }
+    { // 번호가 없는 옛 기록은 날짜 오름차순으로 이어서 번호를 매겨요(저장은 수정할 때)
+      const asc = all.slice().sort((x, y) => (x.date || '').localeCompare(y.date || '') || (x.at || 0) - (y.at || 0)); let mx = 0;
+      asc.forEach(x => { if (x.seq > 0) mx = Math.max(mx, x.seq); });
+      asc.forEach(x => { if (!(x.seq > 0)) x.seq = ++mx; });
+    }
+    const nextSeq = all.reduce((m, x) => Math.max(m, x.seq || 0), 0) + 1;
     all.sort((x, y) => (y.date || '').localeCompare(x.date || '') || (y.at || 0) - (x.at || 0));
     const no = parseInt(b.no, 10);
     const items = no > 0 ? all.filter(x => x.no === no) : all;
     const lim = Math.max(1, Math.min(200, parseInt(b.limit, 10) || 200)), off = Math.max(0, parseInt(b.offset, 10) || 0); // [ADD] 회원정보 목록용 페이지(offset)
-    json(200, { ok: true, items: items.slice(off, off + lim), total: all.length, count: items.length, last: all[0] || null }); return true; // last: 가장 최근 기록(웨이트·슈트·탱크 미리 채우기용)
+    json(200, { ok: true, items: items.slice(off, off + lim), total: all.length, count: items.length, nextSeq, last: all[0] || null }); return true; // last: 가장 최근 기록(웨이트·슈트·탱크 미리 채우기용)
   }
   if (a === 'logsave') {
     const r = clean(b); if (r.error) { json(400, { ok: false, error: r.error }); return true; }

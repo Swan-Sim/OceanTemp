@@ -7,7 +7,7 @@
   const T = KO ? {
     tab: '로그북', title: (n) => `내 로그북 · ${n}`, add: '새 기록 쓰기', login: '로그인하고 쓰기', needLogin: '로그북은 로그인하면 쓸 수 있어요. 같은 포인트에 쓴 지난 기록도 여기서 볼 수 있어요.',
     noSpot: '이 지점은 로그북을 쓸 수 없어요(번호가 있는 포인트만).', empty: '아직 이 포인트에 쓴 기록이 없어요.', loading: '불러오는 중…', fail: '불러오지 못했어요',
-    date: '날짜', tod: '시작 시각 (HH:MM)', kind: '다이버 종류', rec: '레크레이션', tec: '텍다이버', tank: '탱크 종류', dmax: '최대수심 (m)', davg: '평균수심 (m)', mins: '다이빙 시간 (분)',
+    seq: '로그 번호', date: '날짜', tod: '시작 시각 (HH:MM)', kind: '다이버 종류', rec: '레크레이션', tec: '텍다이버', tank: '탱크 종류', dmax: '최대수심 (m)', davg: '평균수심 (m)', mins: '다이빙 시간 (분)',
     fill: '충전 압력 (bar)', remain: '잔압 (bar)', weight: '웨이트 (kg)', suit: '슈트 두께 (mm)', temp: '수온 (°C)', vis: '시야 (m)', buddy: '버디', notes: '메모',
     used: '사용량', sac: '분당 소비량', sacU: 'bar/분 (수면 환산)', rmv: 'L/분', needCalc: '충전·잔압·평균수심·시간을 넣으면 분당 공기소비량이 계산돼요',
     consTitle: '동의 설정 (한 번 정하면 계속 유지돼요)', consUse: '정보 사용 동의 - 내 수온·시야 기록을 익명 통계(시야 보정 등)에 써도 돼요', consOpen: '기록 공개 동의 - 이 기록을 다른 사람에게 보여도 돼요', consPhoto: '사진 공개 동의 - 지도에 공개 (포인트 이름 아래 작은 사진으로 보여요)',
@@ -19,7 +19,7 @@
   } : {
     tab: 'Logbook', title: (n) => `My logbook · ${n}`, add: 'New entry', login: 'Log in to write', needLogin: 'Log in to keep a logbook. Past entries for the same spot show up here.',
     noSpot: 'Logbook is only for numbered spots.', empty: 'No entries for this spot yet.', loading: 'Loading…', fail: 'Could not load',
-    date: 'Date', tod: 'Start time (HH:MM)', kind: 'Diver type', rec: 'Recreational', tec: 'Technical', tank: 'Tank', dmax: 'Max depth (m)', davg: 'Avg depth (m)', mins: 'Dive time (min)',
+    seq: 'Log no.', date: 'Date', tod: 'Start time (HH:MM)', kind: 'Diver type', rec: 'Recreational', tec: 'Technical', tank: 'Tank', dmax: 'Max depth (m)', davg: 'Avg depth (m)', mins: 'Dive time (min)',
     fill: 'Start pressure (bar)', remain: 'End pressure (bar)', weight: 'Weight (kg)', suit: 'Suit (mm)', temp: 'Water temp (°C)', vis: 'Visibility (m)', buddy: 'Buddy', notes: 'Notes',
     used: 'Used', sac: 'SAC', sacU: 'bar/min (surface)', rmv: 'L/min', needCalc: 'Enter pressures, average depth and time to get your air consumption',
     consTitle: 'Consents (saved once, kept for next time)', consUse: 'Data use - my temp/visibility entries may be used in anonymous stats (e.g. visibility calibration)', consOpen: 'Public log - this entry may be shown to others', consPhoto: 'Public photos - show on the map (small thumbnail under the spot name)',
@@ -156,7 +156,7 @@
 
   async function refresh(no) {
     state.loading = true; state.items = null; draw();
-    try { const j = await post('logs', { no }); if (state.no !== no) return; state.items = j.items || []; state.last = j.last || null; state.loading = false; state.fail = false; }
+    try { const j = await post('logs', { no }); if (state.no !== no) return; state.items = j.items || []; state.last = j.last || null; state.nextSeq = j.nextSeq || 1; state.loading = false; state.fail = false; }
     catch (e) { if (e.status === 401) { state.loading = false; state.items = null; } else { state.loading = false; state.fail = true; } }
     draw();
   }
@@ -185,7 +185,7 @@
     else { const PAGE = 5, all = state.items || [], pages = Math.max(1, Math.ceil(all.length / PAGE)); state.page = Math.max(0, Math.min(pages - 1, state.page || 0));
       all.slice(state.page * PAGE, state.page * PAGE + PAGE).forEach(e => {
       const c = calc(e);
-      h += `<div class="log-card" data-id="${esc(e.id)}"><div class="l1"><b>${esc(e.date)}${e.tod ? ' ' + esc(e.tod) : ''}</b><span>${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : ' min') : ''}</span>${c && c.sac != null ? `<span class="log-chip">${fmt(c.sac, 1)} bar/min · ${fmt(c.rmv, 0)} L/min</span>` : ''}</div>`
+      h += `<div class="log-card" data-id="${esc(e.id)}"><div class="l1"><b>${e.seq ? '#' + e.seq + ' · ' : ''}${esc(e.date)}${e.tod ? ' ' + esc(e.tod) : ''}</b><span>${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : ' min') : ''}</span>${c && c.sac != null ? `<span class="log-chip">${fmt(c.sac, 1)} bar/min · ${fmt(c.rmv, 0)} L/min</span>` : ''}</div>`
         + `<div class="det">${[
           e.type === 'tec' ? `${T.tec}${e.tank ? ' · ' + esc(T.tanks[e.tank] || e.tank) : ''}` : T.rec,
           e.depthAvg != null ? `${T.davg}: ${e.depthAvg}` : '', e.weight != null ? `${T.weight}: ${e.weight}` : '', e.suit != null ? `${T.suit}: ${esc(suitTxt(e.suit))}` : '',
@@ -208,7 +208,7 @@
   }
 
   function openForm(e, inline) {
-    const L = state.last, base = e || { date: todayStr(), tod: nowStr(), type: L ? L.type : 'rec', tank: L ? L.tank : '', weight: L ? L.weight : null, suit: L ? L.suit : null };
+    const L = state.last, base = e || { seq: state.nextSeq || '', date: todayStr(), tod: nowStr(), type: L ? L.type : 'rec', tank: L ? L.tank : '', weight: L ? L.weight : null, suit: L ? L.suit : null };
     state.form = { id: e ? e.id : '', v: Object.assign({}, base), photos: e && e.photos ? e.photos.slice() : [], pub: e ? !!e.pub : savedConsent().photo, use: e ? !!e.use : savedConsent().use, open: e ? !!e.open : savedConsent().open, prev: {}, busy: false, hint: !e && L ? T.prev(L.date) : '',
       tempManual: !!(e && e.temp != null && !e.tempAuto), visManual: !!(e && e.vis != null), inline: !!inline }; draw();
   }
@@ -222,7 +222,7 @@
       + `<label class="log-pub"><input type="checkbox" id="log-cuse"${f.use ? ' checked' : ''}><span>${T.consUse}</span></label>`
       + `<label class="log-pub"><input type="checkbox" id="log-copen"${f.open ? ' checked' : ''}><span>${T.consOpen}</span></label>`
       + `<label class="log-pub"><input type="checkbox" id="log-pub"${f.pub ? ' checked' : ''}><span>${T.consPhoto}</span></label></div>`
-      + fld('date', T.date, 'date') + fld('tod', T.tod, 'text', 'maxlength="5" placeholder="09:30" pattern="([01][0-9]|2[0-3]):[0-5][0-9]"') + `<div class="full"><label>${T.kind}</label><select name="type"><option value="rec"${v.type !== 'tec' ? ' selected' : ''}>${T.rec}</option><option value="tec"${v.type === 'tec' ? ' selected' : ''}>${T.tec}</option></select></div>`
+      + fld('seq', T.seq, 'number', 'min="1" max="99999" step="1"') + fld('date', T.date, 'date') + fld('tod', T.tod, 'text', 'maxlength="5" placeholder="09:30" pattern="([01][0-9]|2[0-3]):[0-5][0-9]"') + `<div class="full"><label>${T.kind}</label><select name="type"><option value="rec"${v.type !== 'tec' ? ' selected' : ''}>${T.rec}</option><option value="tec"${v.type === 'tec' ? ' selected' : ''}>${T.tec}</option></select></div>`
       + (v.type === 'tec' ? `<div class="full"><label>${T.tank}</label><select name="tank"><option value="">—</option>${Object.keys(VOL).map(k => `<option value="${k}"${v.tank === k ? ' selected' : ''}>${esc(T.tanks[k])}</option>`).join('')}</select></div>` : '')
       + fld('depthMax', T.dmax) + fld('depthAvg', T.davg) + fld('mins', T.mins) + fld('weight', T.weight)
       + fld('fill', T.fill) + fld('remain', T.remain)
@@ -290,7 +290,7 @@
       try {
         const j = await post('logsave', Object.assign({}, o, { no: state.no, id: f.id || undefined, tempAuto: !f.tempManual, photos: f.photos, pub: f.pub, use: f.use, open: f.open }));
         const i = (state.items || []).findIndex(x => x.id === j.item.id); if (i >= 0) state.items[i] = j.item; else (state.items = state.items || []).unshift(j.item);
-        state.items.sort((a, z) => (z.date || '').localeCompare(a.date || '') || (z.at || 0) - (a.at || 0)); state.last = state.items[0] || j.item;
+        state.items.sort((a, z) => (z.date || '').localeCompare(a.date || '') || (z.at || 0) - (a.at || 0)); state.last = state.items[0] || j.item; state.nextSeq = Math.max(state.nextSeq || 1, (j.item.seq || 0) + 1);
         try { window.dispatchEvent(new Event('otemp:photos')); } catch (_) {} state.form = null; state.page = 0; state.msg = T.saved + (j.gain ? T.gain(j.gain) : ''); if (j.gain && acct().reload) acct().reload(); draw();
       } catch (e2) { err.textContent = T.err[e2.code] || T.fail; }
     };

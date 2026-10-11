@@ -14,6 +14,22 @@
       bgW: 0.25    // 모델 배경 흐름(바람 성분 제외) 가중치. 관찰(만조 때 거의 0)과 모델(0.7노트 SSE 고정)이 안 맞아 해협 안에선 1/4로. 바람이 끄는 성분은 줄이지 않고 그대로
     }
   ];
+  // [ADD] 관리자가 포인트마다 넣은 보정값(/api/spotobs?svc=curfix). 있으면 해협 기본값보다 우선
+  const REF_RATE = 0.3; let fix = null, fixAt = 0, fixLoading = null;
+  async function loadFix(force) {
+    if (fix && !force && Date.now() - fixAt < 300e3) return fix;
+    if (!fixLoading) fixLoading = fetch('/api/spotobs?svc=curfix' + (force ? '&t=' + Date.now() : '')).then(r => r.json()).then(j => { fix = (j && j.spots) || {}; fixAt = Date.now(); return fix; }).catch(() => fix || {}).finally(() => { fixLoading = null; });
+    return fixLoading;
+  }
+  // 포인트 설정(밀물·썰물 방향 + 변화율 0.3m/h 기준 노트)을 해협 설정과 같은 모양으로 바꿔요
+  function spotCfg(st, all) {
+    const c = st && st.no && all && all[st.no]; if (!c || c.floodTo == null) return null;
+    const kn = 0.514444;
+    return { id: 'spot' + st.no, name: { ko: '포인트 보정', en: 'spot fix' }, axis: c.floodTo, ebbAxis: c.ebbTo, k: (c.floodKn || 0) * kn / REF_RATE, kEbb: (c.ebbKn || 0) * kn / REF_RATE, lagH: c.lagH == null ? 0.5 : c.lagH, bgW: c.bgW == null ? 0.25 : c.bgW, spot: true };
+  }
+  window.curfixGet = (no) => (fix && fix[no]) || null;
+  window.curfixReload = async function () { await loadFix(true); const st = typeof selectedStation !== 'undefined' ? selectedStation : null; const d = st && st._hourlyCache;
+    if (d && d._rawCurrent) { d.current = d._rawCurrent.map(c => Object.assign({}, c)); d._strait = null; await window.straitTideApply(st, d); try { if (typeof windDialUpdate === 'function') windDialUpdate(); } catch (_) {} } };
   function straitOf(st) {
     if (!st || !st.coords) return null;
     const lon = st.coords[0], lat = st.coords[1];
@@ -34,7 +50,10 @@
   }
   // 정점의 시간별 자료(d.current)에 조석 조류를 더해요. 바뀐 게 있으면 true (그 포인트 조위 자료만 써서 추가 요청 없음)
   window.straitTideApply = async function (st, d) {
-    const s = straitOf(st); if (!s || !d || !Array.isArray(d.current) || !d.current.length || !Array.isArray(d.tide) || d.tide.length < 3 || d._strait) return false;
+    if (!d || !Array.isArray(d.current) || !d.current.length || !Array.isArray(d.tide) || d.tide.length < 3 || d._strait) return false;
+    const all = await loadFix(false);
+    const s = spotCfg(st, all) || straitOf(st); if (!s) return false;
+    if (!d._rawCurrent) d._rawCurrent = d.current.map(c => Object.assign({}, c)); // 보정 전 원본(다시 적용할 때 씀)
     const r = Math.PI / 180, lag = s.lagH * 3600e3; let n = 0;
     // 바람이 끄는 표층 성분(풍속의 3%, 북반구는 바람이 가는 방향에서 오른쪽 30°) - js/wind-dial.js의 수심별 계산과 같은 식. 이 성분은 줄이지 않아요
     const lat = st.coords[1], sgn = lat >= 0 ? 1 : -1, wind = Array.isArray(d.wind) ? d.wind : [];
@@ -42,14 +61,16 @@
     d.current = d.current.map(c => {
       if (c.speed == null || c.to == null) return c;
       const rate = rateAt(d.tide, c.x - lag); if (rate == null) return c;
-      const ts = s.k * rate; // +면 밀물 방향(axis), −면 반대
+      // 밀물(rate>0)은 axis 방향으로 k, 썰물(rate<0)은 ebbAxis 방향으로 kEbb(없으면 axis 반대, 같은 k)
+      const flood = rate >= 0, ax = flood ? s.axis : (s.ebbAxis != null ? s.ebbAxis : (s.axis + 180) % 360);
+      const ts = Math.abs(rate) * (flood ? s.k : (s.kEbb != null ? s.kEbb : s.k)); // 항상 +, 방향은 ax
       const bw = s.bgW == null ? 1 : s.bgW, w = windAt(c.x);
       let wu = 0, wv = 0; if (w && w.speed != null && w.dir != null) { const ds = 0.03 * w.speed, d0 = (w.dir + 180 + sgn * 30) * r; wu = ds * Math.sin(d0); wv = ds * Math.cos(d0); }
       const bu = c.speed * Math.sin(c.to * r) - wu, bv = c.speed * Math.cos(c.to * r) - wv; // 모델 배경에서 바람 성분을 뺀 나머지만 줄여요
-      const u = bw * bu + wu + ts * Math.sin(s.axis * r), v = bw * bv + wv + ts * Math.cos(s.axis * r); n++;
-      return Object.assign({}, c, { bg: { speed: c.speed, to: c.to }, tide: +ts.toFixed(3), rate: +rate.toFixed(3), speed: +Math.hypot(u, v).toFixed(3), to: (Math.atan2(u, v) / r + 360) % 360, strait: s.id });
+      const u = bw * bu + wu + ts * Math.sin(ax * r), v = bw * bv + wv + ts * Math.cos(ax * r); n++;
+      return Object.assign({}, c, { bg: { speed: c.speed, to: c.to }, tide: +((flood ? 1 : -1) * ts).toFixed(3), tideTo: ax, rate: +rate.toFixed(3), speed: +Math.hypot(u, v).toFixed(3), to: (Math.atan2(u, v) / r + 360) % 360, strait: s.id });
     });
     d._strait = s.id; return n > 0;
   };
-  window.straitName = (id) => { const s = STRAITS.find(x => x.id === id); return s ? s.name[(typeof lang !== 'undefined' && lang === 'ko') ? 'ko' : 'en'] : ''; };
+  window.straitName = (id) => { const ko = typeof lang !== 'undefined' && lang === 'ko'; if (/^spot/.test(String(id))) return ko ? '포인트 보정' : 'spot fix'; const s = STRAITS.find(x => x.id === id); return s ? s.name[ko ? 'ko' : 'en'] : ''; };
 })();

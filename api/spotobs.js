@@ -314,6 +314,10 @@ module.exports = async function handler(req, res) {
   }
   // [ADD] 로그북 사진: svc=lphoto&id=..&s=t|b (사진 보여주기) · svc=lphotos (지도에 공개된 포인트별 사진 목록)
   if (svc === 'lphoto') { try { return await require('./_photos').serve(req, res, require('./_store').R); } catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(500).end(); } }
+  if (svc === 'curfix') { // [ADD] 포인트별 조류 보정값(관리자 입력, 공개 읽기)
+    try { const o = await require('./_curfix').list(require('./_store').R); res.setHeader('Cache-Control', 'public, s-maxage=60, max-age=30'); return res.status(200).json(o); }
+    catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(200).json({ ok: false, spots: {} }); }
+  }
   if (svc === 'lphotos') {
     try { const spots = await require('./_photos').index(require('./_store').R); res.setHeader('Cache-Control', 'public, s-maxage=120, max-age=60'); return res.status(200).json({ ok: true, spots }); }
     catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(200).json({ ok: false, spots: {} }); }

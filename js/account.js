@@ -49,7 +49,7 @@
   .a-me{display:flex;align-items:center;gap:10px;margin-bottom:12px} .a-me img{width:42px;height:42px;border-radius:50%;object-fit:cover} .a-me .a-ph{width:42px;height:42px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center}
   .a-sec{font-size:12px;color:#ffd27a;margin:12px 0 4px} .a-tags span{display:inline-block;font-size:11.5px;border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:1px 8px;margin:0 4px 4px 0;color:#cbd5e1}
   .a-list{max-height:200px;overflow-y:auto;overscroll-behavior:contain;padding-right:2px} .a-list::-webkit-scrollbar{width:5px} .a-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:3px}
-  .a-fav{display:flex;align-items:center;gap:8px} .a-fav .hd{cursor:grab;color:#64748b;font-size:14px;line-height:1;touch-action:none;user-select:none;padding:2px 2px 2px 0} .a-fav .hd:active{cursor:grabbing} .a-fav.drag{opacity:.45} .a-fav .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .a-fav{display:flex;align-items:center;gap:8px} .a-fav .hd{cursor:grab;color:#64748b;font-size:14px;line-height:1;touch-action:none;user-select:none;padding:2px 2px 2px 0} .a-fav .hd:active{cursor:grabbing} .a-fav.drag{opacity:.55;background:#1e2a4a;box-shadow:0 2px 8px rgba(0,0,0,.4)} .a-list.dragging{user-select:none;-webkit-user-select:none;touch-action:none} .a-fav .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .a-log{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;background:#111a30;border:1px solid rgba(255,255,255,.08);color:#e2e8f0;border-radius:8px;padding:6px 10px;margin:4px 0;cursor:pointer;font-size:12.5px} .a-log b{flex:0 0 auto;color:#FFB000;font-weight:600} .a-log .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .a-log .dt{flex:0 0 auto;color:#94a3b8}
   .a-fav{display:flex;width:100%;text-align:left;background:#111a30;border:1px solid rgba(255,255,255,.08);color:#e2e8f0;border-radius:8px;padding:7px 10px;margin:4px 0;cursor:pointer;font-size:13px}
   .a-row{display:flex;gap:8px;margin-top:14px} .a-row button{flex:1;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e2e8f0;cursor:pointer}
@@ -139,13 +139,28 @@
   // 즐겨찾기 끌어서 순서 바꾸기(⋮⋮ 손잡이, 마우스·손가락)
   let dragMoved = false;
   function setupFavDrag(list) {
-    if (!list) return; let cur = null;
+    if (!list) return;
     list.querySelectorAll('.hd').forEach(hd => hd.addEventListener('pointerdown', (e) => {
-      cur = hd.closest('.a-fav'); if (!cur) return; cur.classList.add('drag'); dragMoved = false; hd.setPointerCapture(e.pointerId); e.preventDefault();
-      const move = (ev) => { if (!cur) return; dragMoved = true; const el = document.elementFromPoint(ev.clientX, ev.clientY), over = el && el.closest && el.closest('.a-fav'); if (!over || over === cur || over.parentElement !== list) return;
-        const r = over.getBoundingClientRect(); (ev.clientY < r.top + r.height / 2) ? list.insertBefore(cur, over) : list.insertBefore(cur, over.nextSibling); };
-      const up = () => { hd.removeEventListener('pointermove', move); hd.removeEventListener('pointerup', up); hd.removeEventListener('pointercancel', up); if (!cur) return; cur.classList.remove('drag'); cur = null;
-        const order = [...list.querySelectorAll('.a-fav')].map(b => +b.dataset.no); me.prefs = Object.assign({}, me.prefs, { favOrder: order }); post('prefs', { favOrder: order }).catch(() => {}); paintFavBar(); setTimeout(() => { dragMoved = false; }, 50); };
+      const cur = hd.closest('.a-fav'); if (!cur) return;
+      const rows0 = [...list.querySelectorAll('.a-fav')]; if (rows0.length < 2) return;
+      // 줄 높이는 모두 같아서, 처음 한 번 잰 "한 칸 높이"로 위치를 계산해요(옮기는 중에 줄이 밀려도 흔들리지 않아요)
+      const cs = getComputedStyle(cur), pitch = cur.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0), top0 = rows0[0].getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop - (parseFloat(cs.marginTop) || 0);
+      cur.classList.add('drag'); list.classList.add('dragging'); dragMoved = false; hd.setPointerCapture(e.pointerId); e.preventDefault();
+      let y = e.clientY, raf = 0, idx = rows0.indexOf(cur);
+      const tick = () => {
+        raf = 0; const r = list.getBoundingClientRect();
+        if (y < r.top + 22) list.scrollTop -= 8; else if (y > r.bottom - 22) list.scrollTop += 8; // 가장자리에 대면 자동 스크롤
+        const n = rows0.length, t = Math.max(0, Math.min(n - 1, Math.floor((y - r.top + list.scrollTop - top0) / pitch)));
+        if (t !== idx) { const rows = [...list.querySelectorAll('.a-fav')].filter(x => x !== cur); list.insertBefore(cur, rows[t] || null); idx = t; dragMoved = true; }
+        if (y < r.top + 22 || y > r.bottom - 22) raf = requestAnimationFrame(tick);
+      };
+      const move = (ev) => { y = ev.clientY; dragMoved = true; if (!raf) raf = requestAnimationFrame(tick); };
+      const up = () => {
+        hd.removeEventListener('pointermove', move); hd.removeEventListener('pointerup', up); hd.removeEventListener('pointercancel', up);
+        if (raf) cancelAnimationFrame(raf); cur.classList.remove('drag'); list.classList.remove('dragging');
+        const order = [...list.querySelectorAll('.a-fav')].map(b => +b.dataset.no);
+        me.prefs = Object.assign({}, me.prefs, { favOrder: order }); post('prefs', { favOrder: order }).catch(() => {}); paintFavBar(); setTimeout(() => { dragMoved = false; }, 50);
+      };
       hd.addEventListener('pointermove', move); hd.addEventListener('pointerup', up); hd.addEventListener('pointercancel', up);
     }));
   }

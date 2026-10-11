@@ -9,10 +9,12 @@
       id: 'tanon', name: { ko: '타뇽 해협', en: 'Tañon Strait' },
       box: [9.40, 10.95, 123.15, 123.85],            // [위도 최소, 위도 최대, 경도 최소, 경도 최대]
       south: [9.25, 123.40], north: [11.00, 123.55], // 참조 지점(바다 격자 선택)
-      axis: 11,            // 해협 축 방향(도) - 남→북으로 흐를 때 "흘러가는" 방향
-      k: 1.3,              // Δh 1m당 조류 m/s (시작값: Δh 0.3m → 약 0.4m/s ≈ 0.8노트)
+      axis: 337,           // 조석 흐름 축(도): 밀물 때 "흘러가는" 방향. 현지 관찰(배경 SSE와 정반대로 상쇄) → NNW
+      k: 1.3,              // Δh 1m당 조류 m/s (기본값. 아래 cal이 있으면 관찰로 다시 계산)
       lagH: 1.5,           // 조위차 → 조류 반응 지연(시간). 관성이 크면 3시간 가까이, 마찰이 크면 0 가까이
-      tz: 'Asia/Manila'
+      tz: 'Asia/Manila',
+      // 관찰 교정: 이 현지 시각에 모델 배경 bgKn(노트, bgTo 방향)인데 실제는 거의 0 → 그때 조석 흐름 = 정반대 bgKn. k(부호 포함)를 여기에 맞춰요
+      cal: { at: '2026-10-10T11:00', bgKn: 0.7, bgTo: 157, note: 'ClubHari Housereef 만조(1.4m) 때 실제 흐름 ≈ 0' }
     }
   ];
   const BASE = 'https://marine-api.open-meteo.com/v1/marine';
@@ -33,7 +35,18 @@
     a.time.forEach((ts, i) => { const hs = a.sea_level_height_msl[i], hn = b.sea_level_height_msl[i];
       if (typeof hs === 'number' && typeof hn === 'number') rows.push({ x: Date.parse(ts + ':00Z'), dh: hs - hn }); });
     if (rows.length < 12) throw new Error('strait short');
-    cache[s.id] = { at: Date.now(), rows }; return rows;
+    cache[s.id] = { at: Date.now(), rows }; calibrate(s, rows); return rows;
+  }
+  // 관찰 교정: 교정 시각의 Δh로 k를 정해요(부호도 함께 → 어느 쪽이 높을 때 밀물인지 자동으로 맞음). Δh가 너무 작으면(3cm 미만) 기본값 유지
+  function calibrate(s, rows) {
+    if (!s.cal || s._calDone) return;
+    const KEY = 'otemp.strait.k.' + s.id + '.' + s.cal.at;
+    const x = Date.parse(s.cal.at + ':00Z') - s.lagH * 3600e3;
+    if (x < rows[0].x || x > rows[rows.length - 1].x) { try { const v = +localStorage.getItem(KEY); if (v) s.k = v; } catch (_) {} s._calDone = true; return; } // 교정 시각이 자료 범위 밖이면 전에 구한 값
+    const dh = atX(rows, x), need = s.cal.bgKn * 0.514444; // 상쇄에 필요한 조석 흐름(m/s)
+    if (Math.abs(dh) < 0.03) { try { console.warn('[strait]', s.id, 'calibration dh too small', dh.toFixed(3)); } catch (_) {} s._calDone = true; return; }
+    s.k = +(need / dh).toFixed(3); s._calDone = true; try { localStorage.setItem(KEY, String(s.k)); } catch (_) {}
+    try { console.info('[strait]', s.id, 'calibrated k =', s.k, 'dh =', dh.toFixed(3), 'm at', s.cal.at, '(lag', s.lagH, 'h)'); } catch (_) {}
   }
   const atX = (rows, x) => { // 선형 보간
     if (x <= rows[0].x) return rows[0].dh; if (x >= rows[rows.length - 1].x) return rows[rows.length - 1].dh;

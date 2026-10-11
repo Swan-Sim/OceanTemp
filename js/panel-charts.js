@@ -654,13 +654,20 @@
       // [FIX] "한국 정점은 열면 Now가 화면 시작과 안 맞음" - 실측 자료가 늦게 와서 표를 다시 그릴 때, 처음 그릴 때의 잘못된 위치
       //  (패널이 아직 자리 잡기 전이라 폭이 0이던 때 계산)를 그대로 유지하고 있었어요. 이제 사용자가 직접 표를 넘겼을 때만 위치를 유지하고,
       //  아니면 다시 그릴 때마다 + 화면 배치가 끝난 뒤에 한 번 더 "지금" 칸이 가운데 오게 맞춰요.
-      if (box._lastStationId !== st.id) box._userScrolled = false;
+      // [ADD] 다른 포인트로 가도 보던 시각 그대로: 사용자가 표를 넘긴 상태면 그 시각(현지 시각 기준) 칸이 가운데 오게
+      let carry = null;
+      if (box._lastStationId !== st.id) {
+        if (box._userScrolled && typeof box._viewX === 'number' && box._viewX >= cols[0] && box._viewX <= cols[cols.length - 1]) {
+          const vi = Math.round((box._viewX - cols[0]) / STEP); carry = Math.max(0, toNow() + (vi - nowCol) * COLW);
+        } else box._userScrolled = false;
+      }
       const keep = box._lastStationId === st.id && box._userScrolled && typeof box._lastScroll === 'number';
-      sc.scrollLeft = keep ? box._lastScroll : toNow();
+      sc.scrollLeft = keep ? box._lastScroll : (carry != null ? carry : toNow());
+      if (carry != null) { const reC = () => { if (sc.isConnected && sc.clientWidth > 80) { const vi = Math.round((box._viewX - cols[0]) / STEP); sc.scrollLeft = Math.max(0, toNow() + (vi - nowCol) * COLW); } }; requestAnimationFrame(reC); setTimeout(reC, 250); }
       box._lastStationId = st.id;
       const markUser = () => { box._userScrolled = true; };
       ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(ev => sc.addEventListener(ev, markUser, { passive: true }));
-      if (!keep) {
+      if (!keep && carry == null) {
         const reNow = () => { if (!box._userScrolled && sc.isConnected && sc.clientWidth > 80) sc.scrollLeft = toNow(); };
         requestAnimationFrame(reNow); setTimeout(reNow, 250); setTimeout(reNow, 900);
         if (typeof ResizeObserver === 'function') { const ro = new ResizeObserver(reNow); ro.observe(sc); setTimeout(() => ro.disconnect(), 4000); }
@@ -687,7 +694,7 @@
         if (s < L && L > 0) k = at(L) * (s / L);                                              // 왼쪽 끝 구간: 첫 칸까지
         if (s > Rr && maxLeft > Rr) k = at(Rr) + (last - at(Rr)) * ((s - Rr) / (maxLeft - Rr)); // 오른쪽 끝 구간: 마지막 칸까지
         const idx = Math.max(0, Math.min(cols.length - 1, Math.round(k)));
-        selEl.style.left = (idx * COLW) + 'px';
+        selEl.style.left = (idx * COLW) + 'px'; box._viewX = cols[idx];
         selEl.classList.toggle('is-now', idx === nowCol);
         if (typeof windDialSetTime === 'function') windDialSetTime(cols[idx]);
       };

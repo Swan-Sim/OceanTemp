@@ -7,7 +7,26 @@
     //   모델 격자가 약 8km라 섬·곶 주변의 국지 흐름(지형 영향)은 반영되지 않아요.
     let windDialMarker = null, windDialX = null, windDialRaf = 0, windDialLastSize = null;
     const windDialPos = () => { try { return localStorage.getItem('otemp.dial.pos') || 'E'; } catch (_) { return 'E'; } };
-    document.addEventListener('click', (e) => { const t = e.target && e.target.closest && e.target.closest('[data-dial-pos]'); if (!t) return; e.stopPropagation(); try { localStorage.setItem('otemp.dial.pos', t.getAttribute('data-dial-pos')); } catch (_) {} if (typeof windDialUpdate === 'function') windDialUpdate(); }, true);
+    // 상자 끌기: 손을 떼면 원 중심 기준 각도로 8방향 중 가장 가까운 곳에 붙음
+    document.addEventListener('pointerdown', (e) => {
+      const g = e.target && e.target.closest && e.target.closest('[data-dial-drag]'); if (!g) return;
+      e.stopPropagation(); e.preventDefault();
+      const svg = g.closest('svg'), map = typeof leafletMap !== 'undefined' ? leafletMap : null;
+      try { if (map && map.dragging) map.dragging.disable(); } catch (_) {}
+      const base = g.getAttribute('transform') || '', x0 = e.clientX, y0 = e.clientY; let moved = false;
+      const mv = (ev) => { const dx = ev.clientX - x0, dy = ev.clientY - y0; if (Math.abs(dx) + Math.abs(dy) > 3) moved = true; g.setAttribute('transform', `translate(${dx} ${dy}) ` + base); };
+      const up = (ev) => {
+        window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        try { if (map && map.dragging) map.dragging.enable(); } catch (_) {}
+        if (!moved) { g.setAttribute('transform', base); return; }
+        const r = svg.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const br = (Math.atan2(ev.clientX - cx, -(ev.clientY - cy)) * 180 / Math.PI + 360) % 360;
+        const pos = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(br / 45) % 8];
+        try { localStorage.setItem('otemp.dial.pos', pos); } catch (_) {}
+        if (typeof windDialUpdate === 'function') windDialUpdate();
+      };
+      window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+    }, true);
     const KN = 0.514444;
     // [ADD] 써지(파도가 지나갈 때 물이 앞뒤로 흔들리는 세기) 추정: 선형 파랑 이론의 물입자 속도 u = πH/T·e^(-kz), k = ω²/g(깊은 바다 가정)
     //  H = 유의파고, T = 파도 주기. 해안에서 파도가 휘거나 얕아지며 커지는 건 반영 안 됨 → 약함/보통/강함 세 단계로만 표시
@@ -141,12 +160,11 @@
       const head = `<rect x="${mx + (MW - tw) / 2}" y="9" width="${tw}" height="24" rx="12" fill="rgba(7,11,20,0.92)" stroke="${tcol}" stroke-width="1.5"/>` +
         `<text x="${mx + MW / 2}" y="26" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${timeLabel}</text>` +
         (tzLabel ? `<text x="${mx + MW / 2}" y="46" font-size="10" fill="#94a3b8" text-anchor="middle">${tzLabel}</text>` : '');
-      // [ADD] 상자 위치: 원 둘레 8방향(E·W·N·S·NE·NW·SE·SW) 중 고른 곳에. 상자 오른쪽 위 3×3 점을 누르면 옮겨져요(브라우저에 기억)
+      // [ADD] 상자 위치: 원 둘레 8방향(E·W·N·S·NE·NW·SE·SW) 중 한 곳. 상자를 끌어다 놓으면 가장 가까운 방향으로 붙어요(브라우저에 기억)
       const BH = yEnd + 10, pos = windDialPos(), gap = 22;
       const PX = { E: [R + gap, -R - 30], W: [-R - gap - BW, -R - 30], N: [-BW / 2, -R - gap - BH], S: [-BW / 2, R + gap],
         NE: [R + 8, -R - 8 - BH], NW: [-R - 8 - BW, -R - 8 - BH], SE: [R + 8, R + 8], SW: [-R - 8 - BW, R + 8] }[pos] || [R + gap, -R - 30];
-      const grid = ['NW', 'N', 'NE', 'W', '', 'E', 'SW', 'S', 'SE'].map((k, i) => k ? `<rect data-dial-pos="${k}" x="${BW - 30 + (i % 3) * 8}" y="${6 + Math.floor(i / 3) * 8}" width="6" height="6" rx="1" fill="${k === pos ? '#FFB000' : 'rgba(255,255,255,.35)'}" style="pointer-events:auto;cursor:pointer"><title>${k}</title></rect>` : '').join('');
-      labels += `<g transform="translate(${PX[0]} ${PX[1]})"><rect x="0" y="0" width="${BW}" height="${BH}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>${strip}<g transform="translate(${mx} 0)">${rows}</g>${head}${grid}</g>`;
+      labels += `<g data-dial-drag="1" style="pointer-events:auto;cursor:move;touch-action:none" transform="translate(${PX[0]} ${PX[1]})"><rect x="0" y="0" width="${BW}" height="${BH}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>${strip}<g transform="translate(${mx} 0)">${rows}</g>${head}</g>`;
       const W = 2 * (R + gap + BW + 10), H = 2 * (R + gap + BH + 10); windDialLastSize = [W, H];
       return `<svg width="${W}" height="${H}" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="overflow:visible;pointer-events:none">${g}${labels}</svg>`;
     }

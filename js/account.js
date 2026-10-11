@@ -8,7 +8,7 @@
     login: '로그인', title: '간편 로그인', sub: '즐겨찾기한 포인트를 어느 기기에서든 볼 수 있어요.',
     google: 'Google로 계속하기', kakao: '카카오로 계속하기', naver: '네이버로 계속하기', facebook: 'Facebook으로 계속하기',
     none: '로그인 준비 중이에요.', agree: '계속하면 <a href="/privacy/" target="_blank" rel="noopener">개인정보처리방침</a>에 동의하는 것으로 봐요.',
-    hello: (n) => `${n}님`, linked: '연결된 로그인', link: '다른 계정 연결', favs: '즐겨찾기 포인트', noFav: '아직 없어요. 포인트를 고르고 아래 ☆를 눌러보세요.',
+    hello: (n) => `${n}님`, linked: '연결된 로그인', link: '다른 계정 연결', favs: '즐겨찾기 포인트 (최대 30 · ⋮⋮ 끌어서 순서 바꾸기)', mylogs: '내 로그 (최근 순)', noLog: '아직 기록이 없어요.', more: '불러오는 중…', noFav: '아직 없어요. 포인트를 고르고 아래 ☆를 눌러보세요.',
     logout: '로그아웃', del: '회원 탈퇴', delAsk: '계정과 즐겨찾기를 모두 지울까요? 되돌릴 수 없어요.', close: '닫기',
     favOn: '즐겨찾기에 넣었어요', favOff: '즐겨찾기에서 뺐어요', favNeed: '즐겨찾기는 로그인하면 쓸 수 있어요', favNo: '이 지점은 즐겨찾기할 수 없어요',
     lv: (l) => `Lv.${l}`, toNext: (n) => `다음 레벨까지 ${n} 크레딧`, maxLv: '최고 레벨', credits: '크레딧', last: '마지막', admin: 'Admin', creditHint: '로그인·즐겨찾기 등 활동하면 크레딧이 쌓이고 레벨이 올라가요.',
@@ -19,7 +19,7 @@
     login: 'Log in', title: 'Sign in', sub: 'Save favorite spots and see them on any device.',
     google: 'Continue with Google', kakao: 'Continue with Kakao', naver: 'Continue with Naver', facebook: 'Continue with Facebook',
     none: 'Sign-in is coming soon.', agree: 'By continuing you agree to the <a href="/privacy/?lang=en" target="_blank" rel="noopener">Privacy Policy</a>.',
-    hello: (n) => n, linked: 'Linked accounts', link: 'Link another account', favs: 'Favorite spots', noFav: 'None yet. Pick a spot and tap ☆ below.',
+    hello: (n) => n, linked: 'Linked accounts', link: 'Link another account', favs: 'Favorite spots (max 30 · drag ⋮⋮ to reorder)', mylogs: 'My logs (newest first)', noLog: 'No entries yet.', more: 'Loading…', noFav: 'None yet. Pick a spot and tap ☆ below.',
     logout: 'Log out', del: 'Delete account', delAsk: 'Delete your account and favorites? This cannot be undone.', close: 'Close',
     favOn: 'Added to favorites', favOff: 'Removed from favorites', favNeed: 'Log in to save favorites', favNo: 'This point cannot be saved',
     lv: (l) => `Lv.${l}`, toNext: (n) => `${n} credits to next level`, maxLv: 'Max level', credits: 'Credits', last: 'Last', admin: 'Admin', creditHint: 'Earn credits by being active to level up.',
@@ -48,7 +48,10 @@
   #acct-box .a-agree{color:#64748b;font-size:11.5px;margin-top:10px} #acct-box .a-agree a{color:#94a3b8}
   .a-me{display:flex;align-items:center;gap:10px;margin-bottom:12px} .a-me img{width:42px;height:42px;border-radius:50%;object-fit:cover} .a-me .a-ph{width:42px;height:42px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center}
   .a-sec{font-size:12px;color:#ffd27a;margin:12px 0 4px} .a-tags span{display:inline-block;font-size:11.5px;border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:1px 8px;margin:0 4px 4px 0;color:#cbd5e1}
-  .a-fav{display:block;width:100%;text-align:left;background:#111a30;border:1px solid rgba(255,255,255,.08);color:#e2e8f0;border-radius:8px;padding:7px 10px;margin:4px 0;cursor:pointer;font-size:13px}
+  .a-list{max-height:200px;overflow-y:auto;overscroll-behavior:contain;padding-right:2px} .a-list::-webkit-scrollbar{width:5px} .a-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:3px}
+  .a-fav{display:flex;align-items:center;gap:8px} .a-fav .hd{cursor:grab;color:#64748b;font-size:14px;line-height:1;touch-action:none;user-select:none;padding:2px 2px 2px 0} .a-fav .hd:active{cursor:grabbing} .a-fav.drag{opacity:.45} .a-fav .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .a-log{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;background:#111a30;border:1px solid rgba(255,255,255,.08);color:#e2e8f0;border-radius:8px;padding:6px 10px;margin:4px 0;cursor:pointer;font-size:12.5px} .a-log b{flex:0 0 auto;color:#FFB000;font-weight:600} .a-log .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .a-log .dt{flex:0 0 auto;color:#94a3b8}
+  .a-fav{display:flex;width:100%;text-align:left;background:#111a30;border:1px solid rgba(255,255,255,.08);color:#e2e8f0;border-radius:8px;padding:7px 10px;margin:4px 0;cursor:pointer;font-size:13px}
   .a-row{display:flex;gap:8px;margin-top:14px} .a-row button{flex:1;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e2e8f0;cursor:pointer}
   .a-row .a-del{color:#f87171;border-color:rgba(248,113,113,.35)}
   .tab-btn.tab-fav{flex:0 0 auto;min-width:38px;padding:0 10px;font-size:16px;line-height:1}
@@ -107,7 +110,7 @@
     const chips = [];
     const last = me.prefs && me.prefs.last && stationByNo(me.prefs.last.no);
     if (last && !favSet.has(last.no)) chips.push(`<button class="last" data-no="${last.no}">⟲ ${T.last}: ${esc(last.name)}</button>`);
-    me.favs.map(stationByNo).filter(Boolean).forEach(s => chips.push(`<button data-no="${s.no}">★ ${esc(s.name)}</button>`));
+    sortedFavs().map(stationByNo).filter(Boolean).forEach(s => chips.push(`<button data-no="${s.no}">★ ${esc(s.name)}</button>`));
     b.innerHTML = me.user ? chips.join('') : '';
     b.classList.toggle('show', !!(me.user && chips.length));
     b.querySelectorAll('button').forEach(x => x.onclick = () => goTo(stationByNo(+x.dataset.no)));
@@ -128,6 +131,36 @@
   // ── 창 ──
   const pbtns = (list) => list.map(p => `<a class="a-pbtn a-${p}" href="${startUrl(p)}"><b>${p === 'google' ? 'G' : p === 'kakao' ? '●' : p === 'naver' ? 'N' : 'f'}</b>${T[p]}</a>`).join('');
   function stationByNo(no) { return (typeof stations !== 'undefined' ? stations : []).find(s => s.no === no); }
+  // 즐겨찾기 순서: prefs.favOrder 순 → 나머지는 뒤에
+  function sortedFavs() { const ord = (me.prefs && me.prefs.favOrder) || [], rank = (n) => { const i = ord.indexOf(n); return i < 0 ? 1e9 : i; }; return me.favs.slice().sort((a, b) => rank(a) - rank(b)); }
+  // 즐겨찾기 끌어서 순서 바꾸기(⋮⋮ 손잡이, 마우스·손가락)
+  let dragMoved = false;
+  function setupFavDrag(list) {
+    if (!list) return; let cur = null;
+    list.querySelectorAll('.hd').forEach(hd => hd.addEventListener('pointerdown', (e) => {
+      cur = hd.closest('.a-fav'); if (!cur) return; cur.classList.add('drag'); dragMoved = false; hd.setPointerCapture(e.pointerId); e.preventDefault();
+      const move = (ev) => { if (!cur) return; dragMoved = true; const el = document.elementFromPoint(ev.clientX, ev.clientY), over = el && el.closest && el.closest('.a-fav'); if (!over || over === cur || over.parentElement !== list) return;
+        const r = over.getBoundingClientRect(); (ev.clientY < r.top + r.height / 2) ? list.insertBefore(cur, over) : list.insertBefore(cur, over.nextSibling); };
+      const up = () => { hd.removeEventListener('pointermove', move); hd.removeEventListener('pointerup', up); hd.removeEventListener('pointercancel', up); if (!cur) return; cur.classList.remove('drag'); cur = null;
+        const order = [...list.querySelectorAll('.a-fav')].map(b => +b.dataset.no); me.prefs = Object.assign({}, me.prefs, { favOrder: order }); post('prefs', { favOrder: order }).catch(() => {}); paintFavBar(); setTimeout(() => { dragMoved = false; }, 50); };
+      hd.addEventListener('pointermove', move); hd.addEventListener('pointerup', up); hd.addEventListener('pointercancel', up);
+    }));
+  }
+  // 내 로그 목록: 최근 순, 5개 높이에 스크롤, 끝에 닿으면 더 불러옴(최대 2000개)
+  async function loadLogsInto(list) {
+    if (!list) return; const PAGE = 40; let off = 0, total = Infinity, busy = false;
+    const row = (e) => { const s = stationByNo(e.no); return `<button class="a-log" data-no="${e.no}"><b>${esc(e.date || '')}</b><span class="nm">${esc(s ? s.name : '#' + e.no)}</span><span class="dt">${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (lang === 'ko' ? '분' : 'm') : ''}</span></button>`; };
+    const more = async () => {
+      if (busy || off >= total) return; busy = true;
+      try { const j = await post('logs', { no: 0, limit: PAGE, offset: off }); total = j.count != null ? j.count : (j.items || []).length; const sub = list.querySelector('.a-sub'); if (sub) sub.remove();
+        if (!off && !(j.items || []).length) { list.innerHTML = `<div class="a-sub">${T.noLog}</div>`; return; }
+        list.insertAdjacentHTML('beforeend', (j.items || []).map(row).join('')); off += (j.items || []).length;
+        list.querySelectorAll('.a-log').forEach(b => { if (b._on) return; b._on = true; b.onclick = () => { const s = stationByNo(+b.dataset.no); if (!s) return; close(); goTo(s); try { if (typeof setMode === 'function') setTimeout(() => setMode('log'), 400); } catch (_) {} }; });
+      } catch (_) { const sub = list.querySelector('.a-sub'); if (sub) sub.remove(); } finally { busy = false; }
+    };
+    list.addEventListener('scroll', () => { if (list.scrollTop + list.clientHeight >= list.scrollHeight - 24) more(); });
+    await more();
+  }
   function open() {
     let ov = document.getElementById('acct-ov');
     if (!ov) { ov = document.createElement('div'); ov.id = 'acct-ov'; ov.innerHTML = '<div id="acct-box"></div>'; document.body.appendChild(ov); }
@@ -144,8 +177,9 @@
       }
       if (u.role === 'admin') h += `<a class="a-adm" href="/admin">${T.admin}</a>`;
       h += `<div class="a-sec">${T.favs}</div>`;
-      const favs = me.favs.map(stationByNo).filter(Boolean);
-      h += favs.length ? favs.map(s => `<button class="a-fav" data-no="${s.no}">★ ${esc(s.name)}</button>`).join('') : `<div class="a-sub">${T.noFav}</div>`;
+      const favs = sortedFavs().map(stationByNo).filter(Boolean);
+      h += favs.length ? `<div class="a-list" id="a-favs">${favs.map(s => `<button class="a-fav" data-no="${s.no}"><span class="hd">⋮⋮</span><span class="nm">★ ${esc(s.name)}</span></button>`).join('')}</div>` : `<div class="a-sub">${T.noFav}</div>`;
+      h += `<div class="a-sec">${T.mylogs}</div><div class="a-list" id="a-logs"><div class="a-sub">${T.more}</div></div>`;
       h += `<div class="a-sec">${T.linked}</div><div class="a-tags">${u.providers.map(p => `<span>${PNAME[p] || p}</span>`).join('')}</div>`;
       if (more.length) h += `<div class="a-sec">${T.link}</div><div class="a-small">${pbtns(more)}</div>`;
       h += `<div class="a-row"><button class="a-out">${T.logout}</button><button class="a-del">${T.del}</button></div>`;
@@ -160,7 +194,9 @@
       document.addEventListener('pointerdown', (e) => { const o = document.getElementById('acct-ov'); if (!o || !o.classList.contains('show')) return; if (e.target.closest('#acct-box') || (btn && btn.contains(e.target))) return; close(); }, true);
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); }); }
     box.querySelector('.a-x').onclick = close;
-    box.querySelectorAll('.a-fav').forEach(b => b.onclick = () => { const s = stationByNo(+b.dataset.no); if (!s) return; close(); goTo(s); });
+    box.querySelectorAll('.a-fav').forEach(b => b.onclick = (e) => { if (e.target.closest('.hd') || dragMoved) return; const s = stationByNo(+b.dataset.no); if (!s) return; close(); goTo(s); });
+    setupFavDrag(box.querySelector('#a-favs'));
+    loadLogsInto(box.querySelector('#a-logs'));
     const out = box.querySelector('.a-out'); if (out) out.onclick = async () => { try { await post('logout'); } catch (_) {} close(); await load(); };
     const del = box.querySelector('.a-del'); if (del) del.onclick = async () => { if (!confirm(T.delAsk)) return; try { await post('delete'); } catch (_) {} close(); await load(); };
   }

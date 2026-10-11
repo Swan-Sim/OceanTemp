@@ -93,6 +93,7 @@
   .log-phs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px} .log-phs img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.2);cursor:zoom-in}
   .ot-pv{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px;cursor:zoom-out}
   .ot-pv img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:6px} .ot-pv button{height:32px;padding:0 14px;border-radius:8px;border:1px solid rgba(248,113,113,.5);background:transparent;color:#f87171;cursor:pointer}
+  .log-pager{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0 4px;color:#94a3b8;font-size:12.5px} .log-pager button{min-width:40px}
   .log-step{display:flex;gap:4px} .log-step input{flex:1;min-width:0;text-align:center} .log-step button{flex:0 0 32px;height:32px;border-radius:7px;border:1px solid rgba(255,255,255,.18);background:#111a30;color:#e2e8f0;font-size:16px;cursor:pointer;padding:0}`;
   document.head.appendChild(css);
 
@@ -174,13 +175,14 @@
     const user = acct().user && acct().user();
     if (!state.no) { box.innerHTML = `<div class="log-msg">${T.noSpot}</div>`; return; }
     if (!user) { box.innerHTML = `<div class="log-msg">${T.needLogin}</div><button class="log-btn pri" id="log-login">${T.login}</button>`; box.querySelector('#log-login').onclick = () => acct().open && acct().open(); return; }
-    if (state.form) return drawForm();
+    if (state.form && !state.form.inline) return drawForm();
     let h = `<div class="log-top"><b>${esc(T.title(spotName()))}</b><button class="log-btn pri" id="log-add">${T.add}</button></div>`;
     if (state.msg) h += `<div class="log-msg" style="color:#a7f3d0">${esc(state.msg)}</div>`;
     if (state.loading) h += `<div class="log-msg">${T.loading}</div>`;
     else if (state.fail) h += `<div class="log-msg">${T.fail}</div>`;
-    else if (state.items && !state.items.length) h += `<div class="log-msg">${T.empty}</div>`;
-    else (state.items || []).forEach(e => {
+    else if (state.items && !state.items.length) h += `<div class="log-msg">${T.empty}</div><div id="log-inline-form"></div>`; // 기록이 없으면 바로 아래에 작성 폼
+    else { const PAGE = 5, all = state.items || [], pages = Math.max(1, Math.ceil(all.length / PAGE)); state.page = Math.max(0, Math.min(pages - 1, state.page || 0));
+      all.slice(state.page * PAGE, state.page * PAGE + PAGE).forEach(e => {
       const c = calc(e);
       h += `<div class="log-card" data-id="${esc(e.id)}"><div class="l1"><b>${esc(e.date)}${e.tod ? ' ' + esc(e.tod) : ''}</b><span>${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : ' min') : ''}</span>${c && c.sac != null ? `<span class="log-chip">${fmt(c.sac, 1)} bar/min · ${fmt(c.rmv, 0)} L/min</span>` : ''}</div>`
         + `<div class="det">${[
@@ -191,8 +193,12 @@
         + (c && c.sac != null ? `<br><span style="color:#a7f3d0">${calcHTML(e)}</span>` : '') + (e.notes ? `<br>📝 ${esc(e.notes)}` : '')
         + ((e.photos || []).length ? `<div class="log-phs">${e.photos.map(id => `<img src="${phUrl(id, 't')}" data-ph="${esc(id)}" loading="lazy" alt="">`).join('')}</div>` : '')
         + `<div class="row"><button class="log-btn" data-edit="${esc(e.id)}">${T.edit}</button><button class="log-btn red" data-del="${esc(e.id)}">${T.del}</button></div></div></div>`;
-    });
+      });
+      if (pages > 1) h += `<div class="log-pager"><button class="log-btn" data-pg="-1"${state.page === 0 ? ' disabled' : ''}>‹</button><span>${state.page + 1} / ${pages}</span><button class="log-btn" data-pg="1"${state.page >= pages - 1 ? ' disabled' : ''}>›</button></div>`;
+    }
     box.innerHTML = h;
+    box.querySelectorAll('[data-pg]').forEach(b2 => b2.onclick = () => { state.page = (state.page || 0) + (+b2.dataset.pg); draw(); box.scrollTop = 0; });
+    if (box.querySelector('#log-inline-form')) { if (!state.form || !state.form.inline) { openForm(null, true); return; } drawForm(); }
     box.querySelector('#log-add').onclick = () => { state.msg = ''; openForm(null); };
     box.querySelectorAll('.log-card').forEach(c => c.onclick = (ev) => { if (ev.target.closest('button')) return; const ph = ev.target.closest('[data-ph]'); if (ph) { window.otPhotoView(ph.dataset.ph); return; } c.classList.toggle('open'); });
     box.querySelectorAll('[data-edit]').forEach(b2 => b2.onclick = () => openForm((state.items || []).find(x => x.id === b2.dataset.edit)));
@@ -200,15 +206,15 @@
       if (!confirm(T.delAsk)) return; try { await post('logdel', { id: b2.dataset.del }); state.items = state.items.filter(x => x.id !== b2.dataset.del); } catch (_) {} draw(); });
   }
 
-  function openForm(e) {
+  function openForm(e, inline) {
     const L = state.last, base = e || { date: todayStr(), tod: nowStr(), type: L ? L.type : 'rec', tank: L ? L.tank : '', weight: L ? L.weight : null, suit: L ? L.suit : null };
     state.form = { id: e ? e.id : '', v: Object.assign({}, base), photos: e && e.photos ? e.photos.slice() : [], pub: e ? !!e.pub : savedConsent().photo, use: e ? !!e.use : savedConsent().use, open: e ? !!e.open : savedConsent().open, prev: {}, busy: false, hint: !e && L ? T.prev(L.date) : '',
-      tempManual: !!(e && e.temp != null && !e.tempAuto), visManual: !!(e && e.vis != null) }; draw();
+      tempManual: !!(e && e.temp != null && !e.tempAuto), visManual: !!(e && e.vis != null), inline: !!inline }; draw();
   }
   function drawForm() {
-    const f = state.form, v = f.v, val = (x) => x == null ? '' : esc(x);
+    const f = state.form, v = f.v, root = f.inline ? (root.querySelector('#log-inline-form') || box) : box, val = (x) => x == null ? '' : esc(x);
     const fld = (k, label, type, extra) => `<div><label>${label}</label><input name="${k}" type="${type || 'number'}" ${type === 'text' || type === 'date' ? '' : 'inputmode="decimal" step="any"'} value="${val(v[k])}" ${extra || ''}></div>`;
-    box.innerHTML = `<form class="log-form" id="log-form">`
+    root.innerHTML = `<form class="log-form" id="log-form">`
       + (f.hint ? `<div class="log-hint">${esc(f.hint)}</div>` : '')
       + `<div class="full"><label>${T.photos} (${T.photoMax})</label><div class="log-ph" id="log-ph"></div><input type="file" id="log-file" accept="image/*" multiple hidden></div>`
       + `<div class="full log-cons"><div class="log-sub" style="margin-bottom:4px">${T.consTitle}</div>`
@@ -225,15 +231,15 @@
       + fld('buddy', T.buddy, 'text', 'maxlength="60"')
       + `<div class="full"><label>${T.notes}</label><textarea name="notes" maxlength="600">${esc(v.notes || '')}</textarea></div>`
       + `<div class="log-calc off" id="log-calc"></div>`
-      + `<div class="full" style="display:flex;gap:8px"><button type="button" class="log-btn" id="log-cancel" style="flex:1">${T.cancel}</button><button type="submit" class="log-btn pri" style="flex:2">${T.save}</button></div>`
+      + `<div class="full" style="display:flex;gap:8px">${f.inline ? '' : `<button type="button" class="log-btn" id="log-cancel" style="flex:1">${T.cancel}</button>`}<button type="submit" class="log-btn pri" style="flex:2">${T.save}</button></div>`
       + `<div class="log-msg full" id="log-err" style="color:#f87171"></div></form>`;
-    const form = box.querySelector('#log-form');
+    const form = root.querySelector('#log-form');
     const read = () => { const o = {}; new FormData(form).forEach((x, k) => { o[k] = x; }); o.type = o.type === 'tec' ? 'tec' : 'rec'; return o; };
-    const upd = () => { const o = read(), calcEl = box.querySelector('#log-calc'); const c = calc(o); calcEl.innerHTML = calcHTML(o); calcEl.classList.toggle('off', !(c && c.sac != null)); };
+    const upd = () => { const o = read(), calcEl = root.querySelector('#log-calc'); const c = calc(o); calcEl.innerHTML = calcHTML(o); calcEl.classList.toggle('off', !(c && c.sac != null)); };
     form.addEventListener('input', upd); upd();
     // [ADD] 수온·시야 자동 채우기(직접 고치면 그 뒤로는 안 덮어씀)
     const st = typeof selectedStation !== 'undefined' ? selectedStation : null;
-    const tHint = box.querySelector('#log-temp-hint'), vHint = box.querySelector('#log-vis-hint');
+    const tHint = root.querySelector('#log-temp-hint'), vHint = root.querySelector('#log-vis-hint');
     let seq = 0;
     const autoTemp = async () => {
       if (f.tempManual || !st) { tHint.textContent = ''; return; }
@@ -253,11 +259,11 @@
     ['date', 'tod', 'depthAvg', 'depthMax'].forEach(n => form[n] && form[n].addEventListener('input', later));
     form.temp.addEventListener('input', () => { f.tempManual = form.temp.value !== ''; if (f.tempManual) tHint.textContent = ''; else autoTemp(); });
     form.vis.addEventListener('input', () => { f.visManual = form.vis.value !== ''; });
-    box.querySelectorAll('[data-vis]').forEach(b2 => b2.onclick = () => { const c = num(form.vis.value) || 0; form.vis.value = Math.max(0, Math.min(100, c + (+b2.dataset.vis))); f.visManual = true; f.v.vis = form.vis.value; });
+    root.querySelectorAll('[data-vis]').forEach(b2 => b2.onclick = () => { const c = num(form.vis.value) || 0; form.vis.value = Math.max(0, Math.min(100, c + (+b2.dataset.vis))); f.visManual = true; f.v.vis = form.vis.value; });
     autoTemp(); autoVis();
     form.type.addEventListener('change', () => { f.v = Object.assign(f.v, read()); drawForm(); }); // 텍다이버면 탱크 선택이 나타나요
     // 사진 칸: 고르면 바로 줄여서 올려요
-    const phEl = box.querySelector('#log-ph'), fileEl = box.querySelector('#log-file'), pubEl = box.querySelector('#log-pub'), errEl = () => box.querySelector('#log-err');
+    const phEl = root.querySelector('#log-ph'), fileEl = root.querySelector('#log-file'), pubEl = root.querySelector('#log-pub'), errEl = () => root.querySelector('#log-err');
     const drawPh = () => {
       phEl.innerHTML = f.photos.map(id => `<div class="pt"><img src="${f.prev[id] || phUrl(id, 't')}" alt=""><b data-rm="${esc(id)}">×</b></div>`).join('')
         + (f.busy ? `<span class="busy">${T.photoBusy}</span>` : (f.photos.length < 4 ? `<button type="button" class="add" id="log-padd">${T.photoAdd}</button>` : ''));
@@ -273,18 +279,18 @@
       }
       f.busy = false; if (form.isConnected) drawPh();
     };
-    const cuseEl = box.querySelector('#log-cuse'), copenEl = box.querySelector('#log-copen');
+    const cuseEl = root.querySelector('#log-cuse'), copenEl = root.querySelector('#log-copen');
     const onCons = () => { f.use = cuseEl.checked; f.open = copenEl.checked; f.pub = pubEl.checked; saveConsent({ use: f.use, open: f.open, photo: f.pub }); };
     cuseEl.onchange = copenEl.onchange = pubEl.onchange = onCons;
     drawPh();
-    box.querySelector('#log-cancel').onclick = () => { state.form = null; draw(); };
+    { const cb = root.querySelector('#log-cancel'); if (cb) cb.onclick = () => { state.form = null; draw(); }; }
     form.onsubmit = async (ev) => {
-      ev.preventDefault(); if (f.busy) return; const o = read(), err = box.querySelector('#log-err'); err.textContent = '';
+      ev.preventDefault(); if (f.busy) return; const o = read(), err = root.querySelector('#log-err'); err.textContent = '';
       try {
         const j = await post('logsave', Object.assign({}, o, { no: state.no, id: f.id || undefined, tempAuto: !f.tempManual, photos: f.photos, pub: f.pub, use: f.use, open: f.open }));
         const i = (state.items || []).findIndex(x => x.id === j.item.id); if (i >= 0) state.items[i] = j.item; else (state.items = state.items || []).unshift(j.item);
         state.items.sort((a, z) => (z.date || '').localeCompare(a.date || '') || (z.at || 0) - (a.at || 0)); state.last = state.items[0] || j.item;
-        try { window.dispatchEvent(new Event('otemp:photos')); } catch (_) {} state.form = null; state.msg = T.saved + (j.gain ? T.gain(j.gain) : ''); if (j.gain && acct().reload) acct().reload(); draw();
+        try { window.dispatchEvent(new Event('otemp:photos')); } catch (_) {} state.form = null; state.page = 0; state.msg = T.saved + (j.gain ? T.gain(j.gain) : ''); if (j.gain && acct().reload) acct().reload(); draw();
       } catch (e2) { err.textContent = T.err[e2.code] || T.fail; }
     };
   }

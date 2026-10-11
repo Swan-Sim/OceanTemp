@@ -67,10 +67,9 @@
 
     function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0, raw) {
       const R = 74, ko = typeof lang !== 'undefined' && lang === 'ko';
-      let g = `<circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
-        `<circle r="${R * 0.62}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 4"/>` +
-        `<g fill="#e2e8f0" font-size="12" font-weight="700" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.6);stroke-width:2.5px">` +
-        `<text y="${-R - 5}">N</text><text x="${R + 9}" y="4">E</text><text y="${R + 13}">S</text><text x="${-R - 9}" y="4">W</text></g>`;
+      // [CHANGE] 원은 반투명(50%)으로, N·E·S·W 글자는 뺐어요(지도가 북쪽 위 고정이라 불필요)
+      let g = `<g opacity="0.5"><circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
+        `<circle r="${R * 0.62}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 4"/></g>`;
       // [CHANGE] 화살표 길이 = 값에 완전 비례(머리 삼각형은 값이 0이 아니면 항상 같은 크기로 표시, 0이면 화살표 없음)
       //   바람 15 m/s = 60px, 파도 3 m = 60px, 흐름 1 m/s(약 2노트) = 원 반지름 가까이, 써지 0.5 m/s = 양쪽 40px. 넘으면 그 길이에서 멈춤
       const prop = (val, full, px) => Math.min(px, Math.max(0, val) / full * px);
@@ -99,7 +98,7 @@
         const tip = tipR, hb = tip - 12, Ls = prop(c.speed, 1.0, Math.max(10, hb - 10));
         return `<g transform="rotate(${c.to.toFixed(0)})" style="filter:drop-shadow(0 0 2px rgba(0,0,0,.8))">` +
           (Ls > 0.5 ? `<line x1="0" y1="${-(hb - Ls)}" x2="0" y2="${-hb}" stroke="${color}" stroke-width="${wid}" stroke-linecap="round"${dashed ? ' stroke-dasharray="5 4"' : ''}/>` : '') +
-          `<path d="M-8 ${-hb} L0 ${-tip} L8 ${-hb}Z" fill="${hollow ? 'rgba(7,11,20,.6)' : color}" stroke="${hollow ? color : 'rgba(255,255,255,.85)'}" stroke-width="${hollow ? 2 : 1.2}" stroke-linejoin="round"/></g>`;
+          `<path d="M-8 ${-hb} L0 ${-tip} L8 ${-hb}Z" fill="${hollow ? 'rgba(7,11,20,.6)' : color}" stroke="${hollow ? color : 'none'}" stroke-width="${hollow ? 2 : 0}" stroke-linejoin="round"/></g>`;
       };
       // [ADD] 써지: 파도 축을 따라 앞뒤로 흔들림 → 정점 중심 양쪽 화살표(수심 5m 세기로 길이)
       if (v && vdir != null) {

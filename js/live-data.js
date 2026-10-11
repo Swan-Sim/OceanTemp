@@ -384,6 +384,9 @@
       const result = { temp, tide, waves, wind, current, extremes, nowLocalMs, from, to };
       if (seoulSrc) { result._obs = { sources: [seoulSrc] }; result._inland = true; station.curTemp = +temp[temp.length - 1].y.toFixed(1); }
       station._hourlyCache = result;
+      // [ADD] 해협 안 포인트는 조위차 조석 조류를 더해요(js/strait-tide.js). 끝나면 나침반·표 다시 그림
+      if (typeof window.straitTideApply === 'function') window.straitTideApply(station, result).then(ch => { if (!ch) return;
+        try { if (typeof windDialUpdate === 'function') windDialUpdate(); } catch (_) {} }).catch(() => {});
       // [ADD] 한국·미국 정점이면 근처 관측소 실측을 뒤이어 불러와 지금까지 칸을 실측으로 바꿔요(표는 먼저 그려짐)
       runObsMerge(station);
       return result;

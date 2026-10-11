@@ -44,7 +44,7 @@
       return (typeof lang !== 'undefined' && lang === 'ko') ? ko[i] : en[i];
     };
 
-    function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis) {
+    function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0) {
       const R = 74, ko = typeof lang !== 'undefined' && lang === 'ko';
       let g = `<circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
         `<circle r="${R * 0.62}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 4"/>` +
@@ -123,7 +123,7 @@
         strip += `<text x="${30 + 22 + 44 * (cols.length - 1) + 22}" y="${top + 66}" font-size="8.5" fill="#94a3b8" text-anchor="end">${ko ? '노트(kn)' : 'knots'}</text>`;
         strip += `<line x1="${LW}" y1="46" x2="${LW}" y2="${Math.max(y, top + Hs) + 2}" stroke="rgba(255,255,255,.14)"/>`;
         yEnd = Math.max(y, top + Hs);
-        if (c5) { yEnd += 13; strip += `<text x="10" y="${yEnd}" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬·해안에 막혀 약해짐' : 'sheltered, slower') : (ko ? '지형 따라 방향 바뀜' : 'steered by terrain'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>`; }
+        if (c5) { yEnd += 13; strip += `<text x="10" y="${yEnd}" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (cs0 && cs0.strait) return (ko ? '해협 조위차 보정 추정 · ' : 'strait tide est. · ') + (typeof straitName === 'function' ? straitName(cs0.strait) : '') + (cs0.tide != null ? ` · ${ko ? '조석' : 'tide'} ${cs0.tide >= 0 ? '↑N' : '↓S'} ${(Math.abs(cs0.tide) / KN).toFixed(1)}kn` : ''); if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬·해안에 막혀 약해짐' : 'sheltered, slower') : (ko ? '지형 따라 방향 바뀜' : 'steered by terrain'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>`; }
       }
       const BW = MW + LW;
       const tw = Math.max(70, timeLabel.length * 9 + 24), tcol = isNowLbl ? '#FFB000' : '#4ade80', mx = LW;
@@ -163,7 +163,7 @@
         vc.projection.forEach(p => { const dd = Math.abs(p.t + off - x); if (dd < bd) { bd = dd; best = p; } });
         if (best && bd <= 36 * 3600e3) vis = isNow && vc.now ? vc.now : best;
       }
-      const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis);
+      const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0);
       const size = [2 * (74 + 200), 2 * (74 + 70)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];

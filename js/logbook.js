@@ -226,7 +226,7 @@
       + (v.type === 'tec' ? `<div class="full"><label>${T.tank}</label><select name="tank"><option value="">—</option>${Object.keys(VOL).map(k => `<option value="${k}"${v.tank === k ? ' selected' : ''}>${esc(T.tanks[k])}</option>`).join('')}</select></div>` : '')
       + fld('depthMax', T.dmax) + fld('depthAvg', T.davg) + fld('mins', T.mins) + fld('weight', T.weight)
       + fld('fill', T.fill) + fld('remain', T.remain)
-      + `<div><label>${T.suit}</label><select name="suit"><option value="">—</option>${(v.suit != null && v.suit !== '' && !SUITS.includes(String(v.suit)) ? [String(v.suit)] : []).concat(SUITS).map(k => `<option value="${k}"${v.suit != null && String(v.suit) === k ? ' selected' : ''}>${esc(suitTxt(k))}</option>`).join('')}</select></div>`
+      + `<div><label>${T.suit}</label><select name="suit"><option value="">—</option>${SUITS.map(k => `<option value="${k}"${v.suit != null && String(v.suit) === k ? ' selected' : ''}>${esc(suitTxt(k))}</option>`).join('')}</select></div>`
       + `<div><label>${T.temp}</label><input name="temp" type="number" inputmode="decimal" step="any" value="${val(v.temp)}"><div class="log-sub" id="log-temp-hint"></div></div>`
       + `<div><label>${T.vis}</label><div class="log-step"><button type="button" data-vis="-1">−</button><input name="vis" type="number" inputmode="decimal" step="1" value="${val(v.vis)}"><button type="button" data-vis="1">+</button></div><div class="log-sub" id="log-vis-hint"></div></div>`
       + fld('buddy', T.buddy, 'text', 'maxlength="60"')

@@ -730,6 +730,12 @@
       if (retry) retry.addEventListener('click', (e) => { e.preventDefault(); st._hourlyState = undefined; updateChart(); });
     }
 
+    // [ADD] 수온약층 설명: 범례에서 빼서 그래프 바로 아래 한 줄로(수심 프로파일에서만)
+    function setScmNote(html) {
+      let el = document.getElementById('scm-note');
+      if (!el) { const cb = document.querySelector('.chart-box'); if (!cb) return; el = document.createElement('div'); el.id = 'scm-note'; el.className = 'scm-note'; cb.after(el); }
+      el.innerHTML = html || ''; el.style.display = html ? '' : 'none';
+    }
     function updateChart() {
       const chartCanvas = document.getElementById('detailChart').getContext('2d');
       if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
@@ -953,10 +959,11 @@
             }
           }
         });
+        setScmNote(scm ? `<b>${scm.real ? t.scmTitleReal(scm.top, scm.base) : t.scmTitle}</b> ${scm.real ? t.scmTextReal(scm.top, scm.base, scm.drop) : t.scmText(scm.base - scm.top, scm.drop)}` : ''); // 수온약층 설명은 그래프 아래 줄에
         legendBox.innerHTML = (hy ? '' : `<div class="item" style="color:#94a3b8;">⚠ ${t.liveDataFallback}</div>`) +
           `<div class="item"><span class="swatch" style="background:#FFB000;"></span>${t.chartDepthLabel}</div>` +
           (hy ? `<div class="item" style="color:#7DD3FC;">${t.hycomSrc(hy.time, hy.grid.km)}</div>` : '') +
-          (scm ? `<div class="item" style="color:#7DD3FC;display:block;width:100%;line-height:1.45;"><b>${scm.real ? t.scmTitleReal(scm.top, scm.base) : t.scmTitle}</b> ${scm.real ? t.scmTextReal(scm.top, scm.base, scm.drop) : t.scmText(scm.base - scm.top, scm.drop)}</div>` : '') +
+
           (dep && dep.max1k ? `<div class="item" style="color:#7DD3FC;">${t.depthNear ? t.depthNear(dep.max300, dep.max1k) : `수심: 300m 안 ~${dep.max300 ?? '–'}m · 1km 안 ~${dep.max1k}m`}</div>` : '');
       }
     }
@@ -1082,7 +1089,7 @@
     // 같은 자리(고정 높이)를 번갈아 씁니다.
     function setMode(mode) {
       if (mode === 'forecast' && activeMode !== 'forecast') forecastView = 'temp'; // [FIX] 90일 추이는 항상 수온·시야 화면부터
-      activeMode = mode;
+      activeMode = mode; if (mode !== 'depth') setScmNote('');
       // 로그북은 즐겨찾기 줄 바로 아래까지 크게 펼쳐요
       try { const fb = document.getElementById('fav-bar'), r = fb && fb.classList.contains('show') ? fb.getBoundingClientRect() : null;
         document.documentElement.style.setProperty('--log-top', (r ? Math.round(r.bottom + 6) : 56) + 'px'); document.body.classList.toggle('log-open', mode === 'log'); } catch (_) {}

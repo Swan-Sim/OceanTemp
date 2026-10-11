@@ -127,7 +127,7 @@
         cols.forEach((c, k) => { const cx = c[3];
           rows += `<text x="${cx}" y="${y + 18}" font-size="12.5" fill="${c[1]}" font-weight="800">${c[0]}</text>`
             + `<text x="${cx}" y="${y + 42}" font-size="16" fill="#fff" font-weight="800">${kn(c[2])}</text><text x="${cx + 4 + String(kn(c[2])).length * 8.8}" y="${y + 42}" font-size="10.5" fill="#94a3b8">kn</text>`
-            + (rc && rc[k] ? `<text x="${cx}" y="${y + 62}" font-size="12" fill="#94a3b8" font-weight="700">${kn(rc[k])}</text>${k === cols.length - 1 ? `<text x="${cx + 4 + String(kn(rc[k])).length * 7.2}" y="${y + 62}" font-size="10" fill="#94a3b8">${ko ? '원값' : 'raw'}</text>` : ''}` : ''); });
+            + (rc && rc[k] ? `<text x="${cx}" y="${y + 62}" font-size="12" fill="#94a3b8" font-weight="700">${kn(rc[k])}</text>${rc[k].to != null ? `<g transform="translate(${cx + 12 + String(kn(rc[k])).length * 7.2} ${y + 58}) rotate(${Math.round(rc[k].to)})"><path d="M0,-7 L5,5 L0,2 L-5,5 Z" fill="#cbd5e1"/></g>` : ''}${k === cols.length - 1 ? `<text x="${cx + 26 + String(kn(rc[k])).length * 7.2}" y="${y + 62}" font-size="10" fill="#94a3b8">${ko ? '원값' : 'raw'}</text>` : ''}` : ''); });
         y += bh;
       }
       const tr = (color, name, big, unit, rest) => { y += 21; rows += `<text x="${X1}" y="${y}" font-size="12.5" fill="${color}" font-weight="800">${name}</text>`

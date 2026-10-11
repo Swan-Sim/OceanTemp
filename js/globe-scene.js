@@ -789,15 +789,29 @@ function getCurrentCenterLatLng() {
       // 이동이 시간당 15도 정도라, 5분이면 약 1.25도라 눈에 띄는 끊김
       // 없이 충분히 부드러워요.
       updateCelestialPositions();
-      setInterval(updateCelestialPositions, 5 * 60 * 1000);
+      // [CHANGE] 지도(상세) 화면을 보는 동안은 해·달 위치를 갱신하지 않아요(지구본으로 돌아올 때 한 번 갱신)
+      setInterval(() => { if (!isDetailMode && !document.hidden) updateCelestialPositions(); }, 5 * 60 * 1000);
 
       setupGlobeInteraction(container, width, height);
 
-      function animate() {
+      // [CHANGE] 필요할 때만 그리기: 지구본이 돌거나 카메라가 움직이거나 입력이 있을 때만 다시 그리고,
+      //  가만히 있으면 1초에 한 번만(비동기로 바뀐 색·표시를 따라잡기 위해) 그려요. 지도 화면·숨은 탭에선 그리지 않아요.
+      let lastSig = '', wake = 30, lastBeat = 0, wasDetail = false;
+      window.requestGlobeRender = () => { wake = 30; };
+      ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'touchstart', 'touchmove', 'keydown', 'click', 'resize', 'visibilitychange'].forEach(ev =>
+        window.addEventListener(ev, (e) => { if (ev === 'pointermove' && !e.buttons) return; wake = 30; }, { passive: true, capture: true }));
+      function animate(ts) {
         requestAnimationFrame(animate);
-        renderer.render(scene, camera);
+        if (document.hidden) return;
+        if (isDetailMode) { wasDetail = true; return; }
+        if (wasDetail) { wasDetail = false; wake = 30; try { updateCelestialPositions(); } catch (_) {} }
+        const g = globeGroup.rotation, c = camera.position, sig = g.x + ',' + g.y + ',' + g.z + ',' + c.x + ',' + c.y + ',' + c.z + ',' + camera.zoom + ',' + camera.fov;
+        if (sig !== lastSig || wake > 0 || ts - lastBeat > 1000) {
+          lastSig = sig; lastBeat = ts; if (wake > 0) wake--;
+          renderer.render(scene, camera);
+        }
       }
-      animate();
+      animate(performance.now());
 
       updateZoomGauge();
     }

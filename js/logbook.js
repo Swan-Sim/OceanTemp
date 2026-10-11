@@ -5,7 +5,7 @@
 (function () {
   const KO = typeof lang === 'undefined' || lang === 'ko';
   const T = KO ? {
-    tab: '로그북', title: (n) => `내 로그북 · ${n}`, add: '+ 새 기록', login: '로그인하고 쓰기', needLogin: '로그북은 로그인하면 쓸 수 있어요. 같은 포인트에 쓴 지난 기록도 여기서 볼 수 있어요.',
+    tab: '로그북', title: (n) => `내 로그북 · ${n}`, add: '새 기록 쓰기', login: '로그인하고 쓰기', needLogin: '로그북은 로그인하면 쓸 수 있어요. 같은 포인트에 쓴 지난 기록도 여기서 볼 수 있어요.',
     noSpot: '이 지점은 로그북을 쓸 수 없어요(번호가 있는 포인트만).', empty: '아직 이 포인트에 쓴 기록이 없어요.', loading: '불러오는 중…', fail: '불러오지 못했어요',
     date: '날짜', tod: '시작 시각 (HH:MM)', kind: '다이버 종류', rec: '레크레이션', tec: '텍다이버', tank: '탱크 종류', dmax: '최대수심 (m)', davg: '평균수심 (m)', mins: '다이빙 시간 (분)',
     fill: '충전 압력 (bar)', remain: '잔압 (bar)', weight: '웨이트 (kg)', suit: '슈트 두께 (mm)', temp: '수온 (°C)', vis: '시야 (m)', buddy: '버디', notes: '메모',
@@ -17,7 +17,7 @@
     err: { bad_date: '날짜를 확인해 주세요', avg_gt_max: '평균수심이 최대수심보다 클 수 없어요', remain_gt_fill: '잔압이 충전 압력보다 클 수 없어요', too_many: '기록이 너무 많아요', bad_no: '이 지점은 쓸 수 없어요', too_fast: '너무 빨라요. 10초 뒤에 다시 저장해 주세요', daily_limit: '하루(24시간)에 30건까지 쓸 수 있어요' },
     tanks: { al80: '알루미늄 80cf (11.1L)', s10: '스틸 10L', s12: '스틸 12L', s15: '스틸 15L', s7: '7L (스테이지/슬링)', d12: '더블 12L (24L)', d7: '더블 7L (14L)', sm80: '사이드마운트 2×80cf (22.2L)' }
   } : {
-    tab: 'Logbook', title: (n) => `My logbook · ${n}`, add: '+ New entry', login: 'Log in to write', needLogin: 'Log in to keep a logbook. Past entries for the same spot show up here.',
+    tab: 'Logbook', title: (n) => `My logbook · ${n}`, add: 'New entry', login: 'Log in to write', needLogin: 'Log in to keep a logbook. Past entries for the same spot show up here.',
     noSpot: 'Logbook is only for numbered spots.', empty: 'No entries for this spot yet.', loading: 'Loading…', fail: 'Could not load',
     date: 'Date', tod: 'Start time (HH:MM)', kind: 'Diver type', rec: 'Recreational', tec: 'Technical', tank: 'Tank', dmax: 'Max depth (m)', davg: 'Avg depth (m)', mins: 'Dive time (min)',
     fill: 'Start pressure (bar)', remain: 'End pressure (bar)', weight: 'Weight (kg)', suit: 'Suit (mm)', temp: 'Water temp (°C)', vis: 'Visibility (m)', buddy: 'Buddy', notes: 'Notes',
@@ -93,6 +93,7 @@
   .log-phs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px} .log-phs img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.2);cursor:zoom-in}
   .ot-pv{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px;cursor:zoom-out}
   .ot-pv img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:6px} .ot-pv button{height:32px;padding:0 14px;border-radius:8px;border:1px solid rgba(248,113,113,.5);background:transparent;color:#f87171;cursor:pointer}
+  .log-sec{font-size:12.5px;color:#ffd27a;margin:12px 0 6px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
   .log-pager{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0 4px;color:#94a3b8;font-size:12.5px} .log-pager button{min-width:40px}
   .log-step{display:flex;gap:4px} .log-step input{flex:1;min-width:0;text-align:center} .log-step button{flex:0 0 32px;height:32px;border-radius:7px;border:1px solid rgba(255,255,255,.18);background:#111a30;color:#e2e8f0;font-size:16px;cursor:pointer;padding:0}`;
   document.head.appendChild(css);
@@ -176,11 +177,11 @@
     if (!state.no) { box.innerHTML = `<div class="log-msg">${T.noSpot}</div>`; return; }
     if (!user) { box.innerHTML = `<div class="log-msg">${T.needLogin}</div><button class="log-btn pri" id="log-login">${T.login}</button>`; box.querySelector('#log-login').onclick = () => acct().open && acct().open(); return; }
     if (state.form && !state.form.inline) return drawForm();
-    let h = `<div class="log-top"><b>${esc(T.title(spotName()))}</b><button class="log-btn pri" id="log-add">${T.add}</button></div>`;
+    let h = `<div class="log-top"><b>${esc(T.title(spotName()))}</b></div>`;
     if (state.msg) h += `<div class="log-msg" style="color:#a7f3d0">${esc(state.msg)}</div>`;
     if (state.loading) h += `<div class="log-msg">${T.loading}</div>`;
     else if (state.fail) h += `<div class="log-msg">${T.fail}</div>`;
-    else if (state.items && !state.items.length) h += `<div class="log-msg">${T.empty}</div><div id="log-inline-form"></div>`; // 기록이 없으면 바로 아래에 작성 폼
+    else if (state.items && !state.items.length) h += `<div class="log-msg">${T.empty}</div>`;
     else { const PAGE = 5, all = state.items || [], pages = Math.max(1, Math.ceil(all.length / PAGE)); state.page = Math.max(0, Math.min(pages - 1, state.page || 0));
       all.slice(state.page * PAGE, state.page * PAGE + PAGE).forEach(e => {
       const c = calc(e);
@@ -196,10 +197,10 @@
       });
       if (pages > 1) h += `<div class="log-pager"><button class="log-btn" data-pg="-1"${state.page === 0 ? ' disabled' : ''}>‹</button><span>${state.page + 1} / ${pages}</span><button class="log-btn" data-pg="1"${state.page >= pages - 1 ? ' disabled' : ''}>›</button></div>`;
     }
+    if (!state.loading && !state.fail) h += `<div class="log-sec">${T.add}</div><div id="log-inline-form"></div>`; // 작성 양식은 항상 목록 아래에
     box.innerHTML = h;
     box.querySelectorAll('[data-pg]').forEach(b2 => b2.onclick = () => { state.page = (state.page || 0) + (+b2.dataset.pg); draw(); box.scrollTop = 0; });
     if (box.querySelector('#log-inline-form')) { if (!state.form || !state.form.inline) { openForm(null, true); return; } drawForm(); }
-    box.querySelector('#log-add').onclick = () => { state.msg = ''; openForm(null); };
     box.querySelectorAll('.log-card').forEach(c => c.onclick = (ev) => { if (ev.target.closest('button')) return; const ph = ev.target.closest('[data-ph]'); if (ph) { window.otPhotoView(ph.dataset.ph); return; } c.classList.toggle('open'); });
     box.querySelectorAll('[data-edit]').forEach(b2 => b2.onclick = () => openForm((state.items || []).find(x => x.id === b2.dataset.edit)));
     box.querySelectorAll('[data-del]').forEach(b2 => b2.onclick = async () => {

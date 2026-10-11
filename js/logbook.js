@@ -213,7 +213,7 @@
       tempManual: !!(e && e.temp != null && !e.tempAuto), visManual: !!(e && e.vis != null), inline: !!inline }; draw();
   }
   function drawForm() {
-    const f = state.form, v = f.v, root = f.inline ? (root.querySelector('#log-inline-form') || box) : box, val = (x) => x == null ? '' : esc(x);
+    const f = state.form, v = f.v, root = f.inline ? (box.querySelector('#log-inline-form') || box) : box, val = (x) => x == null ? '' : esc(x);
     const fld = (k, label, type, extra) => `<div><label>${label}</label><input name="${k}" type="${type || 'number'}" ${type === 'text' || type === 'date' ? '' : 'inputmode="decimal" step="any"'} value="${val(v[k])}" ${extra || ''}></div>`;
     root.innerHTML = `<form class="log-form" id="log-form">`
       + (f.hint ? `<div class="log-hint">${esc(f.hint)}</div>` : '')

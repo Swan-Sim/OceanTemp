@@ -68,7 +68,7 @@
   #acct-notice .n-row{display:flex;gap:8px} #acct-notice .n-row button{flex:1;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#cbd5e1;cursor:pointer;font-size:12.5px}
   #acct-notice .n-row .n-go{background:#FFB000;border-color:#FFB000;color:#111;font-weight:700}
   .a-ver{margin-top:12px;text-align:center;font-size:11px;color:#64748b;letter-spacing:.4px}
-  #sw-ver{position:fixed;bottom:6px;z-index:50;font-size:10.5px;color:rgba(226,232,240,.55);letter-spacing:.4px;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+  #sw-ver{position:fixed;bottom:6px;z-index:50;font-size:12.5px;color:rgba(226,232,240,.55);letter-spacing:.4px;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.6)}
   #sw-ver.bl{left:8px} #sw-ver.br{right:8px}
   .a-lv{margin:2px 0 10px;font-size:12px;color:#94a3b8} .a-lv .bar{height:6px;border-radius:99px;background:#1e293b;overflow:hidden;margin:5px 0} .a-lv .bar i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#FFB000)}
   .a-lv b{color:#FFB000;font-size:13px}

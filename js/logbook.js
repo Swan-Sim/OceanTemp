@@ -85,7 +85,7 @@
   .log-calc{grid-column:1/-1;background:#0f2a1f;border:1px solid rgba(52,211,153,.3);border-radius:8px;padding:7px 10px;color:#a7f3d0;font-size:12.5px;line-height:1.55}
   .log-calc.off{background:#111a30;border-color:rgba(255,255,255,.1);color:#94a3b8}
   .log-hint{grid-column:1/-1;color:#7dd3fc;font-size:11.5px}
-  .log-sub{font-size:10.5px;color:#7dd3fc;margin-top:2px;line-height:1.35}
+  .log-sub{font-size:12.5px;color:#7dd3fc;margin-top:2px;line-height:1.35}
   .log-ph{display:flex;flex-wrap:wrap;gap:6px;align-items:center} .log-ph .pt{position:relative;width:62px;height:62px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.2);background:#111a30}
   .log-ph .pt img{width:100%;height:100%;object-fit:cover;display:block} .log-ph .pt b{position:absolute;top:1px;right:1px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:12px;line-height:20px;text-align:center;cursor:pointer}
   .log-ph .add{width:62px;height:62px;border-radius:8px;border:1px dashed rgba(255,255,255,.35);background:transparent;color:#cbd5e1;font-size:12px;cursor:pointer;padding:0}

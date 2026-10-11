@@ -42,7 +42,7 @@
       transition: width 0.25s ease;
     }
     #boot-progress-label {
-      margin-top: 6px; font-size: 10.5px; letter-spacing: 0.06em; color: #ffb000;
+      margin-top: 6px; font-size: 12.5px; letter-spacing: 0.06em; color: #ffb000;
       text-shadow: 0 0 6px rgba(255,176,0,0.8);
     }
     #boot-screen.boot-done { opacity: 0; transition: opacity 0.7s ease; }
@@ -75,7 +75,7 @@
     .hud-overlay {
       position: absolute; top: 12px; right: 12px;
       background: rgba(11, 19, 41, 0.4); border: 1px solid rgba(51,65,85,.5);
-      border-radius: 8px; padding: 8px 12px; font-size: 10.5px;
+      border-radius: 8px; padding: 8px 12px; font-size: 12.5px;
       pointer-events: none; backdrop-filter: blur(4px); z-index: 50;
       box-shadow: 0 4px 15px rgba(0,0,0,0.4);
     }
@@ -128,7 +128,7 @@
     .search-result-item:last-child { border-bottom: none; }
     .search-result-item:hover { background: #172033; }
     .sr-name { color: #e2e8f0; font-size: 13px; font-weight: 600; }
-    .sr-sub { color: #64748b; font-size: 10.5px; }
+    .sr-sub { color: #64748b; font-size: 12.5px; }
 
     /* [ADD] "로딩 중 위치 공유 안 한 사용자에게 내 위치/검색/대륙 선택" 요청
        반영 - 부팅 화면 위에 뜨는 위치 선택 위젯. 뭔가 선택되면(또는 자동
@@ -194,7 +194,7 @@
 
     .disclaimer-bar {
       position: absolute; bottom: 4px; left: 10px; right: 10px;
-      font-size: 8.5px; color: #cbd5e1; pointer-events: none; z-index: 50;
+      font-size: 10px; color: #cbd5e1; pointer-events: none; z-index: 50;
       text-align: left; line-height: 1.2; text-shadow: 0 1px 3px rgba(0,0,0,0.9);
     }
 
@@ -204,35 +204,35 @@
     .meta-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
     .station-name { font-size: 19px; font-weight: 800; color: #f8fafc; max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.01em; }
     .temp-val { font-size: 16px; font-weight: 800; color: #38bdf8; text-align: right; }
-    .station-sub { font-size: 10.5px; color: #94a3b8; margin-bottom: 5px; }
+    .station-sub { font-size: 12.5px; color: #94a3b8; margin-bottom: 5px; }
     .tab-bar { display: flex; gap: 6px; margin-bottom: 6px; }
-    .tab-btn { flex: 1; padding: 4px; font-size: 10px; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; cursor: pointer; }
+    .tab-btn { flex: 1; padding: 4px; font-size: 12px; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; cursor: pointer; }
     .tab-btn.active { background: #0284c7; color: #fff; border-color: #38bdf8; }
     .chart-box { flex: 0 0 auto; height: 262px; position: relative; } /* [CHANGE] 실시간 현황 표 높이에 맞춘 고정 높이 - 세 버튼이 이 자리를 같이 씀 */
     .chart-legend-overlay {
       position: absolute; top: 2px; right: 2px; z-index: 5;
       display: flex; flex-direction: column; gap: 2px;
       background: rgba(11,19,41,0.6); border-radius: 5px; padding: 4px 7px;
-      font-size: 8.5px; color: #cbd5e1; pointer-events: none;
+      font-size: 10px; color: #cbd5e1; pointer-events: none;
     }
     .chart-legend-overlay .item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
     /* [ADD] 실시간 현황 표 (Windy 스타일, 3시간 간격) */
-    .now-table { position: absolute; inset: 0; display: flex; flex-direction: column; font-size: 10px; }
+    .now-table { position: absolute; inset: 0; display: flex; flex-direction: column; font-size: 12px; }
     .nt-top { display: flex; align-items: center; gap: 6px; padding: 2px 0 4px; }
-    .nt-status { flex: 1; min-width: 0; font-size: 10px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .nt-nav { flex: 0 0 auto; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; font-size: 10px; padding: 2px 7px; cursor: pointer; }
+    .nt-status { flex: 1; min-width: 0; font-size: 12px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nt-nav { flex: 0 0 auto; background: #111d3d; border: 1px solid #334155; color: #cbd5e1; border-radius: 5px; font-size: 12px; padding: 2px 7px; cursor: pointer; }
     .nt-scroll { flex: 1; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
     .nt-inner { display: flex; min-width: max-content; }
     .nt-labels { position: sticky; left: 0; z-index: 3; background: #0f172a; flex: 0 0 58px; border-right: 1px solid #1e293b; }
-    .nt-labels div { display: flex; align-items: center; color: #94a3b8; font-size: 9px; padding-left: 4px; }
+    .nt-labels div { display: flex; align-items: center; color: #94a3b8; font-size: 11px; padding-left: 4px; }
     .nt-grid { position: relative; }
     .nt-row { display: flex; align-items: center; }
     .nt-cell { flex: 0 0 34px; width: 34px; height: 100%; display: flex; align-items: center; justify-content: center; }
     /* [CHANGE] "지금" 표시: 해당 3시간 칸 전체를 테두리로 강조 (가는 세로선은 뺐어요) */
     .nt-band { position: absolute; top: 30px; bottom: 0; background: rgba(125,211,252,0.22); z-index: 1; pointer-events: none; }
     .nt-live { color: #4ade80; } .nt-est { color: #facc15; }
-    .nt-note { font-size: 8.5px; color: #64748b; padding-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .station-foot { margin: 4px 0 0; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nt-note { font-size: 10px; color: #64748b; padding-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .station-foot { margin: 4px 0 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .chart-legend-overlay .swatch { width: 9px; height: 2px; border-radius: 1px; flex-shrink: 0; }
     .chart-legend-overlay .swatch.dashed { background-image: linear-gradient(to right, currentColor 50%, transparent 50%); background-size: 4px 2px; background-color: transparent !important; }
 
@@ -242,7 +242,7 @@
     .lf-dot.selected { transform: scale(1.6); border: 2.5px solid #f97316; box-shadow: 0 0 10px rgba(249,115,22,0.9); }
     .lf-dot.beach { width: 14px; height: 14px; border-width: 2px; }
     .lf-label {
-      margin-left: 6px; padding: 2px 6px; font-size: 10.5px; font-weight: 600; color: #f8fafc;
+      margin-left: 6px; padding: 2px 6px; font-size: 12.5px; font-weight: 600; color: #f8fafc;
       background: rgba(15, 23, 42, 0.72); border: 0.8px solid rgba(255, 255, 255, 0.4);
       border-radius: 4px; backdrop-filter: blur(3px); pointer-events: none;
       text-shadow: 0 1px 2px rgba(0,0,0,0.8);
@@ -333,7 +333,7 @@
     .nt-head .nt-status { flex: 0 0 auto; font-size: 12px; text-align: left; overflow: visible; }
     .nt-retry { color: var(--accent); margin-left: 4px; }
     .nt-frame { flex: 1; min-height: 0; display: flex; border: 1px solid var(--ui-line); border-radius: 10px; overflow: hidden; }
-    .nt-arrow { flex: 0 0 20px; background: transparent; border: none; color: var(--ui-muted); font-size: 9px; cursor: pointer; padding: 0; }
+    .nt-arrow { flex: 0 0 20px; background: transparent; border: none; color: var(--ui-muted); font-size: 11px; cursor: pointer; padding: 0; }
     .nt-arrow:hover { color: var(--ui-text); background: rgba(255,255,255,0.03); }
     .nt-arrow[data-dir="-1"] { border-right: 1px solid var(--ui-line); }
     .nt-arrow[data-dir="1"] { border-left: 1px solid var(--ui-line); }
@@ -342,10 +342,10 @@
     .nt-nowcell { position: sticky; left: 58px; right: 0; z-index: 2; background: #0E1524; box-shadow: inset 1px 0 0 rgba(var(--accent-rgb),0.6), inset -1px 0 0 rgba(var(--accent-rgb),0.6); }
     .nt-tiderow { position: relative; align-items: stretch; }
     .nt-tidesvg { position: absolute; left: 0; top: 0; }
-    .nt-tidenow { font-size: 9px; line-height: 1.25; color: #BAE6FD; text-align: center; background: #0E1524; }
-    .nt-note { font-size: 8px; color: #3F4756; padding-top: 3px; }
-    .station-foot { margin-top: 2px; font-size: 9.5px; }
-    .disclaimer-bar { font-size: 7.5px; color: rgba(148,163,184,0.55); text-shadow: none; }
+    .nt-tidenow { font-size: 11px; line-height: 1.25; color: #BAE6FD; text-align: center; background: #0E1524; }
+    .nt-note { font-size: 9.5px; color: #3F4756; padding-top: 3px; }
+    .station-foot { margin-top: 2px; font-size: 11.5px; }
+    .disclaimer-bar { font-size: 9px; color: rgba(148,163,184,0.55); text-shadow: none; }
     .disclaimer-bar b { font-weight: 500; }
 
     /* [CHANGE] "버튼 위 빈 공간 빼서 지구본 공간 넓히기" - 패널 위쪽 여백과
@@ -386,10 +386,10 @@
     .nt-vis-mark { position: absolute; top: -3px; width: 2px; height: 10px; margin-left: -1px; background: #fff; border-radius: 1px; box-shadow: 0 0 0 1.5px var(--ui-bg); }
 
     /* 90일 추이 위쪽: 수온·시야 / 시야 원인 전환 칩 + 계산식 요약 */
-    .fc-top { position: absolute; left: 6px; top: 3px; right: 6px; z-index: 6; pointer-events: none; font-size: 10.5px; line-height: 1.35; color: var(--ui-muted); }
+    .fc-top { position: absolute; left: 6px; top: 3px; right: 6px; z-index: 6; pointer-events: none; font-size: 12.5px; line-height: 1.35; color: var(--ui-muted); }
     .fc-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .fc-chips { display: inline-flex; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; overflow: hidden; pointer-events: auto; flex: 0 0 auto; }
-    .fc-chip { background: transparent; border: none; color: var(--ui-muted); font: inherit; font-size: 10px; padding: 2px 9px; cursor: pointer; }
+    .fc-chip { background: transparent; border: none; color: var(--ui-muted); font: inherit; font-size: 12px; padding: 2px 9px; cursor: pointer; }
     .fc-chip.on { background: rgba(56,189,248,0.18); color: #fff; }
     .fc-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .fc-line b { color: var(--ui-text); }
@@ -427,7 +427,7 @@
     .nt-obsdot { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: #38BDF8; vertical-align: middle; margin-right: 2px; }
 
     /* [ADD] 상태 옆 데이터 출처(작게) */
-    .nt-src { margin-left: 5px; font-size: 10px; color: var(--ui-muted); white-space: nowrap; }
+    .nt-src { margin-left: 5px; font-size: 12px; color: var(--ui-muted); white-space: nowrap; }
     /* [ADD] 90일·수심 탭 머리줄(정점명) - 그래프 위에 겹쳐 두고 그래프·칩·범례를 그만큼 아래로 */
     .mode-head { position: absolute; left: 0; right: 0; top: 0; z-index: 7; background: transparent; }
     .chart-box.with-head .fc-top { top: 27px; }
@@ -443,7 +443,7 @@
     .nt-src-vis { color: #7DD3FC; }
 
     /* [ADD] 시야: 두 위성 자료 차이가 클 때 숫자 옆 작은 표시 */
-    .nt-vis-warn { margin-left: 3px; font-size: 10px; font-weight: 600; color: #FBBF24; opacity: .9; }
+    .nt-vis-warn { margin-left: 3px; font-size: 12px; font-weight: 600; color: #FBBF24; opacity: .9; }
 
     /* [ADD] 범례 머리줄: 눌러서 접기/펴기, 끌어서 옮기기 (나머지 범례 글자는 그래프 터치를 막지 않게 그대로 통과) */
     /* 범례 전체가 손잡이: 어디든 잡고 끌기, 탭하면 접기/펴기. 머리줄은 높이를 안 차지하게 오른쪽 위 작은 아이콘 두 개로 */
@@ -454,9 +454,9 @@
     .chart-legend-overlay.floating .lg-head { white-space: nowrap; }
     .chart-legend-overlay.dragging { cursor: grabbing; opacity: .92; }
     .chart-legend-overlay .lg-head { position: absolute; top: 3px; right: 3px; display: flex; flex-direction: column; align-items: center; gap: 3px;
-      font-size: 9px; font-weight: 600; color: #94A3B8; line-height: 1; }
+      font-size: 11px; font-weight: 600; color: #94A3B8; line-height: 1; }
     .chart-legend-overlay .lg-title { display: none; }
-    .chart-legend-overlay .lg-arrow { font-size: 9px; padding: 1px 2px; cursor: pointer; }
+    .chart-legend-overlay .lg-arrow { font-size: 11px; padding: 1px 2px; cursor: pointer; }
     .chart-legend-overlay .lg-dock { padding: 2px 3px; display: inline-flex; line-height: 0; color: #CBD5E1; border: 1px solid rgba(255,255,255,0.18); border-radius: 4px; cursor: pointer; }
     .chart-legend-overlay.collapsed > :not(.lg-head) { display: none; }
     .chart-legend-overlay.collapsed { background: rgba(7,11,20,0.82); padding: 3px 6px; }
@@ -464,7 +464,7 @@
     .chart-legend-overlay.collapsed .lg-title { display: inline; }
     /* 그래프 밖(아래 줄)으로 치운 범례: 가로로 펼쳐서 한두 줄 */
     .chart-legend-overlay.docked { position: static; transform: none !important; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 10px;
-      background: transparent !important; padding: 3px 0 0; pointer-events: auto; font-size: 9px; }
+      background: transparent !important; padding: 3px 0 0; pointer-events: auto; font-size: 11px; }
     .chart-legend-overlay.docked { cursor: ns-resize; }
     .chart-legend-overlay.docked .lg-head { position: static; flex-direction: row; gap: 5px; margin: 0 2px 0 0; }
     .chart-legend-overlay.docked .lg-arrow { display: none; }
@@ -496,14 +496,14 @@
       width: 28px; height: 26px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.18); background: rgba(15,23,42,0.9); color: #E2E8F0; cursor: pointer; }
 
     /* [ADD] 상세 지도 출처 표시(Esri) - 어두운 화면에 맞게 작고 옅게, 아래 탭 줄에 가리지 않게 살짝 위로 */
-    #leafletMap .leaflet-control-attribution { background: rgba(7,11,20,0.55) !important; color: #94A3B8 !important; font-size: 9px; padding: 0 5px; }
+    #leafletMap .leaflet-control-attribution { background: rgba(7,11,20,0.55) !important; color: #94A3B8 !important; font-size: 11px; padding: 0 5px; }
     #leafletMap .leaflet-control-attribution a { color: #94A3B8 !important; }
     #leafletMap .leaflet-bottom.leaflet-right { bottom: 32px; }
 
     /* [FIX] 조석 곡선: 휴대폰(좁은 화면)에서 더 굵고 글자도 조금 더 크게 */
     @media (max-width: 600px) {
       .nt-tidesvg .tl-line { stroke-width: 2.8; }
-      .nt-tidesvg .tl-mark { font-size: 10px; }
+      .nt-tidesvg .tl-mark { font-size: 12px; }
     }
 
     /* [ADD] 내 위치 안내 문구 */
@@ -518,28 +518,28 @@
     .cp-copy { padding: 3px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f1f5f9; cursor: pointer; font-size: 12px; }
 
     /* [ADD] 다이빙샵: 탭(A) + 아래 정보 줄 바로가기(B) */
-    .tab-btn .tab-n { display: inline-block; min-width: 15px; padding: 0 4px; margin-left: 4px; border-radius: 8px; background: rgba(var(--accent-rgb),.18); color: var(--accent); font-size: 9.5px; line-height: 15px; }
+    .tab-btn .tab-n { display: inline-block; min-width: 15px; padding: 0 4px; margin-left: 4px; border-radius: 8px; background: rgba(var(--accent-rgb),.18); color: var(--accent); font-size: 11.5px; line-height: 15px; }
     .shop-box { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 1px 2px; }
-    .shop-note { display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; color: var(--ui-muted); margin: 0 2px 6px; }
+    .shop-note { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--ui-muted); margin: 0 2px 6px; }
     .shop-note i { font-style: normal; color: var(--ui-dim); }
     .shop-card { border: 1px solid var(--ui-line); background: var(--ui-surface); border-radius: 11px; padding: 9px 11px; margin-bottom: 7px; }
     .shop-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .shop-name { font-size: 13.5px; font-weight: 700; color: var(--ui-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .shop-badge { flex: 0 0 auto; font-size: 9px; font-weight: 700; color: var(--accent); border: 1px solid rgba(var(--accent-rgb),.5); border-radius: 4px; padding: 0 4px; line-height: 14px; }
-    .shop-lang { margin-left: auto; flex: 0 0 auto; font-size: 10px; color: var(--ui-muted); }
+    .shop-badge { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid rgba(var(--accent-rgb),.5); border-radius: 4px; padding: 0 4px; line-height: 14px; }
+    .shop-lang { margin-left: auto; flex: 0 0 auto; font-size: 12px; color: var(--ui-muted); }
     .shop-desc { font-size: 11px; color: var(--ui-muted); margin: 3px 0 0; line-height: 1.4; }
     .shop-btns { display: flex; gap: 6px; margin-top: 7px; }
     .shop-btn { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 11.5px; font-weight: 600; padding: 7px 0; border-radius: 8px; background: rgba(255,255,255,.06); border: 1px solid var(--ui-line); color: var(--ui-text); text-decoration: none; white-space: nowrap; }
     .shop-btn svg { width: 13px; height: 13px; flex: 0 0 auto; }
     .shop-btn.call, .shop-ic.call { background: rgba(var(--accent-rgb),.14); border-color: rgba(var(--accent-rgb),.45); color: #ffd27a; }
-    .shop-chk { font-size: 9.5px; color: var(--ui-dim); margin-top: 6px; }
+    .shop-chk { font-size: 11.5px; color: var(--ui-dim); margin-top: 6px; }
     .station-foot.has-shop { display: flex; align-items: center; gap: 8px; overflow: visible; }
     .station-foot .foot-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .shop-q { flex: 0 1 auto; min-width: 0; max-width: 72%; display: flex; align-items: center; gap: 5px; padding: 2px 3px 2px 7px; border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-surface); }
     .shop-qn { min-width: 2.5em; font-size: 11px; font-weight: 700; color: var(--ui-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .shop-ic { flex: 0 0 auto; width: 24px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.06); border: 1px solid var(--ui-line); color: var(--ui-text); }
     .shop-ic svg { width: 12px; height: 12px; }
-    .shop-all { flex: 0 0 auto; background: none; border: none; color: var(--accent); font-size: 10.5px; font-weight: 600; cursor: pointer; padding: 0 3px; white-space: nowrap; }
+    .shop-all { flex: 0 0 auto; background: none; border: none; color: var(--accent); font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0 3px; white-space: nowrap; }
     .shop-addr { display: block; font-size: 11px; color: var(--ui-muted); margin-top: 3px; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .shop-addr::before { content: '⌖ '; color: var(--ui-dim); }
     .shop-foot { text-align: center; padding: 2px 0 6px; }
@@ -575,7 +575,7 @@
     }
     .station-foot.has-shop .foot-txt { text-align: right; }
     .shop-chk { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-    .shop-report { margin-left: auto; font-size: 9.5px; color: var(--ui-dim); text-decoration: underline; text-align: right; }
+    .shop-report { margin-left: auto; font-size: 11.5px; color: var(--ui-dim); text-decoration: underline; text-align: right; }
     .shop-lang { flex: 0 1 auto; min-width: 0; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* [FIX] "현포다이브에서 '현'밖에 안 보여" - 아래 줄에서 샵 이름이 먼저 자리를 차지하고, 정점 정보 글자가 먼저 줄어들게.
@@ -616,7 +616,7 @@ body:not(.detail-mode) .nt-sel { display: none; }
     /* [ADD] 지도 축척 막대(거리 가늠) - 위성사진 위에서도 보이게 흰 글자·흰 선 + 그림자 */
     #leafletMap .leaflet-bottom.leaflet-left { bottom: 32px; }
     #leafletMap .leaflet-control-scale-line { background: transparent; color: #fff; border: 2px solid #fff; border-top: none; font-size: 11px; font-weight: 700; line-height: 1.1; padding: 0 4px 1px; text-shadow: 0 0 3px rgba(0,0,0,.9); box-shadow: 0 1px 2px rgba(0,0,0,.5); }
-    #leafletMap .depth-lbl.sm { font-size: 10px; font-weight: 600; opacity: .85; }
+    #leafletMap .depth-lbl.sm { font-size: 12px; font-weight: 600; opacity: .85; }
     /* [ADD] 떠 있는 범례(body에 붙음): 지도·지구·패널 위 어디로든 */
     .chart-legend-overlay.floating { position: fixed; right: auto; z-index: 3000; }
 
@@ -646,7 +646,7 @@ body:not(.detail-mode) .nt-sel { display: none; }
     .sg-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(15,23,42,.88); color: #f1f5f9; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
     .sg-btn.on { border-color: #38bdf8; }
     .sg-dot { width: 10px; height: 10px; border-radius: 50%; background: conic-gradient(#22c55e 0 33%, #facc15 0 66%, #ef4444 0); }
-    .sg-car { opacity: .7; font-size: 10px; }
+    .sg-car { opacity: .7; font-size: 12px; }
     .sg-menu { background: rgba(15,23,42,.95); border: 1px solid rgba(255,255,255,.16); border-radius: 12px; padding: 8px; min-width: 230px; max-width: min(340px, 86vw); box-shadow: 0 6px 20px rgba(0,0,0,.5); }
     .sg-head { font-size: 11.5px; color: #94a3b8; padding: 2px 4px 6px; }
     .sg-head b { color: #f1f5f9; }
@@ -654,13 +654,13 @@ body:not(.detail-mode) .nt-sel { display: none; }
     .sg-item:hover { background: rgba(255,255,255,.06); }
     .sg-item.cur { background: rgba(56,189,248,.14); }
     .sg-nm { font-size: 13px; font-weight: 700; }
-    .sg-nm small { display: block; font-size: 10px; font-weight: 500; color: #94a3b8; }
+    .sg-nm small { display: block; font-size: 12px; font-weight: 500; color: #94a3b8; }
     .sg-item .sg-why { grid-column: 2; font-size: 11px; color: #94a3b8; margin-top: 1px; }
     .sg-why.good { color: #86efac; } .sg-why.ok { color: #fde68a; } .sg-why.no { color: #fca5a5; }
     .sg-light { display: inline-flex; gap: 3px; background: #0b1220; border-radius: 999px; padding: 3px 5px; }
     .sg-light i { width: 8px; height: 8px; border-radius: 50%; background: #334155; }
     .sg-light i.on.good { background: #22c55e; box-shadow: 0 0 5px #22c55e; } .sg-light i.on.ok { background: #facc15; box-shadow: 0 0 5px #facc15; } .sg-light i.on.no { background: #ef4444; box-shadow: 0 0 5px #ef4444; }
-    .sg-lg { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: #94a3b8; padding: 6px 4px 0; border-top: 1px solid rgba(255,255,255,.08); margin-top: 4px; }
+    .sg-lg { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: #94a3b8; padding: 6px 4px 0; border-top: 1px solid rgba(255,255,255,.08); margin-top: 4px; }
     .sg-lg i { width: 9px; height: 9px; border-radius: 50%; margin-left: 6px; } .sg-lg i:first-child { margin-left: 0; }
     .sg-lg i.good { background: #22c55e; } .sg-lg i.ok { background: #facc15; } .sg-lg i.no { background: #ef4444; }
 /* [FIX] 상세 지도(밝은 위성사진)에서 선택 탭 테두리가 배경에 묻히던 것 - 상세 지도일 때만 더 밝은 호박색 */

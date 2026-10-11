@@ -483,11 +483,11 @@
             }
           },
           scales: {
-            x: { stacked: true, grid: { display: false }, ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } },
+            x: { stacked: true, grid: { display: false }, ticks: { color: '#64748b', font: { size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } },
             yk: { stacked: true, position: 'left', min: 0, suggestedMax: Math.ceil(maxKd * 12) / 10, grid: { color: 'rgba(255,255,255,0.05)' },
-                  ticks: { color: '#8A94A6', font: { size: 9 } }, title: { display: true, text: t.visTurbidity, color: '#8A94A6', font: { size: 9 } } },
+                  ticks: { color: '#8A94A6', font: { size: 11 } }, title: { display: true, text: t.visTurbidity, color: '#8A94A6', font: { size: 11 } } },
             yv: { position: 'right', min: 0, suggestedMax: Math.max(5, Math.ceil(maxVis * 1.25)), grid: { drawOnChartArea: false },
-                  ticks: { color: '#38BDF8', font: { size: 9 }, callback: (val) => val + 'm' }, title: { display: true, text: t.visAxis, color: '#38BDF8', font: { size: 9 } } }
+                  ticks: { color: '#38BDF8', font: { size: 11 }, callback: (val) => val + 'm' }, title: { display: true, text: t.visAxis, color: '#38BDF8', font: { size: 11 } } }
           }
         }
       });
@@ -572,7 +572,7 @@
         const marks = d.extremes.filter(e => e.x >= cols[0] && e.x <= cols[cols.length - 1]).map(e => {
           const up = e.type === 'high';
           const x = Math.max(42, Math.min(W - 42, xp(e.x))); // 양 끝에서 글자가 잘리지 않게(글자를 키워서 여유도 늘림)
-          return `<text class="tl-mark" x="${x.toFixed(1)}" y="${(up ? yp(e.y) - 4 : yp(e.y) + 12).toFixed(1)}" fill="${up ? '#E0F2FE' : '#A5C4DC'}" font-size="9" font-weight="600" text-anchor="middle">${up ? '▲' : '▼'}${hhmm(e.x)} ${e.y.toFixed(1)}m</text>`;
+          return `<text class="tl-mark" x="${x.toFixed(1)}" y="${(up ? yp(e.y) - 4 : yp(e.y) + 12).toFixed(1)}" fill="${up ? '#E0F2FE' : '#A5C4DC'}" font-size="11" font-weight="600" text-anchor="middle">${up ? '▲' : '▼'}${hhmm(e.x)} ${e.y.toFixed(1)}m</text>`;
         }).join('');
         // [FIX] "모바일에서 조석 곡선이 너무 얇아 안 보임" - 선을 굵게, 아래 채움을 진하게, 글자를 크고 밝게(굵기는 CSS에서 화면 크기별로)
         // 하루 경계(0시)에 옅은 세로선을 그어 위 칸들과 이어져 보이게
@@ -596,7 +596,7 @@
           ? cell(`<button class="nt-nowbtn" title="${t.backToNow}">${t.tideNow}</button>`, '')
           : cell(day !== lastDay ? `${dt.getUTCMonth() + 1}/${day}` : '', 'color:rgba(255,255,255,0.9);font-weight:700;' + dayEdge);
         lastDay = day;
-        rows.time += cell(mm ? `<span style="font-size:8.5px;opacity:.75">:${String(mm).padStart(2, '0')}</span>` : String(hh).padStart(2, '0'), 'color:#8A94A6;' + dayEdge);
+        rows.time += cell(mm ? `<span style="font-size:10px;opacity:.75">:${String(mm).padStart(2, '0')}</span>` : String(hh).padStart(2, '0'), 'color:#8A94A6;' + dayEdge);
 
         const tp = valueAtX(d.temp, x);
         rows.temp += cell(tp ? (tp.obs ? `<span class="nt-obs">${tempVal(tp.y)}</span>` : tempVal(tp.y)) : '–', tp ? 'color:rgba(255,255,255,0.9);font-weight:700;' : 'color:#4B5565;');
@@ -609,7 +609,7 @@
         const wv = valueAtX(d.waves, x);
         rows.wave += cell(wv ? (wv.obs ? `<span class="nt-obs">${wv.height.toFixed(1)}</span>` : wv.height.toFixed(1)) : '–', wv ? waveCellStyle(wv.height) : 'color:#4B5565;');
         rows.swell += cell(wv && wv.swellPeriod != null ? Math.round(wv.swellPeriod) + t.sec : '', 'color:#5B6474;');
-        if (fine) { const th = typeof interpAt === 'function' ? interpAt(d.tide, x) : null; rows.tideh += cell(th != null ? th.toFixed(2) : '', 'color:#7DD3FC;font-size:9.5px;'); }
+        if (fine) { const th = typeof interpAt === 'function' ? interpAt(d.tide, x) : null; rows.tideh += cell(th != null ? th.toFixed(2) : '', 'color:#7DD3FC;font-size:11.5px;'); }
       });
 
       const ROWS = [
@@ -834,19 +834,19 @@
           x: {
             type: 'linear', min: -0.4, max: 11.6,
             ticks: {
-              stepSize: 1, color: '#64748b', font: { size: 9 },
+              stepSize: 1, color: '#64748b', font: { size: 11 },
               callback: (v) => t.months[((windowStartMonth + Math.round(v)) % 12 + 12) % 12] || ''
             },
             grid: { color: 'rgba(255,255,255,0.05)' }
           },
           // [FIX] "상대온도라 날뛰어 보임" - 색상표와 같은 0~40도 절대 범위로 고정
-          y: { min: 0, max: 40, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: 'rgba(255,255,255,0.05)' } }
+          y: { min: 0, max: 40, ticks: { color: '#64748b', font: { size: 11 }, callback: formatAxisTemp }, grid: { color: 'rgba(255,255,255,0.05)' } }
         };
         // [CHANGE] "시야 10m와 30m 차이가 없어 보임" - 로그 눈금 대신 0~30m 일정 간격(절대값) 눈금으로.
         // 30m는 위성 추정의 상한(30m+)이라 축 끝도 30m.
         if (vis) scales.yv = {
           type: 'linear', position: 'right', min: 0, max: 30, grid: { drawOnChartArea: false },
-          ticks: { stepSize: 5, color: '#38BDF8', font: { size: 9 }, callback: (val) => val + 'm' }
+          ticks: { stepSize: 5, color: '#38BDF8', font: { size: 11 }, callback: (val) => val + 'm' }
         };
         chartInstance = new Chart(chartCanvas, {
           type: 'line',
@@ -948,8 +948,8 @@
               tooltip: { callbacks: { label: (ctx) => `${formatTemp(ctx.parsed.y)}` } }
             },
             scales: {
-              x: { title: { display: true, text: t.depthAxisLabel, color: '#94a3b8', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-              y: { title: { display: true, text: t.tempAxisLabel, color: '#94a3b8', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 9 }, callback: formatAxisTemp }, grid: { color: 'rgba(255,255,255,0.05)' } }
+              x: { title: { display: true, text: t.depthAxisLabel, color: '#94a3b8', font: { size: 12 } }, ticks: { color: '#64748b', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+              y: { title: { display: true, text: t.tempAxisLabel, color: '#94a3b8', font: { size: 12 } }, ticks: { color: '#64748b', font: { size: 11 }, callback: formatAxisTemp }, grid: { color: 'rgba(255,255,255,0.05)' } }
             }
           }
         });

@@ -7,7 +7,7 @@
   const css = document.createElement('style');
   css.textContent = `.ot-pth{width:69px;height:69px;border-radius:8px;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.55);background:#111a30 center/cover no-repeat;position:relative;cursor:pointer}
   .ot-pth:before{content:'';position:absolute;left:5px;top:-11px;border:6px solid transparent;border-bottom-color:#fff;border-top-width:0;filter:drop-shadow(0 -1px 1px rgba(0,0,0,.35))}
-  .ot-pth i{position:absolute;right:-5px;bottom:-5px;min-width:16px;height:16px;border-radius:8px;background:#FFB000;color:#111;font:700 10px/16px sans-serif;text-align:center;font-style:normal;padding:0 3px;box-sizing:border-box}`;
+  .ot-pth i{position:absolute;right:-5px;bottom:-5px;min-width:16px;height:16px;border-radius:8px;background:#FFB000;color:#111;font:700 12px/16px sans-serif;text-align:center;font-style:normal;padding:0 3px;box-sizing:border-box}`;
   document.head.appendChild(css);
   async function load(force) {
     if (idx && !force && Date.now() - idxAt < 300000) return idx;

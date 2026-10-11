@@ -48,7 +48,7 @@
       const R = 74, ko = typeof lang !== 'undefined' && lang === 'ko';
       let g = `<circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
         `<circle r="${R * 0.62}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 4"/>` +
-        `<g fill="#e2e8f0" font-size="10" font-weight="700" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.6);stroke-width:2.5px">` +
+        `<g fill="#e2e8f0" font-size="12" font-weight="700" text-anchor="middle" style="paint-order:stroke;stroke:rgba(0,0,0,.6);stroke-width:2.5px">` +
         `<text y="${-R - 5}">N</text><text x="${R + 9}" y="4">E</text><text y="${R + 13}">S</text><text x="${-R - 9}" y="4">W</text></g>`;
       // [CHANGE] 화살표 길이 = 값에 완전 비례(머리 삼각형은 값이 0이 아니면 항상 같은 크기로 표시, 0이면 화살표 없음)
       //   바람 15 m/s = 60px, 파도 3 m = 60px, 흐름 1 m/s(약 2노트) = 원 반지름 가까이, 써지 0.5 m/s = 양쪽 40px. 넘으면 그 길이에서 멈춤
@@ -96,8 +96,8 @@
       const MW = 214, C1 = 10, C2 = 74, C3 = 124;
       const isNowLbl = /^(지금|Now)$/.test(timeLabel), fv = (x) => x >= 29.95 ? '30+' : x < 10 ? x.toFixed(1) : Math.round(x);
       const nm = (color, t) => `<text x="${C1}" y="${y}" font-size="11" fill="${color}" font-weight="800">${t}</text>`;
-      const cell = (x, html, anchor) => `<text x="${x}" y="${y}" font-size="10.5" fill="#cbd5e1"${anchor ? ` text-anchor="${anchor}"` : ''}>${html}</text>`;
-      const tr = (color, name, big, unit, rest) => { y += 17; rows += nm(color, name) + cell(C2 + 36, `<tspan fill="#fff" font-weight="800" font-size="13">${big}</tspan><tspan font-size="9.5"> ${unit}</tspan>`, 'end') + cell(C3, rest || ''); };
+      const cell = (x, html, anchor) => `<text x="${x}" y="${y}" font-size="12.5" fill="#cbd5e1"${anchor ? ` text-anchor="${anchor}"` : ''}>${html}</text>`;
+      const tr = (color, name, big, unit, rest) => { y += 17; rows += nm(color, name) + cell(C2 + 36, `<tspan fill="#fff" font-weight="800" font-size="13">${big}</tspan><tspan font-size="11.5"> ${unit}</tspan>`, 'end') + cell(C3, rest || ''); };
       const sep = () => { y += 6; rows += `<line x1="8" y1="${y}" x2="${MW - 8}" y2="${y}" stroke="rgba(255,255,255,.14)"/>`; };
       if (w && w.speed != null) tr('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s',
         `${w.dir != null ? windDialDir16(w.dir) + (ko ? '풍' : '') : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`);
@@ -117,28 +117,28 @@
         const top = 50, Hs = 72;
         strip += `<text transform="translate(15 ${top + Hs / 2 + 4}) rotate(-90)" font-size="11" fill="#4ade80" font-weight="800" text-anchor="middle">${ko ? '흐름 Current' : 'Current'}</text>`;
         cols.forEach((c, k) => { const cx = 30 + 22 + 44 * k;
-          strip += `<text x="${cx}" y="${top + 17}" font-size="10.5" fill="${c[1]}" font-weight="800" text-anchor="middle">${c[0]}</text>` +
+          strip += `<text x="${cx}" y="${top + 17}" font-size="12.5" fill="${c[1]}" font-weight="800" text-anchor="middle">${c[0]}</text>` +
             `<text x="${cx}" y="${top + 38}" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${kn(c[2])}</text>` +
-            `<text x="${cx}" y="${top + 54}" font-size="10" fill="#cbd5e1" text-anchor="middle">→ ${dirTo(c[2])}</text>`; });
+            `<text x="${cx}" y="${top + 54}" font-size="12" fill="#cbd5e1" text-anchor="middle">→ ${dirTo(c[2])}</text>`; });
         let Hs2 = Hs;
         if (raw) { // 관리자: 아래 줄에 모델 원값(보정 전) 같은 크기로
           const rc = [raw.s, raw.c5, raw.c30].slice(0, cols.length);
-          strip += `<text x="15" y="${top + 72}" font-size="8.5" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 15 ${top + 92})">${ko ? '원값' : 'raw'}</text>`;
+          strip += `<text x="15" y="${top + 72}" font-size="10" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 15 ${top + 92})">${ko ? '원값' : 'raw'}</text>`;
           rc.forEach((c, k) => { if (!c) return; const cx = 30 + 22 + 44 * k;
             strip += `<text x="${cx}" y="${top + 86}" font-size="13" fill="#94a3b8" font-weight="800" text-anchor="middle">${kn(c)}</text>` +
-              `<text x="${cx}" y="${top + 102}" font-size="10" fill="#94a3b8" text-anchor="middle">→ ${dirTo(c)}</text>`; });
+              `<text x="${cx}" y="${top + 102}" font-size="12" fill="#94a3b8" text-anchor="middle">→ ${dirTo(c)}</text>`; });
           Hs2 = Hs + 48;
         }
-        strip += `<text x="${30 + 22 + 44 * (cols.length - 1) + 22}" y="${top + Hs2 - 6}" font-size="8.5" fill="#94a3b8" text-anchor="end">${ko ? '노트(kn)' : 'knots'}</text>`;
+        strip += `<text x="${30 + 22 + 44 * (cols.length - 1) + 22}" y="${top + Hs2 - 6}" font-size="10" fill="#94a3b8" text-anchor="end">${ko ? '노트(kn)' : 'knots'}</text>`;
         strip += `<line x1="${LW}" y1="46" x2="${LW}" y2="${Math.max(y, top + Hs2) + 2}" stroke="rgba(255,255,255,.14)"/>`;
         yEnd = Math.max(y, top + Hs2);
-        if (c5) { yEnd += 13; strip += `<text x="10" y="${yEnd}" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (cs0 && cs0.strait) { return (ko ? '해협 조류 보정 추정 · ' : 'strait tide est. · ') + (typeof straitName === 'function' ? straitName(cs0.strait) : '') + (cs0.tide != null ? ` · ${ko ? '조석' : 'tide'} ${cs0.tideTo != null ? windDialDir16(cs0.tideTo) : (cs0.tide >= 0 ? '↑N' : '↓S')} ${(Math.abs(cs0.tide) / KN).toFixed(1)}kn` : '') ; } if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬·해안에 막혀 약해짐' : 'sheltered, slower') : (ko ? '지형 따라 방향 바뀜' : 'steered by terrain'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>`; }
+        if (c5) { yEnd += 13; strip += `<text x="10" y="${yEnd}" font-size="10" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (cs0 && cs0.strait) { return (ko ? '해협 조류 보정 추정 · ' : 'strait tide est. · ') + (typeof straitName === 'function' ? straitName(cs0.strait) : '') + (cs0.tide != null ? ` · ${ko ? '조석' : 'tide'} ${cs0.tideTo != null ? windDialDir16(cs0.tideTo) : (cs0.tide >= 0 ? '↑N' : '↓S')} ${(Math.abs(cs0.tide) / KN).toFixed(1)}kn` : '') ; } if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬·해안에 막혀 약해짐' : 'sheltered, slower') : (ko ? '지형 따라 방향 바뀜' : 'steered by terrain'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>`; }
       }
       const BW = MW + LW;
       const tw = Math.max(70, timeLabel.length * 9 + 24), tcol = isNowLbl ? '#FFB000' : '#4ade80', mx = LW;
       const head = `<rect x="${mx + (MW - tw) / 2}" y="9" width="${tw}" height="24" rx="12" fill="rgba(7,11,20,0.92)" stroke="${tcol}" stroke-width="1.5"/>` +
         `<text x="${mx + MW / 2}" y="26" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${timeLabel}</text>` +
-        (tzLabel ? `<text x="${mx + MW / 2}" y="46" font-size="8.5" fill="#94a3b8" text-anchor="middle">${tzLabel}</text>` : '');
+        (tzLabel ? `<text x="${mx + MW / 2}" y="46" font-size="10" fill="#94a3b8" text-anchor="middle">${tzLabel}</text>` : '');
       labels += `<g transform="translate(${R + 22} ${-R - 30})"><rect x="0" y="0" width="${BW}" height="${yEnd + 10}" rx="9" fill="rgba(7,11,20,0.86)" stroke="rgba(255,255,255,0.16)"/>${strip}<g transform="translate(${mx} 0)">${rows}</g>${head}</g>`;
       const W = 2 * (R + 200), H = 2 * (R + 70);
       return `<svg width="${W}" height="${H}" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="overflow:visible;pointer-events:none">${g}${labels}</svg>`;

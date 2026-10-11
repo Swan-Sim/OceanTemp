@@ -37,8 +37,8 @@ module.exports = async function logbook(a, b, uid, R, json) {
     all.sort((x, y) => (y.date || '').localeCompare(x.date || '') || (y.at || 0) - (x.at || 0));
     const no = parseInt(b.no, 10);
     const items = no > 0 ? all.filter(x => x.no === no) : all;
-    const lim = Math.max(1, Math.min(200, parseInt(b.limit, 10) || 200)); // [ADD] 회원정보 최근 기록용(limit=3)
-    json(200, { ok: true, items: items.slice(0, lim), total: all.length, last: all[0] || null }); return true; // last: 가장 최근 기록(웨이트·슈트·탱크 미리 채우기용)
+    const lim = Math.max(1, Math.min(200, parseInt(b.limit, 10) || 200)), off = Math.max(0, parseInt(b.offset, 10) || 0); // [ADD] 회원정보 목록용 페이지(offset)
+    json(200, { ok: true, items: items.slice(off, off + lim), total: all.length, count: items.length, last: all[0] || null }); return true; // last: 가장 최근 기록(웨이트·슈트·탱크 미리 채우기용)
   }
   if (a === 'logsave') {
     const r = clean(b); if (r.error) { json(400, { ok: false, error: r.error }); return true; }

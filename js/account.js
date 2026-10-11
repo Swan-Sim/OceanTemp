@@ -149,7 +149,7 @@
   // 내 로그 목록: 최근 순, 5개 높이에 스크롤, 끝에 닿으면 더 불러옴(최대 2000개)
   async function loadLogsInto(list) {
     if (!list) return; const PAGE = 40; let off = 0, total = Infinity, busy = false;
-    const row = (e) => { const s = stationByNo(e.no); return `<button class="a-log" data-no="${e.no}"><b>${esc(e.date || '')}</b><span class="nm">${esc(s ? s.name : '#' + e.no)}</span><span class="dt">${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (lang === 'ko' ? '분' : 'm') : ''}</span></button>`; };
+    const row = (e) => { const s = stationByNo(e.no); return `<button class="a-log" data-no="${e.no}"><b>${esc(e.date || '')}</b><span class="nm">${esc(s ? s.name : '#' + e.no)}</span><span class="dt">${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : 'm') : ''}</span></button>`; };
     const more = async () => {
       if (busy || off >= total) return; busy = true;
       try { const j = await post('logs', { no: 0, limit: PAGE, offset: off }); total = j.count != null ? j.count : (j.items || []).length; const sub = list.querySelector('.a-sub'); if (sub) sub.remove();

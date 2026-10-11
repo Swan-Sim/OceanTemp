@@ -237,7 +237,7 @@ module.exports = async function auth(req, res) {
   if (a === 'fav') {
     const no = parseInt(b.no, 10); if (!(no > 0 && no < 100000)) return json(400, { ok: false, error: 'bad_no' });
     if (b.on === false) await R(['SREM', 'ufav:' + uid, String(no)]);
-    else { const [n] = await R(['SCARD', 'ufav:' + uid]); if (n >= 300) return json(400, { ok: false, error: 'too_many' }); await R(['SADD', 'ufav:' + uid, String(no)]);
+    else { const [n] = await R(['SCARD', 'ufav:' + uid]); if (n >= 30) return json(400, { ok: false, error: 'too_many' }); // 즐겨찾기 최대 30개 await R(['SADD', 'ufav:' + uid, String(no)]);
       const [firstTime] = await R(['SADD', 'ufavseen:' + uid, String(no)]); if (firstTime) await C.award(R, uid, 'fav'); } // 처음 즐겨찾기하는 포인트만 크레딧
     return json(200, { ok: true });
   }
@@ -246,6 +246,7 @@ module.exports = async function auth(req, res) {
     const [pf] = await R(['HGET', 'uprefs:v1', uid]); let cur = {}; try { cur = pf ? JSON.parse(pf) : {}; } catch (_) {}
     if (b.unit === 'C' || b.unit === 'F') cur.unit = b.unit;
     if (['ko', 'en', 'ja'].includes(b.lang)) cur.lang = b.lang;
+    if (Array.isArray(b.favOrder)) cur.favOrder = b.favOrder.map(Number).filter(n => n > 0 && n < 100000).slice(0, 30); // [ADD] 즐겨찾기 순서(드래그로 바꾼 것)
     if (b.last && typeof b.last === 'object') { const no = parseInt(b.last.no, 10); if (no > 0 && no < 100000) cur.last = { no, at: Date.now() }; }
     if (b.consent && typeof b.consent === 'object') cur.consent = { use: !!b.consent.use, open: !!b.consent.open, photo: !!b.consent.photo, at: Date.now() }; // 로그북 동의(정보 사용·기록 공개·사진 공개)
     await R(['HSET', 'uprefs:v1', uid, JSON.stringify(cur)]);

@@ -671,3 +671,7 @@ body.detail-mode { --tab-line: #C48A14; }
 body.log-open #bottom-sheet { position: fixed; left: 0; right: 0; bottom: 0; top: var(--log-top, 56px); margin-top: 0; z-index: 60; display: flex; flex-direction: column; background: var(--ui-bg); pointer-events: auto; }
 body.log-open #bottom-sheet .chart-box { flex: 1 1 auto; height: auto; min-height: 0; }
 body.log-open #bottom-sheet .station-foot { display: none; }
+
+#log-down{display:none;flex:0 0 34px;height:28px;align-items:center;justify-content:center;border:1px solid var(--ui-line);border-radius:8px;background:var(--ui-bg-top);color:#e2e8f0;cursor:pointer;pointer-events:auto;margin-left:4px;padding:0}
+body.log-open #log-down{display:flex}
+.nt-scroll{cursor:grab}

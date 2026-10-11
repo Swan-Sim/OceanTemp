@@ -665,6 +665,14 @@
         requestAnimationFrame(reNow); setTimeout(reNow, 250); setTimeout(reNow, 900);
         if (typeof ResizeObserver === 'function') { const ro = new ResizeObserver(reNow); ro.observe(sc); setTimeout(() => ro.disconnect(), 4000); }
       }
+      // [ADD] 마우스로 끌어서 옆으로 넘기기(손가락은 원래 됨)
+      if (!sc._dragSet) { sc._dragSet = true; let dx0 = null, sl0 = 0, moved = false;
+        sc.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse' || e.button !== 0) return; dx0 = e.clientX; sl0 = sc.scrollLeft; moved = false; });
+        window.addEventListener('pointermove', (e) => { if (dx0 == null) return; const d = e.clientX - dx0; if (!moved && Math.abs(d) < 4) return; if (!moved) { moved = true; sc.style.cursor = 'grabbing'; sc.style.userSelect = 'none'; } sc.scrollLeft = sl0 - d; });
+        const endDrag = () => { if (dx0 == null) return; dx0 = null; sc.style.cursor = ''; sc.style.userSelect = ''; };
+        window.addEventListener('pointerup', endDrag); window.addEventListener('pointercancel', endDrag);
+        sc.addEventListener('click', (e) => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+        sc.style.cursor = 'grab'; }
       // [ADD] 표 가운데 칸 시각 → 지도 위 바람·파도 나침반(js/wind-dial.js)
       // [CHANGE] 표 가운데 칸 = 나침반 시각. 양 끝에서는 표가 더 안 밀리니 선택 칸이 끝까지 따라가게(처음·마지막 칸까지 선택 가능)
       //  선택된 칸은 초록 테두리로 표시
@@ -1236,3 +1244,12 @@
     })();
 
 // Three.js 구체 UV 매핑 표준 정렬
+
+// 로그북을 크게 펼쳤을 때: 탭 줄 오른쪽 "내리기" 버튼 → 원래 높이로(로그북 탭을 다시 누르면 다시 펼쳐져요)
+(function () {
+  const tb = document.querySelector('.tab-bar'); if (!tb || document.getElementById('log-down')) return;
+  const b = document.createElement('button'); b.id = 'log-down'; b.type = 'button'; b.setAttribute('aria-label', 'collapse');
+  b.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 5l4.5 4.5L11.5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  b.onclick = () => document.body.classList.remove('log-open');
+  tb.appendChild(b);
+})();

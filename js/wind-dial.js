@@ -44,7 +44,7 @@
       return (typeof lang !== 'undefined' && lang === 'ko') ? ko[i] : en[i];
     };
 
-    function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0) {
+    function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0, raw) {
       const R = 74, ko = typeof lang !== 'undefined' && lang === 'ko';
       let g = `<circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
         `<circle r="${R * 0.62}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 4"/>` +
@@ -120,10 +120,19 @@
           strip += `<text x="${cx}" y="${top + 17}" font-size="10.5" fill="${c[1]}" font-weight="800" text-anchor="middle">${c[0]}</text>` +
             `<text x="${cx}" y="${top + 38}" font-size="13" fill="#fff" font-weight="800" text-anchor="middle">${kn(c[2])}</text>` +
             `<text x="${cx}" y="${top + 54}" font-size="10" fill="#cbd5e1" text-anchor="middle">→ ${dirTo(c[2])}</text>`; });
-        strip += `<text x="${30 + 22 + 44 * (cols.length - 1) + 22}" y="${top + 66}" font-size="8.5" fill="#94a3b8" text-anchor="end">${ko ? '노트(kn)' : 'knots'}</text>`;
-        strip += `<line x1="${LW}" y1="46" x2="${LW}" y2="${Math.max(y, top + Hs) + 2}" stroke="rgba(255,255,255,.14)"/>`;
-        yEnd = Math.max(y, top + Hs);
-        if (c5) { yEnd += 13; strip += `<text x="10" y="${yEnd}" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (cs0 && cs0.strait) { const adm = (() => { try { const u = window.otAccount && window.otAccount.user && window.otAccount.user(); return !!(u && u.role === 'admin'); } catch (_) { return false; } })(); return (ko ? '해협 조류 보정 추정 · ' : 'strait tide est. · ') + (typeof straitName === 'function' ? straitName(cs0.strait) : '') + (cs0.tide != null ? ` · ${ko ? '조석' : 'tide'} ${cs0.tide >= 0 ? '↑N' : '↓S'} ${(Math.abs(cs0.tide) / KN).toFixed(1)}kn` : '') + (adm && cs0.bg ? ` · ${ko ? '모델 원값' : 'raw model'} ${(cs0.bg.speed / KN).toFixed(1)}kn ${windDialDir16(cs0.bg.to)}` : ''); } if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬·해안에 막혀 약해짐' : 'sheltered, slower') : (ko ? '지형 따라 방향 바뀜' : 'steered by terrain'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>`; }
+        let Hs2 = Hs;
+        if (raw) { // 관리자: 아래 줄에 모델 원값(보정 전) 같은 크기로
+          const rc = [raw.s, raw.c5, raw.c30].slice(0, cols.length);
+          strip += `<text x="15" y="${top + 72}" font-size="8.5" fill="#94a3b8" text-anchor="middle" transform="rotate(-90 15 ${top + 92})">${ko ? '원값' : 'raw'}</text>`;
+          rc.forEach((c, k) => { if (!c) return; const cx = 30 + 22 + 44 * k;
+            strip += `<text x="${cx}" y="${top + 86}" font-size="13" fill="#94a3b8" font-weight="800" text-anchor="middle">${kn(c)}</text>` +
+              `<text x="${cx}" y="${top + 102}" font-size="10" fill="#94a3b8" text-anchor="middle">→ ${dirTo(c)}</text>`; });
+          Hs2 = Hs + 48;
+        }
+        strip += `<text x="${30 + 22 + 44 * (cols.length - 1) + 22}" y="${top + Hs2 - 6}" font-size="8.5" fill="#94a3b8" text-anchor="end">${ko ? '노트(kn)' : 'knots'}</text>`;
+        strip += `<line x1="${LW}" y1="46" x2="${LW}" y2="${Math.max(y, top + Hs2) + 2}" stroke="rgba(255,255,255,.14)"/>`;
+        yEnd = Math.max(y, top + Hs2);
+        if (c5) { yEnd += 13; strip += `<text x="10" y="${yEnd}" font-size="8.5" fill="#94a3b8">${(() => { const tr = window.__curTerrain; if (cs0 && cs0.strait) { return (ko ? '해협 조류 보정 추정 · ' : 'strait tide est. · ') + (typeof straitName === 'function' ? straitName(cs0.strait) : '') + (cs0.tide != null ? ` · ${ko ? '조석' : 'tide'} ${cs0.tide >= 0 ? '↑N' : '↓S'} ${(Math.abs(cs0.tide) / KN).toFixed(1)}kn` : '') ; } if (!tr) return ko ? '추정 · 지형 영향 미반영' : 'estimate · no local terrain'; const k = tr.k, tag = k >= 1.3 ? (ko ? '섬 옆 빨라짐' : 'island side, faster') : k <= 0.7 ? (ko ? '섬·해안에 막혀 약해짐' : 'sheltered, slower') : (ko ? '지형 따라 방향 바뀜' : 'steered by terrain'); return (ko ? '지형 반영 추정 · ' : 'terrain est. · ') + tag + ' ×' + k.toFixed(1); })()}</text>`; }
       }
       const BW = MW + LW;
       const tw = Math.max(70, timeLabel.length * 9 + 24), tcol = isNowLbl ? '#FFB000' : '#4ade80', mx = LW;
@@ -163,7 +172,10 @@
         vc.projection.forEach(p => { const dd = Math.abs(p.t + off - x); if (dd < bd) { bd = dd; best = p; } });
         if (best && bd <= 36 * 3600e3) vis = isNow && vc.now ? vc.now : best;
       }
-      const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0);
+      // [ADD] 관리자: 해협 보정 전 모델 원값(표층·5m·30m)도 같은 크기로 아래 줄에
+      let raw = null; try { const u = window.otAccount && window.otAccount.user && window.otAccount.user();
+        if (u && u.role === 'admin' && cs0 && cs0.bg) raw = { s: cs0.bg, c5: windDialCurrentAt(cs0.bg, w, st.coords[1], 5), c30: windDialCurrentAt(cs0.bg, w, st.coords[1], 30) }; } catch (_) {}
+      const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0, raw);
       const size = [2 * (74 + 200), 2 * (74 + 70)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];

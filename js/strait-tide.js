@@ -9,9 +9,9 @@
       id: 'tanon', name: { ko: '타뇽 해협', en: 'Tañon Strait' },
       box: [9.40, 10.95, 123.15, 123.85], // [위도 최소, 위도 최대, 경도 최소, 경도 최대]
       axis: 337,   // 밀물(조위 오르는 중) 때 "흘러가는" 방향(도). 관찰: 배경 SSE와 정반대로 상쇄 → NNW
-      k: 1.0,      // 조위 변화율 1 m/h 당 조류 m/s (조차 1.4m → 최대 약 0.7노트). 관찰 세기 들어오면 조정
+      k: 1.5,      // 조위 변화율 1 m/h 당 조류 m/s. 관찰 교정(10/10 07:40 수심 5m 보정값 1.1노트 → 실제 약 1.6노트)로 1.0에서 올림
       lagH: 0.5,   // 조위 변화율 → 조류 지연(시간). 0이면 만조에 정확히 멈춤
-      bgW: 0.25    // 모델 배경 흐름 가중치. 관찰(만조 때 거의 0)과 모델(0.7노트 SSE 고정)이 안 맞아 해협 안에선 배경을 1/4로 줄여요
+      bgW: 0.25    // 모델 배경 흐름(바람 성분 제외) 가중치. 관찰(만조 때 거의 0)과 모델(0.7노트 SSE 고정)이 안 맞아 해협 안에선 1/4로. 바람이 끄는 성분은 줄이지 않고 그대로
     }
   ];
   function straitOf(st) {
@@ -36,12 +36,17 @@
   window.straitTideApply = async function (st, d) {
     const s = straitOf(st); if (!s || !d || !Array.isArray(d.current) || !d.current.length || !Array.isArray(d.tide) || d.tide.length < 3 || d._strait) return false;
     const r = Math.PI / 180, lag = s.lagH * 3600e3; let n = 0;
+    // 바람이 끄는 표층 성분(풍속의 3%, 북반구는 바람이 가는 방향에서 오른쪽 30°) - js/wind-dial.js의 수심별 계산과 같은 식. 이 성분은 줄이지 않아요
+    const lat = st.coords[1], sgn = lat >= 0 ? 1 : -1, wind = Array.isArray(d.wind) ? d.wind : [];
+    const windAt = (x) => { let b = null, bd = Infinity; for (const w of wind) { const dd = Math.abs(w.x - x); if (dd < bd) { bd = dd; b = w; } } return bd <= 3 * 3600e3 ? b : null; };
     d.current = d.current.map(c => {
       if (c.speed == null || c.to == null) return c;
       const rate = rateAt(d.tide, c.x - lag); if (rate == null) return c;
       const ts = s.k * rate; // +면 밀물 방향(axis), −면 반대
-      const bw = s.bgW == null ? 1 : s.bgW;
-      const u = bw * c.speed * Math.sin(c.to * r) + ts * Math.sin(s.axis * r), v = bw * c.speed * Math.cos(c.to * r) + ts * Math.cos(s.axis * r); n++;
+      const bw = s.bgW == null ? 1 : s.bgW, w = windAt(c.x);
+      let wu = 0, wv = 0; if (w && w.speed != null && w.dir != null) { const ds = 0.03 * w.speed, d0 = (w.dir + 180 + sgn * 30) * r; wu = ds * Math.sin(d0); wv = ds * Math.cos(d0); }
+      const bu = c.speed * Math.sin(c.to * r) - wu, bv = c.speed * Math.cos(c.to * r) - wv; // 모델 배경에서 바람 성분을 뺀 나머지만 줄여요
+      const u = bw * bu + wu + ts * Math.sin(s.axis * r), v = bw * bv + wv + ts * Math.cos(s.axis * r); n++;
       return Object.assign({}, c, { bg: { speed: c.speed, to: c.to }, tide: +ts.toFixed(3), rate: +rate.toFixed(3), speed: +Math.hypot(u, v).toFixed(3), to: (Math.atan2(u, v) / r + 360) % 360, strait: s.id });
     });
     d._strait = s.id; return n > 0;

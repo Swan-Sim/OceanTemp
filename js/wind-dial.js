@@ -136,8 +136,8 @@
       if (w && w.speed != null) tr('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s', `${w.dir != null ? windDialDir16(w.dir) : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`);
       if (v && v.height != null) {
         tr('#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm', `${vdir != null ? windDialDir16(vdir) : ''}${v.swellPeriod != null ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`);
-        const s5 = windDialSurge(v, 5), s30 = windDialSurge(v, 30);
-        if (s5 != null) { y += 21; rows += `<text x="${X1}" y="${y}" font-size="12.5" fill="#7dd3fc" font-weight="800">${ko ? '써지' : 'Surge'}↕</text><text x="${X2}" y="${y}" font-size="12" fill="#cbd5e1">5m</text><text x="${X2 + 22}" y="${y}" font-size="12" fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</text><text x="${X3}" y="${y}" font-size="12" fill="#cbd5e1">30m</text><text x="${X3 + 28}" y="${y}" font-size="12" fill="#fff" font-weight="700">${surgeLevel(s30, ko)}</text>`; }
+        const s5 = windDialSurge(v, 5);
+        if (s5 != null) { y += 21; rows += `<text x="${X1}" y="${y}" font-size="12.5" fill="#7dd3fc" font-weight="800">${ko ? '써지' : 'Surge'}↕</text><text x="${X2}" y="${y}" font-size="12" fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</text>`; }
       }
       if (vis) tr('#7dd3fc', ko ? '시야' : 'Vis', fv(vis.vis), 'm', vis.lo != null ? `${fv(vis.lo)}–${fv(vis.hi)} m` : '');
       let labels = '';

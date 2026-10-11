@@ -110,7 +110,7 @@
             `<path d="M-6 ${-L} L0 ${-L - 10} L6 ${-L}Z" fill="#bae6fd"/><path d="M-6 ${L} L0 ${L + 10} L6 ${L}Z" fill="#bae6fd"/></g>`;
         }
       }
-      g += flow(cs, '#d9f99d', 3, true, R, true) + flow(c5, '#15803d', 4, false, R - 13, false) + flow(c30, '#0a4f24', 5, false, R - 26, false); // 깊은 것이 위에 그려져 머리가 가려지지 않게
+      g += flow(cs, '#d9f99d', 3, true, R, false) + flow(c5, '#86d65e', 4, false, R - 13, false) + flow(c30, '#22c55e', 5, false, R - 26, false); // 표층 형광연두(속 찬, 테두리 없음) · 5m 중간 연두 · 30m 밝은 초록 // 깊은 것이 위에 그려져 머리가 가려지지 않게
       // [CHANGE] 정보 상자 한 칸 정리: 위 "지금" 알약 + 현지시각, 흐름(표층·5m·30m 노트), 바람·파도·써지·시야 표. 끌어서 8방향 중 한 곳에 붙여요
       const isNowLbl = /^(지금|Now)$/.test(timeLabel), fv = (x) => x >= 29.95 ? '30+' : x < 10 ? x.toFixed(1) : Math.round(x);
       // 3열 표(모두 왼쪽 정렬): 1열 이름/표층, 2열 5m·값, 3열 30m·설명. 각 열의 글자 시작 x가 위아래로 같아요
@@ -121,7 +121,7 @@
       y = 40;
       if (cs) {
         const kn = (c) => (c.speed / KN).toFixed(1);
-        const cols = [[ko ? '표층' : 'Surf', '#d9f99d', cs, X1]].concat(c5 ? [['5m', '#22c55e', c5, X2], ['30m', '#15803d', c30, X3]] : []);
+        const cols = [[ko ? '표층' : 'Surf', '#d9f99d', cs, X1]].concat(c5 ? [['5m', '#86d65e', c5, X2], ['30m', '#22c55e', c30, X3]] : []);
         const rc = raw ? [raw.s, raw.c5, raw.c30] : null, bh = raw ? 74 : 54;
         rows += `<rect x="8" y="${y + 4}" width="18" height="${bh - 8}" rx="4" fill="rgba(74,222,128,.12)"/><text transform="translate(${8 + 13} ${y + bh / 2}) rotate(-90)" font-size="11" fill="#4ade80" font-weight="800" text-anchor="middle">${ko ? '흐름' : 'Current'}</text>`;
         cols.forEach((c, k) => { const cx = c[3];

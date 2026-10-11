@@ -114,33 +114,33 @@
       g += flow(cs, '#d9f99d', 3, true, R, true) + flow(c5, '#15803d', 4, false, R - 13, false) + flow(c30, '#0a4f24', 5, false, R - 26, false); // 깊은 것이 위에 그려져 머리가 가려지지 않게
       // [CHANGE] 정보 상자 한 칸 정리: 위 "지금" 알약 + 현지시각, 흐름(표층·5m·30m 노트), 바람·파도·써지·시야 표. 끌어서 8방향 중 한 곳에 붙여요
       const isNowLbl = /^(지금|Now)$/.test(timeLabel), fv = (x) => x >= 29.95 ? '30+' : x < 10 ? x.toFixed(1) : Math.round(x);
-      const BW = 240, C1 = 10, CV = 126, C3 = 138; let y = 0, rows = '';
+      // 3열 표(모두 왼쪽 정렬): 1열 이름/표층, 2열 5m·값, 3열 30m·설명. 각 열의 글자 시작 x가 위아래로 같아요
+      const BW = 272, X1 = 32, X2 = 106, X3 = 194; let y = 0, rows = '';
       const tw = Math.max(64, timeLabel.length * 9 + 22), tcol = isNowLbl ? '#FFB000' : '#4ade80';
       rows += `<rect x="8" y="8" width="${tw}" height="26" rx="13" fill="rgba(7,11,20,0.95)" stroke="${tcol}" stroke-width="1.8"/><text x="${8 + tw / 2}" y="26" font-size="14" fill="#fff" font-weight="800" text-anchor="middle">${timeLabel}</text>`
         + (tzLabel ? `<text x="${8 + tw + 8}" y="27" font-size="11" fill="#94a3b8">${tzLabel}</text>` : '');
       y = 40;
       if (cs) {
         const kn = (c) => (c.speed / KN).toFixed(1);
-        const cols = [[ko ? '표층' : 'Surf', '#d9f99d', cs]].concat(c5 ? [['5m', '#22c55e', c5], ['30m', '#15803d', c30]] : []);
+        const cols = [[ko ? '표층' : 'Surf', '#d9f99d', cs, X1]].concat(c5 ? [['5m', '#22c55e', c5, X2], ['30m', '#15803d', c30, X3]] : []);
         const rc = raw ? [raw.s, raw.c5, raw.c30] : null, bh = raw ? 74 : 54;
-        rows += `<rect x="${C1}" y="${y + 4}" width="20" height="${bh - 8}" rx="4" fill="rgba(74,222,128,.12)"/><text transform="translate(${C1 + 14} ${y + bh / 2}) rotate(-90)" font-size="11" fill="#4ade80" font-weight="800" text-anchor="middle">${ko ? '흐름' : 'Current'}</text>`;
-        cols.forEach((c, k) => { const cx = 62 + 60 * k;
-          rows += `<text x="${cx}" y="${y + 18}" font-size="12.5" fill="${c[1]}" font-weight="800" text-anchor="middle">${c[0]}</text>`
-            + `<text x="${cx}" y="${y + 42}" font-size="16" fill="#fff" font-weight="800" text-anchor="middle">${kn(c[2])}</text>`
-            + (rc && rc[k] ? `<text x="${cx}" y="${y + 62}" font-size="12" fill="#94a3b8" font-weight="700" text-anchor="middle">${kn(rc[k])}</text>` : ''); });
-        rows += `<text x="${BW - 10}" y="${y + 42}" font-size="10.5" fill="#94a3b8" text-anchor="end">kn</text>` + (raw ? `<text x="${BW - 10}" y="${y + 62}" font-size="10" fill="#94a3b8" text-anchor="end">${ko ? '원값' : 'raw'}</text>` : '');
+        rows += `<rect x="8" y="${y + 4}" width="18" height="${bh - 8}" rx="4" fill="rgba(74,222,128,.12)"/><text transform="translate(${8 + 13} ${y + bh / 2}) rotate(-90)" font-size="11" fill="#4ade80" font-weight="800" text-anchor="middle">${ko ? '흐름' : 'Current'}</text>`;
+        cols.forEach((c, k) => { const cx = c[3];
+          rows += `<text x="${cx}" y="${y + 18}" font-size="12.5" fill="${c[1]}" font-weight="800">${c[0]}</text>`
+            + `<text x="${cx}" y="${y + 42}" font-size="16" fill="#fff" font-weight="800">${kn(c[2])}</text><text x="${cx + 4 + String(kn(c[2])).length * 8.8}" y="${y + 42}" font-size="10.5" fill="#94a3b8">kn</text>`
+            + (rc && rc[k] ? `<text x="${cx}" y="${y + 62}" font-size="12" fill="#94a3b8" font-weight="700">${kn(rc[k])}</text>${k === cols.length - 1 ? `<text x="${cx + 4 + String(kn(rc[k])).length * 7.2}" y="${y + 62}" font-size="10" fill="#94a3b8">${ko ? '원값' : 'raw'}</text>` : ''}` : ''); });
         y += bh;
       }
-      const tr = (color, name, big, unit, rest) => { y += 21; rows += `<text x="${C1}" y="${y}" font-size="12.5" fill="${color}" font-weight="800">${name}</text>`
-        + (big != null ? `<text x="${CV - 28}" y="${y}" font-size="14" fill="#fff" font-weight="800" text-anchor="end">${big}</text><text x="${CV - 24}" y="${y}" font-size="11" fill="#cbd5e1">${unit}</text>` : '')
-        + (rest ? `<text x="${C3}" y="${y}" font-size="12" fill="#cbd5e1">${rest}</text>` : ''); };
+      const tr = (color, name, big, unit, rest) => { y += 21; rows += `<text x="${X1}" y="${y}" font-size="12.5" fill="${color}" font-weight="800">${name}</text>`
+        + (big != null ? `<text x="${X2}" y="${y}" font-size="14" fill="#fff" font-weight="800">${big}</text><text x="${X2 + 4 + String(big).length * 8.6}" y="${y}" font-size="11" fill="#cbd5e1">${unit}</text>` : '')
+        + (rest ? `<text x="${X3}" y="${y}" font-size="12" fill="#cbd5e1">${rest}</text>` : ''); };
       if (w && w.speed != null) tr('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s', `${w.dir != null ? windDialDir16(w.dir) : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`);
       if (v && v.height != null) {
         tr('#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm', `${vdir != null ? windDialDir16(vdir) : ''}${v.swellPeriod != null ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`);
         const s5 = windDialSurge(v, 5), s30 = windDialSurge(v, 30);
-        if (s5 != null) { y += 21; rows += `<text x="${C1}" y="${y}" font-size="12.5" fill="#7dd3fc" font-weight="800">${ko ? '써지' : 'Surge'}↕</text><text x="${CV - 36}" y="${y}" font-size="12" fill="#cbd5e1">5m <tspan fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</tspan> · 30m <tspan fill="#fff" font-weight="700">${surgeLevel(s30, ko)}</tspan></text>`; }
+        if (s5 != null) { y += 21; rows += `<text x="${X1}" y="${y}" font-size="12.5" fill="#7dd3fc" font-weight="800">${ko ? '써지' : 'Surge'}↕</text><text x="${X2}" y="${y}" font-size="12" fill="#cbd5e1">5m</text><text x="${X2 + 22}" y="${y}" font-size="12" fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</text><text x="${X3}" y="${y}" font-size="12" fill="#cbd5e1">30m</text><text x="${X3 + 28}" y="${y}" font-size="12" fill="#fff" font-weight="700">${surgeLevel(s30, ko)}</text>`; }
       }
-      if (vis) tr('#7dd3fc', ko ? '시야' : 'Vis', fv(vis.vis), 'm', vis.lo != null ? `<tspan fill="#94a3b8">${fv(vis.lo)}–${fv(vis.hi)} m</tspan>` : '');
+      if (vis) tr('#7dd3fc', ko ? '시야' : 'Vis', fv(vis.vis), 'm', vis.lo != null ? `${fv(vis.lo)}–${fv(vis.hi)} m` : '');
       let labels = '';
       // [ADD] 상자 위치: 원 둘레 8방향(E·W·N·S·NE·NW·SE·SW) 중 한 곳. 상자를 끌어다 놓으면 가장 가까운 방향으로 붙어요(브라우저에 기억)
       const BH = y + 12, pos = windDialPos(), gap = 22;

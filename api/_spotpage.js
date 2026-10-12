@@ -853,7 +853,10 @@ module.exports = async function spotPage(req, res) {
     // 언어 없이 들어왔거나 주소 이름이 다르면 정식 주소로
     const want = pathOf(lang, st);
     const norm = (x) => { let v = String(x || ''); for (let i = 0; i < 3; i++) { try { const d = decodeURIComponent(v); if (d === v) break; v = d; } catch (_) { break; } } return v.normalize('NFC').toLowerCase(); };
-    if (!q.lang || (q.slug !== undefined && norm(q.slug) !== norm(st.slug))) { res.setHeader('Location', want); res.setHeader('Cache-Control', 'no-store'); return res.status(q.lang ? 301 : 302).end(); }
+    // [CHANGE] 언어 없는 주소(/s/295)도 보내지 않고 그 자리에서 보여줘요(브라우저 언어로). 페이지 안의 canonical 이 정식 주소를 가리키니 검색엔진은 정식 주소만 색인해요
+    //  이름이 다른 주소(옛 이름)만 정식 주소로 301
+    if (q.slug !== undefined && norm(q.slug) !== norm(st.slug)) { res.setHeader('Location', want); res.setHeader('Cache-Control', 'no-store'); return res.status(301).end(); }
+    if (!q.lang) res.setHeader('Vary', 'Accept-Language');
     // [ADD] 주변 수심: 저장된 값이 없으면 처음 한 번 받아요(9초 넘으면 이번엔 건너뛰고 다음 방문 때)
     // [CHANGE] 페이지가 느려져서 수심은 저장된 값만 써요(없으면 이번엔 생략, 아래 페이지 끝 스크립트가 백그라운드로 받아 두어 다음 방문엔 나와요)
     // [ADD] svc=warm&no=..: 페이지가 빠지거나 오래된 자료(예보·시야·월평균·수심)를 뒤에서 새로 받아 저장(페이지 끝 스크립트가 불러요)

@@ -200,15 +200,21 @@
         const isl = T.isl, W = T.W;
         if (!map.getPane('curFieldPane')) { const pn = map.createPane('curFieldPane'); pn.style.zIndex = 450; pn.style.pointerEvents = 'none'; }
         const sz = map.getSize(), step = 46, U = cs.speed; // [CHANGE] 간격 34 → 46px(덜 빽빽하게)
+        // [ADD] 곶 뒤 역류(back-eddy) 구역: 본류를 거꾸로(세기 k배) 그려요. 고른 정점이 역류 구역 안이면 그 값이 이미 역류라 본류는 그 반대로 잡아요
+        const eddyAt = typeof window.straitEddyAt === 'function' ? window.straitEddyAt : null, r0 = Math.PI / 180;
+        let mU = U, mTo = cs.to; { const e0 = eddyAt ? eddyAt(st.coords[1], st.coords[0]) : null; if (e0 && e0.w > 0.5) { mU = U / e0.k; mTo = (cs.to + 180) % 360; } }
+        const mx = mU * Math.sin(mTo * r0), my = mU * Math.cos(mTo * r0);
         for (let py = step / 2; py < sz.y; py += step) for (let px = step / 2; px < sz.x; px += step) {
           const ll = map.containerPointToLatLng([px, py]);
+          let pU = mU, pTo = mTo; { const e = eddyAt ? eddyAt(ll.lat, ll.lng) : null; if (e) { const f = 1 - e.w * (1 + e.k), ux = mx * f, uy = my * f; pU = Math.hypot(ux, uy); pTo = (Math.atan2(ux, uy) / r0 + 360) % 360; } }
           const near = isl.length ? Math.min(...isl.map(m => Math.hypot(ll.lng * m.kx - m.cx, ll.lat * m.ky - m.cy) / m.a)) : Infinity;
           const nw = W ? nearWall(ll.lng * W.kx, ll.lat * W.ky, W, 900) : null, dW = nw ? nw.d : Infinity;
           if (near > 3.2 && dW > 900) continue; // 섬 둘레·해안 900m 안에만
           // 반투명: 섬·해안 가까이 0.5 → 바깥 0.2로 흐려짐
           const op = Math.max(0.5 - 0.3 * Math.max(0, Math.min(1, (near - 1.2) / 2)), 0.5 - 0.3 * Math.max(0, Math.min(1, (dW - 150) / 750)));
-          const v = flowAt(ll.lat, ll.lng, U, cs.to, isl, W); if (!v) continue;
-          const k = Math.hypot(v[0], v[1]) / U, len = 6 + 20 * Math.min(2, k), ang = Math.atan2(v[0], v[1]);
+          if (!(pU > 0.005)) continue;
+          const v = flowAt(ll.lat, ll.lng, pU, pTo, isl, W); if (!v) continue;
+          const k = Math.hypot(v[0], v[1]) / mU, len = 6 + 20 * Math.min(2, k), ang = Math.atan2(v[0], v[1]);
           const col = k >= 1.4 ? '#fb923c' : k <= 0.5 ? '#94a3b8' : '#a3e635';
           const x2 = px + Math.sin(ang) * len, y2 = py - Math.cos(ang) * len, hx = Math.sin(ang), hy = -Math.cos(ang);
           const P = (x, y) => map.containerPointToLatLng([x, y]);

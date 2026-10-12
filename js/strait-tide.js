@@ -13,7 +13,8 @@
       lagH: -1.0,  // 조위 변화율 → 조류 지연(시간). 0이면 만조에 정확히 멈춤. 관찰(10/12 11:00 이미 약하게 남, 화면은 -0.5h로 11:40에야 남) → 조류가 조위보다 약 1시간 앞서 바뀜
       // [ADD] 포인트별 예외(곶 뒤 역류 등). 같은 해협 안이라도 지형 때문에 반대로 흐르는 곳
       spots: {
-        308: { axis: 157, k: 0.75, note: 'Panagsama Beach: 곶 북쪽 그늘의 역류(back-eddy) - ClubHari(295)와 항상 반대, 세기는 본류의 절반쯤' }
+        308: { axis: 157, k: 0.75, note: 'Panagsama Beach: 곶 북쪽 그늘의 역류(back-eddy) - ClubHari(295)와 항상 반대, 세기는 본류의 절반쯤',
+          eddy: { lat: 9.9465, lon: 123.3645, r: 300, blend: 100, k: 0.75 } } // 지도 화살표용 역류 구역(중심·반지름 m·가장자리 섞임 폭 m·세기 비율)
       },
       bgW: 0.25    // 모델 배경 흐름(바람 성분 제외) 가중치. 관찰(만조 때 거의 0)과 모델(0.7노트 SSE 고정)이 안 맞아 해협 안에선 1/4로. 바람이 끄는 성분은 줄이지 않고 그대로
     }
@@ -77,6 +78,15 @@
       return Object.assign({}, c, { bg: { speed: c.speed, to: c.to }, tide: +((flood ? 1 : -1) * ts).toFixed(3), tideTo: ax, rate: +rate.toFixed(3), speed: +Math.hypot(u, v).toFixed(3), to: (Math.atan2(u, v) / r + 360) % 360, strait: s.id });
     });
     d._strait = s.id; return n > 0;
+  };
+  // [ADD] 지도 흐름 화살표용: 이 자리가 역류(back-eddy) 구역이면 { w: 0~1(1=완전히 구역 안), k: 본류 대비 세기 }, 아니면 null
+  window.straitEddyAt = function (lat, lon) {
+    for (const s of STRAITS) { if (!s.spots) continue;
+      for (const no of Object.keys(s.spots)) { const e = s.spots[no].eddy; if (!e) continue;
+        const d = Math.hypot((lat - e.lat) * 111320, (lon - e.lon) * 111320 * Math.cos(e.lat * Math.PI / 180));
+        if (d >= e.r) continue;
+        const w = e.blend ? Math.min(1, (e.r - d) / e.blend) : 1; return { w, k: e.k == null ? 0.75 : e.k }; } }
+    return null;
   };
   window.straitName = (id) => { const ko = typeof lang !== 'undefined' && lang === 'ko'; if (/^spot/.test(String(id))) return ko ? '포인트 보정' : 'spot fix'; const s = STRAITS.find(x => x.id === String(id).split(':')[0]); return s ? s.name[ko ? 'ko' : 'en'] : ''; };
 })();

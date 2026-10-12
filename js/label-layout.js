@@ -6,6 +6,7 @@
     //  - 고른 정점 → 화면 가운데에 가까운 정점 순서로 자리를 잡아요
     (function () {
       const H = 19, GAP = 4, DOT = 8; // 이름표 높이, 점과 이름표 사이, 점 반지름(여유 포함)
+      const TH = 69, TGAP = 6;      // [ADD] 썸네일 크기, 이름표와 썸네일 사이
       const AX = 7, AY = 10; // 마커 안에서 점 가운데 위치(iconAnchor와 같음)
       let raf = 0;
       const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -23,7 +24,8 @@
           dots.push({ x: p.x - DOT, y: p.y - DOT, w: DOT * 2, h: DOT * 2 });
           const lab = el.querySelector('.lf-label'); if (!lab) return;
           if (!lab._w) { lab.style.display = ''; const w = Math.ceil(lab.getBoundingClientRect().width); if (w) lab._w = w; } // 화면에 보일 때 한 번 재서 기억
-          items.push({ id, el, lab, p, w: lab._w || 60 });
+          const th = el.querySelector('.ot-pth'); // [ADD] 사진 썸네일(이름표 아래 69px). 있으면 이름표+썸네일을 한 덩어리로 자리 잡아요
+          items.push({ id, el, lab, th, p, w: Math.max(lab._w || 60, th ? TH : 0), h: th ? H + TGAP + TH : H });
         });
         const sel = typeof selectedStation !== 'undefined' && selectedStation ? String(selectedStation.id) : null;
         const cx = size.x / 2, cy = size.y / 2;
@@ -32,6 +34,7 @@
         const free = (b, own) => inView(b) && !placed.some(q => hit(b, q)) && !dots.some(q => q !== own && hit(b, q));
         const draw = (o, pos, lead) => {
           const old = o.el.querySelector('svg.lf-lead'); if (old) old.remove();
+          if (o.th) { o.th.style.display = (pos && o.h > H) ? '' : 'none'; if (pos && o.h > H) { o.th.style.left = (AX + pos[0]) + 'px'; o.th.style.top = (AY + pos[1] + H + TGAP) + 'px'; } }
           if (!pos) { o.lab.style.display = 'none'; return; }
           o.lab.style.display = ''; o.lab.style.left = (AX + pos[0]) + 'px'; o.lab.style.top = (AY + pos[1]) + 'px';
           if (lead) {
@@ -52,11 +55,12 @@
             const a0 = Math.atan2(c[0].p.y - gy, c[0].p.x - gx);
             c.forEach((o, k) => {
               const own = dots.find(d => d.x === o.p.x - DOT && d.y === o.p.y - DOT); let pos = null, lead = null;
-              outer: for (const extra of [0, 22, 44]) for (const tw of [0, 0.5, -0.5]) {
+              outer: for (const hh of (o.th ? [o.h, H] : [H])) for (const extra of [0, 22, 44]) for (const tw of [0, 0.5, -0.5]) { // 썸네일 포함 덩어리로 먼저, 안 되면 이름표만
                 const a = a0 + (k + tw) / c.length * 2 * Math.PI, ex = gx + Math.cos(a) * (rad + extra), ey = gy + Math.sin(a) * (rad + extra);
-                const lx = Math.cos(a) >= 0 ? ex : ex - o.w, b = { x: lx, y: ey - H / 2, w: o.w, h: H };
-                if (free(b, own)) { placed.push(b); pos = [lx - o.p.x, ey - H / 2 - o.p.y]; lead = [ex - o.p.x, ey - o.p.y]; break outer; }
+                const lx = Math.cos(a) >= 0 ? ex : ex - o.w, b = { x: lx, y: ey - H / 2, w: o.w, h: hh };
+                if (free(b, own)) { placed.push(b); o.h = hh; pos = [lx - o.p.x, ey - H / 2 - o.p.y]; lead = [ex - o.p.x, ey - o.p.y]; break outer; }
               }
+              if (!pos) o.h = H;
               if (!pos && o.id === sel) pos = [DOT + GAP, -H / 2];
               draw(o, pos, lead); done.add(o);
             });
@@ -66,15 +70,19 @@
           if (done.has(o)) return;
           const own = dots.find(d => d.x === o.p.x - DOT && d.y === o.p.y - DOT);
           let pos = null, lead = null;
-          const near = [[DOT + GAP, -H / 2], [-DOT - GAP - o.w, -H / 2], [DOT - 2, -DOT - H + 2], [DOT - 2, DOT - 2], [-DOT - o.w + 2, -DOT - H + 2], [-DOT - o.w + 2, DOT - 2], [-o.w / 2, -DOT - GAP - H], [-o.w / 2, DOT + GAP]];
-          for (const [dx, dy] of near) { const b = { x: o.p.x + dx, y: o.p.y + dy, w: o.w, h: H }; if (free(b, own)) { pos = [dx, dy]; placed.push(b); break; } }
-          if (!pos && z >= 8) { // 지시선: 바깥으로 점점 멀리, 16방향
-            outer: for (const r of [34]) for (let k = 0; k < 16; k++) { // 짧은 선만(길어질 곳은 위의 부채꼴이 맡음)
-              const a = k / 16 * 2 * Math.PI, ex = Math.cos(a) * r, ey = Math.sin(a) * r;
-              const dx = ex >= 0 ? ex : ex - o.w, dy = ey - H / 2, b = { x: o.p.x + dx, y: o.p.y + dy, w: o.w, h: H };
-              if (free(b, own)) { pos = [dx, dy]; lead = [ex, ey]; placed.push(b); break outer; }
+          for (const hh of (o.th ? [o.h, H] : [H])) { // 썸네일 포함 덩어리로 먼저, 안 되면 이름표만(썸네일 숨김)
+            const near = [[DOT + GAP, -H / 2], [-DOT - GAP - o.w, -H / 2], [DOT - 2, -DOT - H + 2], [DOT - 2, DOT - 2], [-DOT - o.w + 2, -DOT - H + 2], [-DOT - o.w + 2, DOT - 2], [-o.w / 2, -DOT - GAP - H], [-o.w / 2, DOT + GAP]];
+            for (const [dx, dy] of near) { const b = { x: o.p.x + dx, y: o.p.y + dy, w: o.w, h: hh }; if (free(b, own)) { pos = [dx, dy]; placed.push(b); break; } }
+            if (!pos && z >= 8) { // 지시선: 바깥으로 점점 멀리, 16방향
+              outer: for (const r of [34]) for (let k = 0; k < 16; k++) { // 짧은 선만(길어질 곳은 위의 부채꼴이 맡음)
+                const a = k / 16 * 2 * Math.PI, ex = Math.cos(a) * r, ey = Math.sin(a) * r;
+                const dx = ex >= 0 ? ex : ex - o.w, dy = ey - H / 2, b = { x: o.p.x + dx, y: o.p.y + dy, w: o.w, h: hh };
+                if (free(b, own)) { pos = [dx, dy]; lead = [ex, ey]; placed.push(b); break outer; }
+              }
             }
+            if (pos) { o.h = hh; break; }
           }
+          if (!pos) o.h = H;
           if (!pos && o.id === sel) pos = [DOT + GAP, -H / 2]; // 고른 정점은 겹쳐도 보이게
           draw(o, pos, lead);
         });

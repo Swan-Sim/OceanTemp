@@ -130,12 +130,15 @@
             + (rc && rc[k] ? `<text x="${cx}" y="${y + 62}" font-size="12" fill="#94a3b8" font-weight="700">${kn(rc[k])}</text>${rc[k].to != null ? `<g transform="translate(${cx + 12 + String(kn(rc[k])).length * 7.2} ${y + 58}) rotate(${Math.round(rc[k].to)})"><path d="M0,-7 L5,5 L0,2 L-5,5 Z" fill="#cbd5e1"/></g>` : ''}${k === cols.length - 1 ? `<text x="${cx + 26 + String(kn(rc[k])).length * 7.2}" y="${y + 62}" font-size="10" fill="#94a3b8">${ko ? '원값' : 'raw'}</text>` : ''}` : ''); });
         y += bh;
       }
-      const tr = (color, name, big, unit, rest) => { y += 21; rows += `<text x="${X1}" y="${y}" font-size="12.5" fill="${color}" font-weight="800">${name}</text>`
+      // [ADD] fromDeg: 불어오는/들어오는 방향(도). 있으면 셋째 열 앞에 "가는 쪽" 화살표(실시간 표의 Dir 화살표와 같은 기준)
+      const tr = (color, name, big, unit, rest, fromDeg) => { y += 21; rows += `<text x="${X1}" y="${y}" font-size="12.5" fill="${color}" font-weight="800">${name}</text>`
         + (big != null ? `<text x="${X2}" y="${y}" font-size="14" fill="#fff" font-weight="800">${big}</text><text x="${X2 + 4 + String(big).length * 8.6}" y="${y}" font-size="11" fill="#cbd5e1">${unit}</text>` : '')
-        + (rest ? `<text x="${X3}" y="${y}" font-size="12" fill="#cbd5e1">${rest}</text>` : ''); };
-      if (w && w.speed != null) tr('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s', `${w.dir != null ? windDialDir16(w.dir) : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`);
+        + (fromDeg != null ? `<g transform="translate(${X3 + 5} ${y - 4}) rotate(${Math.round((fromDeg + 180) % 360)})"><path d="M0,-6.5 L4.5,4.5 L0,2 L-4.5,4.5 Z" fill="${color}"/></g>` : '')
+        + (rest ? `<text x="${X3 + (fromDeg != null ? 14 : 0)}" y="${y}" font-size="12" fill="#cbd5e1">${rest}</text>` : ''); };
+      if (w && w.speed != null) tr('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s', `${w.dir != null ? windDialDir16(w.dir) : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`, w.dir);
       if (v && v.height != null) {
-        tr('#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm', `${vdir != null ? windDialDir16(vdir) : ''}${v.swellPeriod != null ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`);
+        // 주기(초)는 파고가 0.1m 이상일 때만 - 파도가 없는데 "2초"만 남으면 뜻이 헷갈려요
+        tr('#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm', `${vdir != null ? windDialDir16(vdir) : ''}${v.swellPeriod != null && v.height >= 0.1 ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`, v.height >= 0.1 ? vdir : null);
         const s5 = windDialSurge(v, 5);
         if (s5 != null) { y += 21; rows += `<text x="${X1}" y="${y}" font-size="12.5" fill="#7dd3fc" font-weight="800">${ko ? '써지' : 'Surge'}↕</text><text x="${X2}" y="${y}" font-size="12" fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</text>`; }
       }

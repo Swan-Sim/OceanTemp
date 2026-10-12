@@ -135,10 +135,10 @@
         + (big != null ? `<text x="${X2}" y="${y}" font-size="14" fill="#fff" font-weight="800">${big}</text><text x="${X2 + 4 + String(big).length * 8.6}" y="${y}" font-size="11" fill="#cbd5e1">${unit}</text>` : '')
         + (fromDeg != null ? `<g transform="translate(${X3 + 5} ${y - 4}) rotate(${Math.round((fromDeg + 180) % 360)})"><path d="M0,-6.5 L4.5,4.5 L0,2 L-4.5,4.5 Z" fill="${color}"/></g>` : '')
         + (rest ? `<text x="${X3 + (fromDeg != null ? 14 : 0)}" y="${y}" font-size="12" fill="#cbd5e1">${rest}</text>` : ''); };
-      if (w && w.speed != null) tr('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s', `${w.dir != null ? windDialDir16(w.dir) : ''}${w.gust != null ? (ko ? ' · 돌풍 ' : ' · gust ') + Math.round(w.gust) : ''}`, w.dir);
+      if (w && w.speed != null) tr('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s', `${w.gust != null ? (ko ? '돌풍 ' : 'gust ') + Math.round(w.gust) : ''}`, w.dir); // 방향은 화살표로만
       if (v && v.height != null) {
         // 주기(초)는 파고가 0.1m 이상일 때만 - 파도가 없는데 "2초"만 남으면 뜻이 헷갈려요
-        tr('#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm', `${vdir != null ? windDialDir16(vdir) : ''}${v.swellPeriod != null && v.height >= 0.1 ? ` · ${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`, v.height >= 0.1 ? vdir : null);
+        tr('#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm', `${v.swellPeriod != null && v.height >= 0.1 ? `${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`, v.height >= 0.1 ? vdir : null); // 방향은 화살표로만, 파고 0.1m 미만이면 방향·주기 없음
         const s5 = windDialSurge(v, 5);
         if (s5 != null) { y += 21; rows += `<text x="${X1}" y="${y}" font-size="12.5" fill="#7dd3fc" font-weight="800">${ko ? '써지' : 'Surge'}↕</text><text x="${X2}" y="${y}" font-size="12" fill="#fff" font-weight="700">${surgeLevel(s5, ko)}</text>`; }
       }

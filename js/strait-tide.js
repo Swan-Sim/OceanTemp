@@ -10,7 +10,7 @@
       box: [9.40, 10.95, 123.15, 123.85], // [위도 최소, 위도 최대, 경도 최소, 경도 최대]
       axis: 337,   // 밀물(조위 오르는 중) 때 "흘러가는" 방향(도). 관찰: 배경 SSE와 정반대로 상쇄 → NNW
       k: 1.5,      // 조위 변화율 1 m/h 당 조류 m/s. 관찰 교정(10/10 07:40 수심 5m 보정값 1.1노트 → 실제 약 1.6노트)로 1.0에서 올림
-      lagH: 0.5,   // 조위 변화율 → 조류 지연(시간). 0이면 만조에 정확히 멈춤
+      lagH: -0.5,  // 조위 변화율 → 조류 지연(시간). 0이면 만조에 정확히 멈춤. 관찰(10/11 만조 11:00에 거의 0, 10/12 11:00 만조 45분 전인데 이미 약하게 남) → 조류가 조위보다 약 30분 앞서 바뀜
       bgW: 0.25    // 모델 배경 흐름(바람 성분 제외) 가중치. 관찰(만조 때 거의 0)과 모델(0.7노트 SSE 고정)이 안 맞아 해협 안에선 1/4로. 바람이 끄는 성분은 줄이지 않고 그대로
     }
   ];
@@ -25,7 +25,7 @@
   function spotCfg(st, all) {
     const c = st && st.no && all && all[st.no]; if (!c || c.floodTo == null) return null;
     const kn = 0.514444;
-    return { id: 'spot' + st.no, name: { ko: '포인트 보정', en: 'spot fix' }, axis: c.floodTo, ebbAxis: c.ebbTo, k: (c.floodKn || 0) * kn / REF_RATE, kEbb: (c.ebbKn || 0) * kn / REF_RATE, lagH: c.lagH == null ? 0.5 : c.lagH, bgW: c.bgW == null ? 0.25 : c.bgW, spot: true };
+    return { id: 'spot' + st.no, name: { ko: '포인트 보정', en: 'spot fix' }, axis: c.floodTo, ebbAxis: c.ebbTo, k: (c.floodKn || 0) * kn / REF_RATE, kEbb: (c.ebbKn || 0) * kn / REF_RATE, lagH: c.lagH == null ? -0.5 : c.lagH, bgW: c.bgW == null ? 0.25 : c.bgW, spot: true };
   }
   window.curfixGet = (no) => (fix && fix[no]) || null;
   window.curfixReload = async function () { await loadFix(true); const st = typeof selectedStation !== 'undefined' ? selectedStation : null; const d = st && st._hourlyCache;

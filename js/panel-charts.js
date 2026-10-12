@@ -656,7 +656,8 @@
       //  아니면 다시 그릴 때마다 + 화면 배치가 끝난 뒤에 한 번 더 "지금" 칸이 가운데 오게 맞춰요.
       // [ADD] 다른 포인트로 가도 보던 시각 그대로: 사용자가 표를 넘긴 상태면 그 시각(현지 시각 기준) 칸이 가운데 오게
       let carry = null;
-      if (box._lastStationId !== st.id) {
+      if (box._lastStationId !== st.id || box._stepChanged) { // [ADD] 칸 간격(3시간·1시간·30분·10분)을 바꿔도 보던 시각 그대로
+        box._stepChanged = false;
         if (box._userScrolled && typeof box._viewX === 'number' && box._viewX >= cols[0] && box._viewX <= cols[cols.length - 1]) {
           const vi = Math.round((box._viewX - cols[0]) / STEP); carry = Math.max(0, toNow() + (vi - nowCol) * COLW);
         } else box._userScrolled = false;
@@ -723,7 +724,7 @@
       if (stepEl) stepEl.addEventListener('change', () => {
         const m = NOW_STEPS.includes(+stepEl.value) ? +stepEl.value : 180; NOW_STEP_H = m / 60;
         try { localStorage.setItem('otemp.nowStepMin', String(m)); } catch (_) {}
-        box._userScrolled = false; box._lastScroll = null;
+        box._stepChanged = true; box._lastScroll = null; // 보던 시각(box._viewX)은 그대로 두고 새 간격으로 다시 그려요
         updateChart();
       });
       const retry = box.querySelector('.nt-retry');

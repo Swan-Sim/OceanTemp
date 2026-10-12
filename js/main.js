@@ -40,6 +40,7 @@
     async function bootApp() {
       const counter = document.getElementById('point-counter');
       document.body.classList.add('booting');
+      try { if (parseInt(new URLSearchParams(location.search).get('no'), 10) > 0) { const g = document.getElementById('globe-canvas-container'); if (g) g.style.opacity = '0'; } } catch (_) {} // [ADD] 정점 링크로 오면 지구본은 처음부터 안 보이게
       startBootTextSequence();
 
       // 1) 즉시 그릴 수 있는 장면 먼저 (작은 지구 + 우주 배경)
@@ -75,12 +76,15 @@
       finishBootTextSequence();
 
       // 3) 위치 선택 결과 대기 (이미 끝나있을 가능성이 높음) 후 그 방향으로 줌인 전환
-      await waitForBootSearchIdle(6000);
+      // [CHANGE] 주소에 정점 번호(/?no=295)가 있으면 지구본 회전·줌인 없이 바로 그 정점 지도로 (즐겨찾기·포인트 페이지 링크에서 올 때)
+      let linkedStation = null;
+      try { const ln = parseInt(new URLSearchParams(location.search).get('no'), 10); if (ln > 0) linkedStation = stations.find(s => +s.no === ln) || null; } catch (_) {}
+      if (!linkedStation) await waitForBootSearchIdle(6000);
       const targetView = getFinalBootLocation();
       const locationWidget = document.getElementById('boot-location-widget');
       if (locationWidget) locationWidget.classList.add('hide');
 
-      animateBootZoomIn(targetView.x, targetView.y, () => {
+      const finishBoot = () => {
         const bootScreen = document.getElementById('boot-screen');
         if (bootScreen) bootScreen.classList.add('boot-done');
         document.body.classList.remove('booting');
@@ -92,8 +96,6 @@
         // 검색으로 정점을 골랐다면, HUD 검색과 똑같이 상세지도(평면도,
         // 줌 8)로 바로 전환해서 두 검색의 결과가 일치하도록 맞췄습니다.
         // [ADD] 포인트 페이지(/ko/s/번호/...)의 "실시간 지도로 보기" → /?no=번호 로 들어오면 그 정점을 바로 열어요
-        let linkedStation = null;
-        try { const ln = parseInt(new URLSearchParams(location.search).get('no'), 10); if (ln > 0) linkedStation = stations.find(s => +s.no === ln) || null; } catch (_) {}
         const searchedStation = getBootSearchSelectedStation() || linkedStation;
         if (searchedStation) {
           selectStation(searchedStation);
@@ -113,7 +115,9 @@
         // 상태에서 조용히 시작합니다. 절대 화면을 막지 않고, 완료돼도
         // 아무 알림 없이 색만 조용히 갱신됩니다.
         validateStationsInBackground().catch(e => console.warn('[bootApp] 백그라운드 검증 중 오류:', e));
-      });
+      };
+      if (linkedStation) { try { globeGroup.rotation.set(targetView.x, targetView.y, 0); cameraDistance = 270; camera.position.z = 270; } catch (_) {} finishBoot(); }
+      else animateBootZoomIn(targetView.x, targetView.y, finishBoot);
     }
 
     // [ADD] 접속 통계 - 페이지를 열 때 한 번 /api/track에 알립니다(국가·도시·시간대

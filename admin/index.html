@@ -399,7 +399,7 @@
       let g = null; try { g = await apiQuiet('geocode', { q: address }); } catch (_) {}
       if (g && g.error === 'no_kakao_key') { msg.textContent = 'Vercel 환경변수 KAKAO_REST_KEY가 없어요'; break; }
       if (!g || !g.found) { try { g = await apiQuiet('geocode', { q: name }); } catch (_) {} } // 주소로 못 찾으면 이름으로
-      if (!g || !g.found) { bad.push(i + 1); rows.push(`✗ ${esc(name)} — 좌표 못 찾음 (${esc(address)})`); continue; }
+      if (!g || !g.found) { bad.push(i + 1); rows.push(`✗ ${esc(name)} — ${g && g.error ? '오류: ' + esc(g.error) : '좌표 못 찾음'} (${esc(address)})`); if (g && /kakao 40[13]/.test(g.error || '')) { msg.textContent = '카카오 API가 거부했어요(' + g.error + '). 카카오 개발자 콘솔 → 앱 → 카카오맵을 활성화했는지 확인하세요'; break; } continue; }
       rows.push(`${dry ? '·' : '✓'} ${esc(name)} → ${g.lat}, ${g.lon} (${esc(g.addr || g.place)}${g.src === 'keyword' ? ' · 이름 검색' : ''})`);
       if (dry) continue;
       try {

@@ -3,10 +3,11 @@
     //  누르면 연락 버튼·다니는 포인트(풀장은 수심·수온 등). 이름표는 정점과 같이 js/label-layout.js가 겹치지 않게 배치
     //  오른쪽 아래 "샵 ON/OFF"로 켜고 끄기(이 브라우저에 기억)
     (function () {
-      const SHOP_MIN_ZOOM = 11;
+      const SHOP_MIN_ZOOM = 11;   // 다이브샵·리브어보드는 확대 11 이상에서
+      const POOL_MIN_ZOOM = 0;    // [CHANGE] 풀장은 정점과 똑같이 어느 확대에서나 보여요(풀장은 내륙에 있어 정점과 안 겹침)
       const TYPE_NAME = { shop: () => t.shopTypeShop || '다이브샵', liveaboard: () => t.shopLiveaboard || '리브어보드', pool: () => t.shopTypePool || '다이빙 풀장' };
       let on = (() => { try { return localStorage.getItem('otemp.shopLayer') !== '0'; } catch (_) { return true; } })();
-      let group = null, btn = null, built = false;
+      let group = null, poolGroup = null, btn = null, built = false;
       window.__shopMarkers = {}; // label-layout.js가 이름표 배치에 같이 씀
 
       function popupHtml(s) {
@@ -32,20 +33,21 @@
 
       function build(list) {
         if (built || !leafletMap) return; built = true;
-        group = L.layerGroup();
+        group = L.layerGroup(); poolGroup = L.layerGroup();
         list.filter(s => s.lat != null && s.lon != null).forEach(s => {
           const ty = ['shop', 'liveaboard', 'pool'].includes(s.type) ? s.type : 'shop';
           const icon = L.divIcon({ className: 'lf-marker-wrap lf-shopmk', html: `<div class="lf-sq ${ty}"></div><span class="lf-label">${shopEsc(s.name)}</span>`, iconSize: [20, 20], iconAnchor: [7, 10] });
           const m = L.marker([s.lat, s.lon], { icon, zIndexOffset: 300 }).bindPopup(() => popupHtml(s), { maxWidth: 270, className: 'sp-pop' });
-          window.__shopMarkers['s' + s.id] = m; group.addLayer(m);
+          window.__shopMarkers['s' + s.id] = m; (ty === 'pool' ? poolGroup : group).addLayer(m);
         });
         sync();
       }
       function sync() {
         if (!leafletMap || !group) return;
-        const show = on && leafletMap.getZoom() >= SHOP_MIN_ZOOM, has = leafletMap.hasLayer(group);
+        const z = leafletMap.getZoom(), show = on && z >= SHOP_MIN_ZOOM, has = leafletMap.hasLayer(group);
         if (show && !has) group.addTo(leafletMap); else if (!show && has) leafletMap.removeLayer(group);
-        if (btn) { btn.style.display = leafletMap.getZoom() >= SHOP_MIN_ZOOM && Object.keys(window.__shopMarkers).length ? '' : 'none'; btn.classList.toggle('on', on); btn.textContent = (t.shopLayer || '샵') + (on ? ' ON' : ' OFF'); }
+        if (poolGroup) { const ps = on && z >= POOL_MIN_ZOOM, ph = leafletMap.hasLayer(poolGroup); if (ps && !ph) poolGroup.addTo(leafletMap); else if (!ps && ph) leafletMap.removeLayer(poolGroup); }
+        if (btn) { btn.style.display = (z >= SHOP_MIN_ZOOM || (poolGroup && poolGroup.getLayers().length)) && Object.keys(window.__shopMarkers).length ? '' : 'none'; btn.classList.toggle('on', on); btn.textContent = (t.shopLayer || '샵') + (on ? ' ON' : ' OFF'); }
         if (window.layoutStationLabels) window.layoutStationLabels();
       }
       const f = window.showDetailMap;

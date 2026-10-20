@@ -21,9 +21,8 @@ module.exports = async function handler(req, res) {
         const country = req.headers['x-vercel-ip-country'] || '??';
         let city = req.headers['x-vercel-ip-city'] || '';
         try { city = decodeURIComponent(city); } catch (_) {}
-        cmds.push(['HINCRBY', `b:h:${day}`, `${bot.cat}|${hour}`, 1]);
+        // [CHANGE] Redis 명령 절약: 봇은 이름·국가만(시간대·도시는 뺌)
         cmds.push(['HINCRBY', `b:c:${day}`, `${bot.cat}|${country}`, 1]);
-        cmds.push(['HINCRBY', `b:ct:${day}`, `${bot.cat}|${country}|${city || '?'}`, 1]);
         cmds.push(['HINCRBY', `b:n:${day}`, bot.name, 1]);
       }
     } else if (q.e === 'donate') {

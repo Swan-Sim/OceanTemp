@@ -782,11 +782,8 @@ async function count(req, no) {
     const bot = botInfo(req.headers['user-agent']);
     const cmds = [];
     if (bot) {
-      const country = req.headers['x-vercel-ip-country'] || '??';
-      cmds.push(['HINCRBY', `b:pn:${day}`, `${bot.cat}|${no}`, 1], ['HINCRBY', `b:n:${day}`, bot.name, 1], ['HINCRBY', `b:h:${day}`, `${bot.cat}|${hour}`, 1], ['HINCRBY', `b:c:${day}`, `${bot.cat}|${country}`, 1]);
-      // [FIX] 포인트 페이지 봇도 도시별로 기록(전엔 국가만 세서 도시 합계가 모자랐음)
-      let city = req.headers['x-vercel-ip-city'] || ''; try { city = decodeURIComponent(city); } catch (_) {}
-      cmds.push(['HINCRBY', `b:ct:${day}`, `${bot.cat}|${country}|${city || '?'}`, 1]);
+      // [CHANGE] Redis 명령 절약: 봇은 "어느 봇이 어느 포인트를"만 세요(시간대·국가·도시는 뺌 - 봇 페이지뷰가 전체 명령의 대부분이었음)
+      cmds.push(['HINCRBY', `b:pn:${day}`, `${bot.cat}|${no}`, 1], ['HINCRBY', `b:n:${day}`, bot.name, 1]);
     } else {
       cmds.push(['HINCRBY', `pg:${day}`, String(no), 1]);
       if (no !== 'index') cmds.push(['HINCRBY', `sv:${day}`, String(no), 1], ['EXPIRE', `sv:${day}`, String(800 * 86400)]); // 샵 실적의 "조회"에도 포함
@@ -807,6 +804,9 @@ module.exports = async function spotPage(req, res) {
   const q = req.query || {};
   const base = S.baseOf(req);
   const svc = String(q.svc || 'page');
+  // [ADD] Redis 명령 절약: 검색엔진 봇이 페이지 스크립트를 실행하며 부르는 parts·warm 은 바로 끝내요(봇은 저장된 페이지만 보면 충분)
+  //  - Upstash 무료 한도(월 50만 명령)를 봇 크롤링(포인트 1천여 곳 × 3개 언어 × 여러 봇)이 다 써버렸던 문제
+  if ((svc === 'parts' || svc === 'warm') && botInfo(req.headers['user-agent'])) { res.setHeader('Cache-Control', 'no-store'); return res.status(204).end(); }
   try {
     const all = await loadStations(base);
     if (svc === 'sitemap') {

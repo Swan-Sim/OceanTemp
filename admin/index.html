@@ -106,6 +106,12 @@
         <div class="row" style="margin-bottom:10px"><button id="noMailBtn">이메일 없는 샵 수정 링크 → 내 메일로</button></div>
         <div id="linksOut"></div>
         <div id="shopEditor"></div>
+        <details style="margin:12px 0"><summary style="cursor:pointer">풀장 여러 개 한 번에 등록 (주소 → 좌표 자동)</summary>
+          <textarea id="bulkPools" class="f" rows="8" style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px" placeholder="한 줄에 하나, | 로 구분: 이름|주소|최대수심|수온|실내외(in/out/season)|용도(scuba+free+edu+photo)|입장(open/shop)|운영시간|요금|전화|웹|메모&#10;예) K26 잠수풀|경기 가평군 청평면 고재길 262-57|26||in|scuba+free+edu|open|평일 09-22|평일 33,000원|031-585-5757|https://k-26.com|일요일 휴무"></textarea>
+          <div class="actions" style="margin-top:6px"><button id="bulkPoolCheck" type="button">좌표만 확인</button> <button class="primary" id="bulkPoolGo" type="button">등록</button><span class="muted" id="bulkPoolMsg" style="margin-left:8px"></span></div>
+          <div id="bulkPoolOut" class="hint"></div>
+          <div class="hint">주소는 카카오 지도로 좌표를 찾아요(Vercel 환경변수 KAKAO_REST_KEY 필요). 이름이 이미 있는 풀장은 건너뛰어요. 플랜은 "지인(무료)"으로 들어가요.</div>
+        </details>
         <div id="shopList"></div>
         <div class="hint">· 무료(제한)·유료: 기본 1년. 만료 14일 전과 만료일에 결제 링크(PAYMENT_URL) 안내 메일이 가고(샵 이메일이 없으면 내 메일로), 만료되면 자동으로 숨겨져요. 결제 확인 후 수정에서 유료로 바꾸고 날짜를 늘리면 다시 보여요.<br>· 무료(지인): 만료일을 비워두면 계속 보여요.<br>· "수정 링크"를 누르면 새 링크가 만들어지고 예전 링크는 끊겨요. 샵에 카톡 등으로 보내주세요.</div>
       </div>
@@ -379,6 +385,34 @@
     msg.textContent = `등록 ${ok} · 이미 있음 ${skip}` + (bad.length ? ` · 실패/형식 오류 줄: ${bad.join(', ')}` : '');
     if (ok) loadMgmt();
   });
+  // [ADD] 풀장 여러 개 한 번에: 줄마다 geocode → shopSave(type=pool)
+  async function bulkPools(dry) {
+    const msg = $('bulkPoolMsg'), out = $('bulkPoolOut'), lines = $('bulkPools').value.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#') && !/^name\|/i.test(l));
+    const have = new Set(((mg && mg.shops) || []).map(s => String(s.name || '').trim().toLowerCase()));
+    let ok = 0, skip = 0; const bad = [], rows = [];
+    $('bulkPoolGo').disabled = $('bulkPoolCheck').disabled = true;
+    for (const [i, l] of lines.entries()) {
+      const [name, address, depthMax, waterTemp, env, uses, entry, hours, price, phone, web, note] = l.split('|').map(x => (x || '').trim());
+      if (!name || !address) { bad.push(i + 1); continue; }
+      if (!dry && have.has(name.toLowerCase())) { skip++; continue; }
+      msg.textContent = `${i + 1}/${lines.length} ${name}…`;
+      let g = null; try { g = await apiQuiet('geocode', { q: address }); } catch (_) {}
+      if (g && g.error === 'no_kakao_key') { msg.textContent = 'Vercel 환경변수 KAKAO_REST_KEY가 없어요'; break; }
+      if (!g || !g.found) { try { g = await apiQuiet('geocode', { q: name }); } catch (_) {} } // 주소로 못 찾으면 이름으로
+      if (!g || !g.found) { bad.push(i + 1); rows.push(`✗ ${esc(name)} — 좌표 못 찾음 (${esc(address)})`); continue; }
+      rows.push(`${dry ? '·' : '✓'} ${esc(name)} → ${g.lat}, ${g.lon} (${esc(g.addr || g.place)}${g.src === 'keyword' ? ' · 이름 검색' : ''})`);
+      if (dry) continue;
+      try {
+        await api('shopSave', { type: 'pool', name, address, lat: g.lat, lon: g.lon, depthMax, waterTemp, env, uses: uses.replace(/\+/g, ','), entry, hours, price, phone, web, note, plan: 'friend', show: true });
+        ok++; have.add(name.toLowerCase());
+      } catch (_) { bad.push(i + 1); }
+    }
+    $('bulkPoolGo').disabled = $('bulkPoolCheck').disabled = false;
+    out.innerHTML = rows.join('<br>');
+    msg.textContent = (dry ? `확인 ${rows.length}` : `등록 ${ok} · 이미 있음 ${skip}`) + (bad.length ? ` · 실패 줄: ${bad.join(', ')}` : '');
+    if (ok) loadMgmt();
+  }
+  document.addEventListener('click', (e) => { if (!e.target) return; if (e.target.id === 'bulkPoolGo') bulkPools(false); else if (e.target.id === 'bulkPoolCheck') bulkPools(true); });
   function alertMsg(m) { const d = document.createElement('div'); d.className = 'err'; d.textContent = '오류: ' + m; document.querySelector('.nav').after(d); setTimeout(() => d.remove(), 5000); }
   // ───────── [ADD] 회원 관리 탭 ─────────
   let uPage = 0, uMergeFrom = null, uData = null;

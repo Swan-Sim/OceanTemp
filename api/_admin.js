@@ -137,6 +137,19 @@ module.exports = async function admin(req, res) {
     return ok();
   }
   // 관리자가 직접 고치기(요금제·만료일·보이기 포함). id가 없으면 새로 추가
+  // [ADD] 주소 → 좌표 (카카오 로컬 API, Vercel 환경변수 KAKAO_REST_KEY). 주소 검색이 안 되면 장소(키워드) 검색으로 한 번 더
+  if (svc === 'geocode') {
+    const key = process.env.KAKAO_REST_KEY; if (!key) return bad('no_kakao_key');
+    const q = S.str(b.q, 200); if (!q) return bad('no_query');
+    const call = async (path) => { const r = await fetch(`https://dapi.kakao.com/v2/local/search/${path}.json?size=3&query=${encodeURIComponent(q)}`, { headers: { Authorization: 'KakaoAK ' + key } });
+      if (!r.ok) throw new Error('kakao ' + r.status); const j = await r.json(); return (j.documents || [])[0] || null; };
+    try {
+      let d = await call('address'), src = 'address';
+      if (!d) { d = await call('keyword'); src = 'keyword'; }
+      if (!d) return ok({ found: false });
+      return ok({ found: true, lat: +(+d.y).toFixed(5), lon: +(+d.x).toFixed(5), addr: d.road_address_name || d.address_name || (d.road_address && d.road_address.address_name) || d.address_name || '', place: d.place_name || '', src });
+    } catch (e) { return bad('geocode_fail: ' + e.message); }
+  }
   if (svc === 'shopSave') {
     const data = S.shopFields(b);
     if (!S.shopValid(data)) return bad(data.type === 'pool' ? 'need_name_loc' : 'need_name_spots');

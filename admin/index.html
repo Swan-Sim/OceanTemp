@@ -45,6 +45,7 @@
   .hbar { height: 4px; background: rgba(255,176,0,.6); border-radius: 2px; margin-top: 3px; }
   .err { color: #FB7185; font-size: 13px; margin-top: 8px; }
   .nav { display: flex; gap: 6px; margin-bottom: 14px; align-items: center; }
+  .rangeBar { position: sticky; top: 0; z-index: 20; background: var(--bg); padding: 10px 0; margin: -4px 0 10px; border-bottom: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
   .navlink { color: var(--muted); font-size: 13px; text-decoration: none; padding: 6px 10px; border-radius: 999px; border: 1px solid transparent; }
   .navlink.on, .navlink:hover { color: var(--text); border-color: rgba(255,176,0,.5); }
   code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px; }
@@ -186,9 +187,11 @@
       </div>
     </div>
     <div id="secStats" class="sec">
-    <div class="row" style="margin-bottom:14px">
-      <button data-days="7">7일</button><button data-days="14" class="on">14일</button>
-      <button data-days="30">30일</button><button data-days="90">90일</button>
+    <!-- [CHANGE] 기간 선택 한 줄: 당일·7·14·30·90일·누적. 아래 모든 그래프·표에 같이 적용. 스크롤해도 위에 붙어 있어요 -->
+    <div class="row rangeBar" id="rangeBar">
+      <button data-days="today">당일</button><button data-days="7">7일</button><button data-days="14" class="on">14일</button>
+      <button data-days="30">30일</button><button data-days="90">90일</button><button data-days="all">누적</button>
+      <span class="muted" id="rangeNote" style="font-size:12px;margin-left:8px"></span>
     </div>
     <div class="legend"><span><i style="background:var(--human)"></i>사람</span><span><i style="background:var(--sbot)"></i>검색봇 (구글·네이버·빙 등)</span><span><i style="background:var(--obot)"></i>기타 봇 (미리보기·AI·SEO·스크립트)</span></div>
     <div class="card kpis">
@@ -197,10 +200,7 @@
       <div class="kpi"><div class="v" id="kAvg">–</div><div class="l">하루 평균 (사람)</div></div>
       <div class="kpi sb"><div class="v" id="kBot">–</div><div class="l">기간 봇 방문 (검색봇 <small>/ 기타</small>)</div></div>
     </div>
-    <div class="card"><h2>날짜별 방문 <span class="muted" style="font-size:12px;font-weight:400">앱 + 포인트 페이지</span></h2><div class="bars" id="daily"></div><div class="axis" id="dailyAxis"></div></div>
-    <div class="row" style="margin:14px 0 10px;align-items:center;gap:8px"><span class="muted" style="font-size:12px;margin-right:4px">시간대·국가·도시 기간:</span>
-      <button data-sub="today">오늘</button><button data-sub="7">7일</button><button data-sub="14" class="on">14일</button><button data-sub="30">30일</button><button data-sub="90">90일</button>
-    </div>
+    <div class="card" id="dailyCard"><h2>날짜별 방문 <span class="muted" style="font-size:12px;font-weight:400">앱 + 포인트 페이지</span></h2><div class="bars" id="daily"></div><div class="axis" id="dailyAxis"></div></div>
     <div class="card"><h2>시간대별 방문 (<span class="subLbl">14일</span> 합계, 내 시간대)</h2><div class="bars" id="hourly"></div><div class="axis" id="hourlyAxis"></div></div>
     <div class="grid2">
       <div class="card"><h2>국가 <span class="muted subLbl" style="font-size:12px;font-weight:400">14일</span></h2><table id="countries"></table></div>
@@ -223,8 +223,9 @@
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   $('tzNote').textContent = `시간 기준: ${tz} · 개인정보(IP 등)는 저장하지 않고 국가·도시·시간대별 숫자만 모읍니다`;
   const regionName = (() => { try { const d = new Intl.DisplayNames(['ko'], { type: 'region' }); return (c) => { try { return d.of(c) || c; } catch (_) { return c; } }; } catch (_) { return (c) => c; } })();
-  let days = 14, sub = 14, lastData = null; // sub: 시간대·국가·도시 표의 기간('today' | 7 | 14 | 30 | 90)
-  const subDays = () => sub === 'today' ? 1 : +sub;
+  let days = 14, lastData = null; // days: 'today' | 7 | 14 | 30 | 90 | 'all'(누적)
+  const subDays = () => days === 'today' ? 1 : days === 'all' ? 0 : +days;
+  const fetchDays = () => days === 'all' ? 'all' : subDays();
   // [CHANGE] 로그인 유지: 이 브라우저의 모든 탭에서 7일(로그아웃하면 바로 지워짐) - 사이트의 '포인트 등록'에서도 관리자로 바로 등록되게
   const ADMIN_KEY = 'otemp.admin', ADMIN_DAYS = 7;
   const getPw = () => { try { const o = JSON.parse(localStorage.getItem(ADMIN_KEY) || 'null'); if (o && o.pw && o.exp > Date.now()) return o.pw; localStorage.removeItem(ADMIN_KEY); } catch (_) {} try { return sessionStorage.getItem('adminPw') || ''; } catch (_) { return ''; } };
@@ -234,7 +235,7 @@
   fetch('/api/shops').then(r => r.json()).then(j => { (j.shops || []).forEach(s => { shopNames[s.id] = s.name; }); }).catch(() => {});
   async function load() {
     const pw = getPw(); // 비밀번호가 없어도 관리자 권한 회원으로 로그인돼 있으면(쿠키) 통과
-    const r = await fetch(`/api/stats?days=${Math.max(days, subDays())}`, { headers: { 'x-admin-password': pw } });
+    const r = await fetch(`/api/stats?days=${fetchDays()}`, { headers: { 'x-admin-password': pw } });
     if (r.status === 401) { setPw(''); return showLogin(pw ? '비밀번호가 맞지 않아요' : ''); }
     const j = await r.json();
     if (!r.ok) return showLogin(j.error || '불러오지 못했어요');
@@ -251,14 +252,19 @@
     // UTC 날짜·시간 → 내 시간대 날짜·시간으로 다시 나누기. [CHANGE] 사람(h)·검색봇(s)·기타 봇(o) 따로
     const byDay = { h: {}, s: {}, o: {} }, byHour = { h: Array(24).fill(0), s: Array(24).fill(0), o: Array(24).fill(0) };
     // [ADD] 시간대·국가·도시 표는 따로 고른 기간(오늘/7/14/30/90일)만 합쳐요. 국가·도시는 날짜(UTC) 단위로만 저장돼서 내 시간대 날짜와 겹치는 UTC 날짜를 포함해요
+    const isAll = days === 'all', allRow = isAll ? data.find(d => d.date === 'all') : null;
     const subKeys = new Set(); for (let i = subDays() - 1; i >= 0; i--) subKeys.add(localKey(new Date(Date.now() - i * 86400000)));
-    const subData = data.filter(({ date }) => subKeys.has(localKey(new Date(`${date}T00:00:00Z`))) || subKeys.has(localKey(new Date(`${date}T23:59:59Z`))));
-    document.querySelectorAll('.subLbl').forEach(el => { el.textContent = sub === 'today' ? '오늘' : `${sub}일`; });
+    // 누적: all 행(어제까지 합) + 오늘 행. 그 외: 내 시간대 날짜와 겹치는 UTC 날짜만
+    const subData = isAll ? data : data.filter(({ date }) => subKeys.has(localKey(new Date(`${date}T00:00:00Z`))) || subKeys.has(localKey(new Date(`${date}T23:59:59Z`))));
+    const lbl = isAll ? '누적' : days === 'today' ? '당일' : `${days}일`;
+    document.querySelectorAll('.subLbl').forEach(el => { el.textContent = lbl; });
+    $('rangeNote').textContent = isAll ? (allRow && allRow.from ? `${allRow.from}부터 지금까지` : '아직 합산된 날이 없어요(오늘만)') : days === 'today' ? `${localKey(new Date())} (내 시간대)` : '';
+    $('dailyCard').style.display = isAll ? 'none' : '';
     const put = (cat, date, h, n) => {
-      const t = new Date(`${date}T${String(h).padStart(2, '0')}:00:00Z`);
+      const t = new Date(`${date === 'all' ? new Date().toISOString().slice(0, 10) : date}T${String(h).padStart(2, '0')}:00:00Z`); // 누적 행은 시간대만 바꿔요
       const k = localKey(t);
-      byDay[cat][k] = (byDay[cat][k] || 0) + n;
-      if (!subKeys.has(k)) return; // 시간대 그래프는 고른 기간만
+      if (date !== 'all') byDay[cat][k] = (byDay[cat][k] || 0) + n;
+      if (!isAll && !subKeys.has(k)) return; // 시간대 그래프는 고른 기간만
       const lh = +t.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }) % 24;
       byHour[cat][lh] += n;
     };
@@ -267,20 +273,25 @@
       Object.entries(botHours || {}).forEach(([k, n]) => { const [c, h] = k.split('|'); put(c === 's' ? 's' : 'o', date, h, n); });
       // 포인트 페이지 사람 조회도 방문으로(시간 정보가 없어 그날 정오로)
     });
-    data.forEach(({ date, pages }) => { const n = Object.values(pages || {}).reduce((a, b) => a + b, 0); if (n) { const k = localKey(new Date(`${date}T12:00:00Z`)); byDay.h[k] = (byDay.h[k] || 0) + n; } });
-    const dayKeys = [];
-    for (let i = days - 1; i >= 0; i--) dayKeys.push(localKey(new Date(Date.now() - i * 86400000)));
+    data.forEach(({ date, pages }) => { if (date === 'all') return; const n = Object.values(pages || {}).reduce((a, b) => a + b, 0); if (n) { const k = localKey(new Date(`${date}T12:00:00Z`)); byDay.h[k] = (byDay.h[k] || 0) + n; } });
+    const dayKeys = [...subKeys];
     const dv = (cat) => dayKeys.map(k => byDay[cat][k] || 0);
-    const total = dv('h').reduce((a, b) => a + b, 0);
-    const tS = dv('s').reduce((a, b) => a + b, 0), tO = dv('o').reduce((a, b) => a + b, 0);
+    let total = dv('h').reduce((a, b) => a + b, 0);
+    let tS = dv('s').reduce((a, b) => a + b, 0), tO = dv('o').reduce((a, b) => a + b, 0);
+    let nDays = subDays();
+    if (isAll) { // 누적 = all 행(어제까지) + 오늘 행
+      const sumV = (o) => Object.values(o || {}).reduce((a, b) => a + b, 0), bot = (o, c) => Object.entries(o || {}).filter(([k]) => k.startsWith(c + '|')).reduce((a, [, n]) => a + n, 0);
+      total = data.reduce((a, d) => a + sumV(d.hours) + sumV(d.pages), 0); tS = data.reduce((a, d) => a + bot(d.botHours, 's'), 0); tO = data.reduce((a, d) => a + bot(d.botHours, 'o'), 0);
+      nDays = allRow && allRow.from ? Math.max(1, Math.round((Date.now() - Date.parse(allRow.from + 'T00:00:00Z')) / 86400000) + 1) : 1;
+    }
     $('kTotal').textContent = total.toLocaleString();
     $('kToday').textContent = (byDay.h[localKey(new Date())] || 0).toLocaleString();
-    $('kAvg').textContent = (total / days).toFixed(1);
+    $('kAvg').textContent = (total / nDays).toFixed(1);
     $('kBot').innerHTML = `${tS.toLocaleString()} <small>/ ${tO.toLocaleString()}</small>`;
     stack('daily', 'dailyAxis', [dv('h'), dv('s'), dv('o')], dayKeys.map(k => k.slice(5)), dayKeys);
     stack('hourly', 'hourlyAxis', [byHour.h, byHour.s, byHour.o], byHour.h.map((_, h) => h % 3 === 0 ? h : ''), byHour.h.map((_, h) => `${h}시`));
 
-    const sum = (field, src) => { const o = {}; (src || data).forEach(d => Object.entries(d[field] || {}).forEach(([k, n]) => { o[k] = (o[k] || 0) + n; })); return o; };
+    const sum = (field, src) => { const o = {}; (src || subData).forEach(d => Object.entries(d[field] || {}).forEach(([k, n]) => { o[k] = (o[k] || 0) + n; })); return o; };
     // 봇 국가·도시: "s|KR" → { KR: {s, o} }
     const botBy = (field, src) => { const o = {}; Object.entries(sum(field, src)).forEach(([k, n]) => { const i = k.indexOf('|'); const c = k.slice(0, i), key = k.slice(i + 1); (o[key] = o[key] || { s: 0, o: 0 })[c === 's' ? 's' : 'o'] += n; }); return o; };
     table3('countries', sum('countries', subData), botBy('botCountries', subData), (k) => k === '??' ? '알 수 없음' : `${regionName(k)} (${k})`);
@@ -344,16 +355,12 @@
 
   $('loginForm').addEventListener('submit', (e) => { e.preventDefault(); setPw($('pw').value); load(); });
   $('logout').addEventListener('click', () => { setPw(''); showLogin(); });
+  // [CHANGE] 기간 선택(당일/7/14/30/90/누적): 받아 둔 자료 안의 기간이면 다시 받지 않고 바로 다시 그려요
   document.querySelectorAll('[data-days]').forEach(b => b.addEventListener('click', () => {
-    days = +b.dataset.days;
+    const v = b.dataset.days; days = v === 'today' || v === 'all' ? v : +v;
     document.querySelectorAll('[data-days]').forEach(x => x.classList.toggle('on', x === b));
-    load();
-  }));
-  // [ADD] 시간대·국가·도시 표 기간 선택(오늘/7/14/30/90일). 받아 둔 자료보다 긴 기간이면 다시 받아요
-  document.querySelectorAll('[data-sub]').forEach(b => b.addEventListener('click', () => {
-    sub = b.dataset.sub === 'today' ? 'today' : +b.dataset.sub;
-    document.querySelectorAll('[data-sub]').forEach(x => x.classList.toggle('on', x === b));
-    if (lastData && lastData.days >= subDays()) render(lastData.data); else load();
+    const have = lastData ? lastData.days : null;
+    if (lastData && have !== 'all' && days !== 'all' && have >= subDays()) render(lastData.data); else load();
   }));
   // ───────── [ADD] 샵·정점 관리 ─────────
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

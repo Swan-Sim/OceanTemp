@@ -32,23 +32,38 @@ module.exports = async function handler(req, res) {
     catch (e) { return res.status(500).json({ error: String(e.message || e) }); }
   }
   try {
-    const days = Math.max(1, Math.min(90, parseInt((req.query || {}).days, 10) || 14));
-    // 시간대 변환 때문에 앞뒤로 하루씩 더 가져옵니다(화면에서 내 시간대로 다시 나눔)
-    const dates = [];
-    for (let i = -1; i <= days; i++) {
-      const d = new Date(Date.now() - i * 86400000);
-      dates.push(d.toISOString().slice(0, 10));
+    const qd = String((req.query || {}).days || '');
+    const all = qd === 'all'; // [ADD] 누적: 지난 날들은 all:* 해시에 합쳐 두고(하루 한 번), 오늘(과 아직 안 합친 날)만 날짜별로 더해요
+    const days = all ? 0 : Math.max(1, Math.min(90, parseInt(qd, 10) || 14));
+    const dayStr = (t) => new Date(t).toISOString().slice(0, 10);
+    const KEYS = ['v:h', 'v:c', 'v:ct', 'st', 'sc', 'b:h', 'b:c', 'b:ct', 'b:n', 'pg', 'b:pn', 'sr'];
+    const N = KEYS.length;
+    const dayCmds = (d) => KEYS.map(k => ['HGETALL', `${k}:${d}`]);
+    let dates = [], extra = [];
+    if (all) {
+      // 어제까지 아직 안 합친 날을 all:* 에 합쳐요(처음엔 최대 120일 거슬러 올라가요)
+      const [[upto], [from]] = await redisPipeline([['GET', 'all:upto'], ['GET', 'all:from']]).then(r => r.map(x => [x.result]));
+      const yday = dayStr(Date.now() - 86400000);
+      let start = upto ? dayStr(Date.parse(upto + 'T00:00:00Z') + 86400000) : dayStr(Date.now() - 120 * 86400000);
+      const pend = []; for (let t = Date.parse(start + 'T00:00:00Z'); dayStr(t) <= yday; t += 86400000) pend.push(dayStr(t));
+      if (pend.length) {
+        const raw = await redisPipeline(pend.flatMap(dayCmds));
+        const inc = []; let first = from || '';
+        pend.forEach((d, di) => { let any = false; KEYS.forEach((k, ki) => { const o = toObj(raw[di * N + ki].result); Object.entries(o).forEach(([f, n]) => { if (n) { any = true; inc.push(['HINCRBY', `all:${k}`, f, String(n)]); } }); }); if (any && !first) first = d; });
+        if (first && first !== from) inc.push(['SET', 'all:from', first]);
+        inc.push(['SET', 'all:upto', yday]);
+        for (let i = 0; i < inc.length; i += 400) await redisPipeline(inc.slice(i, i + 400)); // 너무 긴 파이프라인은 나눠서
+      }
+      dates = [dayStr(Date.now())]; // 오늘은 날짜별로
+      const outAll = await redisPipeline([...KEYS.map(k => ['HGETALL', `all:${k}`]), ['GET', 'all:from']]);
+      extra = [Object.assign({ date: 'all', from: outAll[N].result || null }, Object.fromEntries(['hours', 'countries', 'cities', 'stations', 'shops', 'botHours', 'botCountries', 'botCities', 'botNames', 'pages', 'botPages', 'search'].map((f, i) => [f, toObj(outAll[i].result)])))];
+    } else {
+      // 시간대 변환 때문에 앞뒤로 하루씩 더 가져옵니다(화면에서 내 시간대로 다시 나눔)
+      for (let i = -1; i <= days; i++) dates.push(dayStr(Date.now() - i * 86400000));
     }
-    const cmds = [];
-    dates.forEach(d => {
-      cmds.push(['HGETALL', `v:h:${d}`], ['HGETALL', `v:c:${d}`], ['HGETALL', `v:ct:${d}`], ['HGETALL', `st:${d}`], ['HGETALL', `sc:${d}`],
-        // [ADD] 봇(검색봇 s / 기타 봇 o)과 포인트 페이지(검색용 페이지) 통계
-        ['HGETALL', `b:h:${d}`], ['HGETALL', `b:c:${d}`], ['HGETALL', `b:ct:${d}`], ['HGETALL', `b:n:${d}`],
-        ['HGETALL', `pg:${d}`], ['HGETALL', `b:pn:${d}`], ['HGETALL', `sr:${d}`]);
-    });
-    const N = 12;
+    const cmds = dates.flatMap(dayCmds);
     const out = await redisPipeline(cmds);
-    const data = dates.map((d, i) => ({
+    const data = extra.concat(dates.map((d, i) => ({
       date: d,
       hours: toObj(out[i * N].result),
       countries: toObj(out[i * N + 1].result),
@@ -62,8 +77,8 @@ module.exports = async function handler(req, res) {
       pages: toObj(out[i * N + 9].result),        // 포인트 페이지 사람 조회 { 번호: 수 }
       botPages: toObj(out[i * N + 10].result),    // 포인트 페이지 봇 수집 { "s|번호": 수 }
       search: toObj(out[i * N + 11].result)       // 검색 결과에서 들어온 사람 { google: 수 }
-    }));
-    res.status(200).json({ days, data });
+    })));
+    res.status(200).json({ days: all ? 'all' : days, data });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e) });
   }

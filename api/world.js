@@ -6,7 +6,8 @@ const H = {
   sst: () => require('./_sst'),
   visibility: () => require('./_visibility'),
   track: () => require('./_track'),
-  hycom: () => require('./_hycom')
+  hycom: () => require('./_hycom'),
+  storms: () => require('./_storms') // [ADD] 태풍·허리케인
 };
 module.exports = async function handler(req, res) {
   const k = String((req.query || {})._h || '');

@@ -57,6 +57,10 @@
       "destination": "/api/world?_h=hycom"
     },
     {
+      "source": "/api/storms",
+      "destination": "/api/world?_h=storms"
+    },
+    {
       "source": "/auth/start/:p(google|kakao|naver|facebook)",
       "destination": "/api/shops?svc=auth&a=start&p=:p"
     },
@@ -109,7 +113,7 @@
       "destination": "/api/spotobs?svc=sitemap"
     },
     {
-      "source": "/:name((?!(?:api|admin|shop|terms|privacy|auth|spot|s|r|ko|en|ja|es|zh|js|css|icons|bg|data|scripts|index|offline|_vercel)(?:/|$))[^/.]+)",
+      "source": "/:name((?!(?:api|admin|shop|terms|privacy|guide|auth|spot|s|r|ko|en|ja|es|zh|js|css|icons|bg|data|scripts|index|offline|_vercel)(?:/|$))[^/.]+)",
       "destination": "/api/spotobs?svc=go&name=:name"
     }
   ]

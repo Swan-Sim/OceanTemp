@@ -110,6 +110,7 @@
           .sort((a, z) => Math.hypot(a.coords[1] - c.lat, a.coords[0] - c.lng) - Math.hypot(z.coords[1] - c.lat, z.coords[0] - c.lng)).slice(0, 120);
       };
       let paintRaf = 0, loadTimer = 0;
+      window.sportLayerRefresh = () => { try { schedulePaint(); } catch (_) {} }; // [ADD] 태풍 자료가 오면 다시 칠하기
       function schedulePaint() { if (!paintRaf) paintRaf = requestAnimationFrame(() => { paintRaf = 0; paint(); }); }
       function paint() {
         const ms = targetMs(), vis = visibleStations(), cnt = { good: 0, ok: 0, no: 0 };
@@ -119,10 +120,10 @@
           const m = typeof leafletMarkersByStationId !== 'undefined' && leafletMarkersByStationId[st.id], el = m && m.getElement && m.getElement();
           const dot = el && el.querySelector('.lf-dot'); if (!dot) return;
           let g = null;
-          if (show) { const c = condAt(st, ms); if (c) { const r = rate(sport, c, st.face != null ? st.face : null); g = r && r[0]; } }
+          if (show) { const c = condAt(st, ms); if (c) { const r = rate(sport, c, st.face != null ? st.face : null); g = r && r[0]; } if (window.stormNear && window.stormsOn && stormsOn() && stormNear(st)) g = 'no'; } // [ADD] 태풍 예보 경로 300km 안이면 불가
           dot.classList.toggle('sig-good', g === 'good'); dot.classList.toggle('sig-ok', g === 'ok'); dot.classList.toggle('sig-no', g === 'no');
         });
-        vis.forEach(st => { const c = condAt(st, ms); if (c) { const r = rate(sport, c, st.face); if (r) cnt[r[0]]++; } });
+        vis.forEach(st => { const c = condAt(st, ms); if (c) { const r = rate(sport, c, st.face); if (r) cnt[(window.stormNear && window.stormsOn && stormsOn() && stormNear(st)) ? 'no' : r[0]]++; } });
         lastCnt = cnt;
         if (menu && menu.style.display !== 'none') renderMenu();
       }

@@ -4,7 +4,34 @@
 //  탱크를 고르면(텍다이버) 용량을 곱해 L/분(RMV)도 보여줘요.
 (function () {
   const KO = typeof lang === 'undefined' || lang === 'ko';
-  const T = KO ? {
+  const L = typeof lang === 'undefined' ? 'ko' : lang; // [ADD] 언어별 문구(ko · es · zh · 그 외 영어)
+  const T_ES = {
+    tab: 'Bitácora', title: (n) => `Mi bitácora · ${n}`, add: 'Nueva entrada', login: 'Inicia sesión para escribir', needLogin: 'Inicia sesión para llevar tu bitácora. Las entradas anteriores de este punto aparecen aquí.',
+    pubH: 'Bitácora pública de buceadores', pubBy: 'por', pubNone: '', noSpot: 'La bitácora solo está disponible en puntos numerados.', empty: 'Aún no hay entradas en este punto.', loading: 'Cargando…', fail: 'No se pudo cargar',
+    seq: 'N.º de inmersión', date: 'Fecha', tod: 'Hora de inicio (HH:MM)', kind: 'Tipo de buceador', rec: 'Recreativo', tec: 'Técnico', tank: 'Botella', dmax: 'Prof. máx. (m)', davg: 'Prof. media (m)', mins: 'Tiempo (min)',
+    fill: 'Presión inicial (bar)', remain: 'Presión final (bar)', weight: 'Lastre (kg)', suit: 'Traje (mm)', temp: 'Temp. del agua (°C)', vis: 'Visibilidad (m)', buddy: 'Compañero', notes: 'Notas',
+    used: 'Consumido', sac: 'SAC', sacU: 'bar/min (superficie)', rmv: 'L/min', needCalc: 'Introduce presiones, profundidad media y tiempo para calcular tu consumo de aire',
+    consTitle: 'Consentimientos (se guardan una vez)', consUse: 'Uso de datos: mis registros de temperatura y visibilidad pueden usarse en estadísticas anónimas (p. ej., calibración de visibilidad)', consOpen: 'Bitácora pública: mostrar esta entrada (fecha, profundidad, tiempo, temperatura, visibilidad, notas) con mi nombre en la bitácora y la página de este punto', consPhoto: 'Fotos públicas: mostrar en el mapa (miniatura bajo el nombre del punto)',
+    photos: 'Fotos', photoMax: 'hasta 4', photoAdd: '+ Foto', photoPub: 'Mostrar en el mapa (miniatura bajo el nombre del punto)', photoBusy: 'Subiendo…', photoFail: 'No se pudo subir la foto', photoBig: 'La foto es demasiado grande', photoDelAdm: 'Eliminar esta foto (admin)',
+    al80: 'Botella 80cf', suitNone: 'Sin traje', suitDry: 'Traje seco', tempAuto: (sst, d, t) => `Auto: superficie ${sst}°C → ~${t}°C a ${d} m (estimación)`, tempAutoS: (sst) => `Auto: superficie ${sst}°C (estimación)`, tempNo: 'No hay datos de temperatura para esta fecha; introdúcela tú', tempBusy: 'Cargando temperatura…', visAuto: (v) => `Estimación satelital ${v} m; ajusta con ±`,
+    prev: (d) => `Rellenado con tu última entrada (${d})`, save: 'Guardar', cancel: 'Cancelar', edit: 'Editar', del: 'Eliminar', delAsk: '¿Eliminar esta entrada?', saved: 'Guardado', gain: (n) => ` · +${n} créditos`,
+    err: { bad_date: 'Revisa la fecha', avg_gt_max: 'La profundidad media no puede superar la máxima', remain_gt_fill: 'La presión final no puede superar la inicial', too_many: 'Demasiadas entradas', bad_no: 'No disponible en este punto', too_fast: 'Demasiado rápido: espera 10 segundos y guarda de nuevo', daily_limit: 'Hasta 30 entradas por 24 horas' },
+    tanks: { al80: 'Aluminio 80cf (11,1L)', s10: 'Acero 10L', s12: 'Acero 12L', s15: 'Acero 15L', s7: '7L (stage)', d12: 'Bibotella 12L (24L)', d7: 'Bibotella 7L (14L)', sm80: 'Sidemount 2×80cf (22,2L)' }
+  };
+  const T_ZH = {
+    tab: '潛水日誌', title: (n) => `我的日誌 · ${n}`, add: '新增記錄', login: '登入後撰寫', needLogin: '登入即可記錄潛水日誌。此潛點的過去記錄會顯示在這裡。',
+    pubH: '潛水員公開日誌', pubBy: '記錄', pubNone: '', noSpot: '只有有編號的潛點可以寫日誌。', empty: '此潛點尚無記錄。', loading: '載入中…', fail: '無法載入',
+    seq: '日誌編號', date: '日期', tod: '開始時間（HH:MM）', kind: '潛水員類型', rec: '休閒', tec: '技術', tank: '氣瓶', dmax: '最大深度 (m)', davg: '平均深度 (m)', mins: '潛水時間（分鐘）',
+    fill: '起始壓力 (bar)', remain: '剩餘壓力 (bar)', weight: '配重 (kg)', suit: '防寒衣 (mm)', temp: '水溫 (°C)', vis: '能見度 (m)', buddy: '潛伴', notes: '備註',
+    used: '用量', sac: 'SAC', sacU: 'bar/分（水面）', rmv: 'L/分', needCalc: '輸入壓力、平均深度與時間即可計算耗氣量',
+    consTitle: '同意設定（設定一次即保留）', consUse: '資料使用：我的水溫、能見度記錄可用於匿名統計（如能見度校正）', consOpen: '公開日誌：將此記錄（日期、深度、時間、水溫、能見度、備註）連同我的姓名顯示在此潛點的日誌與潛點頁面', consPhoto: '公開照片：顯示在地圖上（潛點名稱下方的小縮圖）',
+    photos: '照片', photoMax: '最多 4 張', photoAdd: '+ 照片', photoPub: '顯示在地圖上（潛點名稱下方的小縮圖）', photoBusy: '上傳中…', photoFail: '照片上傳失敗', photoBig: '照片太大', photoDelAdm: '刪除此照片（管理員）',
+    al80: '80cf 氣瓶', suitNone: '無防寒衣', suitDry: '乾式防寒衣', tempAuto: (sst, d, t) => `自動：表層 ${sst}°C → ${d} m 約 ${t}°C（估計）`, tempAutoS: (sst) => `自動：表層 ${sst}°C（估計）`, tempNo: '此日期無水溫資料，請自行輸入', tempBusy: '載入水溫中…', visAuto: (v) => `衛星估計 ${v} m，可用 ± 調整`,
+    prev: (d) => `已依上次記錄填入（${d}）`, save: '儲存', cancel: '取消', edit: '編輯', del: '刪除', delAsk: '要刪除此記錄嗎？', saved: '已儲存', gain: (n) => ` · +${n} 點數`,
+    err: { bad_date: '請確認日期', avg_gt_max: '平均深度不能大於最大深度', remain_gt_fill: '剩餘壓力不能大於起始壓力', too_many: '記錄太多', bad_no: '此潛點無法使用', too_fast: '太快了，請 10 秒後再儲存', daily_limit: '每 24 小時最多 30 筆' },
+    tanks: { al80: '鋁瓶 80cf (11.1L)', s10: '鋼瓶 10L', s12: '鋼瓶 12L', s15: '鋼瓶 15L', s7: '7L（減壓瓶）', d12: '雙瓶 12L (24L)', d7: '雙瓶 7L (14L)', sm80: '側掛 2×80cf (22.2L)' }
+  };
+  const T = L === 'es' ? T_ES : L === 'zh' ? T_ZH : KO ? {
     tab: '로그북', title: (n) => `내 로그북 · ${n}`, add: '새 기록 쓰기', login: '로그인하고 쓰기', needLogin: '로그북은 로그인하면 쓸 수 있어요. 같은 포인트에 쓴 지난 기록도 여기서 볼 수 있어요.',
     pubH: '다이버들의 공개 로그북', pubBy: '작성', pubNone: '', noSpot: '이 지점은 로그북을 쓸 수 없어요(번호가 있는 포인트만).', empty: '아직 이 포인트에 쓴 기록이 없어요.', loading: '불러오는 중…', fail: '불러오지 못했어요',
     seq: '로그 번호', date: '날짜', tod: '시작 시각 (HH:MM)', kind: '다이버 종류', rec: '레크레이션', tec: '텍다이버', tank: '탱크 종류', dmax: '최대수심 (m)', davg: '평균수심 (m)', mins: '다이빙 시간 (분)',
@@ -117,7 +144,7 @@
     const u = acct().user && acct().user(), adm = !!(u && u.role === 'admin');
     const o = document.createElement('div'); o.className = 'ot-pv'; o.innerHTML = `<div class="pvw"><img src="${phUrl(id, 'b')}" alt=""><span class="pvn" hidden></span></div>` + (adm ? `<button type="button">${T.photoDelAdm}</button>` : '');
     // [ADD] 공개 사진이면 작성자 이름·날짜를 사진 오른쪽 아래에
-    fetch(`/api/spotobs?svc=lpinfo&id=${encodeURIComponent(id)}`).then(r => r.json()).then(j => { const n = o.querySelector('.pvn'); if (j && j.ok && n) { n.textContent = `© ${j.name || (KO ? 'otemp.app 회원' : 'otemp.app member')}${j.date ? ' · ' + j.date : ''}`; n.hidden = false; } }).catch(() => {}); // 공개 사진은 이름이 없어도(옛 사진·익명) 출처 표시
+    fetch(`/api/spotobs?svc=lpinfo&id=${encodeURIComponent(id)}`).then(r => r.json()).then(j => { const n = o.querySelector('.pvn'); if (j && j.ok && n) { n.textContent = `© ${j.name || (KO ? 'otemp.app 회원' : L === 'es' ? 'miembro de otemp.app' : L === 'zh' ? 'otemp.app 會員' : 'otemp.app member')}${j.date ? ' · ' + j.date : ''}`; n.hidden = false; } }).catch(() => {}); // 공개 사진은 이름이 없어도(옛 사진·익명) 출처 표시
     o.onclick = (ev) => { if (ev.target.tagName === 'BUTTON') return; o.remove(); };
     const bt = o.querySelector('button'); if (bt) bt.onclick = async () => { try { await post('phdel', { id }); window.dispatchEvent(new Event('otemp:photos')); } catch (_) {} o.remove(); };
     document.body.appendChild(o);
@@ -164,7 +191,7 @@
   }
   function pubHtml() {
     const L = pub.items; if (!L || !L.length) return '';
-    const row = (e) => { const m = [e.depthMax != null ? e.depthMax + 'm' : '', e.mins != null ? e.mins + (KO ? '분' : ' min') : '', e.temp != null ? `${T.temp.split(' ')[0]} ${e.temp}°C` : '', e.vis != null ? `${T.vis.split(' ')[0]} ${e.vis}m` : ''].filter(Boolean).join(' · ');
+    const row = (e) => { const m = [e.depthMax != null ? e.depthMax + 'm' : '', e.mins != null ? e.mins + (KO ? '분' : L === 'zh' ? '分鐘' : ' min') : '', e.temp != null ? `${T.temp.split(' ')[0]} ${e.temp}°C` : '', e.vis != null ? `${T.vis.split(' ')[0]} ${e.vis}m` : ''].filter(Boolean).join(' · ');
       return `<div class="log-card pub"><div class="l1"><b>${esc(e.date)}${e.tod ? ' ' + esc(e.tod) : ''}</b><span class="who">${esc(e.name || '-')} ${T.pubBy}</span><span>${esc(m)}</span></div>${e.notes ? `<div class="pn">${esc(e.notes)}</div>` : ''}${(e.photos || []).length ? `<div class="log-phs">${e.photos.map(id => `<img src="${phUrl(id, 't')}" data-ph="${esc(id)}" loading="lazy" alt="">`).join('')}</div>` : ''}</div>`; };
     return `<div class="log-sec">${T.pubH}</div>` + L.slice(0, 10).map(row).join('');
   }
@@ -202,7 +229,7 @@
     else { const PAGE = 5, all = state.items || [], pages = Math.max(1, Math.ceil(all.length / PAGE)); state.page = Math.max(0, Math.min(pages - 1, state.page || 0));
       all.slice(state.page * PAGE, state.page * PAGE + PAGE).forEach(e => {
       const c = calc(e);
-      h += `<div class="log-card" data-id="${esc(e.id)}"><div class="l1"><b>${e.seq ? '#' + e.seq + ' · ' : ''}${esc(e.date)}${e.tod ? ' ' + esc(e.tod) : ''}</b><span>${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : ' min') : ''}</span>${c && c.sac != null ? `<span class="log-chip">${fmt(c.sac, 1)} bar/min · ${fmt(c.rmv, 0)} L/min</span>` : ''}</div>`
+      h += `<div class="log-card" data-id="${esc(e.id)}"><div class="l1"><b>${e.seq ? '#' + e.seq + ' · ' : ''}${esc(e.date)}${e.tod ? ' ' + esc(e.tod) : ''}</b><span>${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : L === 'zh' ? '分鐘' : ' min') : ''}</span>${c && c.sac != null ? `<span class="log-chip">${fmt(c.sac, 1)} bar/min · ${fmt(c.rmv, 0)} L/min</span>` : ''}</div>`
         + `<div class="det">${[
           e.type === 'tec' ? `${T.tec}${e.tank ? ' · ' + esc(T.tanks[e.tank] || e.tank) : ''}` : T.rec,
           e.depthAvg != null ? `${T.davg}: ${e.depthAvg}` : '', e.weight != null ? `${T.weight}: ${e.weight}` : '', e.suit != null ? `${T.suit}: ${esc(suitTxt(e.suit))}` : '',

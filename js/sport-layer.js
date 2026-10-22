@@ -10,7 +10,9 @@
       const NAME = {
         ko: { dive: '스쿠버 다이빙', paddle: '카약·SUP', wind: '바람 스포츠', windSub: '윈드서핑·카이트·윙', surf: '서핑', row: '조정', good: '가능', ok: '비추천', no: '불가', loading: '날씨 불러오는 중…', none: '자료 없음', visible: (g, o, n) => `화면 안 포인트: 가능 ${g} · 비추천 ${o} · 불가 ${n}`, now: '지금' },
         en: { dive: 'Scuba diving', paddle: 'Kayak · SUP', wind: 'Wind sports', windSub: 'Windsurf · Kite · Wing', surf: 'Surfing', row: 'Rowing', good: 'Go', ok: 'Caution', no: 'No-go', loading: 'Loading weather…', none: 'No data', visible: (g, o, n) => `On screen: go ${g} · caution ${o} · no-go ${n}`, now: 'Now' },
-        ja: { dive: 'スキューバ', paddle: 'カヤック・SUP', wind: '風のスポーツ', windSub: 'ウィンド・カイト・ウイング', surf: 'サーフィン', row: 'ボート(漕艇)', good: '可', ok: '注意', no: '不可', loading: '天気を読み込み中…', none: 'データなし', visible: (g, o, n) => `画面内: 可 ${g} · 注意 ${o} · 不可 ${n}`, now: '今' }
+        ja: { dive: 'スキューバ', paddle: 'カヤック・SUP', wind: '風のスポーツ', windSub: 'ウィンド・カイト・ウイング', surf: 'サーフィン', row: 'ボート(漕艇)', good: '可', ok: '注意', no: '不可', loading: '天気を読み込み中…', none: 'データなし', visible: (g, o, n) => `画面内: 可 ${g} · 注意 ${o} · 不可 ${n}`, now: '今' },
+        es: { dive: 'Buceo', paddle: 'Kayak · SUP', wind: 'Deportes de viento', windSub: 'Windsurf · Kite · Wing', surf: 'Surf', row: 'Remo', good: 'Apto', ok: 'Precaución', no: 'No apto', loading: 'Cargando el tiempo…', none: 'Sin datos', visible: (g, o, n) => `En pantalla: apto ${g} · precaución ${o} · no apto ${n}`, now: 'Ahora' },
+        zh: { dive: '潛水', paddle: '獨木舟 · SUP', wind: '風力運動', windSub: '風浪板 · 風箏 · 翼板', surf: '衝浪', row: '划船', good: '可', ok: '注意', no: '不宜', loading: '載入天氣中…', none: '無資料', visible: (g, o, n) => `畫面內：可 ${g} · 注意 ${o} · 不宜 ${n}`, now: '現在' }
       };
       const T = () => NAME[typeof lang !== 'undefined' && NAME[lang] ? lang : 'en'];
       let sport = (() => { try { const v = localStorage.getItem('otemp.sport'); return ORDER.includes(v) ? v : 'dive'; } catch (_) { return 'dive'; } })();

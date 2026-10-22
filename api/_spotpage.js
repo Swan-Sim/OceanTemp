@@ -809,7 +809,7 @@ ${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, 
   const nowInner = `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))} · ${t.upd(fmtDate(d.obs ? d.obs.at : d.at, t.dateFmt))}</p>
 ${cards}
 ${d.obs && d.obs.kind === 'seoul' ? `<p class="note" style="margin:0 0 10px">${d.obs.extra && d.obs.extra.length ? `${t.trib}: ${d.obs.extra.map(x => `${esc(x.name)} ${x.t}°C`).join(' · ')}<br>` : ''}${t.seoulSrc}</p>` : ''}
-<div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>
+<div class="cta"><a class="btn" href="/?no=${st.no}&lang=${lang}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>
 ${tide}${days}`;
   let regionLink = ''; try { const RG = require('./_region'); const r = RG.buildRegions(all).find(x => x.spots.some(o => o.no === st.no)); if (r) regionLink = `<p class="sub"><a href="${RG.rpath(lang, r)}">${esc(t.regionOf(r.key))}</a></p>`; } catch (_) {} // [ADD] 지역 페이지 링크
   const body = `${header(lang, hrefs)}
@@ -818,7 +818,7 @@ ${tide}${days}`;
 ${nowT != null && !d.pending ? `<p class="lead">${esc(t.lead(st.name, nowT, fmtDate(d.obs && d.obs.at ? d.obs.at : d.at, { dateStyle: 'medium', timeStyle: 'short' }), d.obs ? t.leadObs(d.obs.name, d.obs.dist) : t.leadModel, visToday ? fmtVis(visToday.v) : null, r1(d.now.wave)))}</p>` : ''}${regionLink}
 ${photoHtml}
 ${partW('clim', climH)}${partW('depth', inland ? '' : depthHtml(lang, depth), inland ? '' : undefined)}
-${partW('now', nowInner, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}
+${partW('now', nowInner, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}&lang=${lang}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}
 ${shopHtml}${partW('near', nearHtml, '')}
 <div id="plogs" hidden></div>
 <h2>${t.aboutH(esc(st.name))}</h2><p class="txt">${esc(inland ? t.aboutIn(st.name, cname) : t.about(st.name, cname))}</p>

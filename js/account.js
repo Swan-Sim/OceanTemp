@@ -4,7 +4,32 @@
 //  - 아래 패널 탭 줄 끝에 ★ → 지금 고른 포인트 즐겨찾기(번호 있는 포인트만). 로그인 안 했으면 로그인 창
 (function () {
   const KO = typeof lang === 'undefined' || lang === 'ko';
-  const T = KO ? {
+  const L = typeof lang === 'undefined' ? 'ko' : lang; // [ADD] 언어별 문구(ko · es · zh · 그 외 영어)
+  const T_ES = {
+    login: 'Iniciar sesión', title: 'Iniciar sesión', sub: 'Guarda tus puntos favoritos y velos en cualquier dispositivo.',
+    google: 'Continuar con Google', kakao: 'Continuar con Kakao', naver: 'Continuar con Naver', facebook: 'Continuar con Facebook',
+    none: 'El inicio de sesión llegará pronto.', agree: 'Al continuar aceptas la <a href="/privacy/?lang=en" target="_blank" rel="noopener">Política de privacidad</a>.',
+    hello: (n) => n, linked: 'Cuentas vinculadas', link: 'Vincular otra cuenta', favs: 'Puntos favoritos', favFull: 'Puedes guardar hasta 30 favoritos. Elimina uno con el icono de papelera primero.', favDel: 'Quitar de favoritos', ok: 'OK', mylogs: 'Mis inmersiones (más recientes primero)', noLog: 'Aún no hay entradas.', more: 'Cargando…', noFav: 'Ninguno todavía. Elige un punto y toca ☆ abajo.',
+    logout: 'Cerrar sesión', del: 'Eliminar cuenta', delAsk: '¿Eliminar tu cuenta y favoritos? No se puede deshacer.', close: 'Cerrar',
+    favOn: 'Añadido a favoritos', favOff: 'Quitado de favoritos', favNeed: 'Inicia sesión para guardar favoritos', favNo: 'Este punto no se puede guardar',
+    lv: (l) => `Nv.${l}`, toNext: (n) => `${n} créditos para el siguiente nivel`, maxLv: 'Nivel máximo', credits: 'Créditos', last: 'Último', admin: 'Admin', creditHint: 'Gana créditos con tu actividad para subir de nivel.',
+    nTitle: '📢 Ya puedes registrarte', nSub: 'Inicia sesión con Google, Kakao, Naver o Facebook.',
+    nItems: ['Favoritos por punto', 'Puntos y niveles de miembro', 'Bitácora'], nBtn: 'Iniciar sesión', nHide: 'No volver a mostrar',
+    err: { cancelled: 'Inicio de sesión cancelado', state: 'La sesión caducó. Inténtalo de nuevo', provider: 'No se pudo iniciar sesión. Inténtalo más tarde', provider_off: 'Este inicio de sesión no está disponible' }
+  };
+  const T_ZH = {
+    login: '登入', title: '登入', sub: '儲存喜愛的潛點，任何裝置都能查看。',
+    google: '使用 Google 繼續', kakao: '使用 Kakao 繼續', naver: '使用 Naver 繼續', facebook: '使用 Facebook 繼續',
+    none: '登入功能即將推出。', agree: '繼續即表示您同意<a href="/privacy/?lang=en" target="_blank" rel="noopener">隱私權政策</a>。',
+    hello: (n) => n, linked: '已連結的登入', link: '連結其他帳號', favs: '我的最愛潛點', favFull: '最多可儲存 30 個最愛。請先用垃圾桶圖示刪除一個。', favDel: '從最愛移除', ok: '確定', mylogs: '我的日誌（最新優先）', noLog: '尚無記錄。', more: '載入中…', noFav: '還沒有。請選擇潛點並點下方的 ☆。',
+    logout: '登出', del: '刪除帳號', delAsk: '要刪除帳號與最愛嗎？此操作無法復原。', close: '關閉',
+    favOn: '已加入最愛', favOff: '已從最愛移除', favNeed: '登入後才能儲存最愛', favNo: '此點無法儲存',
+    lv: (l) => `Lv.${l}`, toNext: (n) => `距下一級還需 ${n} 點`, maxLv: '最高等級', credits: '點數', last: '上次', admin: '管理員', creditHint: '持續活動可累積點數並升級。',
+    nTitle: '📢 會員功能上線', nSub: '可用 Google、Kakao、Naver 或 Facebook 登入。',
+    nItems: ['各潛點的最愛', '會員點數與等級', '潛水日誌'], nBtn: '登入', nHide: '不再顯示',
+    err: { cancelled: '已取消登入', state: '登入逾時，請再試一次', provider: '登入失敗，請稍後再試', provider_off: '目前無法使用此登入方式' }
+  };
+  const T = L === 'es' ? T_ES : L === 'zh' ? T_ZH : KO ? {
     login: '로그인', title: '간편 로그인', sub: '즐겨찾기한 포인트를 어느 기기에서든 볼 수 있어요.',
     google: 'Google로 계속하기', kakao: '카카오로 계속하기', naver: '네이버로 계속하기', facebook: 'Facebook으로 계속하기',
     none: '로그인 준비 중이에요.', agree: '계속하면 <a href="/privacy/" target="_blank" rel="noopener">개인정보처리방침</a>에 동의하는 것으로 봐요.',
@@ -167,7 +192,7 @@
   // 내 로그 목록: 최근 순, 5개 높이에 스크롤, 끝에 닿으면 더 불러옴(최대 2000개)
   async function loadLogsInto(list) {
     if (!list) return; const PAGE = 40; let off = 0, total = Infinity, busy = false;
-    const row = (e) => { const s = stationByNo(e.no); return `<button class="a-log" data-no="${e.no}"><b>${e.seq ? '#' + e.seq + ' · ' : ''}${esc(e.date || '')}</b><span class="nm">${esc(s ? s.name : '#' + e.no)}</span><span class="dt">${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : 'm') : ''}</span></button>`; };
+    const row = (e) => { const s = stationByNo(e.no); return `<button class="a-log" data-no="${e.no}"><b>${e.seq ? '#' + e.seq + ' · ' : ''}${esc(e.date || '')}</b><span class="nm">${esc(s ? s.name : '#' + e.no)}</span><span class="dt">${e.depthMax != null ? e.depthMax + 'm' : ''}${e.mins != null ? ' · ' + e.mins + (KO ? '분' : L === 'zh' ? '分鐘' : 'm') : ''}</span></button>`; };
     const more = async () => {
       if (busy || off >= total) return; busy = true;
       try { const j = await post('logs', { no: 0, limit: PAGE, offset: off }); total = j.count != null ? j.count : (j.items || []).length; const sub = list.querySelector('.a-sub'); if (sub) sub.remove();
@@ -277,7 +302,7 @@
       else { const before = document.getElementById('btn-spot-add'); before ? ctr.insertBefore(btn, before) : ctr.appendChild(btn); }
       paintBtn(); }
     const bar = document.querySelector('.tab-bar');
-    if (bar) { star = document.createElement('button'); star.className = 'tab-btn tab-fav'; star.type = 'button'; star.title = KO ? '이 포인트 즐겨찾기' : 'Favorite this spot'; star.onclick = toggleFav; bar.appendChild(star); paintStar(); }
+    if (bar) { star = document.createElement('button'); star.className = 'tab-btn tab-fav'; star.type = 'button'; star.title = KO ? '이 포인트 즐겨찾기' : L === 'es' ? 'Añadir a favoritos' : L === 'zh' ? '加入最愛' : 'Favorite this spot'; star.onclick = toggleFav; bar.appendChild(star); paintStar(); }
     // 고른 포인트가 바뀌면 ★ 다시 그리기
     if (typeof selectStation === 'function') { const orig = selectStation; selectStation = function (st, o) { const r = orig.apply(this, arguments); paintStar(); if (st && st.no && me.user) savePrefs({ last: { no: st.no } }); return r; }; }
     if (typeof toggleTempUnit === 'function') { _origToggle = toggleTempUnit; toggleTempUnit = function () { const r = _origToggle.apply(this, arguments); savePrefs({ unit: tempUnit }); return r; }; }

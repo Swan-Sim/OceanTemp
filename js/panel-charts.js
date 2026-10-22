@@ -354,7 +354,7 @@
 
     // [ADD] "정점명 앞 이모티콘 빼줘" - 이름 앞의 이모지(🤿 등)를 떼고 보여줍니다.
     // [ADD] 정점 이름을 누르면 그 포인트 상세 페이지(/ko/s/번호)로 - 번호 없는 바다 격자 정점은 그냥 글자
-    function spotPageHref(st) { return st && st.no ? `/${lang === 'ko' || lang === 'ja' ? lang : 'en'}/s/${st.no}` : ''; }
+    function spotPageHref(st) { return st && st.no ? `/${['ko', 'ja', 'es', 'zh'].includes(lang) ? lang : 'en'}/s/${st.no}` : ''; }
     function titleTag(st, cls) {
       const href = spotPageHref(st), tip = String(st.name).replace(/"/g, '&quot;');
       return href ? `<a class="${cls} spot-link" href="${href}" target="_blank" rel="noopener" title="${tip} · ${lang === 'ko' ? '상세 페이지' : lang === 'ja' ? '詳細ページ' : 'Details page'}">${stationDisplayName(st)}</a>`

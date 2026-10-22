@@ -86,7 +86,7 @@ async function regionPage(req, res, lang, all, base, slug) {
 <p class="lead">${H.esc(summary)}</p>
 ${table}
 <p class="sub">${t.nspots(rows.length)} · ${t.upd(dstr)}</p>
-<div class="cta"><a class="btn" href="/?lat=${r.lat}&lon=${r.lon}&z=11">${T.cta}</a></div>
+<div class="cta"><a class="btn" href="/?lat=${r.lat}&lon=${r.lon}&z=11&lang=${lang}">${T.cta}</a></div>
 <div class="foot">${T.foot}<br>© otemp.app · <a href="/">${T.links[0]}</a><a href="/${lang}/s/">${T.links[1]}</a></div>`;
   res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=3600'); // 지역 페이지는 10분 캐시(Redis 절약)
   return H.sendHtml(res, 200, H.page({ lang, title: t.title(name, avg), desc: t.desc(name, rows.length), canonical: hrefs[lang], alternates: hrefs, jsonld, body: body + `<style>.rt{width:100%;border-collapse:collapse;font-size:14px;margin:12px 0}.rt th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;padding:6px 6px;border-bottom:1px solid var(--line)}.rt td{padding:8px 6px;border-bottom:1px solid var(--line)}.rt td.m{color:var(--muted);font-size:12px}.lead{font-size:16px;line-height:1.55;margin:8px 0 12px}</style>`, base }));

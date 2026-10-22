@@ -296,7 +296,7 @@ async function obsNow(st) {
 }
 
 async function build(st, all, opt) {
-  opt = opt || {}; const VIS_MS = opt.quick ? 5000 : 20000; // [CHANGE] 페이지를 열 때(quick)는 5초만 기다리고, 뒤에서 채우기(warm)는 20초
+  opt = opt || {}; const VIS_MS = (opt.quick || opt.quickVis) ? 5000 : 20000; // [CHANGE] parts(페이지 빈 칸 채우기)도 시야는 5초만 - 시야 계산이 20초 넘게 걸려 전체가 실패하던 문제. 시야는 뒤에서 따로 채워요 // [CHANGE] 페이지를 열 때(quick)는 5초만 기다리고, 뒤에서 채우기(warm)는 20초
   const near = all.filter(s => s.no !== st.no).map(s => ({ s, d: km(st.lat, st.lon, s.lat, s.lon) })).filter(x => x.d <= 80).sort((a, b) => a.d - b.d).slice(0, 6);
   const ll = `latitude=${st.lat}&longitude=${st.lon}`;
   const [mar, wx, nearCur, visJ, obs, tideP] = await Promise.all([
@@ -352,7 +352,7 @@ async function dataFor(st, all, opt) {
   if (o) { const fresh = Date.now() - o.at < (o.visMissing ? 600 : DATA_TTL) * 1000; if (fresh && !opt.force) return o; if (opt.quick) { o.stale = true; return o; } }
   if (opt.cacheOnly) return null;
   const d = await build(st, all, opt);
-  if (d.now.sst != null || d.obs) { try { await S.R(['SET', key, JSON.stringify(d), 'EX', String(12 * 3600)]); } catch (_) {} }
+  if (d.now.sst != null || d.obs) { try { await S.R(['SET', key, JSON.stringify(d), 'EX', String(72 * 3600)]); } catch (_) {} } // [CHANGE] 12시간 → 3일 보관: 오래됐어도 일단 바로 보여주고 뒤에서 새로 받아요(봇이 미리 채워 주던 걸 끊어서, 첫 방문자가 빈 화면을 오래 보던 문제)
   return d;
 }
 
@@ -741,7 +741,7 @@ ${shopHtml}${partW('near', nearHtml, '')}
 <script>(function(){var no=${st.no};document.getElementById('share').onclick=function(){var u=location.href.split('#')[0];if(navigator.share){navigator.share({title:document.title,url:u}).catch(function(){})}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){var x=document.getElementById('toast');x.textContent=${JSON.stringify(t.copied)};x.style.display='block';setTimeout(function(){x.style.display='none'},1600)})}};
 var ids=[].slice.call(document.querySelectorAll('[data-shop]')).map(function(a){return a.getAttribute('data-shop')}).filter(function(v,i,a){return a.indexOf(v)===i});
 try{ids.forEach(function(id){navigator.sendBeacon('/api/shops?svc=imp&id='+encodeURIComponent(id)+'&no='+no)})}catch(e){}
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);${warm ? `setTimeout(function(){try{fetch('/api/spotobs?svc=warm&no=${st.no}').catch(function(){})}catch(_){}},1500);` : ''}${Object.values(pend).some(Boolean) ? `(function fill(n){fetch('/api/spotobs?svc=parts&no=${st.no}&lang=${lang}').then(function(r){return r.json()}).then(function(j){if(!j||!j.ok)throw 0;Object.keys(j.parts||{}).forEach(function(k){var el=document.querySelector('[data-part="'+k+'"].pending');if(el){el.innerHTML=j.parts[k];el.classList.remove('pending');var s=el.querySelector('script');if(s){var x=document.createElement('script');x.textContent=s.textContent;s.parentNode.replaceChild(x,s);}}});if(document.querySelector('[data-part].pending'))throw 0;}).catch(function(){if(n<5)setTimeout(function(){fill(n+1)},7000);else document.querySelectorAll('[data-part].pending').forEach(function(el){el.innerHTML='<p class="note">${{ ko: '자료를 아직 받지 못했어요. 잠시 후 새로고침해 주세요.', ja: 'データをまだ取得できていません。しばらくして再読み込みしてください。' }[lang] || 'Data not available yet. Please refresh in a moment.'}</p>';el.classList.remove('pending');});});})(1);` : ''}`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-shop]');if(!a)return;try{navigator.sendBeacon('/api/shops?svc=click&id='+encodeURIComponent(a.getAttribute('data-shop'))+'&k='+a.getAttribute('data-k')+'&no='+no)}catch(_){}});${inland ? '' : `setTimeout(function(){try{fetch('/api/visibility?lat=${st.lat.toFixed(3)}&lon=${st.lon.toFixed(3)}&v=3').catch(function(){})}catch(_){}},2500);${warm ? `setTimeout(function(){try{fetch('/api/spotobs?svc=warm&no=${st.no}').catch(function(){})}catch(_){}},1500);` : ''}${Object.values(pend).some(Boolean) ? `(function fill(n){fetch('/api/spotobs?svc=parts&no=${st.no}&lang=${lang}').then(function(r){return r.json()}).then(function(j){if(!j||!j.ok)throw 0;Object.keys(j.parts||{}).forEach(function(k){var el=document.querySelector('[data-part="'+k+'"].pending');if(el){el.innerHTML=j.parts[k];el.classList.remove('pending');var s=el.querySelector('script');if(s){var x=document.createElement('script');x.textContent=s.textContent;s.parentNode.replaceChild(x,s);}}});if(document.querySelector('[data-part].pending'))throw 0;}).catch(function(){if(n<8)setTimeout(function(){fill(n+1)},n<3?4000:8000);else document.querySelectorAll('[data-part].pending').forEach(function(el){el.innerHTML='<p class="note">${{ ko: '자료를 아직 받지 못했어요.', ja: 'データをまだ取得できていません。' }[lang] || 'Data not available yet.'} <a href="#" data-refill>${{ ko: '다시 시도', ja: '再試行' }[lang] || 'Try again'}</a></p>';el.querySelector('[data-refill]').onclick=function(e){e.preventDefault();el.innerHTML='<div class="card pend"><span class="spin"></span></div>';fill(0);};});});})(1);` : ''}`}})();</script>`; /* [ADD] 시야 자료를 브라우저가 미리 받아 두게(서버 계산이 오래 걸려도 다음 방문부터 바로 보이게) */
 
   const jsonld = [
     { '@context': 'https://schema.org', '@type': 'TouristAttraction', name: st.name, description, url: base + hrefs[lang],
@@ -875,7 +875,7 @@ module.exports = async function spotPage(req, res) {
       // [FIX] 하나가 오래 걸려도(수심 30초·시야 20초) 다른 칸은 먼저 돌려주고, 못 받은 칸은 missing 으로 알려서 브라우저가 몇 번 더 물어봐요(예전엔 60초 한도에 걸리면 통째로 실패 → 영영 로딩)
       const TP = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]).catch(() => null);
       const [d, clim, climVis, depth, photos] = await Promise.all([
-        TP(dataFor(st, all), 22000), TP(climFor(st.lat, st.lon), 15000), TP(climVisFor(st.lat, st.lon), 15000),
+        TP(dataFor(st, all, { quickVis: true }), 22000), TP(climFor(st.lat, st.lon), 15000), TP(climVisFor(st.lat, st.lon), 15000),
         TP(require('./_depth').depthCached(st.lat, st.lon).then(v => v || require('./_depth').depthAt(st.lat, st.lon)), 30000),
         TP(require('./_photos').forSpot(S.R, st.no, 8), 2000)]);
       const missing = []; if (!d) missing.push('now', 'near'); if (!clim) missing.push('clim'); if (!depth) missing.push('depth');

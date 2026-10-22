@@ -37,22 +37,22 @@
 
   // ── 태풍 구름 그림(캔버스로 그려요): 북반구는 반시계 방향으로 감기는 나선, 남반구는 시계 방향. 세기(풍속)에 따라 크기·진하기가 달라져요 ──
   const cloudCache = {};
-  function stormCloud(south, level) { // level 0~3 (TD · TS · STS/TY · 강한 TY) - 위성 구름처럼 또렷한 나선 팔
-    const key = (south ? 's' : 'n') + level; if (cloudCache[key]) return cloudCache[key];
+  function stormCloud(south, level, mode) { // level 0~3 (TD · TS · STS/TY · 강한 TY) - 위성 구름처럼 또렷한 나선 팔. mode 'globe'=중심 진하게, 'map'=가장자리 옅게(지형이 보이게)
+    const key = (south ? 's' : 'n') + level + (mode || ''); if (cloudCache[key]) return cloudCache[key]; const G = mode === 'globe', M = mode === 'map';
     const S = 512, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d'); const cx = S / 2, cy = S / 2;
-    const alpha = [.6, .72, .86, .96][level], arms = [2, 3, 4, 5][level], tight = [.34, .30, .27, .24][level], core = [.12, .16, .21, .26][level];
+    const alpha = [.6, .72, .86, .96][level], arms = [2, 3, 4, 5][level], tight = [.34, .30, .27, .24][level], core = [.12, .16, .21, .26][level] * (G ? 1.25 : 1);
     x.translate(cx, cy); if (!south) x.scale(-1, 1); x.translate(-cx, -cy); // 북반구: 팔이 바깥으로 갈수록 시계 방향(반시계로 돌면 안으로 감기는 모양). 남반구는 거울상
     const rnd = (i) => (Math.sin(i * 12.9898 + level * 78.233) * 43758.5453) % 1; // 고정 난수(모양이 매번 같게)
-    let g = x.createRadialGradient(cx, cy, 6, cx, cy, S * core); g.addColorStop(0, `rgba(255,255,255,${alpha})`); g.addColorStop(.75, `rgba(255,255,255,${alpha * .8})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, S * core, 0, Math.PI * 2); x.fill();
+    let g = x.createRadialGradient(cx, cy, 6, cx, cy, S * core); g.addColorStop(0, `rgba(255,255,255,${G ? 1 : alpha})`); g.addColorStop(.75, `rgba(255,255,255,${alpha * (G ? .95 : .8)})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, S * core, 0, Math.PI * 2); x.fill(); if (G) { x.fill(); }
     for (let a = 0; a < arms; a++) { const a0 = a / arms * Math.PI * 2 + rnd(a) * .4;
       for (let i = 0; i < 360; i++) { const t = i / 360, th = a0 + t * Math.PI * 2.4, r = (S * core * .45) * Math.exp((th - a0) * tight); if (r > S * .47) break;
         const jit = (Math.abs(rnd(i * 7 + a)) - .5) * 18 * (1 + t), px = cx + (r + jit) * Math.cos(th), py = cy - (r + jit) * Math.sin(th), w = 7 + 18 * t + Math.abs(rnd(i * 3 + a)) * 7;
-        const fa = alpha * (1 - t * .75) * (.42 + Math.abs(rnd(i * 5 + a)) * .3); g = x.createRadialGradient(px, py, 0, px, py, w); g.addColorStop(0, `rgba(255,255,255,${fa})`); g.addColorStop(.62, `rgba(255,255,255,${fa * .85})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(px, py, w, 0, Math.PI * 2); x.fill(); } }
+        const fa = alpha * (1 - t * (M ? .9 : .75)) * (.42 + Math.abs(rnd(i * 5 + a)) * .3) * (M ? 1 - t * .35 : 1); g = x.createRadialGradient(px, py, 0, px, py, w); g.addColorStop(0, `rgba(255,255,255,${fa})`); g.addColorStop(.62, `rgba(255,255,255,${fa * .85})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(px, py, w, 0, Math.PI * 2); x.fill(); } }
     if (level >= 2) { x.save(); x.globalCompositeOperation = 'destination-out'; const e = 10 + level * 5; g = x.createRadialGradient(cx, cy, 0, cx, cy, e); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.65, 'rgba(0,0,0,.85)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, e, 0, Math.PI * 2); x.fill(); x.restore(); }
-    x.save(); x.globalCompositeOperation = 'destination-in'; g = x.createRadialGradient(cx, cy, S * .3, cx, cy, S * .5); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, S, S); x.restore();
+    x.save(); x.globalCompositeOperation = 'destination-in'; g = x.createRadialGradient(cx, cy, S * (M ? .16 : .3), cx, cy, S * .5); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(M ? .5 : 1, M ? 'rgba(0,0,0,.45)' : 'rgba(0,0,0,0)'); if (M) g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, S, S); x.restore();
     cloudCache[key] = c; return c;
   }
-  const urlCache = {}; const cloudUrl = (south, level) => { const k = (south ? 's' : 'n') + level; return urlCache[k] || (urlCache[k] = stormCloud(south, level).toDataURL('image/png')); };
+  const urlCache = {}; const cloudUrl = (south, level) => { const k = (south ? 's' : 'n') + level; return urlCache[k] || (urlCache[k] = stormCloud(south, level, 'map').toDataURL('image/png')); };
   const levelOf = (s) => { const w = s.wind || 0; return w >= 44 ? 3 : w >= 25 ? 2 : w >= 17 ? 1 : 0; };
   const cloudKm = (s) => Math.max(150, Math.min(900, (s.radii.gale || s.radii.storm * 1.8 || (120 + (s.wind || 15) * 8)) * 1.6)); // 구름 반지름(km): 강풍 반경의 1.6배쯤(위성 구름대가 더 넓어요)
   // [ADD] 실시간 현황 표에서 고른 시각에 태풍이 있을 자리 - 예보 경로를 따라 직선 보간. 지금·과거는 현재 위치
@@ -80,7 +80,7 @@
       trs.forEach(([k, fc]) => { const hex = (AG[k] || AG.jma).hex; line([[s.lat, s.lon], ...fc.map(f => [f.lat, f.lon])], hex, true); fc.forEach(f => ring(f.lat, f.lon, f.r, hex, .4)); });
       ring(pv.lat, pv.lon, s.radii.storm, 0xf87171, .9); ring(pv.lat, pv.lon, s.radii.gale, 0xfbbf24, .7);
       // 구름 그림(반구·세기별) - 지구본에 납작하게 붙여요. 크기는 강풍 반경 기준
-      { const tex = new THREE.CanvasTexture(stormCloud(s.lat < 0, levelOf(s))); const rk = cloudKm(s), size = rk / 111.32 * (Math.PI / 180) * GLOBE_RADIUS * 2;
+      { const tex = new THREE.CanvasTexture(stormCloud(s.lat < 0, levelOf(s), 'globe')); const rk = cloudKm(s), size = rk / 111.32 * (Math.PI / 180) * GLOBE_RADIUS * 2;
         const geo = new THREE.PlaneGeometry(size, size), mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 1, depthWrite: false }); const mesh = new THREE.Mesh(geo, mat); // 지구본은 구름을 또렷하게(지형보다 태풍이 중요)
         const p = latLonToSpherePos(pv.lat, pv.lon, GLOBE_RADIUS + 0.9); mesh.position.copy(p); mesh.lookAt(p.clone().multiplyScalar(2)); mesh.userData.spin = s.lat < 0 ? -1 : 1; gGroup.add(mesh); }
       // 기호 + 이름(캔버스 스프라이트)

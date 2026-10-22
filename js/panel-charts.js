@@ -986,7 +986,9 @@
       }
       const isHotspot = maxTempStation && maxTempStation.id === st.id;
       { const el = document.getElementById('st-name'), href = spotPageHref(st), txt = `${st.name}${isHotspot ? ` [${t.hotspot}]` : ''}`;
-        if (href) { el.textContent = ''; const a = document.createElement('a'); a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.className = 'spot-link'; a.textContent = txt; el.appendChild(a); } else el.innerText = txt; }
+        if (href) { el.textContent = ''; const a = document.createElement('a'); a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.className = 'spot-link'; a.textContent = txt; el.appendChild(a); } else el.innerText = txt;
+        // [ADD] 화면 언어 이름과 원래(영문) 이름이 다르면 원래 이름을 작게 같이
+        if (st.name0 && st.name0 !== st.name) { const sm = document.createElement('span'); sm.className = 'st-alt'; sm.textContent = st.name0; el.appendChild(sm); } }
       document.getElementById('st-temp').innerText = formatTemp(st.curTemp);
 
       // [CHANGE] HUD에 정점명을 텍스트로 보여주던 것은 제거했습니다 -

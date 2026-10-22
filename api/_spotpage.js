@@ -522,7 +522,7 @@ a{color:inherit}.wrap{max-width:760px;margin:0 auto;padding:16px 16px 48px}
 .crumb{font-size:12px;color:var(--dim);margin:14px 0 4px}.crumb a{text-decoration:none}
 h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em;line-height:1.3}
 .sub{color:var(--muted);font-size:13px;margin:0 0 12px}
-.h1row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.h1row h1{margin:0}.shopline{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.shopline a{color:var(--accent);text-decoration:none}
+.h1row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.h1row h1{margin:0}.altname{color:var(--muted);font-size:13.5px;margin:2px 0 8px}.shopline{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.shopline a{color:var(--accent);text-decoration:none}
 .plog{padding:8px 0;border-bottom:1px solid var(--line)}.plog:last-of-type{border-bottom:0}.plog .l1{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline}.plog .who{color:var(--accent);font-weight:600}.plog .m{color:var(--muted);font-size:13px}.plog .n{font-size:13.5px;margin-top:3px;white-space:pre-wrap}
 .phrow{display:flex;gap:6px;overflow-x:auto;margin:8px 0 2px;padding-bottom:2px}.phrow img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
 .cards.g4 .c.amb{border-color:#FFB000;background:rgba(255,176,0,.08)}.bar.dim{opacity:.38;filter:saturate(.35)}
@@ -732,7 +732,7 @@ ${d.obs && d.obs.kind === 'seoul' ? `<p class="note" style="margin:0 0 10px">${d
 ${tide}${days}`;
   const body = `${header(lang, hrefs)}
 <nav class="crumb"><a href="/${lang}/s/">${t.links[1]}</a> › <a href="/${lang}/s/#${st.cc || 'xx'}">${esc(cname)}</a> › ${esc(st.name)}</nav>
-<div class="h1row"><h1>${esc(inland ? t.h1In(st.name) : t.h1(st.name))}</h1>${shopLine}</div>
+<div class="h1row"><h1>${esc(inland ? t.h1In(st.name) : t.h1(st.name))}</h1>${shopLine}</div>${st0.name && st0.name !== st.name ? `<div class="altname">${esc(st0.name)}</div>` : ''}
 ${photoHtml}
 ${partW('clim', climH)}${partW('depth', inland ? '' : depthHtml(lang, depth), inland ? '' : undefined)}
 ${partW('now', nowInner, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}

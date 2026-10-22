@@ -679,3 +679,6 @@ body.log-open #log-down{display:flex}
 /* 수온약층 설명(수심 프로파일 그래프 아래) */
 .scm-note{font-size:12px;line-height:1.45;color:#7DD3FC;margin:4px 2px 0}
 .scm-note b{color:#BAE6FD}
+
+    /* [ADD] 정점 이름 옆 원래(영문) 이름 */
+    .st-alt { margin-left: 8px; font-size: 0.78em; font-weight: 500; color: #8A94A6; }

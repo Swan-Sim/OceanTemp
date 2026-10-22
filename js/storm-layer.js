@@ -3,7 +3,7 @@
 (function () {
   const NEAR_KM = 300, REFRESH = 30 * 60e3;
   let data = { storms: [] }, on = (() => { try { return localStorage.getItem('otemp.storms') !== '0'; } catch (_) { return true; } })();
-  let gGroup = null, mapLayer = null, btn = null, warnEl = null;
+  let gGroup = null, mapLayer = null, moveLayer = null, globeDirty = false, viewMs = null, btn = null, warnEl = null;
   const L_ = () => (typeof lang === 'undefined' ? 'en' : lang);
   const TX = {
     ko: { btn: (n) => `🌀 태풍 ${n}`, typhoon: '태풍', hurricane: '허리케인', tc: '열대저기압', warn: (s, km, when) => `${s} 접근 중 · 예보 경로가 이 포인트에서 약 ${km}km${when ? ` (${when}쯤 가장 가까움)` : ''}. 현지 샵 안내를 꼭 확인하세요.`, now: '현재', fc: (h) => `+${h}시간`, p: '중심기압', w: '최대풍속', move: '이동', storm: '폭풍 반경', gale: '강풍 반경', num: (n) => `${n}호` },
@@ -37,27 +37,34 @@
 
   // ── 태풍 구름 그림(캔버스로 그려요): 북반구는 반시계 방향으로 감기는 나선, 남반구는 시계 방향. 세기(풍속)에 따라 크기·진하기가 달라져요 ──
   const cloudCache = {};
-  function stormCloud(south, level) { // level 0~3 (TD · TS · STS/TY · 강한 TY)
+  function stormCloud(south, level) { // level 0~3 (TD · TS · STS/TY · 강한 TY) - 위성 구름처럼 또렷한 나선 팔
     const key = (south ? 's' : 'n') + level; if (cloudCache[key]) return cloudCache[key];
     const S = 512, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d'); const cx = S / 2, cy = S / 2;
-    const alpha = [.5, .62, .78, .9][level], arms = [2, 3, 4, 5][level], tight = [.34, .30, .27, .24][level], core = [.12, .16, .21, .26][level];
+    const alpha = [.6, .72, .86, .96][level], arms = [2, 3, 4, 5][level], tight = [.34, .30, .27, .24][level], core = [.12, .16, .21, .26][level];
     x.translate(cx, cy); if (south) x.scale(-1, 1); x.translate(-cx, -cy);
     const rnd = (i) => (Math.sin(i * 12.9898 + level * 78.233) * 43758.5453) % 1; // 고정 난수(모양이 매번 같게)
-    // 중심 구름 덩어리
-    let g = x.createRadialGradient(cx, cy, 6, cx, cy, S * core); g.addColorStop(0, `rgba(255,255,255,${alpha})`); g.addColorStop(.7, `rgba(255,255,255,${alpha * .55})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, S * core, 0, Math.PI * 2); x.fill();
-    // 나선 팔: 작은 구름 조각을 로그 나선을 따라 흩뿌려요
+    let g = x.createRadialGradient(cx, cy, 6, cx, cy, S * core); g.addColorStop(0, `rgba(255,255,255,${alpha})`); g.addColorStop(.75, `rgba(255,255,255,${alpha * .8})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, S * core, 0, Math.PI * 2); x.fill();
     for (let a = 0; a < arms; a++) { const a0 = a / arms * Math.PI * 2 + rnd(a) * .4;
-      for (let i = 0; i < 220; i++) { const t = i / 220, th = a0 + t * Math.PI * 2.4, r = (S * core * .45) * Math.exp((th - a0) * tight); if (r > S * .47) break;
-        const jit = (Math.abs(rnd(i * 7 + a)) - .5) * 18 * (1 + t), px = cx + (r + jit) * Math.cos(th), py = cy - (r + jit) * Math.sin(th), w = 9 + 24 * t + Math.abs(rnd(i * 3 + a)) * 8;
-        const fa = alpha * (1 - t * .75) * (.22 + Math.abs(rnd(i * 5 + a)) * .18); g = x.createRadialGradient(px, py, 0, px, py, w); g.addColorStop(0, `rgba(255,255,255,${fa})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(px, py, w, 0, Math.PI * 2); x.fill(); } }
-    // 눈
+      for (let i = 0; i < 360; i++) { const t = i / 360, th = a0 + t * Math.PI * 2.4, r = (S * core * .45) * Math.exp((th - a0) * tight); if (r > S * .47) break;
+        const jit = (Math.abs(rnd(i * 7 + a)) - .5) * 18 * (1 + t), px = cx + (r + jit) * Math.cos(th), py = cy - (r + jit) * Math.sin(th), w = 7 + 18 * t + Math.abs(rnd(i * 3 + a)) * 7;
+        const fa = alpha * (1 - t * .75) * (.42 + Math.abs(rnd(i * 5 + a)) * .3); g = x.createRadialGradient(px, py, 0, px, py, w); g.addColorStop(0, `rgba(255,255,255,${fa})`); g.addColorStop(.62, `rgba(255,255,255,${fa * .85})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(px, py, w, 0, Math.PI * 2); x.fill(); } }
     if (level >= 2) { x.save(); x.globalCompositeOperation = 'destination-out'; const e = 10 + level * 5; g = x.createRadialGradient(cx, cy, 0, cx, cy, e); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.65, 'rgba(0,0,0,.85)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, e, 0, Math.PI * 2); x.fill(); x.restore(); }
-    // 가장자리 부드럽게
-    x.save(); x.globalCompositeOperation = 'destination-in'; g = x.createRadialGradient(cx, cy, S * .22, cx, cy, S * .5); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, S, S); x.restore();
+    x.save(); x.globalCompositeOperation = 'destination-in'; g = x.createRadialGradient(cx, cy, S * .3, cx, cy, S * .5); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, S, S); x.restore();
     cloudCache[key] = c; return c;
   }
+  const urlCache = {}; const cloudUrl = (south, level) => { const k = (south ? 's' : 'n') + level; return urlCache[k] || (urlCache[k] = stormCloud(south, level).toDataURL('image/png')); };
   const levelOf = (s) => { const w = s.wind || 0; return w >= 44 ? 3 : w >= 25 ? 2 : w >= 17 ? 1 : 0; };
   const cloudKm = (s) => Math.max(150, Math.min(900, (s.radii.gale || s.radii.storm * 1.8 || (120 + (s.wind || 15) * 8)) * 1.6)); // 구름 반지름(km): 강풍 반경의 1.6배쯤(위성 구름대가 더 넓어요)
+  // [ADD] 실시간 현황 표에서 고른 시각에 태풍이 있을 자리 - 예보 경로를 따라 직선 보간. 지금·과거는 현재 위치
+  function posAt(s, ms) {
+    const at = Date.parse(s.at) || data.at || Date.now(); if (ms == null || ms <= at) return { lat: s.lat, lon: s.lon, h: 0 };
+    const fcs = (s.forecast && s.forecast.length) ? s.forecast : ((tracksOf(s)[0] || [])[1] || []);
+    const pts = [{ t: at, lat: s.lat, lon: s.lon }].concat(fcs.map(f => ({ t: (f.t && Date.parse(f.t)) || at + (f.h || 0) * 3600e3, lat: f.lat, lon: f.lon })).filter(p => p.lat != null && p.t > at)).sort((a, b) => a.t - b.t);
+    const h = Math.round((ms - at) / 3600e3), last = pts[pts.length - 1]; if (ms >= last.t) return { lat: last.lat, lon: last.lon, h };
+    for (let i = 1; i < pts.length; i++) if (ms <= pts[i].t) { const a = pts[i - 1], b = pts[i], k = (ms - a.t) / (b.t - a.t || 1); return { lat: a.lat + (b.lat - a.lat) * k, lon: a.lon + (b.lon - a.lon) * k, h }; }
+    return { lat: s.lat, lon: s.lon, h: 0 };
+  }
+  const hTag = (p) => p.h > 0 ? ` <span class="st-h">+${p.h}h</span>` : '';
   // ── 지구본 ──
   function drawGlobe() {
     if (typeof globeGroup === 'undefined' || !globeGroup || typeof THREE === 'undefined') return;
@@ -67,18 +74,19 @@
     const line = (pts, color, dashed) => { if (pts.length < 2) return; const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => latLonToSpherePos(p[0], p[1], R))); const m = dashed ? new THREE.LineDashedMaterial({ color, dashSize: 1.2, gapSize: 0.8, transparent: true, opacity: .9 }) : new THREE.LineBasicMaterial({ color, transparent: true, opacity: .85 }); const l = new THREE.Line(g, m); if (dashed) l.computeLineDistances(); gGroup.add(l); };
     const ring = (lat, lon, rkm, color, op) => { if (!rkm) return; const n = 48, pts = []; for (let i = 0; i <= n; i++) { const a = i / n * 2 * Math.PI, dl = rkm / 111.32, la = lat + dl * Math.cos(a), lo = lon + dl * Math.sin(a) / Math.cos(lat * Math.PI / 180); pts.push([la, lo]); } const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => latLonToSpherePos(p[0], p[1], R))); gGroup.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: op }))); };
     data.storms.forEach(s => {
+      const pv = posAt(s, viewMs);
       line(s.track, 0xffffff, false);
       const trs = tracksOf(s); if (!trs.length && s.forecast && s.forecast.length) trs.push([s.src, s.forecast]);
       trs.forEach(([k, fc]) => { const hex = (AG[k] || AG.jma).hex; line([[s.lat, s.lon], ...fc.map(f => [f.lat, f.lon])], hex, true); fc.forEach(f => ring(f.lat, f.lon, f.r, hex, .4)); });
-      ring(s.lat, s.lon, s.radii.storm, 0xf87171, .9); ring(s.lat, s.lon, s.radii.gale, 0xfbbf24, .7);
+      ring(pv.lat, pv.lon, s.radii.storm, 0xf87171, .9); ring(pv.lat, pv.lon, s.radii.gale, 0xfbbf24, .7);
       // 구름 그림(반구·세기별) - 지구본에 납작하게 붙여요. 크기는 강풍 반경 기준
       { const tex = new THREE.CanvasTexture(stormCloud(s.lat < 0, levelOf(s))); const rk = cloudKm(s), size = rk / 111.32 * (Math.PI / 180) * GLOBE_RADIUS * 2;
         const geo = new THREE.PlaneGeometry(size, size), mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: .95, depthWrite: false }); const mesh = new THREE.Mesh(geo, mat);
-        const p = latLonToSpherePos(s.lat, s.lon, GLOBE_RADIUS + 0.9); mesh.position.copy(p); mesh.lookAt(p.clone().multiplyScalar(2)); mesh.userData.spin = s.lat < 0 ? -1 : 1; gGroup.add(mesh); }
+        const p = latLonToSpherePos(pv.lat, pv.lon, GLOBE_RADIUS + 0.9); mesh.position.copy(p); mesh.lookAt(p.clone().multiplyScalar(2)); mesh.userData.spin = s.lat < 0 ? -1 : 1; gGroup.add(mesh); }
       // 기호 + 이름(캔버스 스프라이트)
       const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');
-      x.font = 'bold 26px sans-serif'; x.textBaseline = 'middle'; x.fillStyle = 'rgba(0,0,0,.55)'; const txt = `🌀 ${s.num ? s.num + ' ' : ''}${s.name}`; const w = x.measureText(txt).width + 16; x.fillRect(0, 10, Math.min(256, w), 44); x.fillStyle = '#fff'; x.fillText(txt, 8, 32);
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false })); sp.scale.set(14, 3.5, 1); const p = latLonToSpherePos(s.lat, s.lon, R + 1.5); sp.position.copy(p); sp.center.set(0, .5); gGroup.add(sp);
+      x.font = 'bold 26px sans-serif'; x.textBaseline = 'middle'; x.fillStyle = 'rgba(0,0,0,.55)'; const txt = `🌀 ${s.num ? s.num + ' ' : ''}${s.name}${pv.h > 0 ? ' +' + pv.h + 'h' : ''}`; const w = x.measureText(txt).width + 16; x.fillRect(0, 10, Math.min(256, w), 44); x.fillStyle = '#fff'; x.fillText(txt, 8, 32);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false })); sp.scale.set(14, 3.5, 1); const p = latLonToSpherePos(pv.lat, pv.lon, R + 1.5); sp.position.copy(p); sp.center.set(0, .5); gGroup.add(sp);
     });
     globeGroup.add(gGroup); if (window.requestGlobeRender) requestGlobeRender();
     // 구름을 천천히 돌려요(북반구 반시계·남반구 시계). 지구본이 보일 때만 1초에 몇 번
@@ -88,7 +96,8 @@
   function drawMap() {
     const map = typeof leafletMap !== 'undefined' ? leafletMap : null; if (!map) return;
     if (!mapLayer) mapLayer = L.layerGroup(); mapLayer.clearLayers();
-    if (!on || !data.storms.length) { if (map.hasLayer(mapLayer)) map.removeLayer(mapLayer); return; }
+    if (!moveLayer) { moveLayer = L.layerGroup(); if (!map.getPane('stcloud')) { const pn = map.createPane('stcloud'); pn.style.zIndex = 450; pn.style.pointerEvents = 'none'; } map.on('zoomend', () => { if (map.hasLayer(moveLayer)) drawMoving(); }); }
+    if (!on || !data.storms.length) { if (map.hasLayer(mapLayer)) map.removeLayer(mapLayer); if (map.hasLayer(moveLayer)) map.removeLayer(moveLayer); return; }
     const t = T();
     data.storms.forEach(s => {
       if (s.track.length > 1) L.polyline(s.track, { color: '#fff', weight: 2, opacity: .8, interactive: false }).addTo(mapLayer);
@@ -97,14 +106,24 @@
         if (fc.length > 1) L.polyline(fc, { color: col, weight: 2, dashArray: '6 5', opacity: .9, interactive: false }).addTo(mapLayer);
         fcs.forEach(f => { if (f.r) L.circle([f.lat, f.lon], { radius: f.r * 1000, color: col, weight: 1, dashArray: '4 4', fill: false, interactive: false }).addTo(mapLayer);
           L.circleMarker([f.lat, f.lon], { radius: 4, color: col, fillColor: '#0B1120', fillOpacity: 1, weight: 1.5 }).bindTooltip(`${agName(k)} ${t.fc(f.h)}${f.pressure ? ` · ${f.pressure}hPa` : ''}${f.wind ? ` · ${f.wind}m/s` : ''}`, { direction: 'top' }).addTo(mapLayer); }); });
-      { const rk = cloudKm(s), dl = rk / 111.32, dn = dl / Math.cos(s.lat * Math.PI / 180); const url = stormCloud(s.lat < 0, levelOf(s)).toDataURL('image/png');
-        L.imageOverlay(url, [[s.lat - dl, s.lon - dn], [s.lat + dl, s.lon + dn]], { opacity: .9, interactive: false, className: 'st-cloud ' + (s.lat < 0 ? 'south' : 'north') }).addTo(mapLayer); }
-      if (s.radii.gale) L.circle([s.lat, s.lon], { radius: s.radii.gale * 1000, color: '#fbbf24', weight: 1, fillColor: '#fbbf24', fillOpacity: .08, interactive: false }).addTo(mapLayer);
-      if (s.radii.storm) L.circle([s.lat, s.lon], { radius: s.radii.storm * 1000, color: '#f87171', weight: 1.5, fillColor: '#f87171', fillOpacity: .15, interactive: false }).addTo(mapLayer);
-      const info = [`<b>${label(s)}</b>`, s.pressure ? `${t.p} ${s.pressure}hPa` : '', s.wind ? `${t.w} ${s.wind}m/s${s.gust ? ` (gust ${s.gust})` : ''}` : '', s.move && (s.move.dir || s.move.kmh) ? `${t.move} ${s.move.dir || ''} ${s.move.kmh ? s.move.kmh + 'km/h' : ''}` : '', s.radii.storm ? `${t.storm} ${s.radii.storm}km` : '', s.radii.gale ? `${t.gale} ${s.radii.gale}km` : '', tracksOf(s).map(([k]) => `<span style="color:${(AG[k] || AG.jma).c}">━ ━</span> ${agName(k)}`).join(' · '), agree(s) ? `<b>${agree(s)}</b>` : ''].filter(Boolean).join('<br>');
-      L.marker([s.lat, s.lon], { icon: L.divIcon({ className: '', html: `<div class="st-eye">🌀</div><div class="st-name">${s.num ? s.num + ' ' : ''}${s.name}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] }), zIndexOffset: 900 }).bindPopup(info).addTo(mapLayer);
     });
     if (!map.hasLayer(mapLayer)) mapLayer.addTo(map);
+    drawMoving();
+  }
+  // 시각 따라 움직이는 것만(구름·현재 반경·기호) 다시 그려요 - 표를 넘길 때, 확대/축소할 때. 구름은 제자리에서 돌기만(이미지 자체를 회전)
+  function drawMoving() {
+    const map = typeof leafletMap !== 'undefined' ? leafletMap : null; if (!map || !moveLayer) return; moveLayer.clearLayers(); if (!on || !data.storms.length) return;
+    const t = T(), z = map.getZoom();
+    data.storms.forEach(s => {
+      const p = posAt(s, viewMs), rk = cloudKm(s), south = s.lat < 0;
+      const mpp = 40075016.686 * Math.cos(p.lat * Math.PI / 180) / (256 * Math.pow(2, z)), px = Math.max(24, Math.round(rk * 2000 / mpp)); // 구름 지름(px) = 반지름(km)×2 / (m/px)
+      L.marker([p.lat, p.lon], { pane: 'stcloud', interactive: false, keyboard: false, icon: L.divIcon({ className: 'st-cloud-box', html: `<img class="st-cloud ${south ? 'south' : 'north'}" src="${cloudUrl(south, levelOf(s))}" style="width:${px}px;height:${px}px" alt="">`, iconSize: [px, px], iconAnchor: [px / 2, px / 2] }) }).addTo(moveLayer);
+      if (s.radii.gale) L.circle([p.lat, p.lon], { radius: s.radii.gale * 1000, color: '#fbbf24', weight: 1, fillColor: '#fbbf24', fillOpacity: .08, interactive: false }).addTo(moveLayer);
+      if (s.radii.storm) L.circle([p.lat, p.lon], { radius: s.radii.storm * 1000, color: '#f87171', weight: 1.5, fillColor: '#f87171', fillOpacity: .15, interactive: false }).addTo(moveLayer);
+      const info = [`<b>${label(s)}</b>${p.h > 0 ? ` <span class="st-h">${t.fc(p.h)}</span>` : ''}`, s.pressure ? `${t.p} ${s.pressure}hPa` : '', s.wind ? `${t.w} ${s.wind}m/s${s.gust ? ` (gust ${s.gust})` : ''}` : '', s.move && (s.move.dir || s.move.kmh) ? `${t.move} ${s.move.dir || ''} ${s.move.kmh ? s.move.kmh + 'km/h' : ''}` : '', s.radii.storm ? `${t.storm} ${s.radii.storm}km` : '', s.radii.gale ? `${t.gale} ${s.radii.gale}km` : '', tracksOf(s).map(([k]) => `<span style="color:${(AG[k] || AG.jma).c}">━ ━</span> ${agName(k)}`).join(' · '), agree(s) ? `<b>${agree(s)}</b>` : ''].filter(Boolean).join('<br>');
+      L.marker([p.lat, p.lon], { icon: L.divIcon({ className: '', html: `<div class="st-eye">🌀</div><div class="st-name">${s.num ? s.num + ' ' : ''}${s.name}${hTag(p)}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] }), zIndexOffset: 900 }).bindPopup(info).addTo(moveLayer);
+    });
+    if (!map.hasLayer(moveLayer)) moveLayer.addTo(map);
   }
   // ── 버튼·경고 띠 ──
   function paintBtn() {
@@ -128,12 +147,17 @@
   body.detail-mode #btn-storms{bottom:calc(env(safe-area-inset-bottom,0px) + 120px)}
   #storm-warn{display:none;margin:4px 0 2px;padding:6px 10px;border-radius:8px;background:rgba(127,29,29,.5);border:1px solid rgba(248,113,113,.6);color:#fee2e2;font-size:12.5px;line-height:1.4}
   .st-eye{font-size:20px;line-height:40px;text-align:center;filter:drop-shadow(0 0 4px rgba(0,0,0,.8))}
-  .st-cloud{animation:st-spin 90s linear infinite;transform-origin:center;mix-blend-mode:screen} .st-cloud.south{animation-direction:reverse} @keyframes st-spin{to{rotate:-360deg}} @media (prefers-reduced-motion:reduce){.st-cloud{animation:none}}
+  .st-cloud{display:block;animation:st-spin 70s linear infinite;transform-origin:50% 50%;mix-blend-mode:screen;will-change:transform} .st-cloud.south{animation-direction:reverse} @keyframes st-spin{from{transform:rotate(0)}to{transform:rotate(-360deg)}} .st-cloud-box{background:none;border:0} .st-h{color:#fde68a;font-weight:600;margin-left:3px} @media (prefers-reduced-motion:reduce){.st-cloud{animation:none}}
   .st-name{position:absolute;left:50%;top:38px;transform:translateX(-50%);white-space:nowrap;font-size:12px;font-weight:700;color:#fff;background:rgba(127,29,29,.8);padding:1px 6px;border-radius:6px}`;
   document.head.appendChild(css);
   // 지도가 열릴 때·정점이 바뀔 때 따라가기
   const f = window.showDetailMap; if (typeof f === 'function') window.showDetailMap = function () { const r = f.apply(this, arguments); setTimeout(drawMap, 300); return r; };
   const u = window.updateLeafletSelection; if (typeof u === 'function') window.updateLeafletSelection = function () { const r = u.apply(this, arguments); paintWarn(); return r; };
+  // [ADD] 실시간 현황 표를 넘기면 그 시각의 자리로(예보 경로 보간, 이름 옆에 +N h). 지금 근처(±20분)·과거면 현재 위치. 정점을 바꾸면 지금으로
+  window.stormSetTime = function (ms) { viewMs = ms; if (window.stormSetTime._raf) return; window.stormSetTime._raf = requestAnimationFrame(() => { window.stormSetTime._raf = 0; if (typeof isDetailMode !== 'undefined' && isDetailMode) { drawMoving(); globeDirty = true; } else drawGlobe(); }); };
+  const fd = window.windDialSetTime; if (typeof fd === 'function') window.windDialSetTime = function (x) { try { const st = typeof selectedStation !== 'undefined' ? selectedStation : null, d = st && st._hourlyCache; const real = d && typeof x === 'number' ? x - Math.round((d.nowLocalMs - Date.now()) / 60000) * 60000 : null; const nv = real != null && Math.abs(real - Date.now()) > 20 * 60e3 ? real : null; if (nv !== viewMs) window.stormSetTime(nv); } catch (_) {} return fd.apply(this, arguments); };
+  const fs = window.selectStation; if (typeof fs === 'function') window.selectStation = function () { const r = fs.apply(this, arguments); if (viewMs != null) window.stormSetTime(null); return r; };
+  const fg = window.switchToGlobe; if (typeof fg === 'function') window.switchToGlobe = function () { const r = fg.apply(this, arguments); if (globeDirty) { globeDirty = false; drawGlobe(); } return r; };
   document.addEventListener('DOMContentLoaded', () => { setTimeout(load, 4000); setInterval(load, REFRESH); });
   window.stormsData = () => data; window.stormsOn = () => on;
 })();

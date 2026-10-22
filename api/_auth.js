@@ -55,7 +55,8 @@ const PROVIDERS = {
     async profile(code, cb, state) {
       const tok = await postForm('https://nid.naver.com/oauth2.0/token', { grant_type: 'authorization_code', client_id: process.env.NAVER_CLIENT_ID, client_secret: process.env.NAVER_CLIENT_SECRET, code, state });
       const u = (await getJson('https://openapi.naver.com/v1/nid/me', tok.access_token)).response || {};
-      return { sub: u.id, name: u.nickname || u.name, email: u.email || '', avatar: u.profile_image };
+      // [CHANGE] 네이버는 실명(name)을 먼저 - 회원 화면의 "OOO님", 로그북 공개 기록·포인트 등록·샵 소유권 요청의 작성자 표시에 써요(가명 활동 계정의 허위 정보를 줄이려고). 이메일·전화번호는 받지 않아요
+      return { sub: u.id, name: u.name || u.nickname, email: u.email || '', avatar: u.profile_image };
     }
   },
   facebook: {

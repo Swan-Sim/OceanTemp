@@ -319,7 +319,7 @@ module.exports = async function handler(req, res) {
     catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(200).json({ ok: false, spots: {} }); }
   }
   if (svc === 'lpinfo') { // [ADD] 공개 사진의 작성자 이름·날짜(사진 크게 볼 때)
-    try { const o = await require('./_photos').info(require('./_store').R, (req.query || {}).id); res.setHeader('Cache-Control', 'public, s-maxage=600, max-age=300'); return res.status(200).json({ ok: !!o, ...(o || {}) }); }
+    try { const o = await require('./_photos').info(require('./_store').R, (req.query || {}).id); res.setHeader('Cache-Control', o ? 'public, s-maxage=600, max-age=300' : 'no-store'); return res.status(200).json({ ok: !!o, ...(o || {}) }); }
     catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(200).json({ ok: false }); }
   }
   if (svc === 'lopen') { // [ADD] 포인트의 공개 로그북 기록(작성자 실명 포함). 로그인 없이 읽기

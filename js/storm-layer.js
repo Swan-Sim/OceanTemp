@@ -13,18 +13,25 @@
     zh: { btn: (n) => `🌀 颱風 ${n}`, typhoon: '颱風', hurricane: '颶風', tc: '熱帶氣旋', warn: (s, km, when) => `${s}接近中 · 預報路徑距此潛點約 ${km} km${when ? `（約 ${when} 最接近）` : ''}。請務必確認當地潛店資訊。`, now: '現在', fc: (h) => `+${h} 小時`, p: '中心氣壓', w: '最大風速', move: '移動', storm: '暴風半徑', gale: '強風半徑', num: (n) => `第 ${n} 號` }
   };
   const T = () => TX[L_()] || TX.en;
+  // [ADD] 기관별 예보 경로 색: JMA 노랑 · KMA 하늘 · NHC 주황. 둘 이상이면 겹치는지(확실) 갈라지는지(불확실) 한 줄로
+  const AG = { jma: { c: '#ffd27a', hex: 0xffd27a, n: { ko: '일본 기상청', en: 'JMA (Japan)', ja: '気象庁', es: 'JMA (Japón)', zh: '日本氣象廳' } }, kma: { c: '#7dd3fc', hex: 0x7dd3fc, n: { ko: '한국 기상청', en: 'KMA (Korea)', ja: '韓国気象庁', es: 'KMA (Corea)', zh: '韓國氣象廳' } }, nhc: { c: '#fb923c', hex: 0xfb923c, n: { ko: '미국 NHC', en: 'NOAA NHC', ja: '米NHC', es: 'NOAA NHC', zh: '美國 NHC' } } };
+  const agName = (k) => (AG[k] && (AG[k].n[L_()] || AG[k].n.en)) || k;
+  const tracksOf = (s) => Object.entries(s.tracks || {}).filter(([, v]) => v && v.length);
+  // 두 기관 예보가 같은 시각(±3h)에 얼마나 떨어졌는지(최대 km)
+  function spread(s) { const tr = tracksOf(s); if (tr.length < 2) return null; let mx = 0; for (let i = 0; i < tr.length; i++) for (let j = i + 1; j < tr.length; j++) tr[i][1].forEach(a => { const b = tr[j][1].reduce((best, p) => (best == null || Math.abs(p.h - a.h) < Math.abs(best.h - a.h)) ? p : best, null); if (b && Math.abs(b.h - a.h) <= 3) mx = Math.max(mx, km(a.lat, a.lon, b.lat, b.lon)); }); return Math.round(mx); }
+  const agree = (s) => { const sp = spread(s); if (sp == null) return ''; const t = { ko: sp <= 150 ? `기관 예보 일치 (차이 ${sp}km) · 신뢰도 높음` : sp <= 400 ? `기관 예보 다소 갈림 (차이 ${sp}km)` : `기관 예보 크게 갈림 (차이 ${sp}km) · 불확실`, en: sp <= 150 ? `Agencies agree (${sp} km apart) · high confidence` : sp <= 400 ? `Agencies differ somewhat (${sp} km)` : `Agencies disagree (${sp} km) · low confidence`, ja: sp <= 150 ? `各機関の予報が一致（差 ${sp}km）・信頼度高` : sp <= 400 ? `予報がやや分かれる（差 ${sp}km）` : `予報が大きく分かれる（差 ${sp}km）・不確実`, es: sp <= 150 ? `Las agencias coinciden (${sp} km) · alta confianza` : sp <= 400 ? `Las agencias difieren algo (${sp} km)` : `Las agencias discrepan (${sp} km) · baja confianza`, zh: sp <= 150 ? `各機構預報一致（差 ${sp}km）・可信度高` : sp <= 400 ? `預報略有分歧（差 ${sp}km）` : `預報分歧大（差 ${sp}km）・不確定` }; return t[L_()] || t.en; };
   const kind = (s) => s.src === 'nhc' ? T().hurricane : (s.cat === 'TY' || s.cat === 'STS' || s.cat === 'TS') ? T().typhoon : T().tc;
-  const label = (s) => `${kind(s)}${s.num ? ' ' + T().num(s.num) : ''} ${s.name}`;
+  const label = (s) => `${kind(s)}${s.num ? ' ' + T().num(s.num) : ''} ${L_() === 'ko' && s.nameKo ? s.nameKo : s.name}`;
   const km = (a, b, c, d) => { const r = Math.PI / 180, x = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2; return 12742 * Math.asin(Math.sqrt(x)); };
   // 점과 선분(위경도) 사이 최소 거리(km) - 짧은 구간이라 평면 근사
   function segKm(lat, lon, a, b) { const cl = Math.cos(lat * Math.PI / 180); const ax = (a[1] - lon) * cl, ay = a[0] - lat, bx = (b[1] - lon) * cl, by = b[0] - lat; const dx = bx - ax, dy = by - ay; const l2 = dx * dx + dy * dy; let t = l2 ? -(ax * dx + ay * dy) / l2 : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(ax + t * dx, ay + t * dy) * 111.32; }
   // 포인트에서 태풍 예보 경로까지 가장 가까운 거리 → { s, km, h } 또는 null
   window.stormNear = function (st) {
     if (!st || !st.coords || !data.storms.length) return null; const lat = st.coords[1], lon = st.coords[0]; let best = null;
-    data.storms.forEach(s => { const pts = [[s.lat, s.lon, 0], ...s.forecast.map(f => [f.lat, f.lon, f.h])]; for (let i = 0; i < pts.length; i++) { let d = km(lat, lon, pts[i][0], pts[i][1]); let h = pts[i][2];
+    data.storms.forEach(s => { const trs = tracksOf(s).map(([, v]) => v); if (!trs.length) trs.push(s.forecast || []); trs.forEach(fc => { const pts = [[s.lat, s.lon, 0], ...fc.map(f => [f.lat, f.lon, f.h])]; for (let i = 0; i < pts.length; i++) { let d = km(lat, lon, pts[i][0], pts[i][1]); let h = pts[i][2];
       if (i > 0) { const sd = segKm(lat, lon, pts[i - 1], pts[i]); if (sd < d) { d = sd; h = (pts[i - 1][2] + pts[i][2]) / 2; } }
-      const r = (i > 0 && pts[i] && s.forecast[i - 1] && s.forecast[i - 1].storm) || s.radii.storm || 0; // 폭풍 반경만큼 가까워진 걸로
-      if (!best || d - r < best.km) best = { s, km: Math.max(0, Math.round(d - r)), h }; } });
+      const r = (i > 0 && fc[i - 1] && fc[i - 1].storm) || s.radii.storm || 0; // 폭풍 반경만큼 가까워진 걸로
+      if (!best || d - r < best.km) best = { s, km: Math.max(0, Math.round(d - r)), h }; } }); });
     return best && best.km <= NEAR_KM ? best : null;
   };
 
@@ -38,8 +45,8 @@
     const ring = (lat, lon, rkm, color, op) => { if (!rkm) return; const n = 48, pts = []; for (let i = 0; i <= n; i++) { const a = i / n * 2 * Math.PI, dl = rkm / 111.32, la = lat + dl * Math.cos(a), lo = lon + dl * Math.sin(a) / Math.cos(lat * Math.PI / 180); pts.push([la, lo]); } const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => latLonToSpherePos(p[0], p[1], R))); gGroup.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: op }))); };
     data.storms.forEach(s => {
       line(s.track, 0xffffff, false);
-      line([[s.lat, s.lon], ...s.forecast.map(f => [f.lat, f.lon])], 0xffd27a, true);
-      s.forecast.forEach(f => ring(f.lat, f.lon, f.r, 0xffd27a, .45));
+      const trs = tracksOf(s); if (!trs.length && s.forecast && s.forecast.length) trs.push([s.src, s.forecast]);
+      trs.forEach(([k, fc]) => { const hex = (AG[k] || AG.jma).hex; line([[s.lat, s.lon], ...fc.map(f => [f.lat, f.lon])], hex, true); fc.forEach(f => ring(f.lat, f.lon, f.r, hex, .4)); });
       ring(s.lat, s.lon, s.radii.storm, 0xf87171, .9); ring(s.lat, s.lon, s.radii.gale, 0xfbbf24, .7);
       // 기호 + 이름(캔버스 스프라이트)
       const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');
@@ -56,13 +63,14 @@
     const t = T();
     data.storms.forEach(s => {
       if (s.track.length > 1) L.polyline(s.track, { color: '#fff', weight: 2, opacity: .8, interactive: false }).addTo(mapLayer);
-      const fc = [[s.lat, s.lon], ...s.forecast.map(f => [f.lat, f.lon])];
-      if (fc.length > 1) L.polyline(fc, { color: '#ffd27a', weight: 2, dashArray: '6 5', opacity: .9, interactive: false }).addTo(mapLayer);
-      s.forecast.forEach(f => { if (f.r) L.circle([f.lat, f.lon], { radius: f.r * 1000, color: '#ffd27a', weight: 1, dashArray: '4 4', fill: false, interactive: false }).addTo(mapLayer);
-        L.circleMarker([f.lat, f.lon], { radius: 4, color: '#ffd27a', fillColor: '#0B1120', fillOpacity: 1, weight: 1.5 }).bindTooltip(`${t.fc(f.h)}${f.pressure ? ` · ${f.pressure}hPa` : ''}${f.wind ? ` · ${f.wind}m/s` : ''}`, { direction: 'top' }).addTo(mapLayer); });
+      const trs = tracksOf(s); if (!trs.length && s.forecast && s.forecast.length) trs.push([s.src, s.forecast]);
+      trs.forEach(([k, fcs]) => { const col = (AG[k] || AG.jma).c, fc = [[s.lat, s.lon], ...fcs.map(f => [f.lat, f.lon])];
+        if (fc.length > 1) L.polyline(fc, { color: col, weight: 2, dashArray: '6 5', opacity: .9, interactive: false }).addTo(mapLayer);
+        fcs.forEach(f => { if (f.r) L.circle([f.lat, f.lon], { radius: f.r * 1000, color: col, weight: 1, dashArray: '4 4', fill: false, interactive: false }).addTo(mapLayer);
+          L.circleMarker([f.lat, f.lon], { radius: 4, color: col, fillColor: '#0B1120', fillOpacity: 1, weight: 1.5 }).bindTooltip(`${agName(k)} ${t.fc(f.h)}${f.pressure ? ` · ${f.pressure}hPa` : ''}${f.wind ? ` · ${f.wind}m/s` : ''}`, { direction: 'top' }).addTo(mapLayer); }); });
       if (s.radii.gale) L.circle([s.lat, s.lon], { radius: s.radii.gale * 1000, color: '#fbbf24', weight: 1, fillColor: '#fbbf24', fillOpacity: .08, interactive: false }).addTo(mapLayer);
       if (s.radii.storm) L.circle([s.lat, s.lon], { radius: s.radii.storm * 1000, color: '#f87171', weight: 1.5, fillColor: '#f87171', fillOpacity: .15, interactive: false }).addTo(mapLayer);
-      const info = [`<b>${label(s)}</b>`, s.pressure ? `${t.p} ${s.pressure}hPa` : '', s.wind ? `${t.w} ${s.wind}m/s${s.gust ? ` (gust ${s.gust})` : ''}` : '', s.move && (s.move.dir || s.move.kmh) ? `${t.move} ${s.move.dir || ''} ${s.move.kmh ? s.move.kmh + 'km/h' : ''}` : '', s.radii.storm ? `${t.storm} ${s.radii.storm}km` : '', s.radii.gale ? `${t.gale} ${s.radii.gale}km` : ''].filter(Boolean).join('<br>');
+      const info = [`<b>${label(s)}</b>`, s.pressure ? `${t.p} ${s.pressure}hPa` : '', s.wind ? `${t.w} ${s.wind}m/s${s.gust ? ` (gust ${s.gust})` : ''}` : '', s.move && (s.move.dir || s.move.kmh) ? `${t.move} ${s.move.dir || ''} ${s.move.kmh ? s.move.kmh + 'km/h' : ''}` : '', s.radii.storm ? `${t.storm} ${s.radii.storm}km` : '', s.radii.gale ? `${t.gale} ${s.radii.gale}km` : '', tracksOf(s).map(([k]) => `<span style="color:${(AG[k] || AG.jma).c}">━ ━</span> ${agName(k)}`).join(' · '), agree(s) ? `<b>${agree(s)}</b>` : ''].filter(Boolean).join('<br>');
       L.marker([s.lat, s.lon], { icon: L.divIcon({ className: '', html: `<div class="st-eye">🌀</div><div class="st-name">${s.num ? s.num + ' ' : ''}${s.name}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] }), zIndexOffset: 900 }).bindPopup(info).addTo(mapLayer);
     });
     if (!map.hasLayer(mapLayer)) mapLayer.addTo(map);
@@ -77,7 +85,7 @@
     if (!warnEl) { warnEl = document.createElement('div'); warnEl.id = 'storm-warn'; const nm = document.getElementById('st-name'); if (nm && nm.parentElement) nm.parentElement.insertBefore(warnEl, nm.nextSibling); else document.body.appendChild(warnEl); }
     if (!near) { warnEl.style.display = 'none'; return; }
     const when = near.h ? new Date(Date.now() + near.h * 3600e3).toLocaleString(L_(), { month: 'numeric', day: 'numeric', hour: 'numeric' }) : '';
-    warnEl.textContent = `🌀 ${T().warn(label(near.s), near.km, when)}`; warnEl.style.display = '';
+    const ag = agree(near.s); warnEl.textContent = `🌀 ${T().warn(label(near.s), near.km, when)}${ag ? ' ' + ag : ''}`; warnEl.style.display = '';
   }
   async function load() {
     try { const j = await fetch('/api/storms').then(r => r.json()); data = { storms: (j && j.storms) || [] }; } catch (_) { data = { storms: [] }; }

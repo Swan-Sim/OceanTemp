@@ -42,14 +42,46 @@ async function jma() {
   }
   return out;
 }
-// ── NHC: 대서양·동태평양 (현재 위치만; 예보 경로는 KMZ 라 생략) ──
+// ── KMA(한국 기상청 API허브): 서태평양, 시점 기준 현재 태풍 + 예보 (KMA_API_KEY 필요) ──
+async function kma() {
+  const key = process.env.KMA_API_KEY; if (!key) return [];
+  const tm = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12); // UTC YYYYMMDDHHMM
+  const txt = await getText(`https://apihub.kma.go.kr/api/typ01/url/typ_now.php?tm=${tm}&mode=1&disp=1&help=1&authKey=${encodeURIComponent(key)}`, 10000);
+  if (!txt) return [];
+  const lines = txt.split(/\r?\n/); let cols = null; const rows = [];
+  for (const ln of lines) { const t = ln.trim(); if (!t) continue;
+    if (t.startsWith('#')) { const c = t.replace(/^#\s*/, '').split(/\s*,\s*/); if (c.includes('LAT') && c.includes('LON')) cols = c; continue; }
+    if (!cols) continue; const v = t.split(/\s*,\s*/); if (v.length < cols.length - 1) continue; const o = {}; cols.forEach((k, i) => { o[k] = (v[i] || '').trim(); }); rows.push(o); }
+  const by = {}; rows.forEach(o => { const id = `${o.YY || ''}-${o.TYP || ''}`; (by[id] = by[id] || []).push(o); });
+  const num = (x) => { const n = parseFloat(x); return Number.isFinite(n) ? n : null; };
+  const ftTm = (s) => { const m = String(s || '').match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})?/); return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5] || '00'}:00Z` : null; };
+  const out = [];
+  Object.entries(by).forEach(([id, rs]) => {
+    const an = rs.find(r => r.FT === '0' || r.FT === '0.0') || rs[0]; const lat = num(an.LAT), lon = num(an.LON); if (lat == null || lon == null) return;
+    const fcs = rs.filter(r => r.FT === '1' && num(r.LAT) != null).sort((a, b) => num(a.TMD) - num(b.TMD));
+    out.push({ id: 'kma:' + id, src: 'kma', name: String(an.TYP_EN || an.TYP_NAME || '').toUpperCase().trim(), nameKo: an.TYP_NAME || '', num: num(an.TYP), cat: num(an.WS) >= 17 ? 'TY' : 'TD', catKo: num(an.WS) >= 17 ? '태풍' : '열대저압부', intensity: '',
+      pressure: num(an.PS), wind: num(an.WS), gust: null, lat, lon, at: ftTm(an.TYP_TM || an.FT_TM), issue: ftTm(an.TYP_TM),
+      move: { dir: an.DIR || '', kmh: num(an.SP) }, radii: { storm: num(an.RAD25), gale: num(an.RAD15) }, track: [],
+      forecast: fcs.map(r => ({ h: num(r.TMD), t: ftTm(r.FT_TM), lat: num(r.LAT), lon: num(r.LON), r: num(r.RAD), pressure: num(r.PS), wind: num(r.WS), cat: '', storm: num(r.RAD25) })), url: 'https://www.weather.go.kr/w/typhoon/typ-info.do' });
+  });
+  return out;
+}
+// ── NHC: 대서양·동태평양 - 현재 위치 + 예보 통보문(forecast advisory 글)에서 예보 위치 뽑기 ──
 async function nhc() {
   const j = await getJSON('https://www.nhc.noaa.gov/CurrentStorms.json'); const arr = j && j.activeStorms; if (!Array.isArray(arr)) return [];
-  return arr.map(s => ({ id: 'nhc:' + s.id, src: 'nhc', name: String(s.name || '').toUpperCase(), num: null, cat: s.classification || '', catKo: CAT_KO[s.classification] || (/^HU|MH/.test(s.classification || '') ? '허리케인' : '열대폭풍'),
+  const advs = await Promise.all(arr.map(s => s.forecastAdvisory && s.forecastAdvisory.url ? getText(s.forecastAdvisory.url, 8000) : null));
+  // "FORECAST VALID 23/0600Z 39.8N  65.6W" + 다음 줄 "MAX WIND  55 KT...GUSTS  65 KT." 를 예보 점으로. 기준 시각 줄 "... AT 0300Z ..."
+  const parseAdv = (txt, lastUpdate) => { if (!txt) return []; const out = []; const base = lastUpdate ? Date.parse(lastUpdate) : Date.now();
+    const re = /(FORECAST|OUTLOOK) VALID\s+(\d{2})\/(\d{2})(\d{2})Z\s+([\d.]+)([NS])\s+([\d.]+)([EW])[^\n]*\n(?:[^\n]*MAX WIND\s+(\d+)\s*KT)?/g; let m;
+    while ((m = re.exec(txt))) { const d0 = new Date(base); let t = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), +m[2], +m[3], +m[4])); if (t.getTime() < base - 36e5 * 6) t = new Date(t.getTime() + 31 * 86400e3);
+      const h = Math.round((t.getTime() - base) / 36e5); if (h <= 0) continue;
+      out.push({ h, t: t.toISOString(), lat: +m[5] * (m[6] === 'S' ? -1 : 1), lon: +m[7] * (m[8] === 'W' ? -1 : 1), r: null, pressure: null, wind: m[9] ? +(+m[9] * KT).toFixed(1) : null, cat: '', storm: null }); }
+    return out; };
+  return arr.map((s, i) => ({ forecast: parseAdv(advs[i], s.lastUpdate), id: 'nhc:' + s.id, src: 'nhc', name: String(s.name || '').toUpperCase(), num: null, cat: s.classification || '', catKo: CAT_KO[s.classification] || (/^HU|MH/.test(s.classification || '') ? '허리케인' : '열대폭풍'),
     intensity: '', pressure: s.pressure != null ? +s.pressure : null, wind: s.intensity != null ? +(+s.intensity * KT).toFixed(1) : null, gust: null,
     lat: +s.latitudeNumeric, lon: +s.longitudeNumeric, at: s.lastUpdate || null, issue: s.lastUpdate || null,
     move: { dir: s.movementDir != null ? +s.movementDir : '', kmh: s.movementSpeed != null ? +(+s.movementSpeed * 1.852).toFixed(0) : null },
-    radii: { storm: null, gale: null }, track: [], forecast: [], url: 'https://www.nhc.noaa.gov/' })).filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon));
+    radii: { storm: null, gale: null }, track: [], url: 'https://www.nhc.noaa.gov/' })).filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon));
 }
 // ── GDACS: 전 세계 목록(위 두 곳에 없는 것만 보탬) ──
 async function gdacs() {
@@ -68,10 +100,18 @@ async function gdacs() {
 }
 const near = (a, b) => Math.hypot(a.lat - b.lat, (a.lon - b.lon) * Math.cos(a.lat * Math.PI / 180)) < 3; // 3° 안이면 같은 태풍
 
+// [CHANGE] 기관별 예보 경로를 따로 담아요: tracks = { jma: [...], kma: [...], nhc: [...] }. 겹치면 확실, 갈라지면 불확실
 async function build() {
-  const [j, n, gd] = await Promise.all([jma().catch(() => []), nhc().catch(() => []), gdacs().catch(() => [])]);
-  const storms = [...j, ...n];
-  gd.forEach(s => { if (!storms.some(x => near(x, s))) storms.push(s); else { const x = storms.find(x => near(x, s)); if (x && !x.alert) x.alert = s.alert; } });
+  const [j, k, n, gd] = await Promise.all([jma().catch(() => []), kma().catch(() => []), nhc().catch(() => []), gdacs().catch(() => [])]);
+  const storms = [];
+  const add = (s) => { const x = storms.find(x => near(x, s)); if (!x) { s.tracks = {}; if (s.forecast && s.forecast.length) s.tracks[s.src] = s.forecast; s.agencies = [s.src]; storms.push(s); return; }
+    if (s.forecast && s.forecast.length) x.tracks[s.src] = s.forecast; x.agencies.push(s.src);
+    if (s.nameKo && !x.nameKo) x.nameKo = s.nameKo; if (!x.num && s.num) x.num = s.num; if (!x.name && s.name) x.name = s.name;
+    if (x.pressure == null && s.pressure != null) x.pressure = s.pressure; if (x.wind == null && s.wind != null) x.wind = s.wind;
+    if (!x.radii.storm && s.radii.storm) x.radii.storm = s.radii.storm; if (!x.radii.gale && s.radii.gale) x.radii.gale = s.radii.gale;
+    if (!x.track.length && s.track && s.track.length) x.track = s.track; if (s.alert && !x.alert) x.alert = s.alert; };
+  [...j, ...k, ...n, ...gd].forEach(add);
+  storms.forEach(s => { s.forecast = s.tracks.jma || s.tracks.kma || s.tracks.nhc || s.forecast || []; });
   return { ok: true, at: Date.now(), storms };
 }
 module.exports = async function handler(req, res) {

@@ -46,6 +46,9 @@
   .err { color: #FB7185; font-size: 13px; margin-top: 8px; }
   .nav { display: flex; gap: 6px; margin-bottom: 14px; align-items: center; }
   .rangeBar { position: sticky; top: 0; z-index: 20; background: var(--bg); padding: 10px 0; margin: -4px 0 10px; border-bottom: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
+  /* [FIX] sticky가 안 먹는 환경 대비: 스크롤로 지나가면 화면 위에 고정(JS가 .stuck 붙임), 자리는 #rangeGhost가 지켜요 */
+  .rangeBar.stuck { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: min(960px, 100vw); box-sizing: border-box; padding: 10px 16px; margin: 0; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+  #rangeGhost { display: none; } #rangeGhost.on { display: block; }
   .navlink { color: var(--muted); font-size: 13px; text-decoration: none; padding: 6px 10px; border-radius: 999px; border: 1px solid transparent; }
   .navlink.on, .navlink:hover { color: var(--text); border-color: rgba(255,176,0,.5); }
   code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px; }
@@ -188,6 +191,7 @@
     </div>
     <div id="secStats" class="sec">
     <!-- [CHANGE] 기간 선택 한 줄: 당일·7·14·30·90일·누적. 아래 모든 그래프·표에 같이 적용. 스크롤해도 위에 붙어 있어요 -->
+    <div id="rangeGhost"></div>
     <div class="row rangeBar" id="rangeBar">
       <button data-days="today">당일</button><button data-days="7">7일</button><button data-days="14" class="on">14일</button>
       <button data-days="30">30일</button><button data-days="90">90일</button><button data-days="all">누적</button>
@@ -355,6 +359,19 @@
 
   $('loginForm').addEventListener('submit', (e) => { e.preventDefault(); setPw($('pw').value); load(); });
   $('logout').addEventListener('click', () => { setPw(''); showLogin(); });
+  // [FIX] 기간 버튼 줄을 스크롤해도 화면 위에 붙여 두기(sticky가 안 되는 경우까지). 보던 자리에서 바로 바꿀 수 있어요
+  (function () {
+    const bar = $('rangeBar'), ghost = $('rangeGhost'); let top0 = 0;
+    const measure = () => { if (bar.classList.contains('stuck')) return; top0 = bar.getBoundingClientRect().top + window.scrollY; };
+    const onScroll = () => {
+      if ($('secStats').style.display === 'none') { bar.classList.remove('stuck'); ghost.classList.remove('on'); return; }
+      const stuck = window.scrollY > top0 + 4;
+      if (stuck && !bar.classList.contains('stuck')) { ghost.style.height = bar.offsetHeight + 'px'; ghost.classList.add('on'); bar.classList.add('stuck'); }
+      else if (!stuck && bar.classList.contains('stuck')) { bar.classList.remove('stuck'); ghost.classList.remove('on'); }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true }); window.addEventListener('resize', () => { measure(); onScroll(); });
+    setTimeout(() => { measure(); onScroll(); }, 300); document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('[data-sec]')) setTimeout(() => { bar.classList.remove('stuck'); ghost.classList.remove('on'); measure(); }, 50); });
+  })();
   // [CHANGE] 기간 선택(당일/7/14/30/90/누적): 받아 둔 자료 안의 기간이면 다시 받지 않고 바로 다시 그려요
   document.querySelectorAll('[data-days]').forEach(b => b.addEventListener('click', () => {
     const v = b.dataset.days; days = v === 'today' || v === 'all' ? v : +v;

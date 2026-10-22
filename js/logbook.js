@@ -117,7 +117,7 @@
     const u = acct().user && acct().user(), adm = !!(u && u.role === 'admin');
     const o = document.createElement('div'); o.className = 'ot-pv'; o.innerHTML = `<div class="pvw"><img src="${phUrl(id, 'b')}" alt=""><span class="pvn" hidden></span></div>` + (adm ? `<button type="button">${T.photoDelAdm}</button>` : '');
     // [ADD] 공개 사진이면 작성자 이름·날짜를 사진 오른쪽 아래에
-    fetch(`/api/spotobs?svc=lpinfo&id=${encodeURIComponent(id)}`).then(r => r.json()).then(j => { const n = o.querySelector('.pvn'); if (j && j.ok && j.name && n) { n.textContent = `© ${j.name}${j.date ? ' · ' + j.date : ''}`; n.hidden = false; } }).catch(() => {});
+    fetch(`/api/spotobs?svc=lpinfo&id=${encodeURIComponent(id)}`).then(r => r.json()).then(j => { const n = o.querySelector('.pvn'); if (j && j.ok && n) { n.textContent = `© ${j.name || (KO ? 'otemp.app 회원' : 'otemp.app member')}${j.date ? ' · ' + j.date : ''}`; n.hidden = false; } }).catch(() => {}); // 공개 사진은 이름이 없어도(옛 사진·익명) 출처 표시
     o.onclick = (ev) => { if (ev.target.tagName === 'BUTTON') return; o.remove(); };
     const bt = o.querySelector('button'); if (bt) bt.onclick = async () => { try { await post('phdel', { id }); window.dispatchEvent(new Event('otemp:photos')); } catch (_) {} o.remove(); };
     document.body.appendChild(o);

@@ -81,7 +81,7 @@
       ring(pv.lat, pv.lon, s.radii.storm, 0xf87171, .9); ring(pv.lat, pv.lon, s.radii.gale, 0xfbbf24, .7);
       // 구름 그림(반구·세기별) - 지구본에 납작하게 붙여요. 크기는 강풍 반경 기준
       { const tex = new THREE.CanvasTexture(stormCloud(s.lat < 0, levelOf(s))); const rk = cloudKm(s), size = rk / 111.32 * (Math.PI / 180) * GLOBE_RADIUS * 2;
-        const geo = new THREE.PlaneGeometry(size, size), mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 1, depthWrite: false }) // 지구본은 구름을 또렷하게(지형보다 태풍이 중요); const mesh = new THREE.Mesh(geo, mat);
+        const geo = new THREE.PlaneGeometry(size, size), mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 1, depthWrite: false }); const mesh = new THREE.Mesh(geo, mat); // 지구본은 구름을 또렷하게(지형보다 태풍이 중요)
         const p = latLonToSpherePos(pv.lat, pv.lon, GLOBE_RADIUS + 0.9); mesh.position.copy(p); mesh.lookAt(p.clone().multiplyScalar(2)); mesh.userData.spin = s.lat < 0 ? -1 : 1; gGroup.add(mesh); }
       // 기호 + 이름(캔버스 스프라이트)
       const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');

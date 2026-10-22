@@ -117,6 +117,12 @@ async function build() {
 module.exports = async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   const force = (req.query || {}).force === '1';
+  // [ADD] ?debug=kma : 기상청 API허브 원문 앞부분만 보여줘요(열 이름·형식 확인용. 키는 안 나와요)
+  if ((req.query || {}).debug === 'kma') { const key = process.env.KMA_API_KEY; const tm = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12); res.setHeader('Cache-Control', 'no-store');
+    if (!key) return res.status(200).json({ hasKey: false });
+    const c = new AbortController(); const t = setTimeout(() => c.abort(), 10000);
+    try { const r = await fetch(`https://apihub.kma.go.kr/api/typ01/url/typ_now.php?tm=${tm}&mode=1&disp=1&help=1&authKey=${encodeURIComponent(key)}`, { signal: c.signal }); const txt = await r.text(); return res.status(200).json({ hasKey: true, tm, status: r.status, head: txt.slice(0, 3000) }); }
+    catch (e) { return res.status(200).json({ hasKey: true, tm, error: String(e && e.message || e) }); } finally { clearTimeout(t); } }
   try {
     if (!force) { try { const [{ result }] = await redisPipeline([['GET', 'storms:v1']]); if (result) { res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1800'); return res.status(200).send(result); } } catch (_) {} }
     const o = await build(); const body = JSON.stringify(o);

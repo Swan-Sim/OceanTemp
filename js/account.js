@@ -267,7 +267,8 @@
     let n = document.getElementById('acct-notice');
     const hideIt = () => { if (n) n.classList.remove('show'); };
     if (c.show === 'off' || (c.show === 'guest' && me.user) || (c.start && now < c.start) || (c.end && now > c.end) || nGet()) return hideIt();
-    const title = c.title || T.nTitle, sub = c.title ? c.sub : T.nSub, items = c.title ? c.items : T.nItems;
+    const tr = c.tr && c.tr[L]; // [ADD] 화면 언어의 자동 번역본이 있으면 그걸로
+    const title = (tr && tr.title) || c.title || T.nTitle, sub = c.title ? ((tr && tr.sub) || c.sub) : T.nSub, items = c.title ? ((tr && tr.items) || c.items) : T.nItems;
     if (!n) { n = document.createElement('div'); n.id = 'acct-notice'; document.body.appendChild(n); window.addEventListener('resize', () => placeNotice(n)); }
     n.innerHTML = `<button class="n-x" aria-label="${T.close}">×</button><h4>${esc(title)}</h4>${sub ? `<div class="n-sub">${esc(sub)}</div>` : ''}<ul>${(items || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="n-row"><button class="n-hide">${T.nHide}</button>${me.user ? '' : `<button class="n-go">${T.nBtn}</button>`}</div>`;
     const hide = (perm) => { n.classList.remove('show'); if (perm) nSet('1'); };

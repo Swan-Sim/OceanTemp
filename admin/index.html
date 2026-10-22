@@ -319,7 +319,8 @@
       const b = bp[no] || { s: 0, o: 0 };
       return `<tr><td>${no === 'index' ? esc(name) : `<a href="/ko/s/${no}" target="_blank" style="color:inherit">${esc(name)}</a>`}<div class="hbar h" style="width:${((pg[no] || 0) / pmax * 100).toFixed(0)}%"></div></td><td class="n">${(pg[no] || 0).toLocaleString()}</td><td class="n">${(srNo[no] || 0).toLocaleString()}</td><td class="b">${b.s.toLocaleString()}</td><td class="b o">${b.o.toLocaleString()}</td></tr>`;
     }).join('') : '<tr><td style="color:var(--muted)">아직 데이터가 없어요 (배포 후 구글·네이버에 사이트맵을 등록하면 쌓여요)</td></tr>';
-    table('stations', sum('stations'), (k) => k, 15);
+    // [CHANGE] 정점명에 링크: 이름 → 번호를 찾아 앱(/?no=)과 포인트 페이지(/ko/s/)로. 번호를 못 찾으면 이름만
+    table('stations', sum('stations'), (k) => { const no = spotNoByName[String(k).trim().toLowerCase()]; return no ? `<a href="/?no=${no}" target="_blank" style="color:inherit">${esc(k)}</a> <a href="/ko/s/${no}" target="_blank" class="muted" style="font-size:11px;text-decoration:none">페이지 ›</a>` : esc(k); }, 15, true);
     // [ADD] 다이빙샵 클릭: "샵id|종류" → "샵이름 · 전화"
     const KIND = { tel: '전화', kakao: '카톡', whatsapp: 'WhatsApp', instagram: '인스타', web: '웹', all: '전체 보기' };
     table('shops', sum('shops'), (k) => { const [id, kd] = k.split('|'); return `${shopNames[id] || '샵 ' + id} · ${KIND[kd] || kd}`; }, 30);
@@ -349,11 +350,11 @@
     $(axisId).innerHTML = labels.map(l => `<span>${l}</span>`).join('');
   }
 
-  function table(id, obj, fmt, limit) {
+  function table(id, obj, fmt, limit, html) { // html=true 면 fmt 가 돌려준 HTML 을 그대로 써요(링크 등)
     const rows = Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, limit || 12);
     const max = rows.length ? rows[0][1] : 1;
     $(id).innerHTML = rows.length
-      ? rows.map(([k, n]) => `<tr><td>${fmt(k).replace(/</g, '&lt;')}<div class="hbar" style="width:${(n / max * 100).toFixed(0)}%"></div></td><td class="n">${n.toLocaleString()}</td></tr>`).join('')
+      ? rows.map(([k, n]) => `<tr><td>${html ? fmt(k) : fmt(k).replace(/</g, '&lt;')}<div class="hbar" style="width:${(n / max * 100).toFixed(0)}%"></div></td><td class="n">${n.toLocaleString()}</td></tr>`).join('')
       : '<tr><td style="color:var(--muted)">아직 데이터가 없어요</td></tr>';
   }
 
@@ -539,9 +540,9 @@
   secFromHash();
 
   // 정점 번호 → 이름(구글 시트 + 사용자 등록)
-  let spotNames = {}, spotAll = []; // spotAll: 검색용 [{no, name, label, country}]
+  let spotNames = {}, spotAll = [], spotNoByName = {}; // spotAll: 검색용 [{no, name, label, country}] · spotNoByName: 이름/짧은이름(소문자) → 번호
   // [CHANGE] 포인트 이름: 구글 시트 대신 전체 포인트 목록(/api/shops?svc=spots)에서
-  fetch('/api/shops?svc=spots').then(r => r.json()).then(j => { (j.spots || []).forEach(x => { spotNames[x.no] = x.label || x.name; }); if (mg) renderMgmt(); }).catch(() => {});
+  fetch('/api/shops?svc=spots').then(r => r.json()).then(j => { (j.spots || []).forEach(x => { spotNames[x.no] = x.label || x.name; [x.name, x.label].filter(Boolean).forEach(nm => { spotNoByName[String(nm).trim().toLowerCase()] = x.no; }); }); if (mg) renderMgmt(); if (lastData) render(lastData.data); }).catch(() => {});
   const spotsText = (arr) => (arr || []).map(n => `<span title="#${n}">${esc(spotNames[n] || ('#' + n))}</span>`).join(', ');
   // [ADD] 나라 셀렉트(값은 시트와 같은 영어 이름, 보이는 이름은 한국어)
   function countrySelect(cur) {
@@ -590,7 +591,7 @@
 
   function renderMgmt() {
     if (!mg) return;
-    (mg.spots || []).forEach(s => { spotNames[s.no] = s.label || s.name; });
+    (mg.spots || []).forEach(s => { spotNames[s.no] = s.label || s.name; [s.name, s.label].filter(Boolean).forEach(nm => { spotNoByName[String(nm).trim().toLowerCase()] = s.no; }); });
     const shopById = Object.fromEntries((mg.shops || []).map(s => [String(s.id), s]));
     const reports = mg.reports || [];
     $('bShops').textContent = (mg.reqs.length + reports.length) || '';

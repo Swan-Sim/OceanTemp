@@ -368,6 +368,7 @@ const T = {
     desc: (n, c, t, v, w) => `${c ? c + ' ' : ''}${n}의 오늘 바다 수온${t != null ? ` ${t}°C` : ''}${v ? `, 시야 약 ${v}m` : ''}${w != null ? `, 파고 ${w}m` : ''}. 3일 예보, 물때(만조·간조), 월별 평균 수온과 근처 샵까지 한눈에.`,
     sub: (lat, lon) => `위도 ${lat}°, 경도 ${lon}°`, upd: (s) => `${s} 업데이트`,
     nowT: '지금 수온', vis: '시야(위성 추정)', wave: '파고', wind: '바람',
+    lead: (n, t, when, src, v, w) => `${when} 기준 ${n} 바다 수온은 ${t}°C예요 (${src})${v ? `. 시야 약 ${v}m` : ''}${w != null ? `, 파고 ${w}m` : ''}.`, leadObs: (nm, km) => `${nm} 관측소 실측${km != null ? `, ${km}km` : ''}`, leadModel: '위성·예보 모델 추정', regionOf: (r) => `${r} 전체 보기 ›`,
     obs: (n, d) => `실측 · ${n}${d != null ? ` ${d}km` : ''}`, model: '위성·예보 모델', range: (a, b) => `범위 ${a}–${b}m`,
     period: (p) => `주기 ${p}초`, gust: (g) => `돌풍 ${g}`, dir: ['북', '북동', '동', '남동', '남', '남서', '서', '북서'], dirW: (x) => `${x}풍`,
     cta: '실시간 지도·그래프로 보기 ›', share: '공유', copied: '링크를 복사했어요',
@@ -399,6 +400,7 @@ const T = {
     desc: (n, c, t, v, w) => `Sea water temperature at ${n}${c ? `, ${c}` : ''} today${t != null ? `: ${t}°C (${f(t)}°F)` : ''}${v ? `, visibility about ${v} m` : ''}${w != null ? `, waves ${w} m` : ''}. 3-day forecast, tide times, monthly averages and nearby shops.`,
     sub: (lat, lon) => `Lat ${lat}°, Lon ${lon}°`, upd: (s) => `updated ${s}`,
     nowT: 'Water temp now', vis: 'Visibility (satellite est.)', wave: 'Waves', wind: 'Wind',
+    lead: (n, t, when, src, v, w) => `As of ${when}, the sea temperature at ${n} is ${t}°C (${src})${v ? `, visibility about ${v} m` : ''}${w != null ? `, waves ${w} m` : ''}.`, leadObs: (nm, km) => `measured at ${nm} station${km != null ? `, ${km} km away` : ''}`, leadModel: 'satellite/forecast model estimate', regionOf: (r) => `All spots around ${r} ›`,
     obs: (n, d) => `Measured · ${n}${d != null ? ` ${d} km` : ''}`, model: 'Satellite / forecast model', range: (a, b) => `range ${a}–${b} m`,
     period: (p) => `period ${p} s`, gust: (g) => `gusts ${g}`, dir: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], dirW: (x) => `from ${x}`,
     cta: 'Open live map & charts ›', share: 'Share', copied: 'Link copied',
@@ -430,6 +432,7 @@ const T = {
     desc: (n, c, t, v, w) => `${c ? c + '・' : ''}${n}の今日の海水温${t != null ? ` ${t}°C` : ''}${v ? `、透明度 約${v}m` : ''}${w != null ? `、波高 ${w}m` : ''}。3日間予報、潮汐（満潮・干潮）、月別平均水温、近くのショップ。`,
     sub: (lat, lon) => `緯度 ${lat}°・経度 ${lon}°`, upd: (s) => `${s} 更新`,
     nowT: '現在の水温', vis: '透明度（衛星推定）', wave: '波高', wind: '風',
+    lead: (n, t, when, src, v, w) => `${when}時点の${n}の海水温は${t}°Cです（${src}）${v ? `。透明度 約${v}m` : ''}${w != null ? `、波高 ${w}m` : ''}。`, leadObs: (nm, km) => `${nm}観測所の実測${km != null ? `、${km}km` : ''}`, leadModel: '衛星・予報モデルの推定', regionOf: (r) => `${r}周辺のポイント一覧 ›`,
     obs: (n, d) => `実測・${n}${d != null ? ` ${d}km` : ''}`, model: '衛星・予報モデル', range: (a, b) => `範囲 ${a}–${b}m`,
     period: (p) => `周期 ${p}秒`, gust: (g) => `最大瞬間 ${g}`, dir: ['北', '北東', '東', '南東', '南', '南西', '西', '北西'], dirW: (x) => `${x}の風`,
     cta: 'リアルタイム地図・グラフを見る ›', share: '共有', copied: 'リンクをコピーしました',
@@ -522,7 +525,7 @@ a{color:inherit}.wrap{max-width:760px;margin:0 auto;padding:16px 16px 48px}
 .crumb{font-size:12px;color:var(--dim);margin:14px 0 4px}.crumb a{text-decoration:none}
 h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em;line-height:1.3}
 .sub{color:var(--muted);font-size:13px;margin:0 0 12px}
-.h1row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.h1row h1{margin:0}.altname{color:var(--muted);font-size:13.5px;margin:2px 0 8px}.shopline{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.shopline a{color:var(--accent);text-decoration:none}
+.h1row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.h1row h1{margin:0}.altname{color:var(--muted);font-size:13.5px;margin:2px 0 8px}.lead{font-size:16px;line-height:1.55;margin:6px 0 10px}.shopline{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.shopline a{color:var(--accent);text-decoration:none}
 .plog{padding:8px 0;border-bottom:1px solid var(--line)}.plog:last-of-type{border-bottom:0}.plog .l1{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline}.plog .who{color:var(--accent);font-weight:600}.plog .m{color:var(--muted);font-size:13px}.plog .n{font-size:13.5px;margin-top:3px;white-space:pre-wrap}
 .phrow{display:flex;gap:6px;overflow-x:auto;margin:8px 0 2px;padding-bottom:2px}.phrow img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
 .cards.g4 .c.amb{border-color:#FFB000;background:rgba(255,176,0,.08)}.bar.dim{opacity:.38;filter:saturate(.35)}
@@ -730,9 +733,11 @@ ${cards}
 ${d.obs && d.obs.kind === 'seoul' ? `<p class="note" style="margin:0 0 10px">${d.obs.extra && d.obs.extra.length ? `${t.trib}: ${d.obs.extra.map(x => `${esc(x.name)} ${x.t}°C`).join(' · ')}<br>` : ''}${t.seoulSrc}</p>` : ''}
 <div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>
 ${tide}${days}`;
+  let regionLink = ''; try { const RG = require('./_region'); const r = RG.buildRegions(all).find(x => x.spots.some(o => o.no === st.no)); if (r) regionLink = `<p class="sub"><a href="${RG.rpath(lang, r)}">${esc(t.regionOf(r.key))}</a></p>`; } catch (_) {} // [ADD] 지역 페이지 링크
   const body = `${header(lang, hrefs)}
 <nav class="crumb"><a href="/${lang}/s/">${t.links[1]}</a> › <a href="/${lang}/s/#${st.cc || 'xx'}">${esc(cname)}</a> › ${esc(st.name)}</nav>
 <div class="h1row"><h1>${esc(inland ? t.h1In(st.name) : t.h1(st.name))}</h1>${shopLine}</div>${st0.name && st0.name !== st.name ? `<div class="altname">${esc(st0.name)}</div>` : ''}
+${nowT != null && !d.pending ? `<p class="lead">${esc(t.lead(st.name, nowT, fmtDate(d.obs && d.obs.at ? d.obs.at : d.at, { dateStyle: 'medium', timeStyle: 'short' }), d.obs ? t.leadObs(d.obs.name, d.obs.dist) : t.leadModel, visToday ? fmtVis(visToday.v) : null, r1(d.now.wave)))}</p>` : ''}${regionLink}
 ${photoHtml}
 ${partW('clim', climH)}${partW('depth', inland ? '' : depthHtml(lang, depth), inland ? '' : undefined)}
 ${partW('now', nowInner, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}
@@ -768,7 +773,7 @@ function renderIndex(lang, all, base) {
   all.forEach(s => { const k = s.cc || 'xx'; (groups[k] = groups[k] || []).push(s); });
   const order = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length || regionName(a, lang, a).localeCompare(regionName(b, lang, b), lang));
   const hrefs = Object.fromEntries(LANGS.map(l => [l, `/${l}/s/`]));
-  const body = `${header(lang, hrefs)}<div class="idx"><h1 style="margin-top:16px">${t.indexH1}</h1><p class="sub">${t.indexDesc}</p>
+  const body = `${header(lang, hrefs)}<div class="idx"><h1 style="margin-top:16px">${t.indexH1}</h1><p class="sub">${t.indexDesc} · <a href="/${lang}/r/">${{ ko: '지역별로 보기 ›', ja: '地域別に見る ›' }[lang] || 'By region ›'}</a></p>
 ${order.map(cc => `<h2 id="${cc}">${esc(regionName(cc, lang, groups[cc][0].country))} <small style="color:var(--dim);font-weight:500">${groups[cc].length}</small></h2><div class="near">${groups[cc].map(s => `<a href="${pathOf(lang, s)}">${esc(nameIn(s, lang))}</a>`).join('')}</div>`).join('')}
 <div class="foot">© otemp.app · <a href="/">${t.links[0]}</a><a href="/shop/">${t.links[2]}</a><a href="/spot/">${t.links[3]}</a></div></div>`;
   return page({ lang, title: t.indexTitle, desc: t.indexDesc, canonical: hrefs[lang], alternates: hrefs, body, base });
@@ -822,6 +827,8 @@ module.exports = async function spotPage(req, res) {
       const urls = [];
       const idx = Object.fromEntries(LANGS.map(l => [l, `/${l}/s/`]));
       LANGS.forEach(l => urls.push(`<url><loc>${base}${idx[l]}</loc>${alt(idx)}<lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`));
+      try { const RG = require('./_region'); const ridx = Object.fromEntries(LANGS.map(l => [l, `/${l}/r/`])); LANGS.forEach(l => urls.push(`<url><loc>${base}${ridx[l]}</loc>${alt(ridx)}<lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`));
+        RG.buildRegions(all).forEach(r => { const p = Object.fromEntries(LANGS.map(l => [l, RG.rpath(l, r)])); LANGS.forEach(l => urls.push(`<url><loc>${base}${p[l]}</loc>${alt(p)}<lastmod>${today}</lastmod><changefreq>daily</changefreq></url>`)); }); } catch (_) {} // [ADD] 지역 페이지
       all.forEach(st => { const p = Object.fromEntries(LANGS.map(l => [l, pathOf(l, st)])); LANGS.forEach(l => urls.push(`<url><loc>${base}${p[l]}</loc>${alt(p)}<lastmod>${today}</lastmod><changefreq>daily</changefreq></url>`)); });
       res.setHeader('Content-Type', 'application/xml; charset=utf-8');
       res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
@@ -829,6 +836,9 @@ module.exports = async function spotPage(req, res) {
     }
     const lang = pickLang(req);
     if (svc === 'index') { count(req, 'index'); return sendHtml(res, 200, renderIndex(lang, all, base)); }
+    // [ADD] 지역 페이지(/ko/r/, /ko/r/<지역>) - api/_region.js
+    if (svc === 'regions') { count(req, 'index'); return require('./_region').regionIndex(req, res, lang, all, base); }
+    if (svc === 'region') { count(req, 'region:' + String(q.slug || '')); return require('./_region').regionPage(req, res, lang, all, base, q.slug); }
     // [ADD] 이름 바로가기: otemp.app/문섬 → 정식 주소(/ko/s/39/문섬)로. 여러 곳이면 고르는 화면, 없으면 비슷한 이름 목록
     if (svc === 'go') {
       const dec = (x) => { let v = String(x || ''); for (let i = 0; i < 3; i++) { try { const d = decodeURIComponent(v); if (d === v) break; v = d; } catch (_) { break; } } return v; };
@@ -912,3 +922,5 @@ module.exports = async function spotPage(req, res) {
   }
 };
 module.exports._test = { renderSpot, loadStations, visProjection, extremesFromHourly, slugOf, regionCode, fetchClimYear };
+// [ADD] 지역 페이지(api/_region.js)가 같이 쓰는 도구들
+module.exports.helpers = { page, header, loadStations, dataFor, T, LANGS, pathOf, nameIn, regionName, esc, r1, fmtVis, sendHtml, pickLang, count, cleanSpotName };

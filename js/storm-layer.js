@@ -81,7 +81,7 @@
       ring(pv.lat, pv.lon, s.radii.storm, 0xf87171, .9); ring(pv.lat, pv.lon, s.radii.gale, 0xfbbf24, .7);
       // 구름 그림(반구·세기별) - 지구본에 납작하게 붙여요. 크기는 강풍 반경 기준
       { const tex = new THREE.CanvasTexture(stormCloud(s.lat < 0, levelOf(s))); const rk = cloudKm(s), size = rk / 111.32 * (Math.PI / 180) * GLOBE_RADIUS * 2;
-        const geo = new THREE.PlaneGeometry(size, size), mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: .95, depthWrite: false }); const mesh = new THREE.Mesh(geo, mat);
+        const geo = new THREE.PlaneGeometry(size, size), mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 1, depthWrite: false }) // 지구본은 구름을 또렷하게(지형보다 태풍이 중요); const mesh = new THREE.Mesh(geo, mat);
         const p = latLonToSpherePos(pv.lat, pv.lon, GLOBE_RADIUS + 0.9); mesh.position.copy(p); mesh.lookAt(p.clone().multiplyScalar(2)); mesh.userData.spin = s.lat < 0 ? -1 : 1; gGroup.add(mesh); }
       // 기호 + 이름(캔버스 스프라이트)
       const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');
@@ -147,7 +147,7 @@
   body.detail-mode #btn-storms{bottom:calc(env(safe-area-inset-bottom,0px) + 120px)}
   #storm-warn{display:none;margin:4px 0 2px;padding:6px 10px;border-radius:8px;background:rgba(127,29,29,.5);border:1px solid rgba(248,113,113,.6);color:#fee2e2;font-size:12.5px;line-height:1.4}
   .st-eye{font-size:20px;line-height:40px;text-align:center;filter:drop-shadow(0 0 4px rgba(0,0,0,.8))}
-  .st-cloud{display:block;animation:st-spin 70s linear infinite;transform-origin:50% 50%;mix-blend-mode:screen;will-change:transform} .st-cloud.south{animation-direction:reverse} @keyframes st-spin{from{transform:rotate(0)}to{transform:rotate(-360deg)}} .st-cloud-box{background:none;border:0} .st-h{color:#fde68a;font-weight:600;margin-left:3px} @media (prefers-reduced-motion:reduce){.st-cloud{animation:none}}
+  .st-cloud{display:block;opacity:.5;animation:st-spin 70s linear infinite;transform-origin:50% 50%;mix-blend-mode:screen;will-change:transform} /* 지도에선 지형이 더 중요하니 반투명 */ .st-cloud.south{animation-direction:reverse} @keyframes st-spin{from{transform:rotate(0)}to{transform:rotate(-360deg)}} .st-cloud-box{background:none;border:0} .st-h{color:#fde68a;font-weight:600;margin-left:3px} @media (prefers-reduced-motion:reduce){.st-cloud{animation:none}}
   .st-name{position:absolute;left:50%;top:38px;transform:translateX(-50%);white-space:nowrap;font-size:12px;font-weight:700;color:#fff;background:rgba(127,29,29,.8);padding:1px 6px;border-radius:6px}`;
   document.head.appendChild(css);
   // 지도가 열릴 때·정점이 바뀔 때 따라가기

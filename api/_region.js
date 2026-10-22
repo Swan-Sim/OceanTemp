@@ -46,7 +46,15 @@ const RT = {
   ja: { title: (n, t) => `${n} 今日の海水温${t ? ` – 平均 ${t}°C` : ''} | otemp`, h1: (n) => `${n} 今日の海水温`, desc: (n, k) => `${n}周辺のダイビング・ビーチポイント${k}か所の今日の水温・透明度・波を一覧で。`,
     sum: (n, d, lo, hi, k, w, wt, src) => `${d}時点の${n}周辺の海水温は${lo === hi ? `${lo}°C` : `${lo}〜${hi}°C`}です（${k}か所${w ? `、最も暖かいのは${w} ${wt}°C` : ''}）。${src}`,
     srcObs: '近くに観測所があるポイントは実測値、その他は衛星・予報モデルの推定値です。', cols: ['ポイント', '水温', '透明度', '波高', '出典'], obs: '実測', model: 'モデル', none: 'まだデータがありません。ポイントを一度開くと表示されます。',
-    all: 'すべての地域', idxTitle: '地域別 今日の海水温 | otemp', idxH1: '地域別 今日の海水温', idxDesc: '都市・島ごとにまとめたポイントの今日の水温。', upd: (s) => `${s} 更新`, nspots: (k) => `${k}か所` }
+    all: 'すべての地域', idxTitle: '地域別 今日の海水温 | otemp', idxH1: '地域別 今日の海水温', idxDesc: '都市・島ごとにまとめたポイントの今日の水温。', upd: (s) => `${s} 更新`, nspots: (k) => `${k}か所` },
+  es: { title: (n, t) => `Temperatura del mar hoy en ${n}${t ? ` – media ${t}°C` : ''} | otemp`, h1: (n) => `Temperatura del mar hoy en ${n}`, desc: (n, k) => `Temperatura del agua, visibilidad y olas de hoy en ${k} puntos de buceo y playas de ${n}, en una tabla.`,
+    sum: (n, d, lo, hi, k, w, wt, src) => `A fecha de ${d}, la temperatura del mar en ${n} es de ${lo === hi ? `${lo}°C` : `${lo}–${hi}°C`} en ${k} puntos${w ? ` (el más cálido: ${w}, ${wt}°C)` : ''}. ${src}`,
+    srcObs: 'Los puntos con estación cercana muestran valores medidos; el resto son estimaciones de satélite y modelo.', cols: ['Punto', 'Agua', 'Vis', 'Olas', 'Fuente'], obs: 'medido', model: 'modelo', none: 'Aún no hay datos en caché. Abre un punto y se completará.',
+    all: 'Todas las regiones', idxTitle: 'Temperatura del mar hoy por región | otemp', idxH1: 'Temperatura del mar hoy por región', idxDesc: 'Puntos de buceo y playas agrupados por ciudad o isla, con la temperatura del agua de hoy.', upd: (s) => `Actualizado ${s}`, nspots: (k) => `${k} puntos` },
+  zh: { title: (n, t) => `${n} 今日海水溫度${t ? ` – 平均 ${t}°C` : ''} | otemp`, h1: (n) => `${n} 今日海水溫度`, desc: (n, k) => `${n}周邊 ${k} 個潛點與海灘的今日水溫、能見度與浪高一覽。`,
+    sum: (n, d, lo, hi, k, w, wt, src) => `截至 ${d}，${n}周邊的海水溫度為 ${lo === hi ? `${lo}°C` : `${lo}–${hi}°C`}（${k} 個潛點${w ? `，最暖為 ${w} ${wt}°C` : ''}）。${src}`,
+    srcObs: '附近有測站的潛點為實測值，其餘為衛星與模式估計。', cols: ['潛點', '水溫', '能見度', '浪高', '來源'], obs: '實測', model: '模式', none: '尚無快取資料。開啟任一潛點後即會補上。',
+    all: '所有地區', idxTitle: '各地區今日海水溫度 | otemp', idxH1: '各地區今日海水溫度', idxDesc: '依城市或島嶼分組的潛點與今日水溫。', upd: (s) => `${s} 更新`, nspots: (k) => `${k} 個潛點` }
 };
 const rpath = (lang, r) => `/${lang}/r/${encodeURIComponent(r.slug)}`;
 
@@ -59,7 +67,7 @@ async function regionPage(req, res, lang, all, base, slug) {
     const hit = w.length >= 3 ? regions.map(x => ({ x, n: x.spots.filter(s => `${s.name} ${Object.values(s.names || {}).join(' ')}`.toLowerCase().includes(w)).length })).filter(o => o.n).sort((a, b) => b.n - a.n)[0] : null;
     if (hit) { res.setHeader('Location', rpath(lang, hit.x)); res.setHeader('Cache-Control', 'public, s-maxage=3600'); return res.status(302).end(); }
   }
-  if (!r) { res.setHeader('Cache-Control', 'no-store'); return H.sendHtml(res, 404, H.page({ lang, title: `${T.notFound} | otemp`, desc: t.idxDesc, canonical: `/${lang}/r/`, body: `${H.header(lang, { ko: '/ko/r/', en: '/en/r/', ja: '/ja/r/' })}<h1 style="margin-top:20px">${T.notFound}</h1>`, base })); }
+  if (!r) { res.setHeader('Cache-Control', 'no-store'); return H.sendHtml(res, 404, H.page({ lang, title: `${T.notFound} | otemp`, desc: t.idxDesc, canonical: `/${lang}/r/`, body: `${H.header(lang, Object.fromEntries(H.LANGS.map(l => [l, `/${l}/r/`])))}<h1 style="margin-top:20px">${T.notFound}</h1>`, base })); }
   // 저장된 자료만(Redis GET 포인트당 1번, 최대 40곳)
   const spots = r.spots.slice(0, 40);
   const ds = await Promise.all(spots.map(s => H.dataFor(s, all, { quick: true, cacheOnly: true }).catch(() => null)));

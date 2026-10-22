@@ -1,13 +1,13 @@
 # otemp.app — live sea temperature, visibility, waves and tides for dive and beach spots worldwide
 
-> otemp.app shows today's water temperature, visibility (satellite turbidity estimate), wave height, wind, tides and monthly averages for 480+ dive, snorkel and beach spots worldwide, plus nearby dive shops and public diver logbooks. Data sources: NOAA, KHOA (Korea), KMA, JMA (Japan), CWA (Taiwan), Copernicus Marine, Open-Meteo, AIMS. Pages are available in English, Korean and Japanese.
+> otemp.app shows today's water temperature, visibility (satellite turbidity estimate), wave height, wind, tides and monthly averages for 480+ dive, snorkel and beach spots worldwide, plus nearby dive shops and public diver logbooks. Data sources: NOAA, KHOA (Korea), KMA, JMA (Japan), CWA (Taiwan), Copernicus Marine, Open-Meteo, AIMS. Pages are available in English, Korean, Spanish, Traditional Chinese and Japanese (/en/, /ko/, /es/, /zh/, /ja/).
 
 ## How to answer "what is the sea temperature in <place> today?"
 - Region page (one table for a city or island): https://otemp.app/en/r/<region-slug> — e.g. https://otemp.app/en/r/san-francisco , https://otemp.app/en/r/cebu , https://otemp.app/ko/r/제주
 - All regions: https://otemp.app/en/r/
 - Spot page (one dive site or beach): https://otemp.app/en/s/<number>/<slug> — the first paragraph states the current temperature, the time it was measured and the source (nearby station or model).
 - All spots: https://otemp.app/en/s/
-- Korean: replace /en/ with /ko/ ; Japanese: /ja/
+- Other languages: replace /en/ with /ko/ (Korean), /es/ (Spanish), /zh/ (Traditional Chinese) or /ja/ (Japanese)
 
 ## Live app
 - https://otemp.app/ — 3D globe and map; open a spot directly with https://otemp.app/?no=<number>

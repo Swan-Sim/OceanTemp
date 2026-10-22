@@ -21,7 +21,7 @@ const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
 const WX = 'https://api.open-meteo.com/v1/forecast';
 const CRW = 'https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.csv';
 const COOPS = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
-const LANGS = ['ko', 'en', 'ja'];
+const LANGS = ['ko', 'en', 'ja', 'es', 'zh']; // [CHANGE] 스페인어·중국어(번체) 추가
 const DATA_TTL = 2 * 3600; // 예보·시야 묶음 저장(초)
 
 // ───────── 공통 ─────────
@@ -453,6 +453,70 @@ const T = {
     indexTitle: '世界のダイビングポイントの水温 | otemp', indexH1: 'ダイビングポイント別 水温・透明度・波', indexDesc: '世界のダイビング・シュノーケリングポイントの今日の水温、透明度、波、潮汐、月別平均水温。',
     notFound: 'ポイントが見つかりません', home: 'ホーム',
     dateFmt: { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
+  },
+  es: {
+    title: (n, t) => `${n}: temperatura del agua, visibilidad y olas${t != null ? ` – ${t}°C hoy` : ''} | otemp`,
+    h1: (n) => `${n}: temperatura del agua, visibilidad y olas`,
+    titleIn: (n, t) => `${n}: temperatura del agua y tiempo${t != null ? ` – ${t}°C hoy` : ''} | otemp`, h1In: (n) => `${n}: temperatura del agua y tiempo`,
+    descIn: (n, c, t) => `Temperatura del agua hoy en ${n}${c ? `, ${c}` : ''}${t != null ? `: ${t}°C` : ''}, con temperatura del aire, viento y pronóstico a 3 días.`,
+    aboutIn: (n, c) => `Esta página resume cada día el estado del agua en ${n}${c ? `, ${c}` : ''}. La temperatura del agua se mide en la estación pública de calidad del agua más cercana; la temperatura del aire y el viento provienen de modelos de pronóstico. Los ríos y lagos no tienen modelos marinos de olas, mareas ni visibilidad satelital, por lo que no se muestran. Sigue las indicaciones locales antes de entrar al agua.`,
+    trib: 'Estaciones de afluentes cercanas', seoulSrc: 'Datos: estaciones de calidad del agua del río Han, Gobierno Metropolitano de Seúl (Seoul Open Data Plaza, KOGL tipo 1)', air: 'Aire', colsIn: ['Aire (mín–máx)', 'Viento (máx)', 'Rachas (máx)'],
+    desc: (n, c, t, v, w) => `Temperatura del mar hoy en ${n}${c ? `, ${c}` : ''}${t != null ? `: ${t}°C` : ''}${v ? `, visibilidad de unos ${v} m` : ''}${w != null ? `, olas de ${w} m` : ''}. Pronóstico a 3 días, mareas, promedios mensuales y centros de buceo cercanos.`,
+    sub: (lat, lon) => `Lat ${lat}°, Lon ${lon}°`, upd: (s) => `actualizado ${s}`,
+    nowT: 'Temperatura del agua ahora', vis: 'Visibilidad (est. satelital)', wave: 'Olas', wind: 'Viento',
+    lead: (n, t, when, src, v, w) => `A fecha de ${when}, la temperatura del mar en ${n} es de ${t}°C (${src})${v ? `, visibilidad de unos ${v} m` : ''}${w != null ? `, olas de ${w} m` : ''}.`, leadObs: (nm, km) => `medida en la estación ${nm}${km != null ? `, a ${km} km` : ''}`, leadModel: 'estimación de satélite y modelo de pronóstico', regionOf: (r) => `Todos los puntos de ${r} ›`,
+    obs: (n, d) => `Medida · ${n}${d != null ? ` ${d} km` : ''}`, model: 'Satélite / modelo de pronóstico', range: (a, b) => `rango ${a}–${b} m`,
+    period: (p) => `periodo ${p} s`, gust: (g) => `rachas ${g}`, dir: ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'], dirW: (x) => `del ${x}`,
+    cta: 'Abrir mapa y gráficos en vivo ›', share: 'Compartir', copied: 'Enlace copiado',
+    tideH: 'Mareas de hoy (pleamar y bajamar)', high: 'Pleamar', low: 'Bajamar', msl: 'respecto al nivel medio del mar',
+    tideSrc: { cwa: (s, d) => `Fuente: pronóstico de mareas de la Administración Meteorológica Central de Taiwán · ${s} (${d} km)`, jma: (s, d) => `Fuente: tablas de mareas de la Agencia Meteorológica de Japón · ${s} (${d} km)`, coops: (s, d) => `Fuente: predicciones de mareas NOAA CO-OPS · ${s} (${d} km)`, model: () => 'Fuente: modelo de nivel del mar Open-Meteo (aproximado; puede diferir de las tablas del puerto)' },
+    daysH: 'Próximos 3 días', dayN: ['Hoy', 'Mañana', 'Pasado mañana'], cols: ['Agua', 'Olas (máx)', 'Viento (máx)', 'Visibilidad (est.)'],
+    visNote: (d) => `La visibilidad se estima a partir de la claridad del agua medida por satélite (último día satelital ${d}); los números pequeños son el rango probable, que se amplía más adelante.`,
+    rowTemp: 'Agua °C', rowVis: 'Visibilidad m', visTxt: (bm, bv, wm, wv) => `La visibilidad suele ser mejor en <b>${bm} (unos ${bv} m)</b> y peor en <b>${wm} (unos ${wv} m)</b>.`, visClimNote: (y, a, b) => `visibilidad: turbidez satelital NOAA ${a}–${b} (${y} años), mediana mensual`,
+    climHTemp: 'Temperatura media del agua por mes', climH: 'Temperatura media del agua y visibilidad por mes', climNote: (y, a, b) => `SST satelital NOAA, ${a}–${b} (${y} años), media mensual`,
+    climTxt: (n, hm, hv, cm, cv) => `El mar en ${n} está más cálido en <b>${hm} (unos ${hv}°C)</b> y más frío en <b>${cm} (unos ${cv}°C)</b>.`,
+    month: (m) => ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][m], suit: 'Traje',
+    shopH: (n) => `Centros de buceo cerca de ${n}`, shopNone: 'Aún no hay centros registrados.', shopAsk: '¿Tienes un centro de buceo?', shopReg: 'Registra tu centro ›', partner: 'Colaborador',
+    shopBtn: { tel: 'Llamar', kakao: 'Kakao', whatsapp: 'WhatsApp', instagram: 'Instagram', web: 'Web' },
+    nearH: 'Puntos cercanos', aboutH: (n) => `Sobre el agua en ${n}`,
+    about: (n, c) => `Esta página resume cada día el estado del mar en ${n}${c ? `, ${c}` : ''}. La temperatura actual del agua proviene de una estación de medición cercana cuando existe; si no, de modelos satelitales y de pronóstico. Las olas y el viento vienen de modelos de pronóstico, y la visibilidad se estima a partir de la claridad del agua medida por satélite. Las condiciones reales pueden variar: sigue las indicaciones del centro de buceo local antes de entrar al agua.`,
+    foot: 'Datos: KHOA · KMA · Agencia Meteorológica de Japón · NOAA · Open-Meteo · Copernicus Marine. Solo como referencia; no para navegación ni decisiones de seguridad.',
+    links: ['Mapa mundial de puntos', 'Todos los puntos', 'Registrar un centro', 'Sugerir un punto'],
+    indexTitle: 'Temperatura del agua en puntos de buceo del mundo | otemp', indexH1: 'Temperatura del agua, visibilidad y olas por punto de buceo', indexDesc: 'Temperatura del agua de hoy, visibilidad, olas, mareas y promedios mensuales de puntos de buceo y esnórquel en todo el mundo.',
+    notFound: 'Punto no encontrado', home: 'Inicio',
+    dateFmt: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
+  },
+  zh: {
+    title: (n, t) => `${n} 水溫・能見度・浪高${t != null ? ` – 今日 ${t}°C` : ''} | otemp`,
+    h1: (n) => `${n} 水溫・能見度・浪高`,
+    titleIn: (n, t) => `${n} 水溫・天氣${t != null ? ` – 今日 ${t}°C` : ''} | otemp`, h1In: (n) => `${n} 水溫・天氣`,
+    descIn: (n, c, t) => `${c ? c + ' ' : ''}${n}今日的水溫${t != null ? ` ${t}°C` : ''}、氣溫、風力與 3 日預報一次掌握。`,
+    aboutIn: (n, c) => `本頁每天整理${n}${c ? `（${c}）` : ''}的水況。水溫為最近的公共水質測站實測值，氣溫與風力來自預報模式。河川與湖泊沒有海洋模式的浪高、潮汐與衛星能見度資料，因此不顯示。下水前請依當地建議判斷。`,
+    trib: '附近支流測站', seoulSrc: '資料：首爾市漢江水質自動測站（Seoul Open Data Plaza, KOGL 第 1 類）', air: '氣溫', colsIn: ['氣溫（最低～最高）', '風（最大）', '陣風（最大）'],
+    desc: (n, c, t, v, w) => `${c ? c + ' ' : ''}${n}今日海水溫度${t != null ? ` ${t}°C` : ''}${v ? `、能見度約 ${v} m` : ''}${w != null ? `、浪高 ${w} m` : ''}。3 日預報、潮汐、每月平均水溫與附近潛店。`,
+    sub: (lat, lon) => `緯度 ${lat}°・經度 ${lon}°`, upd: (s) => `${s} 更新`,
+    nowT: '目前水溫', vis: '能見度（衛星估計）', wave: '浪高', wind: '風',
+    lead: (n, t, when, src, v, w) => `截至 ${when}，${n}的海水溫度為 ${t}°C（${src}）${v ? `，能見度約 ${v} m` : ''}${w != null ? `，浪高 ${w} m` : ''}。`, leadObs: (nm, km) => `${nm}測站實測${km != null ? `，距離 ${km} km` : ''}`, leadModel: '衛星與預報模式估計', regionOf: (r) => `查看${r}所有潛點 ›`,
+    obs: (n, d) => `實測 · ${n}${d != null ? ` ${d} km` : ''}`, model: '衛星 / 預報模式', range: (a, b) => `範圍 ${a}–${b} m`,
+    period: (p) => `週期 ${p} 秒`, gust: (g) => `陣風 ${g}`, dir: ['北', '東北', '東', '東南', '南', '西南', '西', '西北'], dirW: (x) => `${x}風`,
+    cta: '開啟即時地圖與圖表 ›', share: '分享', copied: '已複製連結',
+    tideH: '今日潮汐（滿潮・乾潮）', high: '滿潮', low: '乾潮', msl: '以平均海平面為基準',
+    tideSrc: { cwa: (s, d) => `來源：中央氣象署潮汐預報 · ${s}（${d} km）`, jma: (s, d) => `來源：日本氣象廳潮位表 · ${s}（${d} km）`, coops: (s, d) => `來源：NOAA CO-OPS 潮汐預報 · ${s}（${d} km）`, model: () => '來源：Open-Meteo 海平面模式（僅供參考，可能與港口潮汐表不同）' },
+    daysH: '未來 3 天', dayN: ['今天', '明天', '後天'], cols: ['水溫', '浪高（最大）', '風（最大）', '能見度（估計）'],
+    visNote: (d) => `能見度依衛星測得的水體清澈度估計（最近衛星資料 ${d}），小字為可能範圍，越往後範圍越大。`,
+    rowTemp: '水溫 °C', rowVis: '能見度 m', visTxt: (bm, bv, wm, wv) => `能見度通常在<b>${bm}（約 ${bv} m）</b>最好，<b>${wm}（約 ${wv} m）</b>最差。`, visClimNote: (y, a, b) => `能見度：NOAA 衛星濁度 ${a}–${b}（${y} 年）每月中位數`,
+    climHTemp: '每月平均水溫', climH: '每月平均水溫與能見度', climNote: (y, a, b) => `NOAA 衛星海溫 ${a}–${b}（${y} 年）每月平均`,
+    climTxt: (n, hm, hv, cm, cv) => `${n}的海水在<b>${hm}（約 ${hv}°C）</b>最暖，<b>${cm}（約 ${cv}°C）</b>最冷。`,
+    month: (m) => `${m + 1}月`, suit: '防寒衣',
+    shopH: (n) => `${n}附近的潛店`, shopNone: '尚無登錄的潛店。', shopAsk: '您經營潛店嗎？', shopReg: '登錄潛店 ›', partner: '合作',
+    shopBtn: { tel: '電話', kakao: 'Kakao', whatsapp: 'WhatsApp', instagram: 'Instagram', web: '網站' },
+    nearH: '附近潛點', aboutH: (n) => `${n}的水況說明`,
+    about: (n, c) => `本頁每天整理${n}${c ? `（${c}）` : ''}的海況。目前水溫在附近有測站時採用實測值，否則採用衛星與預報模式。浪高與風力來自預報模式，能見度依衛星測得的水體清澈度估計。實際狀況可能不同，下水前請參考當地潛店的建議。`,
+    foot: '資料：KHOA · KMA · 日本氣象廳 · NOAA · Open-Meteo · Copernicus Marine。僅供參考，請勿用於航行或安全判斷。',
+    links: ['世界潛點地圖', '所有潛點', '登錄潛店', '新增潛點'],
+    indexTitle: '世界潛點水溫 | otemp', indexH1: '各潛點的水溫・能見度・浪高', indexDesc: '全球潛水與浮潛潛點的今日水溫、能見度、浪高、潮汐與每月平均水溫。',
+    notFound: '找不到潛點', home: '首頁',
+    dateFmt: { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
   }
 };
 function f(c) { return (c * 9 / 5 + 32).toFixed(1); }
@@ -463,7 +527,9 @@ const suitFor = (t) => t < 18 ? '7mm+' : t < 23 ? '5mm' : t < 27 ? '3mm' : '2mm'
 const SUIT_T = {
   ko: { '2mm': '2mm 쇼티', '3mm': '3mm 웻', '5mm': '5mm 웻', '7mm+': '7mm 이상·드라이', legend: '슈트 = 그 달 평균 수온에 맞는 추천 슈트 두께(2mm 쇼티 ≥27°C · 3mm 웻슈트 23–27°C · 5mm 웻슈트 18–23°C · 7mm 이상 또는 드라이슈트 <18°C). 추위를 타는 정도에 따라 한 단계 두껍게.' },
   en: { '2mm': '2mm shorty', '3mm': '3mm wet', '5mm': '5mm wet', '7mm+': '7mm+ / dry', legend: 'Suit = suggested wetsuit thickness for that month’s average water temperature (2mm shorty ≥27°C · 3mm wetsuit 23–27°C · 5mm wetsuit 18–23°C · 7mm+ or drysuit <18°C). Go one step thicker if you get cold easily.' },
-  ja: { '2mm': '2mm ショーティ', '3mm': '3mm ウェット', '5mm': '5mm ウェット', '7mm+': '7mm以上・ドライ', legend: 'スーツ＝その月の平均水温に合うスーツの目安（2mmショーティ ≥27°C・3mmウェット 23–27°C・5mmウェット 18–23°C・7mm以上またはドライ <18°C）。寒がりの方は一段厚めに。' }
+  ja: { '2mm': '2mm ショーティ', '3mm': '3mm ウェット', '5mm': '5mm ウェット', '7mm+': '7mm以上・ドライ', legend: 'スーツ＝その月の平均水温に合うスーツの目安（2mmショーティ ≥27°C・3mmウェット 23–27°C・5mmウェット 18–23°C・7mm以上またはドライ <18°C）。寒がりの方は一段厚めに。' },
+  es: { '2mm': 'shorty 2mm', '3mm': 'traje 3mm', '5mm': 'traje 5mm', '7mm+': '7mm+ / seco', legend: 'Traje = grosor sugerido según la temperatura media del agua de ese mes (shorty 2mm ≥27°C · 3mm 23–27°C · 5mm 18–23°C · 7mm+ o traje seco <18°C). Elige un grosor más si eres friolero.' },
+  zh: { '2mm': '2mm 短袖', '3mm': '3mm 濕衣', '5mm': '5mm 濕衣', '7mm+': '7mm 以上・乾衣', legend: '防寒衣＝依該月平均水溫建議的厚度（2mm 短袖 ≥27°C・3mm 濕衣 23–27°C・5mm 濕衣 18–23°C・7mm 以上或乾衣 <18°C）。怕冷者請再加厚一級。' }
 };
 // [ADD] 연평균·추천 시즌. 점수 = 시야 55% + 생물 활동 30% + 수온 편안함 15%, 플랑크톤 번성 달(엽록소가 연중 중앙값의 1.6배↑ & 1 mg/m³↑)은 추천에서 빼요.
 //  생물 활동: 실측 생물다양성 자료가 없어서 "그 바다의 따뜻한 철"(연중 수온 범위에서의 위치)을 대신 써요 - 온대 바다는 난류를 따라 어종이 느는 늦여름~가을이 높고, 열대(연교차 작음)는 연중 비슷.
@@ -484,7 +550,7 @@ function seasonFor(lang, clim, climVis) {
   else { for (let k = 0; k < 12; k++) { const j = (start + 1 + k) % 12; if (good[j]) { if (!runs.length || runs[runs.length - 1].e !== (j + 11) % 12) runs.push({ s: j, e: j, n: 1 }); else { runs[runs.length - 1].e = j; runs[runs.length - 1].n++; } } }
     runs = runs.sort((a, b) => b.n - a.n).map(r => [r.s, r.e]); }
   const [s0, e0] = runs[0] || [sc.indexOf(best), sc.indexOf(best)];
-  const mon = (k) => lang === 'en' ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][k] : `${k + 1}${lang === 'ja' ? '月' : '월'}`;
+  const mon = (k) => (T[lang] || T.en).month(k); // [CHANGE] 언어별 달 이름은 T 에서
   const range = s0 === e0 ? mon(s0) : `${mon(s0)}–${mon(e0)}`;
   const idxs = []; for (let k = s0; ; k = (k + 1) % 12) { idxs.push(k); if (k === e0) break; }
   const tIn = +(idxs.reduce((a, k) => a + m[k], 0) / idxs.length).toFixed(1);
@@ -506,11 +572,19 @@ function seasonFor(lang, clim, climVis) {
     ja: [vIn != null ? `この時期は透明度が平均約${vIn}mで年間でも良い方で、` : `この時期は年間で最も暖かく、`,
       tropical ? `水温${tIn}°Cで年中安定し、生き物の活動も安定しています。` : `水温${tIn}°Cで${tIn >= 20 ? '暖流に乗って魚種が増える暖かい季節です。' : 'やや冷たいものの透明度は良好です。'}`,
       vm && bestV >= 0 ? `透明度は${mon(bestV)}（約${vMax}m）が最も良く、水温は${mon(warm)}（${m[warm]}°C）が最高、${mon(cold)}（${m[cold]}°C）が最低です。` : `水温は${mon(warm)}（${m[warm]}°C）が最高、${mon(cold)}（${m[cold]}°C）が最低です。`,
-      blTxt ? `${blTxt}はプランクトンの増殖（クロロフィル高）で透明度が落ちるため除外しました。` : ''].filter(Boolean).join('')
-  }[lang];
-  const basis = { ko: '기준: 시야 55% · 생물 활동 30% · 수온 15%, 플랑크톤 번성 달 제외. 생물 활동은 실측 자료가 없어 그 바다의 따뜻한 철로 추정한 값이에요.', en: 'Basis: visibility 55% · marine-life activity 30% · water temp 15%; plankton-bloom months excluded. Marine-life activity is estimated from the site’s warm season (no direct biodiversity data).', ja: '基準：透明度55%・生物活動30%・水温15%、プランクトン増殖月は除外。生物活動は実測データがないため、その海域の暖かい季節から推定しています。' }[lang];
+      blTxt ? `${blTxt}はプランクトンの増殖（クロロフィル高）で透明度が落ちるため除外しました。` : ''].filter(Boolean).join(''),
+    es: [vIn != null ? `En ese periodo la visibilidad promedia unos ${vIn} m, de las mejores del año,` : `Es la parte más cálida del año,`,
+      tropical ? `y el agua se mantiene en torno a ${tIn}°C todo el año, con vida marina constante.` : `con agua en torno a ${tIn}°C: ${tIn >= 20 ? 'la temporada cálida, cuando más especies siguen las corrientes cálidas.' : 'fría, pero clara.'}`,
+      vm && bestV >= 0 ? `La visibilidad es máxima en ${mon(bestV)} (~${vMax} m); el agua está más cálida en ${mon(warm)} (${m[warm]}°C) y más fría en ${mon(cold)} (${m[cold]}°C).` : `El agua está más cálida en ${mon(warm)} (${m[warm]}°C) y más fría en ${mon(cold)} (${m[cold]}°C).`,
+      blTxt ? `${blTxt} se excluye: las floraciones de plancton (clorofila alta) reducen la visibilidad.` : ''].filter(Boolean).join(' '),
+    zh: [vIn != null ? `這段期間能見度平均約 ${vIn} m，是全年最清澈的時候，` : `這段期間是全年最暖的季節，`,
+      tropical ? `水溫 ${tIn}°C 全年穩定，海洋生物活動也穩定。` : `水溫 ${tIn}°C，${tIn >= 20 ? '屬於暖季，隨暖流而來的魚種較多。' : '偏冷但能見度好。'}`,
+      vm && bestV >= 0 ? `能見度在${mon(bestV)}（約 ${vMax} m）最好；水溫在${mon(warm)}（${m[warm]}°C）最高、${mon(cold)}（${m[cold]}°C）最低。` : `水溫在${mon(warm)}（${m[warm]}°C）最高、${mon(cold)}（${m[cold]}°C）最低。`,
+      blTxt ? `${blTxt}因浮游植物增生（葉綠素高）能見度下降，已排除。` : ''].filter(Boolean).join('')
+  }[lang] || '';
+  const basis = { ko: '기준: 시야 55% · 생물 활동 30% · 수온 15%, 플랑크톤 번성 달 제외. 생물 활동은 실측 자료가 없어 그 바다의 따뜻한 철로 추정한 값이에요.', en: 'Basis: visibility 55% · marine-life activity 30% · water temp 15%; plankton-bloom months excluded. Marine-life activity is estimated from the site’s warm season (no direct biodiversity data).', ja: '基準：透明度55%・生物活動30%・水温15%、プランクトン増殖月は除外。生物活動は実測データがないため、その海域の暖かい季節から推定しています。', es: 'Base: visibilidad 55% · actividad de vida marina 30% · temperatura del agua 15%; se excluyen los meses de floración de plancton. La actividad de vida marina se estima a partir de la temporada cálida del sitio (sin datos directos).', zh: '依據：能見度 55%・海洋生物活動 30%・水溫 15%，排除浮游植物增生月份。生物活動無實測資料，依該海域的暖季推估。' }[lang];
   const rec = m.map((_, i) => idxs.includes(i));
-  const chlTxt = cm ? ({ ko: blTxt ? `플랑크톤(클로로필) 번성: ${blTxt}` : '플랑크톤 번성 달 없음(클로로필 연중 낮음)', en: blTxt ? `Plankton (chlorophyll) bloom: ${blTxt}` : 'No bloom months (chlorophyll low all year)', ja: blTxt ? `プランクトン（クロロフィル）増殖: ${blTxt}` : '増殖月なし（クロロフィル年中低い）' })[lang] : ({ ko: '클로로필 자료 준비 중', en: 'Chlorophyll data pending', ja: 'クロロフィルデータ準備中' })[lang];
+  const chlTxt = cm ? ({ ko: blTxt ? `플랑크톤(클로로필) 번성: ${blTxt}` : '플랑크톤 번성 달 없음(클로로필 연중 낮음)', en: blTxt ? `Plankton (chlorophyll) bloom: ${blTxt}` : 'No bloom months (chlorophyll low all year)', ja: blTxt ? `プランクトン（クロロフィル）増殖: ${blTxt}` : '増殖月なし（クロロフィル年中低い）', es: blTxt ? `Floración de plancton (clorofila): ${blTxt}` : 'Sin meses de floración (clorofila baja todo el año)', zh: blTxt ? `浮游植物（葉綠素）增生：${blTxt}` : '無增生月份（葉綠素全年偏低）' })[lang] : ({ ko: '클로로필 자료 준비 중', en: 'Chlorophyll data pending', ja: 'クロロフィルデータ準備中', es: 'Datos de clorofila pendientes', zh: '葉綠素資料準備中' })[lang];
   return { avgT, avgV, range, why, basis, bloom: blTxt, rec, chlTxt };
 }
 const tempColor = (t) => t < 10 ? '#6366f1' : t < 16 ? '#3b82f6' : t < 20 ? '#0e9488' : t < 24 ? '#84cc16' : t < 27 ? '#facc15' : '#f97316';
@@ -581,7 +655,7 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(
 }
 
 function header(lang, hrefs) {
-  const names = { ko: '한국어', en: 'English', ja: '日本語' };
+  const names = { ko: '한국어', en: 'English', ja: '日本語', es: 'Español', zh: '中文' };
   return `<div class="top"><a class="logo" href="/">otemp<span>.app</span></a><nav class="langs">${LANGS.map(l => `<a href="${hrefs[l]}" hreflang="${l}"${l === lang ? ' aria-current="page"' : ''}>${names[l]}</a>`).join('')}</nav></div>`;
 }
 
@@ -592,7 +666,11 @@ const DEPTH_T = {
   en: { h: 'Depth around the spot', max: (r) => `Max within ${r}m`, avg: (r) => `Avg within ${r}m`, far: 'Max within 1km', at: 'At the spot', prof: 'West–east profile', land: 'Land', depth: 'Depth',
     note: (n, r) => `Source: ${n} (~${r}m grid). Not a nautical chart; real depths (walls, pinnacles) can differ. Plan dives with local knowledge and your dive computer.`, tap: 'Tap the map for depth' },
   ja: { h: '周辺の水深', max: (r) => `${r}m以内の最大`, avg: (r) => `${r}m以内の平均`, far: '1km以内の最大', at: 'ポイント地点', prof: '東西断面', land: '陸地', depth: '水深',
-    note: (n, r) => `出典：${n}（約${r}m格子）。海図ではないため、実際の水深（壁・根など）とは異なる場合があります。ダイビング計画は現地情報とダイブコンピューターを基準にしてください。`, tap: '地図をタップで水深表示' }
+    note: (n, r) => `出典：${n}（約${r}m格子）。海図ではないため、実際の水深（壁・根など）とは異なる場合があります。ダイビング計画は現地情報とダイブコンピューターを基準にしてください。`, tap: '地図をタップで水深表示' },
+  es: { h: 'Profundidad alrededor del punto', max: (r) => `Máx. en ${r}m`, avg: (r) => `Media en ${r}m`, far: 'Máx. en 1km', at: 'En el punto', prof: 'Perfil oeste–este', land: 'Tierra', depth: 'Profundidad',
+    note: (n, r) => `Fuente: ${n} (malla de ~${r}m). No es una carta náutica; las profundidades reales (paredes, pináculos) pueden diferir. Planifica con información local y tu ordenador de buceo.`, tap: 'Toca el mapa para ver la profundidad' },
+  zh: { h: '潛點周邊水深', max: (r) => `${r}m 內最大`, avg: (r) => `${r}m 內平均`, far: '1km 內最大', at: '潛點位置', prof: '東西剖面', land: '陸地', depth: '水深',
+    note: (n, r) => `資料：${n}（約 ${r}m 網格）。非海圖，實際水深（牆壁、礁岩）可能不同。請依當地資訊與潛水電腦規劃。`, tap: '點地圖查看水深' }
 };
 function depthHtml(lang, dp) {
   if (!dp || !dp.ok || !dp.grid) return '';
@@ -643,7 +721,7 @@ function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm, 
   // [ADD] 아직 못 받은 자료는 자리만 잡아 두고(빙글 도는 표시) 페이지를 먼저 보여줘요. 브라우저가 svc=parts 로 받아 채워요.
   const pend = { now: !d, clim: !clim || (!climVis && !d), depth: !depth, near: !d }; // 연평균 시야가 없으면 현재 시야로 대신 보여주려고 d 가 올 때까지 기다려요
   if (!d) d = { tz: 'UTC', at: Date.now(), now: {}, days: [], water: 'sea', near: [], pending: true };
-  const SPIN = `<div class="card pend"><span class="spin"></span>${{ ko: '불러오는 중…', ja: '読み込み中…' }[lang] || 'Loading…'}</div>`;
+  const SPIN = `<div class="card pend"><span class="spin"></span>${{ ko: '불러오는 중…', ja: '読み込み中…', es: 'Cargando…', zh: '載入中…' }[lang] || 'Loading…'}</div>`;
   const st = { ...st0, name: nameIn(st0, lang) };
   const cname = regionName(st.cc, lang, st.country);
   const tz = d.tz;
@@ -691,10 +769,10 @@ ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.d
     const m = clim.months; const hi = m.indexOf(Math.max(...m)), lo = m.indexOf(Math.min(...m));
     const minV = Math.min(...m), maxV = Math.max(...m), span = Math.max(6, maxV - minV + 4), floor = minV - 2;
     let sz = null; try { sz = seasonFor(lang, clim, climVis); } catch (_) {}
-    const L = { ko: ['추천 시즌', '연평균 수온', '연평균 시야', '플랑크톤', '이유'], en: ['Best season', 'Avg water temp', 'Avg visibility', 'Plankton', 'Why'], ja: ['おすすめシーズン', '年平均水温', '年平均透明度', 'プランクトン', '理由'] }[lang] || [];
+    const L = { ko: ['추천 시즌', '연평균 수온', '연평균 시야', '플랑크톤', '이유'], en: ['Best season', 'Avg water temp', 'Avg visibility', 'Plankton', 'Why'], ja: ['おすすめシーズン', '年平均水温', '年平均透明度', 'プランクトン', '理由'], es: ['Mejor temporada', 'Temp. media del agua', 'Visibilidad media', 'Plancton', 'Por qué'], zh: ['推薦季節', '年平均水溫', '年平均能見度', '浮游植物', '原因'] }[lang] || [];
     const recBar = (i) => sz && sz.rec[i];
     // [CHANGE] "한눈에 보기" + "월별 평균 수온"을 한 카드로: 왼쪽 위 추천 시즌 → 연평균 수온·시야·플랑크톤 → 월별 그래프(추천 달 호박색, 나머지는 채도 낮게) → 슈트 → 표
-    climH = `<h2>${{ ko: '한눈에 보기', en: 'At a glance', ja: 'ひと目で' }[lang] || 'At a glance'}</h2><div class="card">
+    climH = `<h2>${{ ko: '한눈에 보기', en: 'At a glance', ja: 'ひと目で', es: 'De un vistazo', zh: '一目了然' }[lang] || 'At a glance'}</h2><div class="card">
 ${sz ? `<div class="cards g4"><div class="c amb"><div class="l">${L[0]}</div><div class="v" style="font-size:19px">${sz.range}</div></div><div class="c"><div class="l">${L[1]}</div><div class="v">${sz.avgT}<small>°C</small></div></div>${sz.avgV != null ? `<div class="c"><div class="l">${L[2]}</div><div class="v">${fmtVis(sz.avgV)}<small>m</small></div></div>` : (() => { const cv = d && d.vis && d.vis[d.today]; return `<div class="c"><div class="l">${{ ko: '시야 (현재·위성)', en: 'Visibility (now, satellite)', ja: '透明度（現在・衛星）' }[lang]}</div><div class="v">${cv ? fmtVis(cv.v) : '–'}<small>m</small></div><div class="s">${{ ko: '연평균은 준비 중', en: 'yearly average pending', ja: '年平均は準備中' }[lang]}</div></div>`; })()}<div class="c"><div class="l">${L[3]}</div><div class="v" style="font-size:12.5px;font-weight:600;white-space:normal;line-height:1.35">${esc(sz.chlTxt)}</div></div></div>
 <p class="txt" style="margin-top:4px"><b>${L[4]}:</b> ${sz.why}</p>` : ''}
 <div class="months">${m.map((v, i) => `<div class="bar${recBar(i) ? ' rec' : ' dim'}" style="height:${((v - floor) / span * 100).toFixed(0)}%;background:${recBar(i) ? '#FFB000' : tempColor(v)}" title="${t.month(i)} ${v}°C"><span>${Math.round(v)}°</span></div>`).join('')}</div>
@@ -704,7 +782,7 @@ ${sz ? `<div class="cards g4"><div class="c amb"><div class="l">${L[0]}</div><di
 <table style="margin-top:6px"><tr><th></th>${m.map((_, i) => `<th>${t.month(i)}</th>`).join('')}</tr>
 <tr><td style="font-size:11px;color:var(--muted);white-space:nowrap">${t.rowTemp}</td>${m.map(v => `<td style="font-size:11.5px">${v}</td>`).join('')}</tr>
 ${climVis ? `<tr><td style="font-size:11px;color:var(--sky);white-space:nowrap">${t.rowVis}</td>${climVis.months.map(v => `<td style="font-size:11.5px;color:var(--sky)">${v == null ? '–' : fmtVis(v)}</td>`).join('')}</tr>` : ''}
-${climVis && climVis.chl ? `<tr><td style="font-size:11px;color:#86efac;white-space:nowrap">${{ ko: '클로로필 mg/m³', en: 'Chl-a mg/m³', ja: 'クロロフィル mg/m³' }[lang]}</td>${climVis.chl.map(v => `<td style="font-size:11px;color:#86efac">${v == null ? '–' : v}</td>`).join('')}</tr>` : ''}</table>
+${climVis && climVis.chl ? `<tr><td style="font-size:11px;color:#86efac;white-space:nowrap">${{ ko: '클로로필 mg/m³', en: 'Chl-a mg/m³', ja: 'クロロフィル mg/m³', es: 'Clorofila mg/m³', zh: '葉綠素 mg/m³' }[lang] || 'Chl-a mg/m³'}</td>${climVis.chl.map(v => `<td style="font-size:11px;color:#86efac">${v == null ? '–' : v}</td>`).join('')}</tr>` : ''}</table>
 ${climVis ? (() => { const vm = climVis.months; const ok = vm.map((v, i) => [v, i]).filter(x => x[0] != null); const b = ok.reduce((a, x) => x[0] > a[0] ? x : a), w = ok.reduce((a, x) => x[0] < a[0] ? x : a); return `<p class="txt">${t.visTxt(t.month(b[1]), fmtVis(b[0]), t.month(w[1]), fmtVis(w[0]))}</p>`; })() : ''}
 <p class="note">${t.climNote(clim.years, clim.from, clim.to)}${climVis ? ' · ' + t.visClimNote(climVis.years, climVis.from, climVis.to) : ''} · ${(SUIT_T[lang] || SUIT_T.en).legend}${sz ? ' · ' + sz.basis : ''}</p></div>`;
   }
@@ -745,7 +823,7 @@ ${shopHtml}${partW('near', nearHtml, '')}
 <div id="plogs" hidden></div>
 <h2>${t.aboutH(esc(st.name))}</h2><p class="txt">${esc(inland ? t.aboutIn(st.name, cname) : t.about(st.name, cname))}</p>
 <div class="foot">${t.foot}<br>© otemp.app · <a href="/">${t.links[0]}</a><a href="/${lang}/s/">${t.links[1]}</a><a href="/shop/">${t.links[2]}</a><a href="/spot/">${t.links[3]}</a></div>
-<script>(function(){var no=${st.no};var PL=${JSON.stringify({ h: { ko: '다이버들의 공개 로그북', en: 'Divers\' public logbook', ja: 'ダイバーの公開ログ' }[lang] || 'Public logbook', by: { ko: '작성', en: 'by', ja: '記録' }[lang] || 'by', min: { ko: '분', en: ' min', ja: '分' }[lang] || ' min', temp: { ko: '수온', en: 'Water', ja: '水温' }[lang] || 'Water', vis: { ko: '시야', en: 'Vis', ja: '透明度' }[lang] || 'Vis', more: { ko: '내 로그북 쓰기 ›', en: 'Write your own ›', ja: '自分のログを書く ›' }[lang] || 'Write your own ›' })};
+<script>(function(){var no=${st.no};var PL=${JSON.stringify({ h: { ko: '다이버들의 공개 로그북', en: 'Divers\' public logbook', ja: 'ダイバーの公開ログ', es: 'Bitácora pública de buceadores', zh: '潛水員公開日誌' }[lang] || 'Public logbook', by: { ko: '작성', en: 'by', ja: '記録', es: 'por', zh: '記錄' }[lang] || 'by', min: { ko: '분', en: ' min', ja: '分', es: ' min', zh: '分鐘' }[lang] || ' min', temp: { ko: '수온', en: 'Water', ja: '水温', es: 'Agua', zh: '水溫' }[lang] || 'Water', vis: { ko: '시야', en: 'Vis', ja: '透明度', es: 'Vis', zh: '能見度' }[lang] || 'Vis', more: { ko: '내 로그북 쓰기 ›', en: 'Write your own ›', ja: '自分のログを書く ›', es: 'Escribe tu bitácora ›', zh: '寫自己的日誌 ›' }[lang] || 'Write your own ›' })};
 fetch('/api/spotobs?svc=lopen&no='+no).then(function(r){return r.json()}).then(function(j){var L=(j&&j.items)||[];if(!L.length)return;var E=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
 var h='<h2>'+PL.h+'</h2>'+L.slice(0,8).map(function(e){var m=[];if(e.depthMax!=null)m.push(e.depthMax+'m');if(e.mins!=null)m.push(e.mins+PL.min);if(e.temp!=null)m.push(PL.temp+' '+e.temp+'°C');if(e.vis!=null)m.push(PL.vis+' '+e.vis+'m');
 return '<div class="plog"><div class="l1"><b>'+E(e.date)+(e.tod?' '+E(e.tod):'')+'</b> <span class="who">'+E(e.name||'-')+' '+PL.by+'</span><span class="m">'+E(m.join(' · '))+'</span></div>'+(e.notes?'<div class="n">'+E(e.notes)+'</div>':'')+((e.photos||[]).length?'<div class="phrow">'+e.photos.map(function(id){return '<a href="/api/spotobs?svc=lphoto&id='+id+'&s=b" target="_blank" rel="noopener"><img src="/api/spotobs?svc=lphoto&id='+id+'&s=t" loading="lazy" alt=""></a>'}).join('')+'</div>':'')+'</div>'}).join('')+'<p class="txt"><a href="/?no='+no+'">'+PL.more+'</a></p>';
@@ -773,7 +851,7 @@ function renderIndex(lang, all, base) {
   all.forEach(s => { const k = s.cc || 'xx'; (groups[k] = groups[k] || []).push(s); });
   const order = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length || regionName(a, lang, a).localeCompare(regionName(b, lang, b), lang));
   const hrefs = Object.fromEntries(LANGS.map(l => [l, `/${l}/s/`]));
-  const body = `${header(lang, hrefs)}<div class="idx"><h1 style="margin-top:16px">${t.indexH1}</h1><p class="sub">${t.indexDesc} · <a href="/${lang}/r/">${{ ko: '지역별로 보기 ›', ja: '地域別に見る ›' }[lang] || 'By region ›'}</a></p>
+  const body = `${header(lang, hrefs)}<div class="idx"><h1 style="margin-top:16px">${t.indexH1}</h1><p class="sub">${t.indexDesc} · <a href="/${lang}/r/">${{ ko: '지역별로 보기 ›', ja: '地域別に見る ›', es: 'Por región ›', zh: '依地區瀏覽 ›' }[lang] || 'By region ›'}</a></p>
 ${order.map(cc => `<h2 id="${cc}">${esc(regionName(cc, lang, groups[cc][0].country))} <small style="color:var(--dim);font-weight:500">${groups[cc].length}</small></h2><div class="near">${groups[cc].map(s => `<a href="${pathOf(lang, s)}">${esc(nameIn(s, lang))}</a>`).join('')}</div>`).join('')}
 <div class="foot">© otemp.app · <a href="/">${t.links[0]}</a><a href="/shop/">${t.links[2]}</a><a href="/spot/">${t.links[3]}</a></div></div>`;
   return page({ lang, title: t.indexTitle, desc: t.indexDesc, canonical: hrefs[lang], alternates: hrefs, body, base });
@@ -856,8 +934,8 @@ module.exports = async function spotPage(req, res) {
       }
       if (!hits.length) hits = all.filter(s => keys(s).some(x => x.includes(k) || (x.length >= 2 && k.includes(x))));
       const lst = hits.slice(0, 30).map(s => `<li><a href="/?no=${s.no}" style="color:var(--accent)">${esc(s.label || s.name)}</a> <span class="txt" style="font-size:12px">${esc(s.name !== s.label ? s.name : '')} · ${esc(regionName(s.cc, lang, s.country))}</span></li>`).join('');
-      const msg = { ko: hits.length ? `"${raw}"에 해당하는 포인트` : `"${raw}" 포인트를 찾지 못했어요`, en: hits.length ? `Spots matching "${raw}"` : `No spot named "${raw}"`, ja: hits.length ? `「${raw}」のポイント` : `「${raw}」のポイントが見つかりません` }[lang];
-      const body = `${header(lang, { ko: '/ko/s/', en: '/en/s/', ja: '/ja/s/' })}<h1 style="margin-top:20px">${esc(msg)}</h1>${lst ? `<div class="card"><ul style="margin:0;padding-left:18px;line-height:2">${lst}</ul></div>` : ''}<p class="txt"><a href="/${lang}/s/" style="color:var(--accent)">${esc(t.indexTitle)}</a></p>`;
+      const msg = { ko: hits.length ? `"${raw}"에 해당하는 포인트` : `"${raw}" 포인트를 찾지 못했어요`, en: hits.length ? `Spots matching "${raw}"` : `No spot named "${raw}"`, ja: hits.length ? `「${raw}」のポイント` : `「${raw}」のポイントが見つかりません` , es: hits.length ? `Puntos que coinciden con "${raw}"` : `No hay ningún punto llamado "${raw}"`, zh: hits.length ? `符合「${raw}」的潛點` : `找不到名為「${raw}」的潛點` }[lang];
+      const body = `${header(lang, Object.fromEntries(LANGS.map(l => [l, `/${l}/s/`])))}<h1 style="margin-top:20px">${esc(msg)}</h1>${lst ? `<div class="card"><ul style="margin:0;padding-left:18px;line-height:2">${lst}</ul></div>` : ''}<p class="txt"><a href="/${lang}/s/" style="color:var(--accent)">${esc(t.indexTitle)}</a></p>`;
       res.setHeader('X-Robots-Tag', 'noindex');
       return sendHtml(res, hits.length ? 200 : 404, page({ lang, title: `${msg} | otemp`, desc: t.indexDesc, canonical: `/${lang}/s/`, body, base }));
     }
@@ -865,7 +943,7 @@ module.exports = async function spotPage(req, res) {
     const st = all.find(s => s.no === no);
     if (!st) {
       const t = T[lang];
-      return sendHtml(res, 404, page({ lang, title: `${t.notFound} | otemp`, desc: t.indexDesc, canonical: `/${lang}/s/`, body: `${header(lang, { ko: '/ko/s/', en: '/en/s/', ja: '/ja/s/' })}<h1 style="margin-top:20px">${t.notFound}</h1><p class="txt"><a href="/${lang}/s/" style="color:var(--accent)">${t.links[1]} ›</a></p>`, base }));
+      return sendHtml(res, 404, page({ lang, title: `${t.notFound} | otemp`, desc: t.indexDesc, canonical: `/${lang}/s/`, body: `${header(lang, Object.fromEntries(LANGS.map(l => [l, `/${l}/s/`])))}<h1 style="margin-top:20px">${t.notFound}</h1><p class="txt"><a href="/${lang}/s/" style="color:var(--accent)">${t.links[1]} ›</a></p>`, base }));
     }
     // 언어 없이 들어왔거나 주소 이름이 다르면 정식 주소로
     const want = pathOf(lang, st);

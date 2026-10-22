@@ -110,7 +110,7 @@
         try {
           const j = JSON.parse(await fetchTextWithTimeout('/api/shops?svc=spots', 8000));
           const spots = (j.spots || []).filter(s => s.name && Number.isFinite(+s.lat) && Number.isFinite(+s.lon)).map(s => ({
-            country: s.country || '', name: cleanSpotName(s.name), shortName: cleanSpotName(s.label || s.name), lat: +s.lat, lon: +s.lon,
+            country: s.country || '', name: cleanSpotName(s.name), shortName: cleanSpotName(s.label || s.name), lat: +s.lat, lon: +s.lon, names: s.names || null,
             depth: s.depth !== false, net: s.network || 'Beach/local', no: +s.no || null,
             face: Number.isFinite(s.face) ? s.face : null, // [ADD] 바다 쪽 방향
             prof: s.prof && ((s.prof.secs && s.prof.secs.length) || s.prof.els) ? s.prof : null // [ADD] 현지 지형(수심 지도 보완)
@@ -147,10 +147,14 @@
         if (isOnLand(s.lon, s.lat)) {
           console.warn('[QA] 해안선 저해상도 오차로 육지 판정된 해변 좌표 - 실제 해변 위치는 맞습니다:', s.name);
         }
+        // [ADD] 언어별 이름: 화면 언어(lang)의 이름이 있으면 그걸 쓰고, 없으면 영어 → 기본 이름. 원래 이름·다른 언어 이름은 검색용으로 남겨요
+        const L = (typeof lang !== 'undefined' ? lang : 'en'), nm = s.names || null;
+        const locName = (nm && (nm[L] || nm.en)) ? cleanSpotName(nm[L] || nm.en) : s.name;
         list.push({
           id: stationIdCounter++,
-          name: s.name, // [CHANGE] "이모티콘도 다 빼" - 이름 앞 🤿 제거
-          label: s.shortName,
+          name: locName, // [CHANGE] "이모티콘도 다 빼" - 이름 앞 🤿 제거 · [CHANGE] 화면 언어의 이름
+          name0: s.name, names: nm,
+          label: (L === 'ko' && nm && nm.ko && !/[가-힣]/.test(s.shortName || '')) ? cleanSpotName(nm.ko) : (L !== 'ko' && /[가-힣]/.test(s.shortName || '') && nm && nm.en) ? cleanSpotName(nm.en) : s.shortName, // 지도 글자: 한국어 화면엔 한국어, 그 외 화면엔 영어
           country: s.country,
           isBeach: true,
           coords: [s.lon, s.lat],

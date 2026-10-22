@@ -8,6 +8,8 @@
       if (!q) return [];
       return stations.filter(st =>
         (st.name && st.name.toLowerCase().includes(q)) ||
+        (st.name0 && st.name0.toLowerCase().includes(q)) || // [ADD] 원래 이름·다른 언어 이름으로도 검색
+        (st.names && Object.values(st.names).some(v => String(v).toLowerCase().includes(q))) ||
         (st.shortName && st.shortName.toLowerCase().includes(q)) ||
         (st.label && st.label.toLowerCase().includes(q))
       ).slice(0, 8);
@@ -23,7 +25,7 @@
         const item = document.createElement('div');
         item.className = 'search-result-item';
         const label = st.shortName || st.name;
-        item.innerHTML = `<span class="sr-name">${label}</span><span class="sr-sub">${st.name}</span>`;
+        item.innerHTML = `<span class="sr-name">${label}</span><span class="sr-sub">${st.name0 && st.name0 !== st.name ? st.name0 : st.name}</span>`;
         item.addEventListener('click', () => onSelect(st));
         containerEl.appendChild(item);
       });

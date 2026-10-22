@@ -147,10 +147,15 @@ function normProf(o) {
 }
 function profOf(b) { const n = normProf(b), L = { pOff: (b.pOff === true || /^(y|yes|true|1)$/i.test(String(b.pOff == null ? '' : b.pOff))) ? true : null, pMax: null, pRun: null, pDir: null, pSpan: null, pRun2: null };
   return n ? { ...L, pTop: n.top, pR: n.r, pSec: n.secs, pElse: n.els } : { ...L, pTop: null, pR: null, pSec: null, pElse: null }; }
+// [ADD] 언어별 이름 { en, ko, es, zh, ja } (비어 있는 칸은 빼요) · namesAuto: 자동 번역으로 채운 칸(true)
+const NAME_LANGS = ['en', 'ko', 'es', 'zh', 'ja'];
+function namesOf(o) { const n = {}, a = {}; const src = (o && o.names) || {}, sa = (o && o.namesAuto) || {};
+  NAME_LANGS.forEach(l => { const v = str(src[l], 80); if (v) { n[l] = v; a[l] = !!sa[l]; } }); return { names: n, namesAuto: a }; }
 function spotFields(b) {
   b = b || {};
   const lat = +b.lat, lon = +b.lon;
   return {
+    ...namesOf(b),
     face: faceOf(b.face), // [ADD] 바다 쪽 방향(바람 종목 오프쇼어 판단)
     ...profOf(b),
     name: str(b.name, 80), label: str(b.label, 30) || str(b.name, 30), country: str(b.country, 40),
@@ -201,7 +206,7 @@ function normSpot(o) {
   if (!(no > 0) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   return { no, country: str(o.country, 40), name: str(o.name, 80), label: str(o.label, 30) || str(o.name, 30), lat: +lat.toFixed(5), lon: +lon.toFixed(5),
     network: str(o.network, 40) || 'Beach/local', depth: truthy(o.depth, true), show: truthy(o.show, true),
-    face: faceOf(o.face), ...profOf(o) };
+    face: faceOf(o.face), ...profOf(o), ...namesOf(o) };
 }
 async function legacySpots(base) {
   let text = await getText(STATION_SHEET, 8000);
@@ -263,6 +268,6 @@ async function adminEmail() { const c = await adminCfg(); return c.email || proc
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const baseOf = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 
-module.exports = { normProf, adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, MAX_SPOTS_LIVEABOARD, maxSpotsFor, shopType, shopValid, POOL_USES, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
+module.exports = { NAME_LANGS, namesOf, normProf, adminCfg, hashPw, checkAdminPw, adminEmail, TERMS_VERSION, PAID_START, defaultExpires, MAX_SPOTS, MAX_SPOTS_LIVEABOARD, maxSpotsFor, shopType, shopValid, POOL_USES, planOf, PLAN_KO, plusYear, K, R, hgetallJSON, shopFields, hasContact, publicShop, isLive, sha, newToken, editUrl, spotFields, email, dateStr, str,
   csvObjects, getText, sheetMaxNo, sendMail, esc, baseOf, STATION_SHEET, BUILTIN_SPOTS,
   allSpots, legacySpots, normSpot, cleanName, spotsMigrated, nextSpotNo, clearSpotsMemo, MIGRATED_KEY };

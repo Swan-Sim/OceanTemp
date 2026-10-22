@@ -96,6 +96,7 @@ module.exports = async function admin(req, res) {
     if (!f.name || f.lat == null || f.lon == null) return bad('need_name_latlon');
     const no = await S.nextSpotNo(S.baseOf(req));
     const spot = { no, ...f, network: S.str(b.network, 40) || 'Beach/local', depth: b.depth !== false, show: b.show !== false, created: Date.now() };
+    try { await require('./_translate').fillNames(spot, { ms: 6000 }); } catch (_) {} // [ADD] 언어별 이름 자동 번역(키가 없으면 그냥 넘어가요)
     await R(['HSET', K.spots, String(no), JSON.stringify(spot)], ['DEL', 'sp:list']);
     S.clearSpotsMemo();
     return ok({ no });
@@ -316,9 +317,22 @@ module.exports = async function admin(req, res) {
     const spot = Object.assign(JSON.parse(raw), S.spotFields(Object.assign(JSON.parse(raw), b)), { show: b.show !== undefined ? b.show !== false : JSON.parse(raw).show !== false }); // [FIX] 종목만 바꿀 때 숨김 상태 유지
     if (b.network !== undefined) spot.network = S.str(b.network, 40) || spot.network || 'Beach/local'; // [ADD]
     if (b.depth !== undefined) spot.depth = b.depth !== false;
+    // [ADD] 사람이 고친 이름 칸은 자동 표시를 지우고, 빈 칸은 자동 번역으로 채워요
+    if (b.names) { const prev = JSON.parse(raw), pn = prev.names || {}, pa = prev.namesAuto || {}, na = {}; S.NAME_LANGS.forEach(l => { const v = (spot.names || {})[l]; if (v) na[l] = v === pn[l] ? !!pa[l] : false; }); spot.namesAuto = na; }
+    try { await require('./_translate').fillNames(spot, { ms: 6000 }); } catch (_) {}
     await R(['HSET', K.spots, no, JSON.stringify(spot)], ['DEL', 'sp:list']);
     S.clearSpotsMemo();
-    return ok();
+    return ok({ names: spot.names, namesAuto: spot.namesAuto });
+  }
+  // [ADD] 이름 번역 한꺼번에 채우기: 빈 칸이 있는 정점부터 한 번에 limit 개(브라우저가 여러 번 불러요). force 면 자동 칸도 다시
+  if (svc === 'spotsTranslate') {
+    const T = require('./_translate'); if (!T.hasKey()) return bad('no_deepl_key');
+    const all = Object.values(await S.hgetallJSON(K.spots)); const limit = Math.max(1, Math.min(30, parseInt(b.limit, 10) || 15));
+    const need = all.filter(sp => { const n = sp.names || {}; return T.LANGS.some(l => !n[l]) || (b.force && Object.values(sp.namesAuto || {}).some(Boolean)); }).sort((a, c) => a.no - c.no);
+    let done = 0; const cmds = [];
+    for (const sp of need.slice(0, limit)) { try { if (await T.fillNames(sp, { ms: 6000, force: !!b.force })) { cmds.push(['HSET', K.spots, String(sp.no), JSON.stringify(sp)]); done++; } } catch (_) {} }
+    if (cmds.length) { cmds.push(['DEL', 'sp:list']); await R(...cmds); S.clearSpotsMemo(); }
+    return ok({ done, remaining: Math.max(0, need.length - done), total: all.length });
   }
   if (svc === 'spotDelete') { await R(['HDEL', K.spots, String(parseInt(b.no, 10))], ['DEL', 'sp:list']); S.clearSpotsMemo(); return ok(); }
 

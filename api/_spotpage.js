@@ -99,7 +99,7 @@ async function loadStations(base) {
   try { const [v] = await S.R(['GET', 'sp:list']); if (v) { const o = JSON.parse(v); if (Date.now() - o.at < 5 * 60e3) list = o.list; } } catch (_) {}
   if (!list) {
     // [CHANGE] 관리 페이지(Redis) 전체 포인트 목록 - 옮기기 전엔 _store가 구글 시트를 대신 읽어요
-    list = (await S.allSpots(base)).map(s => ({ no: s.no, name: cleanSpotName(s.name), label: cleanSpotName(s.label || s.name), country: s.country || '', lat: s.lat, lon: s.lon }));
+    list = (await S.allSpots(base)).map(s => ({ no: s.no, name: cleanSpotName(s.name), label: cleanSpotName(s.label || s.name), country: s.country || '', lat: s.lat, lon: s.lon, names: s.names && Object.keys(s.names).length ? s.names : undefined })); // [ADD] 언어별 이름(nameIn 이 써요)
     list.forEach(s => { s.cc = regionCode(s.country); s.slug = slugOf(s.name); });
     // [ADD] 나라 칸이 빈 포인트(사용자 등록 등)는 300km 안 가장 가까운 포인트의 나라로 채움
     list.forEach(s => {

@@ -21,7 +21,7 @@ const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
 const WX = 'https://api.open-meteo.com/v1/forecast';
 const CRW = 'https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.csv';
 const COOPS = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
-const LANGS = ['ko', 'en', 'ja', 'es', 'zh']; // [CHANGE] 스페인어·중국어(번체) 추가
+const LANGS = ['en', 'ko', 'es', 'zh', 'ja']; // [CHANGE] 스페인어·중국어(번체) 추가
 const DATA_TTL = 2 * 3600; // 예보·시야 묶음 저장(초)
 
 // ───────── 공통 ─────────

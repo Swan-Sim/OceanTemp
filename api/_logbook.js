@@ -30,7 +30,15 @@ function clean(b) {
 }
 
 // handler(a, b, uid, R, json) → 처리했으면 true
-module.exports = async function logbook(a, b, uid, R, json) {
+// [ADD] 공개 기록 목록(HASH lopen: 기록id → {no, uid, name, date, tod, depthMax, mins, temp, vis, photos, at}) - "기록 공개" 동의한 기록만. 작성자 실명(로그인 계정 이름)을 함께 보여줘요
+function pubEntry(e, uid, name) { return { no: e.no, uid, name: String(name || '').slice(0, 40), date: e.date, tod: e.tod || '', depthMax: e.depthMax, mins: e.mins, temp: e.temp, vis: e.vis, type: e.type, notes: String(e.notes || '').slice(0, 140), photos: e.pub ? (e.photos || []).slice(0, 4) : [], at: e.at || Date.now() }; }
+module.exports.listOpen = async function (R, no, limit) { // 포인트의 공개 기록(최근 순)
+  const [arr] = await R(['HGETALL', 'lopen']); const out = [];
+  if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) { try { const o = JSON.parse(arr[i + 1]); if (!no || o.no === no) out.push(Object.assign({ id: arr[i] }, o)); } catch (_) {} }
+  out.sort((x, y) => (y.date || '').localeCompare(x.date || '') || (y.at || 0) - (x.at || 0));
+  return out.slice(0, limit || 20).map(({ uid, ...rest }) => rest); // 회원 id는 밖으로 안 내보내요
+};
+module.exports = Object.assign(async function logbook(a, b, uid, R, json, user) {
   const key = 'ulog:' + uid;
   if (a === 'logs') {
     const [arr] = await R(['HGETALL', key]); const all = [];
@@ -66,18 +74,19 @@ module.exports = async function logbook(a, b, uid, R, json) {
     e.photos = await P.owned(R, uid, b.photos); e.pub = !!b.pub && e.photos.length > 0;
     e.use = !!b.use; e.open = !!b.open; // 동의: 정보 사용(익명 통계) · 기록 공개
     await R(['HSET', key, id, JSON.stringify(e)]);
-    try { await P.sync(R, uid, oldE, e); } catch (_) {}
+    try { await P.sync(R, uid, oldE, e, user && user.name); } catch (_) {}
+    try { if (e.open) await R(['HSET', 'lopen', id, JSON.stringify(pubEntry(e, uid, user && user.name))]); else await R(['HDEL', 'lopen', id]); } catch (_) {} // 공개 목록 맞추기
     let gain = 0; if (!b.id) gain = await C.award(R, uid, 'log'); // 새로 쓸 때만 크레딧(수정은 안 쳐줘요)
     json(200, { ok: true, item: e, gain }); return true;
   }
   if (a === 'logdel') {
     const id = txt(b.id, 20).replace(/[^\w]/g, ''); if (!id) { json(400, { ok: false, error: 'no_id' }); return true; }
-    const [old] = await R(['HGET', key, id]); await R(['HDEL', key, id]);
+    const [old] = await R(['HGET', key, id]); await R(['HDEL', key, id], ['HDEL', 'lopen', id]);
     try { if (old) await require('./_photos').sync(R, uid, JSON.parse(old), null); } catch (_) {}
     json(200, { ok: true }); return true;
   }
   return false;
-};
+}, module.exports);
 module.exports.TANKS = TANKS;
 // 계정 합칠 때 from 의 로그북을 to 로 옮기는 명령들(to 에 같은 id가 있을 일은 없어요)
 module.exports.mergeCmds = async function (R, from, to) {

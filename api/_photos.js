@@ -28,11 +28,17 @@ async function owned(R, uid, ids) {
   return ids.filter((_, i) => res[i] === uid);
 }
 // 기록 저장·삭제 뒤: 빠진 사진 지우기 + 공개 목록 맞추기 (oldE/newE: 기록, 없으면 null)
-async function sync(R, uid, oldE, newE) {
+async function sync(R, uid, oldE, newE, name) { // [ADD] name: 작성자 이름(공개 사진에 같이 저장 → 사진 크게 볼 때 표시)
   const o = (oldE && oldE.photos) || [], n = (newE && newE.photos) || [], cmds = [];
   for (const id of o) if (!n.includes(id)) { cmds.push(['HDEL', 'lphoto:own', id], ['HDEL', 'lphoto:pub', id]); try { await R2.del(`lph/${uid}/${id}_t`); await R2.del(`lph/${uid}/${id}_b`); } catch (_) {} }
-  for (const id of n) cmds.push(newE.pub ? ['HSET', 'lphoto:pub', id, JSON.stringify({ no: newE.no, at: Date.now() })] : ['HDEL', 'lphoto:pub', id]);
+  for (const id of n) cmds.push(newE.pub ? ['HSET', 'lphoto:pub', id, JSON.stringify({ no: newE.no, at: Date.now(), name: String(name || '').slice(0, 40), date: newE.date || '' })] : ['HDEL', 'lphoto:pub', id]);
   if (cmds.length) await R(...cmds);
+}
+// [ADD] 공개 사진 정보(작성자 이름·포인트·날짜) - 사진 크게 볼 때 오른쪽 아래에 표시
+async function info(R, id) {
+  if (!ID.test(String(id))) return null;
+  const [pub] = await R(['HGET', 'lphoto:pub', String(id)]); if (!pub) return null;
+  try { const o = JSON.parse(pub); return { no: o.no, name: o.name || '', date: o.date || '' }; } catch (_) { return null; }
 }
 // 보여주기: ?id=..&s=t|b - 공개 사진은 누구나, 비공개는 주인·관리자만
 async function serve(req, res, R) {
@@ -73,4 +79,4 @@ async function forSpot(R, no, n) {
   if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) { try { const v = JSON.parse(arr[i + 1]); if (v && +v.no === +no) out.push([arr[i], v.at || 0]); } catch (_) {} }
   return out.sort((a, b) => b[1] - a[1]).slice(0, n || 8).map(x => x[0]);
 }
-module.exports = { upload, owned, sync, serve, index, adminDel, forSpot, MAX_PHOTOS };
+module.exports = { info, upload, owned, sync, serve, index, adminDel, forSpot, MAX_PHOTOS };

@@ -6,11 +6,11 @@
   const KO = typeof lang === 'undefined' || lang === 'ko';
   const T = KO ? {
     tab: '로그북', title: (n) => `내 로그북 · ${n}`, add: '새 기록 쓰기', login: '로그인하고 쓰기', needLogin: '로그북은 로그인하면 쓸 수 있어요. 같은 포인트에 쓴 지난 기록도 여기서 볼 수 있어요.',
-    noSpot: '이 지점은 로그북을 쓸 수 없어요(번호가 있는 포인트만).', empty: '아직 이 포인트에 쓴 기록이 없어요.', loading: '불러오는 중…', fail: '불러오지 못했어요',
+    pubH: '다이버들의 공개 로그북', pubBy: '작성', pubNone: '', noSpot: '이 지점은 로그북을 쓸 수 없어요(번호가 있는 포인트만).', empty: '아직 이 포인트에 쓴 기록이 없어요.', loading: '불러오는 중…', fail: '불러오지 못했어요',
     seq: '로그 번호', date: '날짜', tod: '시작 시각 (HH:MM)', kind: '다이버 종류', rec: '레크레이션', tec: '텍다이버', tank: '탱크 종류', dmax: '최대수심 (m)', davg: '평균수심 (m)', mins: '다이빙 시간 (분)',
     fill: '충전 압력 (bar)', remain: '잔압 (bar)', weight: '웨이트 (kg)', suit: '슈트 두께 (mm)', temp: '수온 (°C)', vis: '시야 (m)', buddy: '버디', notes: '메모',
     used: '사용량', sac: '분당 소비량', sacU: 'bar/분 (수면 환산)', rmv: 'L/분', needCalc: '충전·잔압·평균수심·시간을 넣으면 분당 공기소비량이 계산돼요',
-    consTitle: '동의 설정 (한 번 정하면 계속 유지돼요)', consUse: '정보 사용 동의 - 내 수온·시야 기록을 익명 통계(시야 보정 등)에 써도 돼요', consOpen: '기록 공개 동의 - 이 기록을 다른 사람에게 보여도 돼요', consPhoto: '사진 공개 동의 - 지도에 공개 (포인트 이름 아래 작은 사진으로 보여요)',
+    consTitle: '동의 설정 (한 번 정하면 계속 유지돼요)', consUse: '정보 사용 동의 - 내 수온·시야 기록을 익명 통계(시야 보정 등)에 써도 돼요', consOpen: '기록 공개 동의 - 이 기록(날짜·수심·시간·수온·시야·메모)을 내 이름과 함께 이 포인트의 로그북과 포인트 페이지에 공개해요', consPhoto: '사진 공개 동의 - 지도에 공개 (포인트 이름 아래 작은 사진으로 보여요)',
     photos: '사진', photoMax: '최대 4장', photoAdd: '+ 사진', photoPub: '지도에 공개 (포인트 이름 아래 작은 사진으로 보여요)', photoBusy: '올리는 중…', photoFail: '사진을 올리지 못했어요', photoBig: '사진이 너무 커요', photoDelAdm: '이 사진 삭제(관리자)',
     al80: '80cf 탱크 기준', suitNone: '슈트 없이', suitDry: '드라이슈트', tempAuto: (sst, d, t) => `자동: 수면 ${sst}°C → ${d}m 약 ${t}°C (추정)`, tempAutoS: (sst) => `자동: 수면 ${sst}°C (추정)`, tempNo: '이 날짜 수온 자료가 없어요 - 직접 넣어 주세요', tempBusy: '수온 불러오는 중…', visAuto: (v) => `위성 추정 ${v}m - 실제와 다르면 ±로 고쳐 주세요`,
     prev: (d) => `지난 기록(${d})에서 불러왔어요`, save: '저장', cancel: '취소', edit: '수정', del: '삭제', delAsk: '이 기록을 지울까요?', saved: '저장했어요', gain: (n) => ` · 크레딧 +${n}`,
@@ -18,11 +18,11 @@
     tanks: { al80: '알루미늄 80cf (11.1L)', s10: '스틸 10L', s12: '스틸 12L', s15: '스틸 15L', s7: '7L (스테이지/슬링)', d12: '더블 12L (24L)', d7: '더블 7L (14L)', sm80: '사이드마운트 2×80cf (22.2L)' }
   } : {
     tab: 'Logbook', title: (n) => `My logbook · ${n}`, add: 'New entry', login: 'Log in to write', needLogin: 'Log in to keep a logbook. Past entries for the same spot show up here.',
-    noSpot: 'Logbook is only for numbered spots.', empty: 'No entries for this spot yet.', loading: 'Loading…', fail: 'Could not load',
+    pubH: "Divers' public logbook", pubBy: 'by', pubNone: '', noSpot: 'Logbook is only for numbered spots.', empty: 'No entries for this spot yet.', loading: 'Loading…', fail: 'Could not load',
     seq: 'Log no.', date: 'Date', tod: 'Start time (HH:MM)', kind: 'Diver type', rec: 'Recreational', tec: 'Technical', tank: 'Tank', dmax: 'Max depth (m)', davg: 'Avg depth (m)', mins: 'Dive time (min)',
     fill: 'Start pressure (bar)', remain: 'End pressure (bar)', weight: 'Weight (kg)', suit: 'Suit (mm)', temp: 'Water temp (°C)', vis: 'Visibility (m)', buddy: 'Buddy', notes: 'Notes',
     used: 'Used', sac: 'SAC', sacU: 'bar/min (surface)', rmv: 'L/min', needCalc: 'Enter pressures, average depth and time to get your air consumption',
-    consTitle: 'Consents (saved once, kept for next time)', consUse: 'Data use - my temp/visibility entries may be used in anonymous stats (e.g. visibility calibration)', consOpen: 'Public log - this entry may be shown to others', consPhoto: 'Public photos - show on the map (small thumbnail under the spot name)',
+    consTitle: 'Consents (saved once, kept for next time)', consUse: 'Data use - my temp/visibility entries may be used in anonymous stats (e.g. visibility calibration)', consOpen: 'Public log - show this entry (date, depth, time, temp, vis, notes) with my name on this spot\'s logbook and spot page', consPhoto: 'Public photos - show on the map (small thumbnail under the spot name)',
     photos: 'Photos', photoMax: 'up to 4', photoAdd: '+ Photo', photoPub: 'Show on the map (small thumbnail under the spot name)', photoBusy: 'Uploading…', photoFail: 'Could not upload the photo', photoBig: 'Photo is too large', photoDelAdm: 'Delete this photo (admin)',
     al80: '80cf tank', suitNone: 'No suit', suitDry: 'Drysuit', tempAuto: (sst, d, t) => `Auto: surface ${sst}°C → ~${t}°C at ${d} m (estimate)`, tempAutoS: (sst) => `Auto: surface ${sst}°C (estimate)`, tempNo: 'No water temp data for this date - enter it yourself', tempBusy: 'Loading water temp…', visAuto: (v) => `Satellite estimate ${v} m - adjust with ±`,
     prev: (d) => `Filled from your last entry (${d})`, save: 'Save', cancel: 'Cancel', edit: 'Edit', del: 'Delete', delAsk: 'Delete this entry?', saved: 'Saved', gain: (n) => ` · +${n} credits`,
@@ -78,6 +78,7 @@
   .log-card .l1{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap} .log-card .l1 b{font-size:13.5px} .log-card .l1 span{color:#cbd5e1}
   .log-chip{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid rgba(255,176,0,.45);color:#FFB000}
   .log-card .det{display:none;margin-top:8px;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;color:#cbd5e1;line-height:1.6}
+  .log-card.pub{cursor:default} .log-card.pub .who{color:#ffd27a;font-weight:600;margin:0 8px} .log-card.pub .pn{font-size:12.5px;color:#cbd5e1;margin-top:4px;white-space:pre-wrap}
   .log-card.open .det{display:block} .log-card .det .row{display:flex;gap:8px;margin-top:8px}
   .log-form{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px} .log-form label{display:block;font-size:11.5px;color:#94a3b8;margin-bottom:2px}
   .log-form input,.log-form select,.log-form textarea{width:100%;box-sizing:border-box;height:32px;border-radius:7px;border:1px solid rgba(255,255,255,.16);background:#0B1120;color:#f1f5f9;padding:0 8px;font-size:13px;font-family:inherit}
@@ -92,7 +93,8 @@
   .log-ph .busy{color:#7dd3fc;font-size:11.5px} .log-pub{display:flex;gap:6px;align-items:flex-start;margin-top:6px;font-size:11.5px;color:#cbd5e1;line-height:1.4} .log-pub input{width:auto;height:auto;margin-top:2px}
   .log-phs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px} .log-phs img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.2);cursor:zoom-in}
   .ot-pv{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px;cursor:zoom-out}
-  .ot-pv img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:6px} .ot-pv button{height:32px;padding:0 14px;border-radius:8px;border:1px solid rgba(248,113,113,.5);background:transparent;color:#f87171;cursor:pointer}
+  .ot-pv .pvw{position:relative;display:inline-block;max-width:100%} .ot-pv img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:6px;display:block}
+  .ot-pv .pvn{position:absolute;right:8px;bottom:8px;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,.55);color:#fff;font-size:12.5px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.8);pointer-events:none} .ot-pv button{height:32px;padding:0 14px;border-radius:8px;border:1px solid rgba(248,113,113,.5);background:transparent;color:#f87171;cursor:pointer}
   .log-sec{font-size:12.5px;color:#ffd27a;margin:12px 0 6px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
   .log-pager{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0 4px;color:#94a3b8;font-size:12.5px} .log-pager button{min-width:40px}
   .log-step{display:flex;gap:4px} .log-step input{flex:1;min-width:0;text-align:center} .log-step button{flex:0 0 32px;height:32px;border-radius:7px;border:1px solid rgba(255,255,255,.18);background:#111a30;color:#e2e8f0;font-size:16px;cursor:pointer;padding:0}`;
@@ -113,7 +115,9 @@
   // 큰 사진 보기(지도 썸네일·기록에서 같이 써요). 관리자는 지우기 버튼도 보여요.
   window.otPhotoView = function (id) {
     const u = acct().user && acct().user(), adm = !!(u && u.role === 'admin');
-    const o = document.createElement('div'); o.className = 'ot-pv'; o.innerHTML = `<img src="${phUrl(id, 'b')}" alt="">` + (adm ? `<button type="button">${T.photoDelAdm}</button>` : '');
+    const o = document.createElement('div'); o.className = 'ot-pv'; o.innerHTML = `<div class="pvw"><img src="${phUrl(id, 'b')}" alt=""><span class="pvn" hidden></span></div>` + (adm ? `<button type="button">${T.photoDelAdm}</button>` : '');
+    // [ADD] 공개 사진이면 작성자 이름·날짜를 사진 오른쪽 아래에
+    fetch(`/api/spotobs?svc=lpinfo&id=${encodeURIComponent(id)}`).then(r => r.json()).then(j => { const n = o.querySelector('.pvn'); if (j && j.ok && j.name && n) { n.textContent = `© ${j.name}${j.date ? ' · ' + j.date : ''}`; n.hidden = false; } }).catch(() => {});
     o.onclick = (ev) => { if (ev.target.tagName === 'BUTTON') return; o.remove(); };
     const bt = o.querySelector('button'); if (bt) bt.onclick = async () => { try { await post('phdel', { id }); window.dispatchEvent(new Event('otemp:photos')); } catch (_) {} o.remove(); };
     document.body.appendChild(o);
@@ -152,6 +156,18 @@
   const todayStr = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 
   let box = null, state = { no: 0, items: null, last: null, loading: false, form: null, msg: '' };
+  // [ADD] 다른 다이버들의 공개 기록(작성자 실명 포함) - 로그인 없이도 읽어요
+  let pub = { no: 0, items: null };
+  function loadPub(no) {
+    if (!no || pub.no === no) return; pub = { no, items: null };
+    fetch(`/api/spotobs?svc=lopen&no=${no}`).then(r => r.json()).then(j => { if (pub.no !== no) return; pub.items = (j && j.items) || []; draw(); }).catch(() => { if (pub.no === no) pub.items = []; });
+  }
+  function pubHtml() {
+    const L = pub.items; if (!L || !L.length) return '';
+    const row = (e) => { const m = [e.depthMax != null ? e.depthMax + 'm' : '', e.mins != null ? e.mins + (KO ? '분' : ' min') : '', e.temp != null ? `${T.temp.split(' ')[0]} ${e.temp}°C` : '', e.vis != null ? `${T.vis.split(' ')[0]} ${e.vis}m` : ''].filter(Boolean).join(' · ');
+      return `<div class="log-card pub"><div class="l1"><b>${esc(e.date)}${e.tod ? ' ' + esc(e.tod) : ''}</b><span class="who">${esc(e.name || '-')} ${T.pubBy}</span><span>${esc(m)}</span></div>${e.notes ? `<div class="pn">${esc(e.notes)}</div>` : ''}${(e.photos || []).length ? `<div class="log-phs">${e.photos.map(id => `<img src="${phUrl(id, 't')}" data-ph="${esc(id)}" loading="lazy" alt="">`).join('')}</div>` : ''}</div>`; };
+    return `<div class="log-sec">${T.pubH}</div>` + L.slice(0, 10).map(row).join('');
+  }
   const getBox = (b) => { box = b; b.classList.add('log-box'); return b; };
 
   async function refresh(no) {
@@ -164,6 +180,7 @@
   window.renderLogTab = function (b) {
     getBox(b); b.style.display = 'block'; // '' 로 두면 CSS의 display:none 이 되살아나 통째로 안 보여요
     const st = typeof selectedStation !== 'undefined' ? selectedStation : null, no = st && st.no ? st.no : 0;
+    loadPub(no);
     if (no !== state.no) { state = { no, items: null, last: null, loading: false, form: null, msg: '' }; if (no && acct().user && acct().user()) refresh(no); }
     else if (no && state.items == null && !state.loading && acct().user && acct().user()) refresh(no);
     draw();
@@ -175,7 +192,7 @@
     if (!box || box.style.display === 'none') return;
     const user = acct().user && acct().user();
     if (!state.no) { box.innerHTML = `<div class="log-msg">${T.noSpot}</div>`; return; }
-    if (!user) { box.innerHTML = `<div class="log-msg">${T.needLogin}</div><button class="log-btn pri" id="log-login">${T.login}</button>`; box.querySelector('#log-login').onclick = () => acct().open && acct().open(); return; }
+    if (!user) { box.innerHTML = `<div class="log-msg">${T.needLogin}</div><button class="log-btn pri" id="log-login">${T.login}</button>` + pubHtml(); box.querySelectorAll('[data-ph]').forEach(i => i.onclick = () => window.otPhotoView(i.dataset.ph)); box.querySelector('#log-login').onclick = () => acct().open && acct().open(); return; }
     if (state.form && !state.form.inline) return drawForm();
     let h = `<div class="log-top"><b>${esc(T.title(spotName()))}</b></div>`;
     if (state.msg) h += `<div class="log-msg" style="color:#a7f3d0">${esc(state.msg)}</div>`;
@@ -198,6 +215,7 @@
       if (pages > 1) h += `<div class="log-pager"><button class="log-btn" data-pg="-1"${state.page === 0 ? ' disabled' : ''}>‹</button><span>${state.page + 1} / ${pages}</span><button class="log-btn" data-pg="1"${state.page >= pages - 1 ? ' disabled' : ''}>›</button></div>`;
     }
     if (!state.loading && !state.fail) h += `<div class="log-sec">${T.add}</div><div id="log-inline-form"></div>`; // 작성 양식은 항상 목록 아래에
+    h += pubHtml(); // [ADD] 다른 다이버들의 공개 기록은 맨 아래
     box.innerHTML = h;
     box.querySelectorAll('[data-pg]').forEach(b2 => b2.onclick = () => { state.page = (state.page || 0) + (+b2.dataset.pg); draw(); box.scrollTop = 0; });
     if (box.querySelector('#log-inline-form')) { if (!state.form || !state.form.inline) { openForm(null, true); return; } drawForm(); }

@@ -41,7 +41,7 @@
     const key = (south ? 's' : 'n') + level; if (cloudCache[key]) return cloudCache[key];
     const S = 512, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d'); const cx = S / 2, cy = S / 2;
     const alpha = [.6, .72, .86, .96][level], arms = [2, 3, 4, 5][level], tight = [.34, .30, .27, .24][level], core = [.12, .16, .21, .26][level];
-    x.translate(cx, cy); if (south) x.scale(-1, 1); x.translate(-cx, -cy);
+    x.translate(cx, cy); if (!south) x.scale(-1, 1); x.translate(-cx, -cy); // 북반구: 팔이 바깥으로 갈수록 시계 방향(반시계로 돌면 안으로 감기는 모양). 남반구는 거울상
     const rnd = (i) => (Math.sin(i * 12.9898 + level * 78.233) * 43758.5453) % 1; // 고정 난수(모양이 매번 같게)
     let g = x.createRadialGradient(cx, cy, 6, cx, cy, S * core); g.addColorStop(0, `rgba(255,255,255,${alpha})`); g.addColorStop(.75, `rgba(255,255,255,${alpha * .8})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, S * core, 0, Math.PI * 2); x.fill();
     for (let a = 0; a < arms; a++) { const a0 = a / arms * Math.PI * 2 + rnd(a) * .4;

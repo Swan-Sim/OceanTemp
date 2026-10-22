@@ -10,7 +10,7 @@ const STOP = /^(philippines|korea|south korea|japan|usa|united states|indonesia|
 function regionKeyOf(st) { // 포인트 이름에서 지역 이름(원문) 뽑기 - 없으면 null
   const n = String(st.name || '');
   const m = n.match(/\(([^)]+)\)/);
-  if (m) { const ctry = String(st.country || '').toLowerCase(); const toks = m[1].split(',').map(x => x.trim()).filter(Boolean); const t = toks.find(x => !STOP.test(x) && x.toLowerCase() !== ctry); if (t && t.length >= 2) return t; return null; } // 괄호가 나라 이름뿐이면 지역 없음
+  if (m) { const ctry = String(st.country || '').toLowerCase(); const toks = m[1].split(',').map(x => x.trim().replace(/\s*\d+$/, '')).filter(Boolean); const t = toks.find(x => !STOP.test(x) && x.toLowerCase() !== ctry); if (t && t.length >= 2) return t; return null; } // 괄호가 나라 이름뿐이면 지역 없음. 끝의 숫자(Saavedra2)는 떼요
   if (/[가-힣]/.test(n)) { const w = n.split(/\s+/)[0]; if (w && w.length >= 2 && !/^[\d]/.test(w)) return w; }
   return null;
 }
@@ -22,8 +22,12 @@ function buildRegions(all) { // → [{ key, slug, name, cc, lat, lon, spots: [..
   tagged.filter(x => !x.key).forEach(({ s }) => { let best = null, bd = 40;
     by.forEach(r => { if (r.cc !== (s.cc || '')) return; r.spots.forEach(o => { const d = km(s.lat, s.lon, o.lat, o.lon); if (d < bd) { bd = d; best = r; } }); });
     if (best) best.spots.push(s); });
+  // [ADD] 가까운 지역끼리 합치기: 작은 지역의 중심이 큰 지역의 어느 포인트와 20km 안이면 큰 쪽으로(SF ↔ San Francisco, 문섬·섶섬·범섬 → 제주 같은 경우)
+  let list = [...by.values()].map(r => ({ ...r, lat: r.spots.reduce((a, s) => a + s.lat, 0) / r.spots.length, lon: r.spots.reduce((a, s) => a + s.lon, 0) / r.spots.length })).sort((a, b) => b.spots.length - a.spots.length);
+  for (let i = list.length - 1; i > 0; i--) { const sm = list[i]; const big = list.slice(0, i).find(b => b.cc === sm.cc && b.spots.some(o => km(sm.lat, sm.lon, o.lat, o.lon) <= 20));
+    if (big) { big.spots.push(...sm.spots); list.splice(i, 1); } }
   const out = [];
-  by.forEach(r => { if (r.spots.length < 2) return; // 포인트 2곳 이상인 지역만
+  list.forEach(r => { if (r.spots.length < 2) return; // 포인트 2곳 이상인 지역만
     const lat = r.spots.reduce((a, s) => a + s.lat, 0) / r.spots.length, lon = r.spots.reduce((a, s) => a + s.lon, 0) / r.spots.length;
     out.push({ key: r.key, slug: slugOf(r.key) || 'r', cc: r.cc, lat: +lat.toFixed(4), lon: +lon.toFixed(4), spots: r.spots.sort((a, b) => a.no - b.no) }); });
   // 같은 slug 가 다른 나라에 있으면 나라 코드를 붙여요
@@ -49,7 +53,12 @@ const rpath = (lang, r) => `/${lang}/r/${encodeURIComponent(r.slug)}`;
 async function regionPage(req, res, lang, all, base, slug) {
   const t = RT[lang], T = H.T[lang];
   const regions = buildRegions(all);
-  const r = regions.find(x => x.slug === String(slug || '').toLowerCase());
+  let r = regions.find(x => x.slug === String(slug || '').toLowerCase());
+  if (!r) { // [ADD] 지역 이름이 없으면(예: cebu) 그 단어가 이름에 들어간 포인트가 가장 많은 지역으로 보내요
+    const w = decodeURIComponent(String(slug || '')).toLowerCase().replace(/-/g, ' ');
+    const hit = w.length >= 3 ? regions.map(x => ({ x, n: x.spots.filter(s => `${s.name} ${Object.values(s.names || {}).join(' ')}`.toLowerCase().includes(w)).length })).filter(o => o.n).sort((a, b) => b.n - a.n)[0] : null;
+    if (hit) { res.setHeader('Location', rpath(lang, hit.x)); res.setHeader('Cache-Control', 'public, s-maxage=3600'); return res.status(302).end(); }
+  }
   if (!r) { res.setHeader('Cache-Control', 'no-store'); return H.sendHtml(res, 404, H.page({ lang, title: `${T.notFound} | otemp`, desc: t.idxDesc, canonical: `/${lang}/r/`, body: `${H.header(lang, { ko: '/ko/r/', en: '/en/r/', ja: '/ja/r/' })}<h1 style="margin-top:20px">${T.notFound}</h1>`, base })); }
   // 저장된 자료만(Redis GET 포인트당 1번, 최대 40곳)
   const spots = r.spots.slice(0, 40);

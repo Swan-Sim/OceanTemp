@@ -35,6 +35,29 @@
     return best && best.km <= NEAR_KM ? best : null;
   };
 
+  // ── 태풍 구름 그림(캔버스로 그려요): 북반구는 반시계 방향으로 감기는 나선, 남반구는 시계 방향. 세기(풍속)에 따라 크기·진하기가 달라져요 ──
+  const cloudCache = {};
+  function stormCloud(south, level) { // level 0~3 (TD · TS · STS/TY · 강한 TY)
+    const key = (south ? 's' : 'n') + level; if (cloudCache[key]) return cloudCache[key];
+    const S = 512, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d'); const cx = S / 2, cy = S / 2;
+    const alpha = [.5, .62, .78, .9][level], arms = [2, 3, 4, 5][level], tight = [.34, .30, .27, .24][level], core = [.12, .16, .21, .26][level];
+    x.translate(cx, cy); if (south) x.scale(-1, 1); x.translate(-cx, -cy);
+    const rnd = (i) => (Math.sin(i * 12.9898 + level * 78.233) * 43758.5453) % 1; // 고정 난수(모양이 매번 같게)
+    // 중심 구름 덩어리
+    let g = x.createRadialGradient(cx, cy, 6, cx, cy, S * core); g.addColorStop(0, `rgba(255,255,255,${alpha})`); g.addColorStop(.7, `rgba(255,255,255,${alpha * .55})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, S * core, 0, Math.PI * 2); x.fill();
+    // 나선 팔: 작은 구름 조각을 로그 나선을 따라 흩뿌려요
+    for (let a = 0; a < arms; a++) { const a0 = a / arms * Math.PI * 2 + rnd(a) * .4;
+      for (let i = 0; i < 220; i++) { const t = i / 220, th = a0 + t * Math.PI * 2.4, r = (S * core * .45) * Math.exp((th - a0) * tight); if (r > S * .47) break;
+        const jit = (Math.abs(rnd(i * 7 + a)) - .5) * 18 * (1 + t), px = cx + (r + jit) * Math.cos(th), py = cy - (r + jit) * Math.sin(th), w = 9 + 24 * t + Math.abs(rnd(i * 3 + a)) * 8;
+        const fa = alpha * (1 - t * .75) * (.22 + Math.abs(rnd(i * 5 + a)) * .18); g = x.createRadialGradient(px, py, 0, px, py, w); g.addColorStop(0, `rgba(255,255,255,${fa})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(px, py, w, 0, Math.PI * 2); x.fill(); } }
+    // 눈
+    if (level >= 2) { x.save(); x.globalCompositeOperation = 'destination-out'; const e = 10 + level * 5; g = x.createRadialGradient(cx, cy, 0, cx, cy, e); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.65, 'rgba(0,0,0,.85)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, e, 0, Math.PI * 2); x.fill(); x.restore(); }
+    // 가장자리 부드럽게
+    x.save(); x.globalCompositeOperation = 'destination-in'; g = x.createRadialGradient(cx, cy, S * .22, cx, cy, S * .5); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, S, S); x.restore();
+    cloudCache[key] = c; return c;
+  }
+  const levelOf = (s) => { const w = s.wind || 0; return w >= 44 ? 3 : w >= 25 ? 2 : w >= 17 ? 1 : 0; };
+  const cloudKm = (s) => Math.max(150, Math.min(900, (s.radii.gale || s.radii.storm * 1.8 || (120 + (s.wind || 15) * 8)) * 1.6)); // 구름 반지름(km): 강풍 반경의 1.6배쯤(위성 구름대가 더 넓어요)
   // ── 지구본 ──
   function drawGlobe() {
     if (typeof globeGroup === 'undefined' || !globeGroup || typeof THREE === 'undefined') return;
@@ -48,12 +71,18 @@
       const trs = tracksOf(s); if (!trs.length && s.forecast && s.forecast.length) trs.push([s.src, s.forecast]);
       trs.forEach(([k, fc]) => { const hex = (AG[k] || AG.jma).hex; line([[s.lat, s.lon], ...fc.map(f => [f.lat, f.lon])], hex, true); fc.forEach(f => ring(f.lat, f.lon, f.r, hex, .4)); });
       ring(s.lat, s.lon, s.radii.storm, 0xf87171, .9); ring(s.lat, s.lon, s.radii.gale, 0xfbbf24, .7);
+      // 구름 그림(반구·세기별) - 지구본에 납작하게 붙여요. 크기는 강풍 반경 기준
+      { const tex = new THREE.CanvasTexture(stormCloud(s.lat < 0, levelOf(s))); const rk = cloudKm(s), size = rk / 111.32 * (Math.PI / 180) * GLOBE_RADIUS * 2;
+        const geo = new THREE.PlaneGeometry(size, size), mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: .95, depthWrite: false }); const mesh = new THREE.Mesh(geo, mat);
+        const p = latLonToSpherePos(s.lat, s.lon, GLOBE_RADIUS + 0.9); mesh.position.copy(p); mesh.lookAt(p.clone().multiplyScalar(2)); mesh.userData.spin = s.lat < 0 ? -1 : 1; gGroup.add(mesh); }
       // 기호 + 이름(캔버스 스프라이트)
       const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');
       x.font = 'bold 26px sans-serif'; x.textBaseline = 'middle'; x.fillStyle = 'rgba(0,0,0,.55)'; const txt = `🌀 ${s.num ? s.num + ' ' : ''}${s.name}`; const w = x.measureText(txt).width + 16; x.fillRect(0, 10, Math.min(256, w), 44); x.fillStyle = '#fff'; x.fillText(txt, 8, 32);
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false })); sp.scale.set(14, 3.5, 1); const p = latLonToSpherePos(s.lat, s.lon, R + 1.5); sp.position.copy(p); sp.center.set(0, .5); gGroup.add(sp);
     });
     globeGroup.add(gGroup); if (window.requestGlobeRender) requestGlobeRender();
+    // 구름을 천천히 돌려요(북반구 반시계·남반구 시계). 지구본이 보일 때만 1초에 몇 번
+    if (!drawGlobe._spin) { drawGlobe._spin = true; let last = 0; const tick = (ts) => { requestAnimationFrame(tick); if (!gGroup || document.hidden || (typeof isDetailMode !== 'undefined' && isDetailMode) || ts - last < 120) return; last = ts; gGroup.children.forEach(m => { if (m.userData && m.userData.spin) m.rotateZ(.025 * m.userData.spin); }); if (window.requestGlobeRender) requestGlobeRender(); }; requestAnimationFrame(tick); }
   }
   // ── 상세 지도 ──
   function drawMap() {
@@ -68,6 +97,8 @@
         if (fc.length > 1) L.polyline(fc, { color: col, weight: 2, dashArray: '6 5', opacity: .9, interactive: false }).addTo(mapLayer);
         fcs.forEach(f => { if (f.r) L.circle([f.lat, f.lon], { radius: f.r * 1000, color: col, weight: 1, dashArray: '4 4', fill: false, interactive: false }).addTo(mapLayer);
           L.circleMarker([f.lat, f.lon], { radius: 4, color: col, fillColor: '#0B1120', fillOpacity: 1, weight: 1.5 }).bindTooltip(`${agName(k)} ${t.fc(f.h)}${f.pressure ? ` · ${f.pressure}hPa` : ''}${f.wind ? ` · ${f.wind}m/s` : ''}`, { direction: 'top' }).addTo(mapLayer); }); });
+      { const rk = cloudKm(s), dl = rk / 111.32, dn = dl / Math.cos(s.lat * Math.PI / 180); const url = stormCloud(s.lat < 0, levelOf(s)).toDataURL('image/png');
+        L.imageOverlay(url, [[s.lat - dl, s.lon - dn], [s.lat + dl, s.lon + dn]], { opacity: .9, interactive: false, className: 'st-cloud ' + (s.lat < 0 ? 'south' : 'north') }).addTo(mapLayer); }
       if (s.radii.gale) L.circle([s.lat, s.lon], { radius: s.radii.gale * 1000, color: '#fbbf24', weight: 1, fillColor: '#fbbf24', fillOpacity: .08, interactive: false }).addTo(mapLayer);
       if (s.radii.storm) L.circle([s.lat, s.lon], { radius: s.radii.storm * 1000, color: '#f87171', weight: 1.5, fillColor: '#f87171', fillOpacity: .15, interactive: false }).addTo(mapLayer);
       const info = [`<b>${label(s)}</b>`, s.pressure ? `${t.p} ${s.pressure}hPa` : '', s.wind ? `${t.w} ${s.wind}m/s${s.gust ? ` (gust ${s.gust})` : ''}` : '', s.move && (s.move.dir || s.move.kmh) ? `${t.move} ${s.move.dir || ''} ${s.move.kmh ? s.move.kmh + 'km/h' : ''}` : '', s.radii.storm ? `${t.storm} ${s.radii.storm}km` : '', s.radii.gale ? `${t.gale} ${s.radii.gale}km` : '', tracksOf(s).map(([k]) => `<span style="color:${(AG[k] || AG.jma).c}">━ ━</span> ${agName(k)}`).join(' · '), agree(s) ? `<b>${agree(s)}</b>` : ''].filter(Boolean).join('<br>');
@@ -96,7 +127,8 @@
   css.textContent = `#btn-storms{position:fixed;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 88px);z-index:58;height:30px;padding:0 12px;border-radius:999px;border:1px solid rgba(248,113,113,.55);background:rgba(11,17,32,.85);color:#fca5a5;font-size:12.5px;font-weight:700;cursor:pointer;backdrop-filter:blur(6px)} #btn-storms.on{background:rgba(127,29,29,.75);color:#fff}
   body.detail-mode #btn-storms{bottom:calc(env(safe-area-inset-bottom,0px) + 120px)}
   #storm-warn{display:none;margin:4px 0 2px;padding:6px 10px;border-radius:8px;background:rgba(127,29,29,.5);border:1px solid rgba(248,113,113,.6);color:#fee2e2;font-size:12.5px;line-height:1.4}
-  .st-eye{font-size:26px;line-height:40px;text-align:center;animation:st-spin 6s linear infinite;filter:drop-shadow(0 0 4px rgba(0,0,0,.8))} @keyframes st-spin{to{transform:rotate(-360deg)}} @media (prefers-reduced-motion:reduce){.st-eye{animation:none}}
+  .st-eye{font-size:20px;line-height:40px;text-align:center;filter:drop-shadow(0 0 4px rgba(0,0,0,.8))}
+  .st-cloud{animation:st-spin 90s linear infinite;transform-origin:center;mix-blend-mode:screen} .st-cloud.south{animation-direction:reverse} @keyframes st-spin{to{rotate:-360deg}} @media (prefers-reduced-motion:reduce){.st-cloud{animation:none}}
   .st-name{position:absolute;left:50%;top:38px;transform:translateX(-50%);white-space:nowrap;font-size:12px;font-weight:700;color:#fff;background:rgba(127,29,29,.8);padding:1px 6px;border-radius:6px}`;
   document.head.appendChild(css);
   // 지도가 열릴 때·정점이 바뀔 때 따라가기

@@ -158,7 +158,7 @@ function spotFields(b) {
     ...namesOf(b),
     face: faceOf(b.face), // [ADD] 바다 쪽 방향(바람 종목 오프쇼어 판단)
     ...profOf(b),
-    name: str(b.name, 80), label: str(b.label, 30) || str(b.name, 30), country: str(b.country, 40),
+    name: str(b.name, 80), label: str(b.label, 30) || str(b.name, 30), country: str(b.country, 40), region: str(b.region, 40), // [ADD] region: 지역(도시·섬) 이름 - 지역 페이지 묶음
     lat: Number.isFinite(lat) && Math.abs(lat) <= 90 ? +lat.toFixed(5) : null,
     lon: Number.isFinite(lon) && Math.abs(lon) <= 180 ? +lon.toFixed(5) : null,
     note: str(b.note, 300)
@@ -204,7 +204,7 @@ const truthy = (v, def) => v === undefined || v === null || v === '' ? def : !(v
 function normSpot(o) {
   const no = parseInt(o.no, 10), lat = +o.lat, lon = +o.lon;
   if (!(no > 0) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-  return { no, country: str(o.country, 40), name: str(o.name, 80), label: str(o.label, 30) || str(o.name, 30), lat: +lat.toFixed(5), lon: +lon.toFixed(5),
+  return { no, country: str(o.country, 40), name: str(o.name, 80), label: str(o.label, 30) || str(o.name, 30), region: str(o.region, 40), lat: +lat.toFixed(5), lon: +lon.toFixed(5),
     network: str(o.network, 40) || 'Beach/local', depth: truthy(o.depth, true), show: truthy(o.show, true),
     face: faceOf(o.face), ...profOf(o), ...namesOf(o) };
 }

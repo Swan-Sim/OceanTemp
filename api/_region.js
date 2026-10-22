@@ -7,7 +7,8 @@ const km = (a, b, c, d) => { const r = Math.PI / 180, x = Math.sin((c - a) * r /
 const slugOf = (n) => String(n || '').toLowerCase().normalize('NFC').replace(/[()'".,·]/g, ' ').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 50);
 const STOP = /^(philippines|korea|south korea|japan|usa|united states|indonesia|thailand|malaysia|mexico|australia|taiwan|vietnam|egypt|maldives|spain|italy|france|portugal|greece|croatia|turkey|hawaii)$/i;
 
-function regionKeyOf(st) { // 포인트 이름에서 지역 이름(원문) 뽑기 - 없으면 null
+function regionKeyOf(st) { // 관리자가 넣은 지역(region)이 있으면 그것, 없으면 포인트 이름에서 뽑기 - 없으면 null
+  if (st.region) return String(st.region).trim();
   const n = String(st.name || '');
   const m = n.match(/\(([^)]+)\)/);
   if (m) { const ctry = String(st.country || '').toLowerCase(); const toks = m[1].split(',').map(x => x.trim().replace(/\s*\d+$/, '')).filter(Boolean); const t = toks.find(x => !STOP.test(x) && x.toLowerCase() !== ctry); if (t && t.length >= 2) return t; return null; } // 괄호가 나라 이름뿐이면 지역 없음. 끝의 숫자(Saavedra2)는 떼요

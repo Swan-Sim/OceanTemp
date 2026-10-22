@@ -324,6 +324,19 @@ module.exports = async function admin(req, res) {
     S.clearSpotsMemo();
     return ok({ names: spot.names, namesAuto: spot.namesAuto });
   }
+  // [ADD] 지역 일괄 지정: { region, nos: [번호…] } 또는 { region, center: 번호, km } (중심 포인트에서 km 안 전부)
+  if (svc === 'spotsRegion') {
+    const region = S.str(b.region, 40); if (!region) return bad('no_region');
+    const all = Object.values(await S.hgetallJSON(K.spots)); let targets = [];
+    if (b.center) { const c = all.find(sp => sp.no === parseInt(b.center, 10)); if (!c) return bad('no_center'); const km = Math.max(1, Math.min(200, +b.km || 15));
+      const d = (a, x) => { const r = Math.PI / 180, q = Math.sin((x.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(x.lat * r) * Math.sin((x.lon - a.lon) * r / 2) ** 2; return 12742 * Math.asin(Math.sqrt(q)); };
+      targets = all.filter(sp => d(c, sp) <= km); }
+    else targets = all.filter(sp => (b.nos || []).map(Number).includes(sp.no));
+    if (!targets.length) return bad('no_targets');
+    const cmds = targets.map(sp => { sp.region = region; return ['HSET', K.spots, String(sp.no), JSON.stringify(sp)]; });
+    cmds.push(['DEL', 'sp:list']); await R(...cmds); S.clearSpotsMemo();
+    return ok({ done: targets.length, nos: targets.map(sp => sp.no) });
+  }
   // [ADD] 이름 번역 한꺼번에 채우기: 빈 칸이 있는 정점부터 한 번에 limit 개(브라우저가 여러 번 불러요). force 면 자동 칸도 다시
   if (svc === 'spotsTranslate') {
     const T = require('./_translate'); if (!T.hasKey()) return bad('no_deepl_key');

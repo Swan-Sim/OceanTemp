@@ -1,5 +1,18 @@
     const userLocale = (navigator.language || 'en').toLowerCase();
-    const lang = userLocale.startsWith('ko') ? 'ko' : (userLocale.startsWith('ja') ? 'ja' : 'en');
+    // [CHANGE] 언어 고르는 순서: 주소의 ?lang=ko|en|ja → 전에 고른 언어(이 브라우저) → 브라우저 언어. 기본은 영어(세계 대상), 한국어·일본어 브라우저는 그 언어로
+    const lang = (() => {
+      const ok = (v) => ['ko', 'en', 'ja'].includes(v) ? v : null;
+      let v = null; try { v = ok(new URLSearchParams(location.search).get('lang')); if (v) localStorage.setItem('otemp.lang', v); } catch (_) {}
+      if (!v) { try { v = ok(localStorage.getItem('otemp.lang')); } catch (_) {} }
+      return v || (userLocale.startsWith('ko') ? 'ko' : (userLocale.startsWith('ja') ? 'ja' : 'en'));
+    })();
+    // 화면 언어에 맞춰 문서 언어·제목·설명(검색엔진은 서버가 준 영어 기본값을 보고, 사람은 자기 언어로 봐요)
+    try {
+      document.documentElement.lang = lang;
+      const META = { ko: ['otemp | 전 세계 바다 수온·시야·파도·물때 실시간 지도', '전 세계 다이빙, 스노클링, 윈드서핑 등 해양레저 포인트의 오늘 바다 수온, 시야, 파도, 바람, 물때를 3D 지구본과 지도로 한눈에'],
+        ja: ['otemp | 世界の海水温・透明度・波・潮汐 リアルタイム地図', '世界のダイビング・シュノーケリングポイントの今日の水温、透明度、波、風、潮汐を3D地球儀と地図で'] }[lang];
+      if (META) { document.title = META[0]; const d = document.querySelector('meta[name="description"]'); if (d) d.setAttribute('content', META[1]); }
+    } catch (_) {}
 
     const todayObj = new Date();
     const curMonth = todayObj.getMonth();

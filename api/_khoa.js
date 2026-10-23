@@ -147,6 +147,14 @@ module.exports = async function handler(req, res) {
     res.status(200).json(body);
   };
   try {
+    // [ADD] 조류예보(시계열): 가까운 공식 조류 예보지점의 시각별 유향·유속. /api/khoa?svc=crnear&lat=35.1&lon=129.0 (예보는 안 변하니 CDN 12시간)
+    if (svcName === 'crnear') {
+      const la = parseFloat(req.query.lat), lo = parseFloat(req.query.lon);
+      if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) return res.status(400).json({ ok: false, error: 'lat, lon이 필요해요' });
+      const r = await require('./_khoacurrent').near(key, la, lo, Math.min(30, parseFloat(req.query.maxKm) || 10), 5);
+      return sendJson({ ok: true, ms: Date.now() - t0, ...r }, r.ready ? (r.near ? 43200 : 86400) : 0);
+    }
+    if (svcName === 'crstations') { const r = await require('./_khoacurrent').stations(key); return sendJson({ ok: true, count: r.list.length, pending: r.pending, stations: req.query.full === '1' ? r.list : undefined }, 0); }
     if (svcName === 'stations') {
       const list = await stationList(key);
       return sendJson({ ok: true, ms: Date.now() - t0, count: list.length, stations: list }, 86400);

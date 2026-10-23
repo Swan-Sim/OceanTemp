@@ -65,6 +65,24 @@
   input.f, select.f, textarea.f { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 13px; }
   .ed { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; align-items: center; font-size: 12.5px; border: 1px solid rgba(255,176,0,.4); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
   .ed label { color: var(--muted); } .ed input, .ed select { width: 100%; }
+  /* [FIX] 공지 시작/종료: 어두운 화면에서 달력 아이콘이 검은색이라 안 보이던 것 → 다크 모드 입력칸 */
+  input.f[type=datetime-local] { color-scheme: dark; }
+  input.f[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(72%) sepia(60%) saturate(900%) hue-rotate(2deg); opacity: .9; cursor: pointer; }
+  /* [ADD] 공지 기간: 항상 펼쳐진 달력 + 종료 시간 조절 버튼 */
+  .ed .dtw { display: flex; flex-direction: column; gap: 6px; align-self: start; }
+  .ed .dtrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .ed .dtrow input { width: auto; flex: 1 1 190px; }
+  .dtadj { display: inline-flex; gap: 4px; flex-wrap: wrap; } .dtadj button { padding: 4px 9px; font-size: 12px; }
+  .dtadj button:hover { color: var(--text); border-color: rgba(255,176,0,.6); }
+  .ncal { width: 238px; border: 1px solid var(--line); border-radius: 9px; padding: 6px; background: var(--bg); font-size: 12px; user-select: none; }
+  .ncal .nc-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; color: var(--text); font-weight: 600; }
+  .ncal .nc-h button { border: none; padding: 2px 9px; font-size: 13px; }
+  .ncal .nc-g { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .ncal .nc-w { color: var(--muted); font-size: 10.5px; padding: 2px 0; }
+  .ncal .nc-d { border: 1px solid transparent; border-radius: 6px; padding: 4px 0; cursor: pointer; color: var(--text); }
+  .ncal .nc-d:hover { background: rgba(255,255,255,.07); }
+  .ncal .nc-d.out { color: #475063; }
+  .ncal .nc-d.today { border-color: rgba(255,176,0,.55); }
+  .ncal .nc-d.sel { background: var(--accent); color: #111; font-weight: 700; }
   .linkbox { word-break: break-all; font-size: 12px; background: var(--bg); border: 1px dashed rgba(255,176,0,.5); border-radius: 8px; padding: 8px; margin-top: 8px; }
   #importUrl { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -151,8 +169,8 @@
           <label>제목</label><input class="f" name="title" maxlength="60" placeholder="예: 📢 10/30~31 한국 연안 실측 중단 안내" required>
           <label>설명</label><input class="f" name="sub" maxlength="140">
           <label>항목 (한 줄에 하나, 최대 8개)</label><textarea class="f" name="items" rows="4"></textarea>
-          <label>노출 시작</label><input class="f" type="datetime-local" name="start">
-          <label>노출 종료</label><input class="f" type="datetime-local" name="end">
+          <label>노출 시작</label><div class="dtw"><input class="f" type="datetime-local" name="start"><div class="ncal" data-for="start"></div></div>
+          <label>노출 종료</label><div class="dtw"><div class="dtrow"><input class="f" type="datetime-local" name="end"><span class="dtadj"><button type="button" data-adj="-1440">−1일</button><button type="button" data-adj="-60">−1시간</button><button type="button" data-adj="60">+1시간</button><button type="button" data-adj="1440">+1일</button></span></div><div class="ncal" data-for="end"></div></div>
           <span></span><div><button class="primary" type="submit">저장</button> <button type="button" id="noticeCancel">취소</button></div>
         </form><div class="muted" id="noticeMsg"></div></div>
       <div class="card"><h2>KHOA API 시험 호출</h2>
@@ -566,7 +584,26 @@
     el.querySelectorAll('[data-nedit]').forEach(b => { b.onclick = () => editNotice(notices.find(n => n.id === b.dataset.nedit)); });
     el.querySelectorAll('[data-ndel]').forEach(b => { b.onclick = async () => { const n = notices.find(x => x.id === b.dataset.ndel); if (!n || !confirm(`"${n.title}" 공지를 지울까요?`)) return; await saveNotices(notices.filter(x => x.id !== n.id), '지웠어요.'); }; });
   }
-  function editNotice(n) { const f = $('noticeForm'); f.style.display = ''; f.id.value = n ? n.id : ''; f.show.value = n ? n.show : 'all'; f.title.value = n ? n.title : ''; f.sub.value = n ? n.sub : ''; f.items.value = n ? (n.items || []).join('\n') : ''; f.start.value = toLocalIn(n ? n.start : 0); f.end.value = toLocalIn(n ? n.end : 0); f.title.focus(); }
+  function editNotice(n) { const f = $('noticeForm'); f.style.display = ''; f.id.value = n ? n.id : ''; f.show.value = n ? n.show : 'all'; f.title.value = n ? n.title : ''; f.sub.value = n ? n.sub : ''; f.items.value = n ? (n.items || []).join('\n') : ''; const nowMin = Math.floor(Date.now() / 60000) * 60000; f.start.value = toLocalIn(n ? n.start : nowMin); f.end.value = toLocalIn(n ? n.end : nowMin); paintCal('start', true); paintCal('end', true); f.title.focus(); }
+  // [ADD] 공지 기간 달력(항상 펼침): 날짜를 누르면 시간은 그대로 두고 날짜만 바뀜
+  function paintCal(name, resetView) {
+    const f = $('noticeForm'), inp = f[name], box = f.querySelector(`.ncal[data-for="${name}"]`); if (!box) return;
+    const sel = inp.value ? new Date(inp.value) : null, base = sel || new Date();
+    if (resetView || !box._view) box._view = new Date(base.getFullYear(), base.getMonth(), 1);
+    const v = box._view, y = v.getFullYear(), m = v.getMonth(), first = new Date(y, m, 1 - v.getDay()), today = new Date();
+    const same = (a, b) => a && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    let h = `<div class="nc-h"><button type="button" data-nav="-1">‹</button><span>${y}년 ${m + 1}월</span><button type="button" data-nav="1">›</button></div><div class="nc-g">` + '일월화수목금토'.split('').map(w => `<div class="nc-w">${w}</div>`).join('');
+    for (let i = 0; i < 42; i++) { const d = new Date(first.getFullYear(), first.getMonth(), first.getDate() + i);
+      h += `<div class="nc-d${d.getMonth() !== m ? ' out' : ''}${same(sel, d) ? ' sel' : ''}${same(today, d) ? ' today' : ''}" data-day="${d.getFullYear()}-${d.getMonth()}-${d.getDate()}">${d.getDate()}</div>`; }
+    box.innerHTML = h + '</div>';
+    box.querySelectorAll('[data-nav]').forEach(b => { b.onclick = () => { box._view = new Date(y, m + +b.dataset.nav, 1); paintCal(name); }; });
+    box.querySelectorAll('[data-day]').forEach(c => { c.onclick = () => { const [yy, mm, dd] = c.dataset.day.split('-').map(Number), t = inp.value ? new Date(inp.value) : new Date();
+      inp.value = toLocalIn(new Date(yy, mm, dd, t.getHours(), t.getMinutes()).getTime()); paintCal(name, true); }; });
+  }
+  ['start', 'end'].forEach(nm => $('noticeForm')[nm].addEventListener('input', () => paintCal(nm, true)));
+  // [ADD] 종료 시간 ±1시간 / ±1일
+  $('noticeForm').querySelectorAll('[data-adj]').forEach(b => { b.onclick = () => { const inp = $('noticeForm').end, t = inp.value ? new Date(inp.value).getTime() : Math.floor(Date.now() / 60000) * 60000;
+    inp.value = toLocalIn(t + +b.dataset.adj * 60000); paintCal('end', true); }; });
   async function saveNotices(list, okMsg) { const msg = $('noticeMsg'); msg.textContent = '저장 중… (번역에 몇 초 걸려요)';
     try { const c = await api('siteSave', { ...siteBody(), notices: list }); notices = Array.isArray(c.notices) ? c.notices : list; paintNotices(); $('noticeForm').style.display = 'none'; msg.textContent = okMsg + ' 사이트에는 최대 1분 안에 반영돼요.'; }
     catch (e) { msg.textContent = '저장 실패: ' + (e && e.message || e); } }

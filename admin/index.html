@@ -155,6 +155,13 @@
           <label>노출 종료</label><input class="f" type="datetime-local" name="end">
           <span></span><div><button class="primary" type="submit">저장</button> <button type="button" id="noticeCancel">취소</button></div>
         </form><div class="muted" id="noticeMsg"></div></div>
+      <div class="card"><h2>KHOA API 시험 호출</h2>
+        <div class="muted" style="margin-bottom:8px">새로 신청한 국립해양조사원 API의 응답 형식을 확인할 때 써요(인증키는 서버에서 붙고 화면엔 안 나와요). 주소는 <code>1192136/서비스/오퍼레이션</code>, 추가 값은 한 줄에 하나(<code>obsCode=DT_0001</code>).</div>
+        <form id="probeForm" class="ed" style="border-color:var(--line)">
+          <label>주소</label><input class="f" name="path" placeholder="1192136/..." required>
+          <label>추가 값</label><textarea class="f" name="q" rows="3" placeholder="obsCode=DT_0001&#10;reqDate=20261101"></textarea>
+          <span></span><div><button class="primary" type="submit">호출</button></div>
+        </form><pre id="probeOut" class="muted" style="white-space:pre-wrap;word-break:break-all;max-height:360px;overflow:auto"></pre></div>
       <div class="card"><h2>소프트웨어 버전 · 수심 보정</h2>
         <form id="siteForm" class="ed" style="border-color:var(--line)">
           <label>소프트웨어 버전 표시</label><input class="f" name="vtext" maxlength="24" placeholder="V:B1008">
@@ -544,6 +551,8 @@
   });
   // 버전·수심 설정 값(공지 저장 때도 같이 보내요 - 안 보내면 기본값으로 돌아가니까)
   function siteBody() { const f = $('siteForm'); return { ver: { text: f.vtext.value, pos: f.vpos.value }, depthOff: { prof: f.offProf.checked, fix: f.offFix.checked, land: f.offLand.checked }, depthFix: f.dfix.value.split('\n').map(l => l.split(',').map(z => z.trim())).filter(a => a.length >= 4).map(a => ({ la: a[0], lo: a[1], r: a[2], min: a[3], name: a.slice(4).join(',') })) }; }
+  $('probeForm').addEventListener('submit', async (e) => { e.preventDefault(); const f = e.target, out = $('probeOut'); out.textContent = '호출 중…';
+    try { const j = await api('khoaProbe', { path: f.path.value.trim(), q: f.q.value.split('\n').map(x => x.trim()).filter(Boolean) }); out.textContent = `HTTP ${j.status} (${j.len}자)\n` + j.head; } catch (err) { out.textContent = '실패: ' + (err && err.message || err); } });
   // ── [ADD] 공지 게시판 ──
   let notices = [];
   const fmtDt = (ms) => ms ? new Date(ms).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';

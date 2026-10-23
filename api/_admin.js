@@ -280,6 +280,17 @@ module.exports = async function admin(req, res) {
   // [ADD] KHOA 스킨스쿠버지수 API의 전국 스쿠버 포인트(이름·위도·경도) 불러오기 - 관리자만.
   //  같은 포인트가 날짜·시간별로 여러 줄 나와서 이름으로 하나만 남기고, 기존 포인트와 가장 가까운 거리를 붙여요.
   //  라이선스: 공공누리 제1유형(출처표시) → 메모에 "출처: 국립해양조사원" 넣음
+  // [ADD] KHOA(공공데이터포털 1192136) 새 API 응답 형식 확인용 - 관리자만. 키는 서버에서만 붙고 응답에 안 나와요.
+  //  /api/stats?svc=khoaProbe&path=1192136/서비스/오퍼레이션&q=obsCode=DT_0001&q=reqDate=20261101  (q는 여러 개 가능, 앞 4000자만 돌려줌)
+  if (svc === 'khoaProbe') {
+    const key = process.env.KHOA_API_KEY; if (!key) return bad('no_khoa_key');
+    const path = String(b.path || (req.query || {}).path || ''); if (!/^1192136\/[A-Za-z0-9_\/]+$/.test(path)) return bad('path는 1192136/서비스/오퍼레이션 형식이어야 해요');
+    const qs = [].concat(b.q || (req.query || {}).q || []).map(x => String(x)).filter(x => /^[A-Za-z0-9_]+=[^&#]{0,80}$/.test(x));
+    const url = `https://apis.data.go.kr/${path}?serviceKey=${encodeURIComponent(key)}&type=json&pageNo=1&numOfRows=${encodeURIComponent((req.query || {}).rows || b.rows || 5)}${qs.length ? '&' + qs.join('&') : ''}`;
+    const c = new AbortController(); const tm = setTimeout(() => c.abort(), 15000);
+    try { const r = await fetch(url, { signal: c.signal }); const text = await r.text(); return ok({ status: r.status, head: text.slice(0, 4000), len: text.length }); }
+    catch (e) { return bad(String(e && e.message || e)); } finally { clearTimeout(tm); }
+  }
   if (svc === 'khoaScubaSpots') {
     const key = process.env.KHOA_API_KEY;
     if (!key) return bad('no_khoa_key');

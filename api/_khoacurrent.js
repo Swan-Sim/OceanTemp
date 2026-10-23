@@ -69,7 +69,7 @@ async function near(key, lat, lon, maxKm, days) {
   if (pending > 10) return { ready: false, pending };
   let best = null, bd = Infinity; list.forEach(s => { const d = hav(lat, lon, s.lat, s.lon); if (d < bd) { bd = d; best = s; } });
   if (!best || bd > maxKm) return { ready: true, near: null, km: best ? +bd.toFixed(1) : null };
-  const dates = Array.from({ length: days }, (_, i) => ymdK(Date.now() + (i - 1) * 86400e3));
+  const dates = Array.from({ length: days }, (_, i) => ymdK(Date.now() + (i - 6) * 86400e3)); // 앱이 보여주는 구간(과거 6일 ~ 미래 8일)을 모두
   const parts = await Promise.all(dates.map(d => dayRows(key, best.code, d).catch(() => [])));
   return { ready: true, near: { code: best.code, name: best.name, lat: best.lat, lon: best.lon, km: +bd.toFixed(1) }, rows: parts.flat() };
 }

@@ -151,7 +151,7 @@ module.exports = async function handler(req, res) {
     if (svcName === 'crnear') {
       const la = parseFloat(req.query.lat), lo = parseFloat(req.query.lon);
       if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) return res.status(400).json({ ok: false, error: 'lat, lon이 필요해요' });
-      const r = await require('./_khoacurrent').near(key, la, lo, Math.min(30, parseFloat(req.query.maxKm) || 10), 5);
+      const r = await require('./_khoacurrent').near(key, la, lo, Math.min(30, parseFloat(req.query.maxKm) || 10), 15);
       return sendJson({ ok: true, ms: Date.now() - t0, ...r }, r.ready ? (r.near ? 43200 : 86400) : 0);
     }
     if (svcName === 'crstations') { const r = await require('./_khoacurrent').stations(key); return sendJson({ ok: true, count: r.list.length, pending: r.pending, stations: req.query.full === '1' ? r.list : undefined }, 0); }

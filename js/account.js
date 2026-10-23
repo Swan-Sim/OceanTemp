@@ -246,7 +246,7 @@
   const DEFAULT_SITE = { notice: { show: 'guest', title: '', sub: '', items: [], start: 0, end: 0 }, ver: { text: 'V:B1008', pos: 'acct' }, updated: 0 };
   let site = DEFAULT_SITE;
   async function loadSite() {
-    try { const j = await fetch('/api/shops?svc=site', { cache: 'default' }).then(r => r.json()); if (j && j.ok) site = { notice: j.notice || DEFAULT_SITE.notice, ver: j.ver || DEFAULT_SITE.ver, updated: j.updated || 0 }; if (j && j.ok) { window.otDepthFix = j.depthFix || []; window.otDepthOff = j.depthOff || {}; try { window.dispatchEvent(new Event('otemp:site')); } catch (_) {} } } catch (_) {}
+    try { const j = await fetch('/api/shops?svc=site', { cache: 'default' }).then(r => r.json()); if (j && j.ok) site = { notice: j.notice || DEFAULT_SITE.notice, notices: Array.isArray(j.notices) ? j.notices : [], ver: j.ver || DEFAULT_SITE.ver, updated: j.updated || 0 }; if (j && j.ok) { window.otDepthFix = j.depthFix || []; window.otDepthOff = j.depthOff || {}; try { window.dispatchEvent(new Event('otemp:site')); } catch (_) {} } } catch (_) {}
   }
   const verText = () => (site.ver && site.ver.text) || '';
   function paintVer() { // 화면 모서리에 표시하는 경우
@@ -255,23 +255,29 @@
     if (!v) { v = document.createElement('div'); v.id = 'sw-ver'; document.body.appendChild(v); }
     v.textContent = t; v.className = pos; v.style.display = '';
   }
-  const noticeId = () => 'n-' + (site.updated || 'default');
-  const nGet = () => { try { return localStorage.getItem(noticeId()); } catch (_) { return null; } };
-  const nSet = (v) => { try { localStorage.setItem(noticeId(), v); } catch (_) {} };
+  // [ADD] 공지 게시판: 공지마다 따로 "다시 보지 않기"를 기억해요(내용이 바뀌면 rev가 바뀌어 다시 보여요)
+  const noticeId = (c) => 'n-' + (c && c.id ? c.id + '-' + (c.rev || 0) : (site.updated || 'default'));
+  const nGet = (c) => { try { return localStorage.getItem(noticeId(c)); } catch (_) { return null; } };
+  const nSet = (c, v) => { try { localStorage.setItem(noticeId(c), v); } catch (_) {} };
+  // 지금 보여줄 공지: 게시판 목록 중 기간 안이고 대상에 맞고 아직 안 닫은 것(최근 것부터). 목록이 없으면 예전 방식의 공지 하나
+  function pickNotice() {
+    const now = Date.now(), ok = (c) => c && (c.title || !c.id) && c.show !== 'off' && !(c.show === 'guest' && me.user) && !(c.start && now < c.start) && !(c.end && now > c.end) && !nGet(c);
+    const list = (site.notices && site.notices.length) ? site.notices.slice().sort((a, b) => (b.start || b.created || 0) - (a.start || a.created || 0)) : [site.notice || DEFAULT_SITE.notice];
+    return list.find(ok) || null;
+  }
   function placeNotice(n) {
     const r = btn ? btn.getBoundingClientRect() : { bottom: 56, left: window.innerWidth - 312 }, bw = Math.min(300, window.innerWidth - 24);
     n.style.top = Math.round(r.bottom + 8) + 'px'; n.style.left = Math.max(12, Math.min(Math.round(r.left), window.innerWidth - bw - 12)) + 'px';
   }
   function showNotice() {
-    const c = site.notice || DEFAULT_SITE.notice, now = Date.now();
     let n = document.getElementById('acct-notice');
     const hideIt = () => { if (n) n.classList.remove('show'); };
-    if (c.show === 'off' || (c.show === 'guest' && me.user) || (c.start && now < c.start) || (c.end && now > c.end) || nGet()) return hideIt();
+    const c = pickNotice(); if (!c) return hideIt();
     const tr = c.tr && c.tr[L]; // [ADD] 화면 언어의 자동 번역본이 있으면 그걸로
     const title = (tr && tr.title) || c.title || T.nTitle, sub = c.title ? ((tr && tr.sub) || c.sub) : T.nSub, items = c.title ? ((tr && tr.items) || c.items) : T.nItems;
     if (!n) { n = document.createElement('div'); n.id = 'acct-notice'; document.body.appendChild(n); window.addEventListener('resize', () => placeNotice(n)); }
     n.innerHTML = `<button class="n-x" aria-label="${T.close}">×</button><h4>${esc(title)}</h4>${sub ? `<div class="n-sub">${esc(sub)}</div>` : ''}<ul>${(items || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="n-row"><button class="n-hide">${T.nHide}</button>${me.user ? '' : `<button class="n-go">${T.nBtn}</button>`}</div>`;
-    const hide = (perm) => { n.classList.remove('show'); if (perm) nSet('1'); };
+    const hide = (perm) => { n.classList.remove('show'); if (perm) { nSet(c, '1'); setTimeout(showNotice, 400); } }; // 다시 보지 않기 → 다음 공지가 있으면 이어서
     n.querySelector('.n-x').onclick = () => hide(false);
     n.querySelector('.n-hide').onclick = () => hide(true);
     const go = n.querySelector('.n-go'); if (go) go.onclick = () => { hide(true); open(); };

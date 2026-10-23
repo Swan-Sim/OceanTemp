@@ -141,15 +141,22 @@
     </div>
     <!-- [ADD] 관리 설정: 알림 이메일·비밀번호 바꾸기 -->
     <div id="secSettings" class="sec" style="display:none">
-      <div class="card"><h2>공지 팝업 · 소프트웨어 버전</h2>
-        <div class="muted" style="margin-bottom:8px">공지는 로그인 버튼 아래에 카드로 떠요. 저장하면 영어·한국어·스페인어·중국어·일본어로 자동 번역돼서 사용자 화면 언어로 보여요(DeepL). 제목을 비우면 기본 문구(회원가입 기능 안내)가 나와요. 내용을 저장하면 "다시 보지 않기"를 눌렀던 방문자에게도 다시 보여요. 기간은 지금 보고 있는 이 브라우저의 시간대 기준이에요.</div>
-        <form id="siteForm" class="ed" style="border-color:var(--line)">
-          <label>공지 노출</label><select class="f" name="show"><option value="off">보이지 않음</option><option value="guest">로그인 안 한 방문자만</option><option value="all">모든 방문자</option></select>
-          <label>제목</label><input class="f" name="title" maxlength="60" placeholder="예: 📢 회원가입 기능이 추가됐어요">
+      <div class="card"><h2>공지 게시판</h2>
+        <div class="muted" style="margin-bottom:8px">공지를 여러 개 저장해 두면 각자 노출 기간에 맞춰 로그인 버튼 아래 카드로 떠요(기간이 겹치면 가장 최근 것부터, 사용자가 "다시 보지 않기"를 누르면 다음 공지). 저장하면 영어·한국어·스페인어·중국어·일본어로 자동 번역돼요(DeepL).</div>
+        <div id="noticeList" class="muted">불러오는 중…</div>
+        <div class="actions" style="margin:8px 0"><button type="button" id="noticeNew">＋ 새 공지</button></div>
+        <form id="noticeForm" class="ed" style="border-color:var(--line);display:none">
+          <input type="hidden" name="id">
+          <label>노출 대상</label><select class="f" name="show"><option value="all">모든 방문자</option><option value="guest">로그인 안 한 방문자만</option><option value="off">보이지 않음(보관만)</option></select>
+          <label>제목</label><input class="f" name="title" maxlength="60" placeholder="예: 📢 10/30~31 한국 연안 실측 중단 안내" required>
           <label>설명</label><input class="f" name="sub" maxlength="140">
-          <label>항목 (한 줄에 하나, 최대 8개)</label><textarea class="f" name="items" rows="4" placeholder="정점별 즐겨찾기&#10;회원 포인트/등급 기능 추가"></textarea>
+          <label>항목 (한 줄에 하나, 최대 8개)</label><textarea class="f" name="items" rows="4"></textarea>
           <label>노출 시작</label><input class="f" type="datetime-local" name="start">
           <label>노출 종료</label><input class="f" type="datetime-local" name="end">
+          <span></span><div><button class="primary" type="submit">저장</button> <button type="button" id="noticeCancel">취소</button></div>
+        </form><div class="muted" id="noticeMsg"></div></div>
+      <div class="card"><h2>소프트웨어 버전 · 수심 보정</h2>
+        <form id="siteForm" class="ed" style="border-color:var(--line)">
           <label>소프트웨어 버전 표시</label><input class="f" name="vtext" maxlength="24" placeholder="V:B1008">
           <label>버전 노출 위치</label><select class="f" name="vpos"><option value="acct">로그인/계정 창 맨 아래</option><option value="bl">화면 왼쪽 아래</option><option value="br">화면 오른쪽 아래</option><option value="off">표시 안 함</option></select>
           <label style="display:block;margin-top:6px"><b>수심 보정 적용 해제</b> <span class="hint">(체크하면 그 보정을 끄고 공개 수심 자료 그대로 그려요. 입력값은 지워지지 않아요)</span></label>
@@ -524,21 +531,44 @@
   const fromLocalIn = (v) => { const t = v ? new Date(v).getTime() : 0; return Number.isFinite(t) ? t : 0; };
   async function loadSite() {
     const f = $('siteForm'); if (!f) return;
-    try { const c = await api('siteGet'); const n = c.notice || {}, v = c.ver || {};
-      f.show.value = n.show || 'guest'; f.title.value = n.title || ''; f.sub.value = n.sub || ''; f.items.value = (n.items || []).join('\n');
-      f.start.value = toLocalIn(n.start); f.end.value = toLocalIn(n.end); f.vtext.value = v.text == null ? '' : v.text; f.vpos.value = v.pos || 'acct';
+    try { const c = await api('siteGet'); const v = c.ver || {};
+      notices = Array.isArray(c.notices) ? c.notices : []; paintNotices();
+      f.vtext.value = v.text == null ? '' : v.text; f.vpos.value = v.pos || 'acct';
       f.offProf.checked = !!(c.depthOff && c.depthOff.prof); f.offFix.checked = !!(c.depthOff && c.depthOff.fix); f.offLand.checked = !!(c.depthOff && c.depthOff.land);
       f.dfix.value = (c.depthFix || []).map(x => [x.la, x.lo, x.r, x.min, x.name || ''].join(', ')).join('\n');
     } catch (_) {}
   }
   $('siteForm').addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.target, msg = $('siteMsg');
-    const st = fromLocalIn(f.start.value), en = fromLocalIn(f.end.value);
-    if (st && en && en <= st) { msg.textContent = '종료 시각이 시작보다 늦어야 해요'; return; }
-    try {
-      await api('siteSave', { notice: { show: f.show.value, title: f.title.value, sub: f.sub.value, items: f.items.value.split('\n'), start: st, end: en }, ver: { text: f.vtext.value, pos: f.vpos.value }, depthOff: { prof: f.offProf.checked, fix: f.offFix.checked, land: f.offLand.checked }, depthFix: f.dfix.value.split('\n').map(l => l.split(',').map(z => z.trim())).filter(a => a.length >= 4).map(a => ({ la: a[0], lo: a[1], r: a[2], min: a[3], name: a.slice(4).join(',') })) });
-      msg.textContent = '저장했어요. 사이트에는 최대 1분 안에 반영돼요.';
-    } catch (_) { msg.textContent = ''; }
+    try { await api('siteSave', siteBody()); msg.textContent = '저장했어요. 사이트에는 최대 1분 안에 반영돼요.'; } catch (_) { msg.textContent = ''; }
+  });
+  // 버전·수심 설정 값(공지 저장 때도 같이 보내요 - 안 보내면 기본값으로 돌아가니까)
+  function siteBody() { const f = $('siteForm'); return { ver: { text: f.vtext.value, pos: f.vpos.value }, depthOff: { prof: f.offProf.checked, fix: f.offFix.checked, land: f.offLand.checked }, depthFix: f.dfix.value.split('\n').map(l => l.split(',').map(z => z.trim())).filter(a => a.length >= 4).map(a => ({ la: a[0], lo: a[1], r: a[2], min: a[3], name: a.slice(4).join(',') })) }; }
+  // ── [ADD] 공지 게시판 ──
+  let notices = [];
+  const fmtDt = (ms) => ms ? new Date(ms).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  function nState(n) { const now = Date.now(); if (n.show === 'off') return ['꺼짐', '#64748b']; if (n.start && now < n.start) return ['예정', '#60a5fa']; if (n.end && now > n.end) return ['종료', '#94a3b8']; return ['노출 중', '#4ade80']; }
+  function paintNotices() {
+    const el = $('noticeList'); if (!el) return;
+    if (!notices.length) { el.textContent = '저장된 공지가 없어요.'; return; }
+    const sorted = notices.slice().sort((a, b) => (b.start || b.created || 0) - (a.start || a.created || 0));
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">${sorted.map(n => { const [st, col] = nState(n); const per = n.start || n.end ? `${fmtDt(n.start) || '…'} ~ ${fmtDt(n.end) || '…'}` : '기간 제한 없음';
+      return `<tr style="border-top:1px solid var(--line)"><td style="padding:6px 4px;white-space:nowrap"><b style="color:${col}">${st}</b></td><td style="padding:6px 4px"><b>${esc(n.title)}</b>${n.sub ? `<div class="muted">${esc(n.sub)}</div>` : ''}<div class="muted">${per} · ${n.show === 'guest' ? '비로그인만' : n.show === 'all' ? '모두' : '보관'}${n.tr && Object.keys(n.tr).length > 2 ? ' · 번역됨' : ''}</div></td><td style="padding:6px 4px;white-space:nowrap;text-align:right"><button type="button" data-nedit="${esc(n.id)}">수정</button> <button type="button" data-ndel="${esc(n.id)}">삭제</button></td></tr>`; }).join('')}</table>`;
+    el.querySelectorAll('[data-nedit]').forEach(b => { b.onclick = () => editNotice(notices.find(n => n.id === b.dataset.nedit)); });
+    el.querySelectorAll('[data-ndel]').forEach(b => { b.onclick = async () => { const n = notices.find(x => x.id === b.dataset.ndel); if (!n || !confirm(`"${n.title}" 공지를 지울까요?`)) return; await saveNotices(notices.filter(x => x.id !== n.id), '지웠어요.'); }; });
+  }
+  function editNotice(n) { const f = $('noticeForm'); f.style.display = ''; f.id.value = n ? n.id : ''; f.show.value = n ? n.show : 'all'; f.title.value = n ? n.title : ''; f.sub.value = n ? n.sub : ''; f.items.value = n ? (n.items || []).join('\n') : ''; f.start.value = toLocalIn(n ? n.start : 0); f.end.value = toLocalIn(n ? n.end : 0); f.title.focus(); }
+  async function saveNotices(list, okMsg) { const msg = $('noticeMsg'); msg.textContent = '저장 중… (번역에 몇 초 걸려요)';
+    try { const c = await api('siteSave', { ...siteBody(), notices: list }); notices = Array.isArray(c.notices) ? c.notices : list; paintNotices(); $('noticeForm').style.display = 'none'; msg.textContent = okMsg + ' 사이트에는 최대 1분 안에 반영돼요.'; }
+    catch (e) { msg.textContent = '저장 실패: ' + (e && e.message || e); } }
+  $('noticeNew').onclick = () => editNotice(null);
+  $('noticeCancel').onclick = () => { $('noticeForm').style.display = 'none'; };
+  $('noticeForm').addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.target, st = fromLocalIn(f.start.value), en = fromLocalIn(f.end.value);
+    if (st && en && en <= st) { $('noticeMsg').textContent = '종료 시각이 시작보다 늦어야 해요'; return; }
+    const cur = notices.find(n => n.id === f.id.value);
+    const item = { ...(cur || {}), id: f.id.value || undefined, show: f.show.value, title: f.title.value.trim(), sub: f.sub.value.trim(), items: f.items.value.split('\n').map(x => x.trim()).filter(Boolean), start: st, end: en };
+    await saveNotices(cur ? notices.map(n => n.id === cur.id ? item : n) : [...notices, item], '저장했어요.');
   });
   function showSec(name) {
     document.querySelectorAll('[data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === name));

@@ -716,10 +716,12 @@ x.strokeStyle='rgba(244,63,94,.6)';x.setLineDash([4,3]);x.beginPath();x.moveTo(0
 var ro=document.getElementById('dro');function sh(e){var r=c.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*W,py=(e.clientY-r.top)/r.height*H,v=Z[Math.max(0,Math.min(H-1,Math.round(py)))*W+Math.max(0,Math.min(W-1,Math.round(px)))];ro.textContent=isNaN(v)?'–':v>=0?D.land:D.depth+' ~'+Math.round(-v)+'m'}c.addEventListener('pointermove',sh);c.addEventListener('pointerdown',sh)})();</script>`;
 }
 
+// [CHANGE] 임시: 상세 페이지에서 '주변 수심'을 아예 뺐어요(수심 계산이 Vercel CPU를 가장 많이 써서). 다시 넣으려면 true 로.
+const SHOW_DEPTH = false;
 function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm, opt) {
   opt = opt || {}; const t = T[lang];
   // [ADD] 아직 못 받은 자료는 자리만 잡아 두고(빙글 도는 표시) 페이지를 먼저 보여줘요. 브라우저가 svc=parts 로 받아 채워요.
-  const pend = { now: !d, clim: !clim || (!climVis && !d), depth: !depth, near: !d }; // 연평균 시야가 없으면 현재 시야로 대신 보여주려고 d 가 올 때까지 기다려요
+  const pend = { now: !d, clim: !clim || (!climVis && !d), depth: SHOW_DEPTH && !depth, near: !d }; // 연평균 시야가 없으면 현재 시야로 대신 보여주려고 d 가 올 때까지 기다려요
   if (!d) d = { tz: 'UTC', at: Date.now(), now: {}, days: [], water: 'sea', near: [], pending: true };
   const SPIN = `<div class="card pend"><span class="spin"></span>${{ ko: '불러오는 중…', ja: '読み込み中…', es: 'Cargando…', zh: '載入中…' }[lang] || 'Loading…'}</div>`;
   const st = { ...st0, name: nameIn(st0, lang) };
@@ -818,7 +820,7 @@ ${tide}${days}`;
 ${nowT != null && !d.pending ? `<p class="lead">${esc(t.lead(st.name, nowT, fmtDate(d.obs && d.obs.at ? d.obs.at : d.at, { dateStyle: 'medium', timeStyle: 'short' }), d.obs ? t.leadObs(d.obs.name, d.obs.dist) : t.leadModel, visToday ? fmtVis(visToday.v) : null, r1(d.now.wave)))}</p>` : ''}${regionLink}
 <div id="storm-banner" hidden></div>
 ${photoHtml}
-${partW('clim', climH)}${partW('depth', inland ? '' : depthHtml(lang, depth), inland ? '' : undefined)}
+${partW('clim', climH)}${SHOW_DEPTH ? partW('depth', inland ? '' : depthHtml(lang, depth), inland ? '' : undefined) : ''}
 ${partW('now', nowInner, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}&lang=${lang}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}
 ${shopHtml}${partW('near', nearHtml, '')}
 <div id="plogs" hidden></div>
@@ -848,7 +850,7 @@ document.addEventListener('click',function(e){var a=e.target.closest&&e.target.c
       { '@type': 'ListItem', position: 2, name: cname, item: `${base}/${lang}/s/#${st.cc || 'xx'}` },
       { '@type': 'ListItem', position: 3, name: st.name, item: base + hrefs[lang] }] }
   ];
-  if (opt.partsOnly) return { now: nowInner, clim: climH, depth: inland ? '' : depthHtml(lang, depth), near: nearHtml };
+  if (opt.partsOnly) return { now: nowInner, clim: climH, ...(SHOW_DEPTH ? { depth: inland ? '' : depthHtml(lang, depth) } : {}), near: nearHtml };
   return page({ lang, title, desc: description, canonical: hrefs[lang], alternates: hrefs, jsonld, body, base });
 }
 
@@ -982,7 +984,7 @@ module.exports = async function spotPage(req, res) {
       const lock = await S.R(['SET', 'sp:warm:' + st.no, '1', 'NX', 'EX', '120']).then(r => r[0] === 'OK').catch(() => true); // 2분에 한 번만
       if (!lock) return res.status(200).json({ ok: true, skipped: true });
       const r = await Promise.all([dataFor(st, all, { force: true }).then(() => 'data').catch(e => 'data:' + e.message), climFor(st.lat, st.lon).then(() => 'clim').catch(e => 'clim:' + e.message), climVisFor(st.lat, st.lon).then(() => 'vis').catch(e => 'vis:' + e.message),
-        require('./_depth').depthCached(st.lat, st.lon).then(v => v ? 'depth:cached' : require('./_depth').depthAt(st.lat, st.lon).then(() => 'depth')).catch(e => 'depth:' + e.message)]);
+        SHOW_DEPTH ? require('./_depth').depthCached(st.lat, st.lon).then(v => v ? 'depth:cached' : require('./_depth').depthAt(st.lat, st.lon).then(() => 'depth')).catch(e => 'depth:' + e.message) : 'depth:off']);
       return res.status(200).json({ ok: true, done: r });
     }
     const T0 = Date.now(), tm = {}, timed = (name, p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]).catch(() => null).then(v => { tm[name] = Date.now() - T0; return v; });
@@ -993,11 +995,11 @@ module.exports = async function spotPage(req, res) {
       const TP = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]).catch(() => null);
       const [d, clim, climVis, depth, photos] = await Promise.all([
         TP(dataFor(st, all, { quickVis: true }), 22000), TP(climFor(st.lat, st.lon), 15000), TP(climVisFor(st.lat, st.lon), 15000),
-        TP(require('./_depth').depthCached(st.lat, st.lon).then(v => v || require('./_depth').depthAt(st.lat, st.lon)), 30000),
+        SHOW_DEPTH ? TP(require('./_depth').depthCached(st.lat, st.lon).then(v => v || require('./_depth').depthAt(st.lat, st.lon)), 30000) : null,
         TP(require('./_photos').forSpot(S.R, st.no, 8), 2000)]);
-      const missing = []; if (!d) missing.push('now', 'near'); if (!clim) missing.push('clim'); if (!depth) missing.push('depth');
+      const missing = []; if (!d) missing.push('now', 'near'); if (!clim) missing.push('clim'); if (SHOW_DEPTH && !depth) missing.push('depth');
       const parts = renderSpot(lang, st, all, d, [], clim, base, climVis, depth, false, { partsOnly: true, photos: photos || [] });
-      if (!d) { delete parts.now; delete parts.near; } if (!clim) delete parts.clim; if (!depth) delete parts.depth;
+      if (!d) { delete parts.now; delete parts.near; } if (!clim) delete parts.clim; if (!depth) delete parts.depth; // SHOW_DEPTH=false 면 원래 없음
       return res.status(200).json({ ok: true, parts, missing });
     }
     // 페이지: 저장된 값은 0.6초 안에 오니 그것만 기다리고, 없는 칸은 자리만 두고 바로 보여줘요(브라우저가 svc=parts 로 채움)
@@ -1008,7 +1010,7 @@ module.exports = async function spotPage(req, res) {
       timed('clim', climFor(st.lat, st.lon, { cacheOnly: true }), QUICK),
       Promise.resolve(), // [CHANGE] 조회 수는 svc=hit 신호로
       timed('climvis', climVisFor(st.lat, st.lon, { cacheOnly: true }), QUICK),
-      timed('depth', require('./_depth').depthCached(st.lat, st.lon), QUICK),
+      SHOW_DEPTH ? timed('depth', require('./_depth').depthCached(st.lat, st.lon), QUICK) : null,
       timed('photos', require('./_photos').forSpot(S.R, st.no, 8), QUICK)
     ]);
     res.setHeader('Server-Timing', Object.entries(tm).map(([k, v]) => `${k};dur=${v}`).join(', ') + `, total;dur=${Date.now() - T0}`);

@@ -65,6 +65,13 @@
   input.f, select.f, textarea.f { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 13px; }
   .ed { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; align-items: center; font-size: 12.5px; border: 1px solid rgba(255,176,0,.4); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
   .ed label { color: var(--muted); } .ed input, .ed select { width: 100%; }
+  /* [ADD] 관리 설정: 섹션별 접기/펼치기 */
+  .foldAll { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 10px; } .foldAll button { font-size: 12px; padding: 3px 10px; }
+  .card.fold > h2 { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; margin-bottom: 0; }
+  .card.fold > h2 .fbtn { margin-left: auto; font-size: 12px; font-weight: 500; padding: 3px 10px; }
+  .card.fold > h2 .fchev { display: inline-block; color: var(--accent); font-size: 11px; transition: transform .15s; }
+  .card.fold.open > h2 { margin-bottom: 12px; } .card.fold.open > h2 .fchev { transform: rotate(90deg); }
+  .card.fold:not(.open) > .fbody { display: none; }
   /* [FIX] 공지 시작/종료: 어두운 화면에서 달력 아이콘이 검은색이라 안 보이던 것 → 다크 모드 입력칸 */
   input.f[type=datetime-local] { color-scheme: dark; }
   input.f[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(72%) sepia(60%) saturate(900%) hue-rotate(2deg); opacity: .9; cursor: pointer; }
@@ -616,6 +623,32 @@
     const item = { ...(cur || {}), id: f.id.value || undefined, show: f.show.value, title: f.title.value.trim(), sub: f.sub.value.trim(), items: f.items.value.split('\n').map(x => x.trim()).filter(Boolean), start: st, end: en };
     await saveNotices(cur ? notices.map(n => n.id === cur.id ? item : n) : [...notices, item], '저장했어요.');
   });
+  // [ADD] 관리 설정 섹션 접기/펼치기 - 제목이나 버튼을 누르면 열리고 닫혀요. 열어 둔 섹션은 이 브라우저에 기억돼요.
+  (function () {
+    const sec = $('secSettings'); if (!sec) return;
+    const KEY = 'adminOpenCards'; let open = [];
+    try { open = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) {}
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(open)); } catch (e) {} };
+    const cards = [...sec.querySelectorAll(':scope > .card')].filter(c => c.querySelector(':scope > h2'));
+    const set = (c, on) => { c.classList.toggle('open', on); c._btn.textContent = on ? '접기' : '펼치기';
+      open = open.filter(t => t !== c._key); if (on) open.push(c._key); save(); };
+    cards.forEach(c => {
+      const h = c.querySelector(':scope > h2'), body = document.createElement('div'); body.className = 'fbody';
+      while (h.nextSibling) body.appendChild(h.nextSibling); c.appendChild(body);
+      c._key = h.textContent.trim(); c.classList.add('fold');
+      h.insertAdjacentHTML('afterbegin', '<span class="fchev">▶</span>');
+      c._btn = document.createElement('button'); c._btn.type = 'button'; c._btn.className = 'fbtn'; h.appendChild(c._btn);
+      h.onclick = () => set(c, !c.classList.contains('open'));
+      set(c, open.includes(c._key));
+    });
+    const bar = document.createElement('div'); bar.className = 'foldAll';
+    bar.innerHTML = '<button type="button" data-f="1">모두 펼치기</button><button type="button" data-f="0">모두 접기</button>';
+    bar.querySelectorAll('button').forEach(b => { b.onclick = () => cards.forEach(c => set(c, b.dataset.f === '1')); });
+    sec.insertBefore(bar, sec.firstChild);
+    // 다른 곳에서 공지 폼을 열면(＋ 새 공지·수정) 그 섹션은 자동으로 펼침
+    const nf = $('noticeForm'); const nc = nf && nf.closest('.card');
+    if (nc) ['noticeNew'].forEach(id => $(id) && $(id).addEventListener('click', () => set(nc, true)));
+  })();
   function showSec(name) {
     document.querySelectorAll('[data-sec]').forEach(b => b.classList.toggle('on', b.dataset.sec === name));
     $('secStats').style.display = name === 'stats' ? '' : 'none';

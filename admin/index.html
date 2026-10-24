@@ -150,7 +150,7 @@
         <details style="margin-top:12px"><summary style="cursor:pointer">여러 개 한 번에 등록</summary>
           <textarea id="bulkSpots" class="f" rows="8" style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px" placeholder="한 줄에 하나: 이름, 위도, 경도, 짧은이름(선택), 나라(선택), 메모(선택)&#10;예) Tawala MPA (Panglao), 9.54887, 123.79789, Tawala MPA, Philippines, Reef wall"></textarea>
           <div class="actions" style="margin-top:6px"><button id="khoaScuba" type="button">KHOA 스쿠버 포인트 불러오기</button> <button class="primary" id="bulkGo" type="button">등록</button><span class="muted" id="bulkMsg" style="margin-left:8px"></span></div>
-          <div class="actions" style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.1)"><button id="trAll" type="button">언어별 이름 비어 있는 정점 자동 번역 채우기</button><span class="muted" id="trMsg" style="margin-left:8px"></span></div>
+          <div class="actions" style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.1)"><button id="trAll" type="button">언어별 이름 자동 채우기 (현지 발음 표기)</button><span class="muted" id="trMsg" style="margin-left:8px"></span></div>
           <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.1)"><b>지역 일괄 지정</b> <span class="hint">지역 페이지(/ko/r/…)는 이 지역 이름으로 묶여요. 한 줄에 하나: <code>지역명|번호,번호,…</code> 또는 <code>지역명|@중심번호|반경km</code> (예: <code>Cebu|@295|25</code> = 295번에서 25km 안 전부)</span>
             <textarea id="bulkRegion" class="f" rows="3" style="width:100%;margin-top:6px;font-family:ui-monospace,monospace;font-size:12px" placeholder="Cebu|@295|25&#10;제주|@254|40&#10;Malapascua|482,483,484"></textarea>
             <div class="actions" style="margin-top:6px"><button class="primary" id="bulkRegionGo" type="button">지정</button><span class="muted" id="bulkRegionMsg" style="margin-left:8px"></span></div></div>
@@ -509,8 +509,8 @@
   document.addEventListener('click', async (e) => {
     if (!e.target || e.target.id !== 'trAll') return;
     const btn = e.target, msg = $('trMsg'); btn.disabled = true; let total = 0;
-    try { for (let i = 0; i < 60; i++) { const j = await api('spotsTranslate', { limit: 15 }); total += j.done; msg.textContent = `채움 ${total} · 남음 ${j.remaining}`; if (!j.remaining || !j.done) break; } }
-    catch (_) {} btn.disabled = false; loadMgmt();
+    try { for (let i = 0; i < 120; i++) { const j = await api('spotsTranslate', { limit: 8 }); total += j.done; msg.textContent = `채움 ${total} · 남음 ${j.remaining}`; if (!j.remaining || !j.done) break; } }
+    catch (e) { msg.textContent = String(e && e.message || e).includes('no_anthropic_key') ? 'Vercel 환경변수 ANTHROPIC_API_KEY 가 없어요' : '실패: ' + (e && e.message || e); } btn.disabled = false; loadMgmt();
   });
   function alertMsg(m) { const d = document.createElement('div'); d.className = 'err'; d.textContent = '오류: ' + m; document.querySelector('.nav').after(d); setTimeout(() => d.remove(), 5000); }
   // ───────── [ADD] 회원 관리 탭 ─────────
@@ -802,7 +802,7 @@
     return `<div class="req" data-sform="${isNew ? 'new' : s.no}"><div class="grid2" style="gap:8px">
       <label>이름(기본)<input class="f" data-k="name" value="${esc(s.name || '')}"></label>
       <label>짧은 이름(지도 글자)<input class="f" data-k="label" value="${esc(s.label || '')}"></label>
-      <div style="grid-column:1/-1;border-top:1px solid rgba(255,255,255,.1);padding-top:8px"><b>언어별 이름</b> <span class="hint">한국어나 영어 하나만 넣고 저장하면 나머지는 자동 번역(DeepL)으로 채워요. 직접 고친 칸은 다시 덮어쓰지 않아요. <i style="color:#67e8f9">자동</i> = 번역으로 채운 칸</span></div>
+      <div style="grid-column:1/-1;border-top:1px solid rgba(255,255,255,.1);padding-top:8px"><b>언어별 이름</b> <span class="hint">한국어나 영어 하나만 넣고 저장하면 나머지는 현지 발음 표기로 자동으로 채워요(예: Skull Cave → 스컬 케이브, Pescador Island → 페스카도르섬). 직접 고친 칸은 다시 덮어쓰지 않아요. <i style="color:#67e8f9">자동</i> = 자동으로 채운 칸</span></div>
       ${[['en', 'English'], ['ko', '한국어'], ['es', 'Español'], ['zh', '中文(繁體)'], ['ja', '日本語']].map(([l, nm]) => `<label>${nm}${(s.namesAuto || {})[l] ? ' <i style="color:#67e8f9;font-style:normal;font-size:11px">자동</i>' : ''}<input class="f" data-n="${l}" value="${esc((s.names || {})[l] || '')}"></label>`).join('')}
       <label>나라${countrySelect(s.country || '')}</label>
       <label>지역(도시·섬, 지역 페이지 묶음)<input class="f" data-k="region" value="${esc(s.region || '')}" placeholder="예) Cebu, 제주"></label>

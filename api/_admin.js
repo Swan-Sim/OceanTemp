@@ -350,11 +350,13 @@ module.exports = async function admin(req, res) {
   }
   // [ADD] 이름 번역 한꺼번에 채우기: 빈 칸이 있는 정점부터 한 번에 limit 개(브라우저가 여러 번 불러요). force 면 자동 칸도 다시
   if (svc === 'spotsTranslate') {
-    const T = require('./_translate'); if (!T.hasKey()) return bad('no_deepl_key');
-    const all = Object.values(await S.hgetallJSON(K.spots)); const limit = Math.max(1, Math.min(30, parseInt(b.limit, 10) || 15));
-    const need = all.filter(sp => { const n = sp.names || {}; return T.LANGS.some(l => !n[l]) || (b.force && Object.values(sp.namesAuto || {}).some(Boolean)); }).sort((a, c) => a.no - c.no);
+    const T = require('./_translate'); if (!T.hasNameKey()) return bad('no_anthropic_key');
+    const all = Object.values(await S.hgetallJSON(K.spots)); const limit = Math.max(1, Math.min(30, parseInt(b.limit, 10) || 8));
+    const need = all.filter(T.needsNames).sort((a, c) => a.no - c.no);
     let done = 0; const cmds = [];
-    for (const sp of need.slice(0, limit)) { try { if (await T.fillNames(sp, { ms: 6000, force: !!b.force })) { cmds.push(['HSET', K.spots, String(sp.no), JSON.stringify(sp)]); done++; } } catch (_) {} }
+    // [CHANGE] Claude 로 발음 표기 - 4개씩 동시에(한 번 호출 시간 안에 끝나게)
+    const batch = need.slice(0, limit);
+    for (let i = 0; i < batch.length; i += 4) { await Promise.all(batch.slice(i, i + 4).map(async sp => { try { if (await T.fillNames(sp, { ms: 15000 })) { cmds.push(['HSET', K.spots, String(sp.no), JSON.stringify(sp)]); done++; } } catch (_) {} })); }
     if (cmds.length) { cmds.push(['DEL', 'sp:list']); await R(...cmds); S.clearSpotsMemo(); }
     return ok({ done, remaining: Math.max(0, need.length - done), total: all.length });
   }

@@ -891,9 +891,17 @@ async function count(req, no) {
   } catch (_) {}
 }
 
-function sendHtml(res, code, html) {
+// [CHANGE] Vercel CPU 절약: 포인트·목록·지역 페이지를 CDN에 10분 캐시해요(봇이 1천여 곳 × 5개 언어를 매일 긁어서
+//  매번 서버에서 페이지를 새로 만들던 게 CPU를 가장 많이 썼어요). 조회 수는 서버에서 세지 않고, 페이지가 열린 뒤
+//  브라우저가 보내는 작은 신호(svc=hit)로 세요 - 캐시된 페이지를 봐도 조회가 빠지지 않아요.
+//  hit = 조회 수 키(포인트 번호 / 'index' / 'region:<slug>'), cache = CDN 캐시 여부(언어 없는 주소는 브라우저 언어마다 달라서 캐시 안 함)
+const hitBeacon = (k) => `<script>try{navigator.sendBeacon('/api/spotobs?svc=hit&k=${encodeURIComponent(String(k))}&ref='+encodeURIComponent(document.referrer||''))}catch(e){}</script>`;
+function sendHtml(res, code, html, opt) {
+  opt = opt || {};
+  const hit = opt.hit !== undefined ? opt.hit : res._hit, cache = opt.cache !== undefined ? opt.cache : !!res._cache;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'private, max-age=120'); // CDN 캐시 안 함(조회 수를 정확히 세려고)
+  res.setHeader('Cache-Control', code === 200 && cache ? 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400' : 'private, max-age=120');
+  if (code === 200 && hit !== undefined && hit !== null) html = String(html).replace(/<\/body><\/html>\s*$/, hitBeacon(hit) + '</body></html>');
   res.status(code).send(html);
 }
 
@@ -904,6 +912,13 @@ module.exports = async function spotPage(req, res) {
   // [ADD] Redis 명령 절약: 검색엔진 봇이 페이지 스크립트를 실행하며 부르는 parts·warm 은 바로 끝내요(봇은 저장된 페이지만 보면 충분)
   //  - Upstash 무료 한도(월 50만 명령)를 봇 크롤링(포인트 1천여 곳 × 3개 언어 × 여러 봇)이 다 써버렸던 문제
   if ((svc === 'parts' || svc === 'warm') && botInfo(req.headers['user-agent'])) { res.setHeader('Cache-Control', 'no-store'); return res.status(204).end(); }
+  // [ADD] 조회 수 신호(페이지가 CDN 캐시돼도 여기서 세요). 페이지 자체를 다시 만들지 않으니 CPU가 거의 안 들어요
+  if (svc === 'hit') {
+    res.setHeader('Cache-Control', 'no-store');
+    const k = String(q.k || '').slice(0, 80);
+    if (/^(\d+|index|region:[^\s<>"']{0,60})$/.test(k)) await count({ headers: { ...req.headers, referer: String(q.ref || '').slice(0, 300), referrer: undefined } }, /^\d+$/.test(k) ? parseInt(k, 10) : k);
+    return res.status(204).end();
+  }
   try {
     const all = await loadStations(base);
     if (svc === 'sitemap') {
@@ -920,10 +935,10 @@ module.exports = async function spotPage(req, res) {
       return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n<url><loc>${base}/</loc><changefreq>daily</changefreq></url>\n${urls.join('\n')}\n</urlset>`);
     }
     const lang = pickLang(req);
-    if (svc === 'index') { count(req, 'index'); return sendHtml(res, 200, renderIndex(lang, all, base)); }
+    if (svc === 'index') return sendHtml(res, 200, renderIndex(lang, all, base), { hit: 'index', cache: !!q.lang });
     // [ADD] 지역 페이지(/ko/r/, /ko/r/<지역>) - api/_region.js
-    if (svc === 'regions') { count(req, 'index'); return require('./_region').regionIndex(req, res, lang, all, base); }
-    if (svc === 'region') { count(req, 'region:' + String(q.slug || '')); return require('./_region').regionPage(req, res, lang, all, base, q.slug); }
+    if (svc === 'regions') { res._hit = 'index'; res._cache = !!q.lang; return require('./_region').regionIndex(req, res, lang, all, base); }
+    if (svc === 'region') { res._hit = 'region:' + String(q.slug || '').slice(0, 60); res._cache = !!q.lang; return require('./_region').regionPage(req, res, lang, all, base, q.slug); }
     // [ADD] 이름 바로가기: otemp.app/문섬 → 정식 주소(/ko/s/39/문섬)로. 여러 곳이면 고르는 화면, 없으면 비슷한 이름 목록
     if (svc === 'go') {
       const dec = (x) => { let v = String(x || ''); for (let i = 0; i < 3; i++) { try { const d = decodeURIComponent(v); if (d === v) break; v = d; } catch (_) { break; } } return v; };
@@ -991,7 +1006,7 @@ module.exports = async function spotPage(req, res) {
       timed('data', dataFor(st, all, { quick: true, cacheOnly: true }), QUICK),
       timed('shops', S.hgetallJSON(S.K.shops), 1500),
       timed('clim', climFor(st.lat, st.lon, { cacheOnly: true }), QUICK),
-      timed('count', count(req, st.no), 1500),
+      Promise.resolve(), // [CHANGE] 조회 수는 svc=hit 신호로
       timed('climvis', climVisFor(st.lat, st.lon, { cacheOnly: true }), QUICK),
       timed('depth', require('./_depth').depthCached(st.lat, st.lon), QUICK),
       timed('photos', require('./_photos').forSpot(S.R, st.no, 8), QUICK)
@@ -1000,7 +1015,8 @@ module.exports = async function spotPage(req, res) {
     res.setHeader('X-OT-Warm', d && d.stale ? '1' : '0'); // 오래된 저장본만 warm, 빈 칸은 parts 가 받아요
     const live = Object.values(shopsAll || {}).filter(s => S.isLive(s) && (s.spots || []).map(Number).includes(st.no)).map(S.publicShop);
     const shops = [...live.filter(s => s.paid).sort(() => Math.random() - 0.5), ...live.filter(s => !s.paid).sort(() => Math.random() - 0.5)];
-    return sendHtml(res, 200, renderSpot(lang, st, all, d, shops || [], clim, base, climVis, depth, res.getHeader('X-OT-Warm') === '1', { photos: photos || [] }));
+    // [CHANGE] 샵 순서 무작위는 캐시된 10분 동안 고정돼요(유료 샵이 먼저인 건 그대로)
+    return sendHtml(res, 200, renderSpot(lang, st, all, d, shops || [], clim, base, climVis, depth, res.getHeader('X-OT-Warm') === '1', { photos: photos || [] }), { hit: st.no, cache: !!q.lang });
   } catch (e) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(500).send('error: ' + esc(String(e && e.message || e)));

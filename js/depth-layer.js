@@ -10,7 +10,9 @@
     const dRend = () => dRenderer || (dRenderer = L.canvas({ padding: 0.5 }));
     const dTiles = new Map(); // "x_y" → { st: 'load'|'ok'|'none', grp, lbl: [[위도, 경도, 수심]] }
     let dQueue = [], dActive = 0, dLabels = null;
-    let depthOn = (() => { try { return localStorage.getItem('otemp.depthLayer') !== '0'; } catch (_) { return true; } })();
+    // [CHANGE] 임시: 서버 CPU 절약을 위해 수심 지도는 기본 꺼짐. 사용자가 [수심 OFF] 버튼을 눌러 켜야 보여요.
+    //  저장 키를 새로 바꿔서(otemp.depthLayer2) 예전에 켜 둔 사람도 모두 꺼진 상태에서 시작해요. 다시 기본 켜짐으로 돌리려면 !== '0' 으로.
+    let depthOn = (() => { try { return localStorage.getItem('otemp.depthLayer2') === '1'; } catch (_) { return false; } })();
     let depthHooked = false, depthBtn = null;
 
     const tileX = (lon) => Math.floor((lon + 180) / 360 * 2 ** DTILE_Z);
@@ -158,7 +160,7 @@
       if (!leafletMap) return;
       if (!depthBtn) {
         const Ctl = L.Control.extend({ onAdd() { const d = L.DomUtil.create('button', 'depth-btn'); d.type = 'button'; L.DomEvent.disableClickPropagation(d);
-          d.onclick = () => { depthOn = !depthOn; try { localStorage.setItem('otemp.depthLayer', depthOn ? '1' : '0'); } catch (_) {} refreshDepthLayers(); }; depthBtn = d; return d; } });
+          d.onclick = () => { depthOn = !depthOn; try { localStorage.setItem('otemp.depthLayer2', depthOn ? '1' : '0'); } catch (_) {} refreshDepthLayers(); }; depthBtn = d; return d; } });
         new Ctl({ position: 'bottomright' }).addTo(leafletMap);
       }
       depthBtn.style.display = leafletMap.getZoom() >= DEPTH_MIN_ZOOM ? '' : 'none';

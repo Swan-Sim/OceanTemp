@@ -135,6 +135,30 @@ async function jtwc() {
   });
   return out;
 }
+// ── CWA(대만 중앙기상서) 氣象資料開放平臺 W-C0034-005 (颱風消息與警報 - 熱帶氣旋路徑). 조석과 같은 키 CWA_API_KEY ──
+async function cwa() {
+  const key = process.env.CWA_API_KEY; if (!key) return [];
+  const j = await getJSON(`https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-005?Authorization=${encodeURIComponent(key)}&format=JSON`, 10000);
+  const list = j && j.records && j.records.tropicalCyclones && j.records.tropicalCyclones.tropicalCyclone; if (!Array.isArray(list)) return [];
+  const num = (x) => { const n = parseFloat(x); return Number.isFinite(n) ? n : null; };
+  const ll = (c) => { const m = String(c || '').split(','); const lon = num(m[0]), lat = num(m[1]); return lat != null && lon != null ? [lat, lon] : null; };
+  const rad = (o) => o && (num(o.radius) != null ? num(o.radius) : null);
+  const tm = (s) => { const d = new Date(String(s || '').replace(' ', 'T')); return isNaN(d) ? null : d.toISOString(); }; // "2026-10-28T18:00:00+00:00" 또는 "2026-10-28 18:00:00"
+  const out = [];
+  for (const tc of list) {
+    const fixes = (tc.analysisData && tc.analysisData.fix) || [], fcs = (tc.forecastData && tc.forecastData.fix) || [];
+    const an = fixes[fixes.length - 1]; if (!an) continue; const pos = ll(an.coordinate); if (!pos) continue;
+    const name = String(tc.typhoonName || '').toUpperCase().trim(), nameZh = String(tc.cwaTyphoonName || '').trim();
+    const w = num(an.maxWindSpeed), g = num(an.maxGustSpeed);
+    out.push({ id: 'cwa:' + (tc.cwaTyNo || tc.cwaTdNo || name), src: 'cwa', name, nameZh, num: tc.cwaTyNo ? parseInt(String(tc.cwaTyNo).slice(-2), 10) || null : null,
+      cat: w != null && w >= 17.2 ? 'TY' : 'TD', catKo: w != null && w >= 17.2 ? '태풍' : '열대저압부', intensity: '', pressure: num(an.pressure), wind: w, gust: g,
+      lat: pos[0], lon: pos[1], at: tm(an.fixTime), issue: tm(an.fixTime), move: { dir: num(an.movingDirection) != null ? num(an.movingDirection) : (an.movingDirection || ''), kmh: num(an.movingSpeed) },
+      radii: { storm: rad(an.circleOf25Ms), gale: rad(an.circleOf15Ms) }, track: fixes.map(f => ll(f.coordinate)).filter(Boolean),
+      forecast: fcs.map(f => { const p = ll(f.coordinate); const t = tm(f.initTime); const h = num(f.tau); return p ? { h, t: t && h != null ? new Date(Date.parse(t) + h * 3600e3).toISOString() : null, lat: p[0], lon: p[1], r: num(f.radiusOf70PercentProbability), pressure: num(f.pressure), wind: num(f.maxWindSpeed), cat: '', storm: rad(f.circleOf25Ms) } : null; }).filter(Boolean),
+      url: 'https://www.cwa.gov.tw/V8/C/P/Typhoon/TY_NEWS.html' });
+  }
+  return out;
+}
 const near = (a, b) => Math.hypot(a.lat - b.lat, (a.lon - b.lon) * Math.cos(a.lat * Math.PI / 180)) < 3; // 3° 안이면 같은 태풍
 // [ADD] 태풍 고정 주소용 이름: 2026-in-fa (연도-이름). 이름이 없으면 기관 번호
 const slugOf = (s) => { const y = new Date(Date.parse(s.at) || Date.now()).getUTCFullYear(); const n = String(s.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); return `${y}-${n || String(s.id).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`; };
@@ -161,15 +185,15 @@ async function archive(storms) {
 
 // [CHANGE] 기관별 예보 경로를 따로 담아요: tracks = { jma: [...], kma: [...], nhc: [...] }. 겹치면 확실, 갈라지면 불확실
 async function build() {
-  const [j, k, n, jt, gd] = await Promise.all([jma().catch(() => []), kma().catch(() => []), nhc().catch(() => []), jtwc().catch(() => []), gdacs().catch(() => [])]);
+  const [j, k, n, jt, tw, gd] = await Promise.all([jma().catch(() => []), kma().catch(() => []), nhc().catch(() => []), jtwc().catch(() => []), cwa().catch(() => []), gdacs().catch(() => [])]);
   const storms = [];
   const add = (s) => { const x = storms.find(x => near(x, s)); if (!x) { s.tracks = {}; if (s.forecast && s.forecast.length) s.tracks[s.src] = s.forecast; s.agencies = [s.src]; storms.push(s); return; }
     if (s.forecast && s.forecast.length) x.tracks[s.src] = s.forecast; x.agencies.push(s.src);
-    if (s.nameKo && !x.nameKo) x.nameKo = s.nameKo; if (!x.num && s.num) x.num = s.num; if (!x.name && s.name) x.name = s.name; if (s.effKr) x.effKr = true;
+    if (s.nameKo && !x.nameKo) x.nameKo = s.nameKo; if (s.nameZh && !x.nameZh) x.nameZh = s.nameZh; if (!x.num && s.num) x.num = s.num; if (!x.name && s.name) x.name = s.name; if (s.effKr) x.effKr = true;
     if (x.pressure == null && s.pressure != null) x.pressure = s.pressure; if (x.wind == null && s.wind != null) x.wind = s.wind;
     if (!x.radii.storm && s.radii.storm) x.radii.storm = s.radii.storm; if (!x.radii.gale && s.radii.gale) x.radii.gale = s.radii.gale;
     if (!x.track.length && s.track && s.track.length) x.track = s.track; if (s.alert && !x.alert) x.alert = s.alert; };
-  [...j, ...k, ...n, ...jt, ...gd].forEach(add);
+  [...j, ...k, ...n, ...jt, ...tw, ...gd].forEach(add);
   storms.forEach(s => { s.forecast = s.tracks.jma || s.tracks.kma || s.tracks.nhc || s.forecast || [];
     // [ADD] 어느 기관도 예보 경로를 내지 않으면 '예보 종료'(약해졌거나 온대저기압으로 바뀜). JMA 등급 LOW 도 같아요
     //  [FIX] GDACS 에만 있는 태풍(인도양·남반구 등 예보 기관을 아직 안 붙인 해역)은 '종료'가 아니라 '예보 경로 자료 없음'(noTrack)
@@ -186,6 +210,7 @@ module.exports = async function handler(req, res) {
   const force = (req.query || {}).force === '1';
   // [ADD] ?debug=kma : 기상청 API허브 원문 앞부분만 보여줘요(열 이름·형식 확인용. 키는 안 나와요)
   // [ADD] ?debug=kmaparse : 기상청 응답을 코드가 어떻게 읽었는지(파싱 결과) 보여줘요
+  if ((req.query || {}).debug === 'cwaparse') { res.setHeader('Cache-Control', 'no-store'); try { const k = await cwa(); return res.status(200).json({ n: k.length, storms: k.map(s => ({ name: s.name, nameZh: s.nameZh, lat: s.lat, lon: s.lon, at: s.at, wind: s.wind, track: s.track.length, forecast: s.forecast.length })) }); } catch (e) { return res.status(200).json({ error: String(e && e.message || e) }); } }
   if ((req.query || {}).debug === 'kmaparse') { res.setHeader('Cache-Control', 'no-store'); try { const k = await kma(); return res.status(200).json({ n: k.length, storms: k.map(s => ({ name: s.name, nameKo: s.nameKo, num: s.num, lat: s.lat, lon: s.lon, at: s.at, wind: s.wind, track: s.track.length, forecast: s.forecast.length })) }); } catch (e) { return res.status(200).json({ error: String(e && e.message || e) }); } }
   if ((req.query || {}).debug === 'kma') { const key = process.env.KMA_API_KEY; const tm = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12); res.setHeader('Cache-Control', 'no-store');
     if (!key) return res.status(200).json({ hasKey: false });

@@ -8,7 +8,7 @@ const { redisPipeline } = require('./_redis');
 const LANGS = H.LANGS, esc = H.esc;
 const km = (a, b, c, d) => { const r = Math.PI / 180, x = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2; return 12742 * Math.asin(Math.sqrt(x)); };
 const AG = { jma: { c: '#ffd27a', n: { ko: '일본 기상청', en: 'JMA (Japan)', ja: '気象庁', es: 'JMA (Japón)', zh: '日本氣象廳' } }, kma: { c: '#7dd3fc', n: { ko: '한국 기상청', en: 'KMA (Korea)', ja: '韓国気象庁', es: 'KMA (Corea)', zh: '韓國氣象廳' } },
-  jtwc: { c: '#c4b5fd', n: { ko: '미국 JTWC', en: 'JTWC (US Navy)', ja: '米JTWC', es: 'JTWC (EE. UU.)', zh: '美國 JTWC' } }, nhc: { c: '#fdba74', n: { ko: '미국 허리케인센터', en: 'NHC (US)', ja: '米ハリケーンセンター', es: 'NHC (EE. UU.)', zh: '美國颶風中心' } }, gdacs: { c: '#94a3b8', n: { ko: 'GDACS', en: 'GDACS', ja: 'GDACS', es: 'GDACS', zh: 'GDACS' } } };
+  jtwc: { c: '#c4b5fd', n: { ko: '미국 JTWC', en: 'JTWC (US Navy)', ja: '米JTWC', es: 'JTWC (EE. UU.)', zh: '美國 JTWC' } }, nhc: { c: '#fdba74', n: { ko: '미국 허리케인센터', en: 'NHC (US)', ja: '米ハリケーンセンター', es: 'NHC (EE. UU.)', zh: '美國颶風中心' } }, cwa: { c: '#86efac', n: { ko: '대만 기상서', en: 'CWA (Taiwan)', ja: '台湾中央気象署', es: 'CWA (Taiwán)', zh: '中央氣象署' } }, gdacs: { c: '#94a3b8', n: { ko: 'GDACS', en: 'GDACS', ja: 'GDACS', es: 'GDACS', zh: 'GDACS' } } };
 const T = {
   ko: { list: '태풍·허리케인', crumb: '태풍 목록', h1: (n) => `${n} 예상 경로 · 기관별 비교`, listH1: '지금 활동 중인 태풍·허리케인', listDesc: '한국·일본 기상청, 미국 JTWC·NHC 예보 경로를 한 지도에서 비교하고, 영향받는 다이빙·서핑 포인트를 확인하세요.',
     desc: (n, d) => `${n} 현재 위치·예상 경로를 한국 기상청, 일본 기상청, 미국 JTWC 예보로 비교. 영향권에 드는 다이빙·서핑 포인트와 다시 들어갈 수 있는 시기. ${d} 기준.`,
@@ -74,7 +74,7 @@ const T = {
 const KIND = { TY: { ko: '태풍', en: 'Typhoon', ja: '台風', es: 'Tifón', zh: '颱風' }, STS: { ko: '태풍', en: 'Severe tropical storm', ja: '台風', es: 'Tormenta tropical severa', zh: '強烈熱帶風暴' }, TS: { ko: '열대폭풍', en: 'Tropical storm', ja: '熱帯低気圧', es: 'Tormenta tropical', zh: '熱帶風暴' },
   TD: { ko: '열대저압부', en: 'Tropical depression', ja: '熱帯低気圧', es: 'Depresión tropical', zh: '熱帶性低氣壓' }, LOW: { ko: '온대저기압', en: 'Extratropical low', ja: '温帯低気圧', es: 'Baja extratropical', zh: '溫帶氣旋' }, HU: { ko: '허리케인', en: 'Hurricane', ja: 'ハリケーン', es: 'Huracán', zh: '颶風' }, MH: { ko: '허리케인', en: 'Major hurricane', ja: 'ハリケーン', es: 'Huracán mayor', zh: '強烈颶風' }, PTC: { ko: '열대저기압', en: 'Tropical cyclone', ja: '熱帯低気圧', es: 'Ciclón tropical', zh: '熱帶氣旋' } };
 const NUM = { ko: (n) => `${n}호`, en: (n) => `No.${n}`, ja: (n) => `${n}号`, es: (n) => `n.º ${n}`, zh: (n) => `第${n}號` };
-const label = (s, lang) => { const k = (KIND[s.cat] || KIND.PTC)[lang]; const nm = lang === 'ko' && s.nameKo ? s.nameKo : s.name; return `${k}${s.num ? ' ' + NUM[lang](s.num) : ''} ${nm}`.trim(); };
+const label = (s, lang) => { const k = (KIND[s.cat] || KIND.PTC)[lang]; const nm = lang === 'ko' && s.nameKo ? s.nameKo : lang === 'zh' && s.nameZh ? s.nameZh : s.name; return `${k}${s.num ? ' ' + NUM[lang](s.num) : ''} ${nm}`.trim(); };
 const tpath = (lang, slug) => `/${lang}/t/${encodeURIComponent(slug)}`;
 const fmtLL = (lat, lon, lang) => { const ns = { ko: ['북위', '남위'], en: ['N', 'S'], ja: ['北緯', '南緯'], es: ['N', 'S'], zh: ['北緯', '南緯'] }[lang], ew = { ko: ['동경', '서경'], en: ['E', 'W'], ja: ['東経', '西経'], es: ['E', 'O'], zh: ['東經', '西經'] }[lang];
   const a = Math.abs(lat).toFixed(1) + '°', b = Math.abs(lon).toFixed(1) + '°'; return lang === 'en' || lang === 'es' ? [a + (lat < 0 ? ns[1] : ns[0]), b + (lon < 0 ? ew[1] : ew[0])] : [(lat < 0 ? ns[1] : ns[0]) + ' ' + a, (lon < 0 ? ew[1] : ew[0]) + ' ' + b]; };

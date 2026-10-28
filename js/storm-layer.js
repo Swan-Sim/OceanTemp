@@ -20,7 +20,8 @@
   const MORE = { ko: '기관별 경로 비교·영향 포인트 보기 ›', en: 'Compare agency tracks & spots in the path ›', ja: '機関別進路の比較・影響ポイント ›', es: 'Comparar trayectorias y puntos afectados ›', zh: '比較各機構路徑與受影響潛點 ›' };
   const ENDED = { ko: '공식 예보 종료 · 약해졌거나 온대저기압으로 바뀌어 예상 경로가 없어요', en: 'Official forecasts ended · weakened or became extratropical, no forecast track', ja: '公式予報終了 · 衰弱または温帯低気圧化したため予報進路はありません', es: 'Pronósticos oficiales finalizados · se debilitó o se volvió extratropical, sin trayectoria prevista', zh: '官方預報已結束 · 已減弱或轉為溫帶氣旋，無預報路徑' };
   // [ADD] 기관별 예보 경로 색: JMA 노랑 · KMA 하늘 · NHC 주황. 둘 이상이면 겹치는지(확실) 갈라지는지(불확실) 한 줄로
-  const AG = { jma: { c: '#ffd27a', hex: 0xffd27a, n: { ko: '일본 기상청', en: 'JMA (Japan)', ja: '気象庁', es: 'JMA (Japón)', zh: '日本氣象廳' } }, kma: { c: '#7dd3fc', hex: 0x7dd3fc, n: { ko: '한국 기상청', en: 'KMA (Korea)', ja: '韓国気象庁', es: 'KMA (Corea)', zh: '韓國氣象廳' } }, nhc: { c: '#fb923c', hex: 0xfb923c, n: { ko: '미국 NHC', en: 'NOAA NHC', ja: '米NHC', es: 'NOAA NHC', zh: '美國 NHC' } } };
+  const AG = { jma: { c: '#ffd27a', hex: 0xffd27a, n: { ko: '일본 기상청', en: 'JMA (Japan)', ja: '気象庁', es: 'JMA (Japón)', zh: '日本氣象廳' } }, kma: { c: '#7dd3fc', hex: 0x7dd3fc, n: { ko: '한국 기상청', en: 'KMA (Korea)', ja: '韓国気象庁', es: 'KMA (Corea)', zh: '韓國氣象廳' } }, nhc: { c: '#fb923c', hex: 0xfb923c, n: { ko: '미국 NHC', en: 'NOAA NHC', ja: '米NHC', es: 'NOAA NHC', zh: '美國 NHC' } },
+    jtwc: { c: '#c4b5fd', hex: 0xc4b5fd, n: { ko: '미국 JTWC', en: 'JTWC (US Navy)', ja: '米JTWC', es: 'JTWC (EE. UU.)', zh: '美國 JTWC' } }, cwa: { c: '#86efac', hex: 0x86efac, n: { ko: '대만 기상서', en: 'CWA (Taiwan)', ja: '台湾中央気象署', es: 'CWA (Taiwán)', zh: '中央氣象署' } } }; // [ADD] JTWC·대만
   const agName = (k) => (AG[k] && (AG[k].n[L_()] || AG[k].n.en)) || k;
   const tracksOf = (s) => Object.entries(s.tracks || {}).filter(([, v]) => v && v.length);
   // 두 기관 예보가 같은 시각(±3h)에 얼마나 떨어졌는지(최대 km)

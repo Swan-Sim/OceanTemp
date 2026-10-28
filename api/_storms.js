@@ -45,23 +45,33 @@ async function jma() {
 // ── KMA(한국 기상청 API허브): 서태평양, 시점 기준 현재 태풍 + 예보 (KMA_API_KEY 필요) ──
 async function kma() {
   const key = process.env.KMA_API_KEY; if (!key) return [];
+  // [FIX] 응답이 EUC-KR 이라 한글이 깨지던 것 → euc-kr 로 읽어요. 열 이름 줄은 쉼표가 아니라 빈칸으로 나뉘고 "(UTC)"·"LOC----ED25" 같은 군더더기가 붙어요
+  const getKr = async (url) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), 10000);
+    try { const r = await fetch(url, { signal: c.signal }); if (!r.ok) return null; const buf = await r.arrayBuffer(); try { return new TextDecoder('euc-kr').decode(buf); } catch (_) { return new TextDecoder().decode(buf); } } catch (_) { return null; } finally { clearTimeout(t); } };
+  const parse = (txt) => { const lines = String(txt || '').split(/\r?\n/); let cols = null; const rows = [];
+    for (const ln of lines) { const t = ln.trim(); if (!t) continue;
+      if (t.startsWith('#')) { const c = t.replace(/^#\s*/, '').replace(/\(UTC\)/g, '').split(/-{3,}|\s+|,/).map(x => x.trim()).filter(Boolean); if (c.includes('LAT') && c.includes('LON') || c.includes('TYP') && c.length >= 4 && !/[가-힣:]/.test(t)) cols = c; continue; }
+      if (!cols) continue; const v = t.replace(/,?=\s*$/, '').split(','); if (v.length < Math.min(cols.length, 8)) continue; const o = {}; cols.forEach((k, i) => { o[k] = (v[i] || '').trim(); }); rows.push(o); }
+    return rows; };
   const tm = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12); // UTC YYYYMMDDHHMM
-  const txt = await getText(`https://apihub.kma.go.kr/api/typ01/url/typ_now.php?tm=${tm}&mode=1&disp=1&help=1&authKey=${encodeURIComponent(key)}`, 10000);
-  if (!txt) return [];
-  const lines = txt.split(/\r?\n/); let cols = null; const rows = [];
-  for (const ln of lines) { const t = ln.trim(); if (!t) continue;
-    if (t.startsWith('#')) { const c = t.replace(/^#\s*/, '').split(/\s*,\s*/); if (c.includes('LAT') && c.includes('LON')) cols = c; continue; }
-    if (!cols) continue; const v = t.split(/\s*,\s*/); if (v.length < cols.length - 1) continue; const o = {}; cols.forEach((k, i) => { o[k] = (v[i] || '').trim(); }); rows.push(o); }
-  const by = {}; rows.forEach(o => { const id = `${o.YY || ''}-${o.TYP || ''}`; (by[id] = by[id] || []).push(o); });
-  const num = (x) => { const n = parseFloat(x); return Number.isFinite(n) ? n : null; };
+  const rows = parse(await getKr(`https://apihub.kma.go.kr/api/typ01/url/typ_now.php?tm=${tm}&mode=1&disp=1&help=1&authKey=${encodeURIComponent(key)}`));
+  if (!rows.length) return [];
+  const num = (x) => { const n = parseFloat(x); return Number.isFinite(n) && n > -900 ? n : null; };
   const ftTm = (s) => { const m = String(s || '').match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})?/); return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5] || '00'}:00Z` : null; };
+  // 이름은 이 API에 없어요 → 올해 태풍 목록(typ_lst.php)에서 번호로 찾기(영문·한글 열 이름은 EN/KO 가 들어간 것을 씀)
+  const names = {}; try { const yy = new Date().getUTCFullYear(); const lst = parse(await getKr(`https://apihub.kma.go.kr/api/typ01/url/typ_lst.php?YY=${yy}&disp=1&help=1&authKey=${encodeURIComponent(key)}`));
+    lst.forEach(r => { const k = Object.keys(r), en = k.find(x => /EN/i.test(x)), ko = k.find(x => /KO|KR|HAN/i.test(x)), tp = r.TYP || r.TYP_NO || r.NO; if (tp) names[String(parseInt(tp, 10))] = { en: en ? r[en] : '', ko: ko ? r[ko] : '' }; }); } catch (_) {}
+  const by = {}; rows.forEach(o => { const id = `${o.YY || ''}-${o.TYP || ''}`; (by[id] = by[id] || []).push(o); });
   const out = [];
   Object.entries(by).forEach(([id, rs]) => {
-    const an = rs.find(r => r.FT === '0' || r.FT === '0.0') || rs[0]; const lat = num(an.LAT), lon = num(an.LON); if (lat == null || lon == null) return;
-    const fcs = rs.filter(r => r.FT === '1' && num(r.LAT) != null).sort((a, b) => num(a.TMD) - num(b.TMD));
-    out.push({ id: 'kma:' + id, src: 'kma', name: String(an.TYP_EN || an.TYP_NAME || '').toUpperCase().trim(), nameKo: an.TYP_NAME || '', num: num(an.TYP), cat: num(an.WS) >= 17 ? 'TY' : 'TD', catKo: num(an.WS) >= 17 ? '태풍' : '열대저압부', intensity: '',
-      pressure: num(an.PS), wind: num(an.WS), gust: null, lat, lon, at: ftTm(an.TYP_TM || an.FT_TM), issue: ftTm(an.TYP_TM),
-      move: { dir: an.DIR || '', kmh: num(an.SP) }, radii: { storm: num(an.RAD25), gale: num(an.RAD15) }, track: [],
+    // FT=0 은 분석(지나온 길, 시각순), FT=1 은 예보. 가장 최근 분석 시각 기준으로 현재 위치·예보를 골라요
+    const ana = rs.filter(r => r.FT === '0' && num(r.LAT) != null).sort((a, b) => num(a.TYP_TM) - num(b.TYP_TM)); const an = ana[ana.length - 1] || rs[0];
+    const lat = num(an.LAT), lon = num(an.LON); if (lat == null || lon == null) return;
+    const fcs = rs.filter(r => r.FT === '1' && num(r.LAT) != null && (!an.TYP_TM || r.TYP_TM === an.TYP_TM)).sort((a, b) => num(a.TMD) - num(b.TMD));
+    const nm = names[String(parseInt(an.TYP, 10))] || {}; const ws = num(an.WS);
+    out.push({ id: 'kma:' + id, src: 'kma', name: String(nm.en || '').toUpperCase().trim(), nameKo: nm.ko || '', num: num(an.TYP), cat: ws != null && ws >= 17 ? 'TY' : 'TD', catKo: ws != null && ws >= 17 ? '태풍' : '열대저압부', intensity: '',
+      pressure: num(an.PS), wind: ws, gust: null, lat, lon, at: ftTm(an.TYP_TM || an.FT_TM), issue: ftTm(an.TYP_TM),
+      move: { dir: an.DIR || '', kmh: num(an.SP) }, radii: { storm: num(an.RAD25), gale: num(an.RAD15) }, track: ana.map(r => [num(r.LAT), num(r.LON)]),
       forecast: fcs.map(r => ({ h: num(r.TMD), t: ftTm(r.FT_TM), lat: num(r.LAT), lon: num(r.LON), r: num(r.RAD), pressure: num(r.PS), wind: num(r.WS), cat: '', storm: num(r.RAD25) })), url: 'https://www.weather.go.kr/w/typhoon/typ-info.do' });
   });
   return out;

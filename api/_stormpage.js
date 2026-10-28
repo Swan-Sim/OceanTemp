@@ -167,6 +167,7 @@ ${s.ended ? `<p class="note warn">${t.ended}</p>` : ''}${s.noTrack ? `<p class="
 <p class="lead">${esc(t.lead(name, dstr, la, lo, s.pressure, s.wind, moveText(s, lang)))}${agreeTxt ? ` <b>${esc(agreeTxt)}</b>` : ''}</p>
 <div class="cards g4">${cards.map(([l, v]) => `<div class="c"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('')}</div>
 <h2>${t.mapH}</h2>
+<style>#stmap{height:440px;border-radius:12px;border:1px solid var(--line);background:#0b1120;margin:8px 0 2px}@media(max-width:600px){#stmap{height:340px}}</style>
 <div id="stmap"></div><p class="sub">${t.mapNote}</p>
 <h2>${t.tableH}</h2>
 ${table}
@@ -190,9 +191,9 @@ D.trs.forEach(function(tr){var pts=tr.pts.map(function(p){return[p[0],p[1]]});L.
 if(D.s.gale)L.circle([D.s.lat,D.s.lon],{radius:D.s.gale*1000,color:'#ffd27a',weight:1,fillOpacity:.1}).addTo(m);if(D.s.storm)L.circle([D.s.lat,D.s.lon],{radius:D.s.storm*1000,color:'#f87171',weight:1,fillOpacity:.15}).addTo(m);
 L.marker([D.s.lat,D.s.lon],{icon:L.divIcon({className:'',html:'<div style="font-size:26px;line-height:1;text-shadow:0 0 6px #000">🌀</div>',iconSize:[26,26],iconAnchor:[13,13]})}).addTo(m).bindTooltip(D.s.name);
 D.spots.forEach(function(s){L.circleMarker([s[0],s[1]],{radius:5,color:'#0f172a',fillColor:'#4ade80',fillOpacity:.95,weight:1}).addTo(m).bindTooltip(s[2]+' · '+s[3]+' km').on('click',function(){location.href=s[4]})});
-m.fitBounds(L.latLngBounds(b).pad(.15));var lg=L.control({position:'bottomleft'});lg.onAdd=function(){var d=L.DomUtil.create('div');d.style.cssText='background:rgba(7,11,20,.8);color:#e2e8f0;font-size:11px;padding:6px 8px;border-radius:8px;line-height:1.5';d.innerHTML=D.trs.map(function(t){return'<span style="color:'+t.c+'">━ ━</span> '+t.n}).join('<br>');return d};lg.addTo(m)})();</script>
+D.spots.forEach(function(s){b.push([s[0],s[1]])});var bb=L.latLngBounds(b).pad(.35);var fit=function(){m.invalidateSize();m.fitBounds(bb,{maxZoom:6})};fit();setTimeout(fit,300);setTimeout(fit,1500);window.addEventListener('load',fit);window.addEventListener('resize',fit);var lg=L.control({position:'bottomleft'});lg.onAdd=function(){var d=L.DomUtil.create('div');d.style.cssText='background:rgba(7,11,20,.8);color:#e2e8f0;font-size:11px;padding:6px 8px;border-radius:8px;line-height:1.5';d.innerHTML=D.trs.map(function(t){return'<span style="color:'+t.c+'">━ ━</span> '+t.n}).join('<br>');return d};lg.addTo(m)})();</script>
 <style>.sstg{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:8px 0 4px}.sstg .c{padding:8px 6px;text-align:center}.sstg .v{font-size:15px}@media(max-width:600px){.sstg{grid-template-columns:repeat(4,1fr)}}
-#stmap{height:420px;border-radius:12px;border:1px solid var(--line);background:#0b1120;margin:8px 0 2px}@media(max-width:600px){#stmap{height:320px}}h2{font-size:17px;margin:22px 0 6px}
+h2{font-size:17px;margin:22px 0 6px}
 .tw{overflow-x:auto}.rt{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}.rt th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}.rt td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}.rt td small{color:var(--muted)}.dim{color:var(--dim)}
 .note{font-size:13.5px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--line)}.note.warn{border-color:rgba(255,176,0,.5);color:#ffd27a}
 .off{padding-left:18px;line-height:1.9;font-size:14px}.off a{color:var(--sky)}.lead b{color:#ffd27a}</style>`;

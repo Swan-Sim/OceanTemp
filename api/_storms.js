@@ -73,7 +73,7 @@ async function nhc() {
   // "FORECAST VALID 23/0600Z 39.8N  65.6W" + 다음 줄 "MAX WIND  55 KT...GUSTS  65 KT." 를 예보 점으로. 기준 시각 줄 "... AT 0300Z ..."
   const parseAdv = (txt, lastUpdate) => { if (!txt) return []; const out = []; const base = lastUpdate ? Date.parse(lastUpdate) : Date.now();
     const re = /(FORECAST|OUTLOOK) VALID\s+(\d{2})\/(\d{2})(\d{2})Z\s+([\d.]+)([NS])\s+([\d.]+)([EW])[^\n]*\n(?:[^\n]*MAX WIND\s+(\d+)\s*KT)?/g; let m;
-    while ((m = re.exec(txt))) { const d0 = new Date(base); let t = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), +m[2], +m[3], +m[4])); if (t.getTime() < base - 36e5 * 6) t = new Date(t.getTime() + 31 * 86400e3);
+    while ((m = re.exec(txt))) { const d0 = new Date(base); let t = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), +m[2], +m[3], +m[4])); if (t.getTime() < base - 36e5 * 6) t = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, +m[2], +m[3], +m[4])); // [FIX] 월말→월초 넘어가는 예보: +31일이 아니라 다음 달 같은 날
       const h = Math.round((t.getTime() - base) / 36e5); if (h <= 0) continue;
       out.push({ h, t: t.toISOString(), lat: +m[5] * (m[6] === 'S' ? -1 : 1), lon: +m[7] * (m[8] === 'W' ? -1 : 1), r: null, pressure: null, wind: m[9] ? +(+m[9] * KT).toFixed(1) : null, cat: '', storm: null }); }
     return out; };
@@ -98,11 +98,59 @@ async function gdacs() {
   }
   return out;
 }
+// ── JTWC(미국 합동태풍경보센터): 서태평양·북인도양·남반구 예보 경로 (RSS → 경보문 텍스트). 풍속은 1분 평균(기상청 10분 평균보다 10~15% 높아요) ──
+async function jtwc() {
+  const rss = await getText('https://www.metoc.navy.mil/jtwc/rss/jtwc.rss', 10000); if (!rss) return [];
+  const urls = [...new Set((rss.match(/https?:\/\/www\.metoc\.navy\.mil\/jtwc\/products\/[a-z]{2}\d{4}web\.txt/g) || []))].slice(0, 8);
+  const txts = await Promise.all(urls.map(u => getText(u, 8000)));
+  const out = [];
+  txts.forEach((txt, i) => {
+    if (!txt) return;
+    const head = txt.match(/(SUPER TYPHOON|TYPHOON|TROPICAL STORM|TROPICAL DEPRESSION|TROPICAL CYCLONE|HURRICANE)\s+(\d{2}[A-Z])\s+\(([A-Z0-9\-]+)\)/);
+    const pos = txt.match(/WARNING POSITION:\s*(\d{2})(\d{2})(\d{2})Z\s*---\s*NEAR\s*([\d.]+)([NS])\s*([\d.]+)([EW])/);
+    if (!head || !pos) return;
+    // 날짜(DD)만 있어서 달은 지금 기준: 15일 넘게 과거면 다음 달, 15일 넘게 미래면 지난달(월말·월초 넘어가는 예보)
+    const now = Date.now(), Y = new Date(now).getUTCFullYear(), MO = new Date(now).getUTCMonth(), mk = (dd, hh, mm) => { let t = Date.UTC(Y, MO, +dd, +hh, +mm); if (t < now - 15 * 86400e3) t = Date.UTC(Y, MO + 1, +dd, +hh, +mm); else if (t > now + 15 * 86400e3) t = Date.UTC(Y, MO - 1, +dd, +hh, +mm); return new Date(t); };
+    const at = mk(pos[1], pos[2], pos[3]);
+    const wind = txt.match(/PRESENT WIND DISTRIBUTION:[\s\S]*?MAX SUSTAINED WINDS\s*-\s*(\d+)\s*KT(?:,\s*GUSTS\s*(\d+)\s*KT)?/) || txt.match(/MAX SUSTAINED WINDS\s*-\s*(\d+)\s*KT(?:,\s*GUSTS\s*(\d+)\s*KT)?/);
+    const mv = txt.match(/MOVEMENT PAST SIX HOURS\s*-\s*(\d{3})\s*DEGREES AT\s*(\d+)\s*KTS?/);
+    const forecast = []; const re = /(\d{2,3})\s*HRS?,\s*VALID AT:\s*(\d{2})(\d{2})(\d{2})Z\s*---\s*([\d.]+)([NS])\s*([\d.]+)([EW])\s*(?:MAX SUSTAINED WINDS\s*-\s*(\d+)\s*KT)?/g; let m;
+    while ((m = re.exec(txt))) { const t = mk(m[2], m[3], m[4]); forecast.push({ h: +m[1], t: t.toISOString(), lat: +m[5] * (m[6] === 'S' ? -1 : 1), lon: +m[7] * (m[8] === 'W' ? -1 : 1), r: null, pressure: null, wind: m[9] ? +(+m[9] * KT).toFixed(1) : null, cat: '', storm: null }); }
+    const kind = head[1], cat = /TYPHOON|HURRICANE/.test(kind) ? 'TY' : /STORM|CYCLONE/.test(kind) ? 'TS' : 'TD';
+    out.push({ id: 'jtwc:' + head[2], src: 'jtwc', name: head[3].toUpperCase(), num: null, cat, catKo: CAT_KO[cat] || '열대저기압', intensity: '', pressure: null,
+      wind: wind ? +(+wind[1] * KT).toFixed(1) : null, gust: wind && wind[2] ? +(+wind[2] * KT).toFixed(1) : null, lat: +pos[4] * (pos[5] === 'S' ? -1 : 1), lon: +pos[6] * (pos[7] === 'W' ? -1 : 1),
+      at: at.toISOString(), issue: at.toISOString(), move: { dir: mv ? +mv[1] : '', kmh: mv ? +(+mv[2] * 1.852).toFixed(0) : null }, radii: { storm: null, gale: null }, track: [], forecast,
+      basin: head[2].slice(-1), url: 'https://www.metoc.navy.mil/jtwc/jtwc.html' });
+  });
+  return out;
+}
 const near = (a, b) => Math.hypot(a.lat - b.lat, (a.lon - b.lon) * Math.cos(a.lat * Math.PI / 180)) < 3; // 3° 안이면 같은 태풍
+// [ADD] 태풍 고정 주소용 이름: 2026-in-fa (연도-이름). 이름이 없으면 기관 번호
+const slugOf = (s) => { const y = new Date(Date.parse(s.at) || Date.now()).getUTCFullYear(); const n = String(s.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); return `${y}-${n || String(s.id).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`; };
+// [ADD] 태풍 기록 보관(사라진 뒤에도 /ko/t/2026-in-fa 페이지가 남아요): st:arc:<slug> 400일, 목록 st:idx(해시). 새 태풍이면 IndexNow 로 검색엔진에 알려요
+async function archive(storms) {
+  if (!storms.length) return;
+  const now = Date.now(); const [{ result: idxRaw }] = await redisPipeline([['HGETALL', 'st:idx']]).catch(() => [{ result: null }]);
+  const idx = {}; if (Array.isArray(idxRaw)) for (let i = 0; i < idxRaw.length; i += 2) { try { idx[idxRaw[i]] = JSON.parse(idxRaw[i + 1]); } catch (_) {} }
+  const cmds = [], fresh = [];
+  for (const s of storms) {
+    const prev = idx[s.slug]; const peak = Math.max(prev && prev.maxWind || 0, s.wind || 0);
+    const sum = { slug: s.slug, name: s.name, nameKo: s.nameKo || '', num: s.num, cat: s.cat, catKo: s.catKo, first: prev && prev.first || now, last: now, maxWind: peak, minP: Math.min(prev && prev.minP || 9999, s.pressure || 9999), lat: s.lat, lon: s.lon, agencies: s.agencies };
+    cmds.push(['HSET', 'st:idx', s.slug, JSON.stringify(sum)], ['SET', 'st:arc:' + s.slug, JSON.stringify({ ...s, savedAt: now }), 'EX', String(400 * 86400)]);
+    if (!prev) fresh.push(s.slug);
+  }
+  await redisPipeline(cmds).catch(() => {});
+  if (fresh.length && process.env.INDEXNOW_KEY) { // 검색엔진(네이버·빙 등 IndexNow)에 새 페이지 바로 알리기
+    const host = process.env.SITE_HOST || 'otemp.app', key = process.env.INDEXNOW_KEY;
+    const urlList = fresh.flatMap(sl => ['ko', 'en', 'ja', 'es', 'zh'].map(l => `https://${host}/${l}/t/${sl}`));
+    const c = new AbortController(); const t = setTimeout(() => c.abort(), 6000);
+    try { await fetch('https://api.indexnow.org/indexnow', { method: 'POST', signal: c.signal, headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify({ host, key, keyLocation: `https://${host}/${key}.txt`, urlList }) }); } catch (_) {} finally { clearTimeout(t); }
+  }
+}
 
 // [CHANGE] 기관별 예보 경로를 따로 담아요: tracks = { jma: [...], kma: [...], nhc: [...] }. 겹치면 확실, 갈라지면 불확실
 async function build() {
-  const [j, k, n, gd] = await Promise.all([jma().catch(() => []), kma().catch(() => []), nhc().catch(() => []), gdacs().catch(() => [])]);
+  const [j, k, n, jt, gd] = await Promise.all([jma().catch(() => []), kma().catch(() => []), nhc().catch(() => []), jtwc().catch(() => []), gdacs().catch(() => [])]);
   const storms = [];
   const add = (s) => { const x = storms.find(x => near(x, s)); if (!x) { s.tracks = {}; if (s.forecast && s.forecast.length) s.tracks[s.src] = s.forecast; s.agencies = [s.src]; storms.push(s); return; }
     if (s.forecast && s.forecast.length) x.tracks[s.src] = s.forecast; x.agencies.push(s.src);
@@ -110,12 +158,16 @@ async function build() {
     if (x.pressure == null && s.pressure != null) x.pressure = s.pressure; if (x.wind == null && s.wind != null) x.wind = s.wind;
     if (!x.radii.storm && s.radii.storm) x.radii.storm = s.radii.storm; if (!x.radii.gale && s.radii.gale) x.radii.gale = s.radii.gale;
     if (!x.track.length && s.track && s.track.length) x.track = s.track; if (s.alert && !x.alert) x.alert = s.alert; };
-  [...j, ...k, ...n, ...gd].forEach(add);
+  [...j, ...k, ...n, ...jt, ...gd].forEach(add);
   storms.forEach(s => { s.forecast = s.tracks.jma || s.tracks.kma || s.tracks.nhc || s.forecast || [];
     // [ADD] 어느 기관도 예보 경로를 내지 않으면 '예보 종료'(약해졌거나 온대저기압으로 바뀜). JMA 등급 LOW 도 같아요
-    s.ended = !Object.values(s.tracks).some(v => v && v.length) || s.cat === 'LOW'; });
+    //  [FIX] GDACS 에만 있는 태풍(인도양·남반구 등 예보 기관을 아직 안 붙인 해역)은 '종료'가 아니라 '예보 경로 자료 없음'(noTrack)
+    const has = Object.values(s.tracks).some(v => v && v.length), gOnly = s.agencies.every(a => a === 'gdacs');
+    s.ended = s.cat === 'LOW' || (!has && !gOnly); s.noTrack = !has && gOnly; });
   // [ADD] GDACS 목록에만 남아 있고 마지막 갱신이 36시간 넘은 건 빼요(소멸된 태풍이 한동안 '현재'로 남아 있던 문제)
-  const now = Date.now(), kept = storms.filter(s => !(s.ended && s.agencies.every(a => a === 'gdacs') && now - (Date.parse(s.at) || now) > 36 * 3600e3));
+  const now = Date.now(), kept = storms.filter(s => !(s.noTrack && now - (Date.parse(s.at) || now) > 36 * 3600e3));
+  kept.forEach(s => { s.slug = slugOf(s); });
+  try { await archive(kept); } catch (_) {}
   return { ok: true, at: now, storms: kept };
 }
 module.exports = async function handler(req, res) {
@@ -135,3 +187,4 @@ module.exports = async function handler(req, res) {
   } catch (e) { res.setHeader('Cache-Control', 'no-store'); return res.status(200).json({ ok: false, storms: [], error: String(e && e.message || e).slice(0, 200) }); }
 };
 module.exports.build = build;
+module.exports.slugOf = slugOf;

@@ -918,7 +918,7 @@ module.exports = async function spotPage(req, res) {
   if (svc === 'hit') {
     res.setHeader('Cache-Control', 'no-store');
     const k = String(q.k || '').slice(0, 80);
-    if (/^(\d+|index|region:[^\s<>"']{0,60})$/.test(k)) await count({ headers: { ...req.headers, referer: String(q.ref || '').slice(0, 300), referrer: undefined } }, /^\d+$/.test(k) ? parseInt(k, 10) : k);
+    if (/^(\d+|index|storms|(region|storm):[^\s<>"']{0,60})$/.test(k)) await count({ headers: { ...req.headers, referer: String(q.ref || '').slice(0, 300), referrer: undefined } }, /^\d+$/.test(k) ? parseInt(k, 10) : k);
     return res.status(204).end();
   }
   try {
@@ -932,6 +932,7 @@ module.exports = async function spotPage(req, res) {
       try { const RG = require('./_region'); const ridx = Object.fromEntries(LANGS.map(l => [l, `/${l}/r/`])); LANGS.forEach(l => urls.push(`<url><loc>${base}${ridx[l]}</loc>${alt(ridx)}<lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`));
         RG.buildRegions(all).forEach(r => { const p = Object.fromEntries(LANGS.map(l => [l, RG.rpath(l, r)])); LANGS.forEach(l => urls.push(`<url><loc>${base}${p[l]}</loc>${alt(p)}<lastmod>${today}</lastmod><changefreq>daily</changefreq></url>`)); }); } catch (_) {} // [ADD] 지역 페이지
       all.forEach(st => { const p = Object.fromEntries(LANGS.map(l => [l, pathOf(l, st)])); LANGS.forEach(l => urls.push(`<url><loc>${base}${p[l]}</loc>${alt(p)}<lastmod>${today}</lastmod><changefreq>daily</changefreq></url>`)); });
+      try { urls.push(...await require('./_stormpage').sitemapUrls(base)); } catch (_) {} // [ADD] 태풍 페이지
       res.setHeader('Content-Type', 'application/xml; charset=utf-8');
       res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
       return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n<url><loc>${base}/</loc><changefreq>daily</changefreq></url>\n${urls.join('\n')}\n</urlset>`);
@@ -941,6 +942,9 @@ module.exports = async function spotPage(req, res) {
     // [ADD] 지역 페이지(/ko/r/, /ko/r/<지역>) - api/_region.js
     if (svc === 'regions') { res._hit = 'index'; res._cache = !!q.lang; return require('./_region').regionIndex(req, res, lang, all, base); }
     if (svc === 'region') { res._hit = 'region:' + String(q.slug || '').slice(0, 60); res._cache = !!q.lang; return require('./_region').regionPage(req, res, lang, all, base, q.slug); }
+    // [ADD] 태풍 페이지(/ko/t/, /ko/t/2026-in-fa) - api/_stormpage.js
+    if (svc === 'storms') return require('./_stormpage').stormIndex(req, res, lang, all, base);
+    if (svc === 'storm') return require('./_stormpage').stormPage(req, res, lang, all, base, q.slug);
     // [ADD] 이름 바로가기: otemp.app/문섬 → 정식 주소(/ko/s/39/문섬)로. 여러 곳이면 고르는 화면, 없으면 비슷한 이름 목록
     if (svc === 'go') {
       const dec = (x) => { let v = String(x || ''); for (let i = 0; i < 3; i++) { try { const d = decodeURIComponent(v); if (d === v) break; v = d; } catch (_) { break; } } return v; };

@@ -14,6 +14,10 @@
   };
   const T = () => TX[L_()] || TX.en;
   // [ADD] 예보 경로가 없는 태풍(약해졌거나 온대저기압으로 바뀌어 기관 예보가 끝남) 안내
+  // [ADD] 예보 기관을 아직 못 붙인 해역(인도양·남반구 등): 현재 위치만 있어요
+  const NOTRACK = { ko: '이 해역은 예상 경로 자료가 아직 없어요(현재 위치만 표시) · 현지 기상청 발표를 확인하세요', en: 'No forecast track available for this basin yet (current position only) · check the local met agency', ja: 'この海域の予報進路データはまだありません（現在位置のみ）· 現地気象機関の発表を確認してください', es: 'Aún no hay trayectoria prevista para esta cuenca (solo posición actual) · consulta el servicio meteorológico local', zh: '此海域尚無預報路徑資料（僅顯示目前位置）· 請確認當地氣象機構發布' };
+  // [ADD] 상세 페이지(기관별 경로 비교·영향 포인트) 링크
+  const MORE = { ko: '기관별 경로 비교·영향 포인트 보기 ›', en: 'Compare agency tracks & spots in the path ›', ja: '機関別進路の比較・影響ポイント ›', es: 'Comparar trayectorias y puntos afectados ›', zh: '比較各機構路徑與受影響潛點 ›' };
   const ENDED = { ko: '공식 예보 종료 · 약해졌거나 온대저기압으로 바뀌어 예상 경로가 없어요', en: 'Official forecasts ended · weakened or became extratropical, no forecast track', ja: '公式予報終了 · 衰弱または温帯低気圧化したため予報進路はありません', es: 'Pronósticos oficiales finalizados · se debilitó o se volvió extratropical, sin trayectoria prevista', zh: '官方預報已結束 · 已減弱或轉為溫帶氣旋，無預報路徑' };
   // [ADD] 기관별 예보 경로 색: JMA 노랑 · KMA 하늘 · NHC 주황. 둘 이상이면 겹치는지(확실) 갈라지는지(불확실) 한 줄로
   const AG = { jma: { c: '#ffd27a', hex: 0xffd27a, n: { ko: '일본 기상청', en: 'JMA (Japan)', ja: '気象庁', es: 'JMA (Japón)', zh: '日本氣象廳' } }, kma: { c: '#7dd3fc', hex: 0x7dd3fc, n: { ko: '한국 기상청', en: 'KMA (Korea)', ja: '韓国気象庁', es: 'KMA (Corea)', zh: '韓國氣象廳' } }, nhc: { c: '#fb923c', hex: 0xfb923c, n: { ko: '미국 NHC', en: 'NOAA NHC', ja: '米NHC', es: 'NOAA NHC', zh: '美國 NHC' } } };
@@ -122,7 +126,7 @@
       L.marker([p.lat, p.lon], { pane: 'stcloud', interactive: false, keyboard: false, icon: L.divIcon({ className: 'st-cloud-box', html: `<img class="st-cloud ${south ? 'south' : 'north'}" src="${cloudUrl(south, levelOf(s))}" style="width:${px}px;height:${px}px" alt="">`, iconSize: [px, px], iconAnchor: [px / 2, px / 2] }) }).addTo(moveLayer);
       if (s.radii.gale) L.circle([p.lat, p.lon], { radius: s.radii.gale * 1000, color: '#fbbf24', weight: 1, fillColor: '#fbbf24', fillOpacity: .08, interactive: false }).addTo(moveLayer);
       if (s.radii.storm) L.circle([p.lat, p.lon], { radius: s.radii.storm * 1000, color: '#f87171', weight: 1.5, fillColor: '#f87171', fillOpacity: .15, interactive: false }).addTo(moveLayer);
-      const info = [`<b>${label(s)}</b>${p.h > 0 ? ` <span class="st-h">${t.fc(p.h)}</span>` : ''}`, s.pressure ? `${t.p} ${s.pressure}hPa` : '', s.wind ? `${t.w} ${s.wind}m/s${s.gust ? ` (gust ${s.gust})` : ''}` : '', s.move && (s.move.dir || s.move.kmh) ? `${t.move} ${s.move.dir || ''} ${s.move.kmh ? s.move.kmh + 'km/h' : ''}` : '', s.radii.storm ? `${t.storm} ${s.radii.storm}km` : '', s.radii.gale ? `${t.gale} ${s.radii.gale}km` : '', tracksOf(s).map(([k]) => `<span style="color:${(AG[k] || AG.jma).c}">━ ━</span> ${agName(k)}`).join(' · '), agree(s) ? `<b>${agree(s)}</b>` : '', s.ended ? `<span style="color:#94a3b8">${ENDED[L_()] || ENDED.en}</span>` : ''].filter(Boolean).join('<br>');
+      const info = [`<b>${label(s)}</b>${p.h > 0 ? ` <span class="st-h">${t.fc(p.h)}</span>` : ''}`, s.pressure ? `${t.p} ${s.pressure}hPa` : '', s.wind ? `${t.w} ${s.wind}m/s${s.gust ? ` (gust ${s.gust})` : ''}` : '', s.move && (s.move.dir || s.move.kmh) ? `${t.move} ${s.move.dir || ''} ${s.move.kmh ? s.move.kmh + 'km/h' : ''}` : '', s.radii.storm ? `${t.storm} ${s.radii.storm}km` : '', s.radii.gale ? `${t.gale} ${s.radii.gale}km` : '', tracksOf(s).map(([k]) => `<span style="color:${(AG[k] || AG.jma).c}">━ ━</span> ${agName(k)}`).join(' · '), agree(s) ? `<b>${agree(s)}</b>` : '', s.ended ? `<span style="color:#94a3b8">${ENDED[L_()] || ENDED.en}</span>` : '', s.noTrack ? `<span style="color:#94a3b8">${NOTRACK[L_()] || NOTRACK.en}</span>` : '', s.slug ? `<a href="/${L_()}/t/${encodeURIComponent(s.slug)}" style="color:#ffd27a;font-weight:700">${(MORE[L_()] || MORE.en)}</a>` : ''].filter(Boolean).join('<br>');
       L.marker([p.lat, p.lon], { icon: L.divIcon({ className: '', html: `<div class="st-eye">🌀</div><div class="st-name">${s.num ? s.num + ' ' : ''}${s.name}${hTag(p)}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] }), zIndexOffset: 900 }).bindPopup(info).addTo(moveLayer);
     });
     if (!map.hasLayer(moveLayer)) moveLayer.addTo(map);
@@ -137,7 +141,8 @@
     if (!warnEl) { warnEl = document.createElement('div'); warnEl.id = 'storm-warn'; const nm = document.getElementById('st-name'); if (nm && nm.parentElement) nm.parentElement.insertBefore(warnEl, nm.nextSibling); else document.body.appendChild(warnEl); }
     if (!near) { warnEl.style.display = 'none'; return; }
     const when = near.h ? new Date(Date.now() + near.h * 3600e3).toLocaleString(L_(), { month: 'numeric', day: 'numeric', hour: 'numeric' }) : '';
-    const ag = agree(near.s); warnEl.textContent = `🌀 ${T().warn(label(near.s), near.km, when)}${ag ? ' ' + ag : ''}`; warnEl.style.display = '';
+    const ag = agree(near.s); warnEl.textContent = `🌀 ${T().warn(label(near.s), near.km, when)}${ag ? ' ' + ag : ''} `; warnEl.style.display = '';
+    if (near.s.slug) { const a = document.createElement('a'); a.href = `/${L_()}/t/${encodeURIComponent(near.s.slug)}`; a.textContent = MORE[L_()] || MORE.en; a.style.cssText = 'color:#ffd27a;font-weight:700;text-decoration:underline'; warnEl.appendChild(a); }
   }
   async function load() {
     try { const j = await fetch('/api/storms').then(r => r.json()); data = { storms: (j && j.storms) || [] }; } catch (_) { data = { storms: [] }; }

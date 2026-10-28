@@ -109,11 +109,31 @@
       "destination": "/api/spotobs?svc=page&no=:no&slug=:slug"
     },
     {
+      "source": "/:lang(ko|en|ja|es|zh)/t",
+      "destination": "/api/spotobs?svc=storms&lang=:lang"
+    },
+    {
+      "source": "/:lang(ko|en|ja|es|zh)/t/",
+      "destination": "/api/spotobs?svc=storms&lang=:lang"
+    },
+    {
+      "source": "/:lang(ko|en|ja|es|zh)/t/:slug",
+      "destination": "/api/spotobs?svc=storm&lang=:lang&slug=:slug"
+    },
+    {
+      "source": "/t/:slug",
+      "destination": "/api/spotobs?svc=storm&slug=:slug"
+    },
+    {
+      "source": "/:key([a-f0-9]{16,64}).txt",
+      "destination": "/api/spotobs?svc=inkey&k=:key"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "/api/spotobs?svc=sitemap"
     },
     {
-      "source": "/:name((?!(?:api|admin|shop|terms|privacy|guide|auth|spot|s|r|ko|en|ja|es|zh|js|css|icons|bg|data|scripts|index|offline|_vercel)(?:/|$))[^/.]+)",
+      "source": "/:name((?!(?:api|admin|shop|terms|privacy|guide|auth|spot|s|r|t|ko|en|ja|es|zh|js|css|icons|bg|data|scripts|index|offline|_vercel)(?:/|$))[^/.]+)",
       "destination": "/api/spotobs?svc=go&name=:name"
     }
   ]

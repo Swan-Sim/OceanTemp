@@ -185,6 +185,8 @@ module.exports = async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   const force = (req.query || {}).force === '1';
   // [ADD] ?debug=kma : 기상청 API허브 원문 앞부분만 보여줘요(열 이름·형식 확인용. 키는 안 나와요)
+  // [ADD] ?debug=kmaparse : 기상청 응답을 코드가 어떻게 읽었는지(파싱 결과) 보여줘요
+  if ((req.query || {}).debug === 'kmaparse') { res.setHeader('Cache-Control', 'no-store'); try { const k = await kma(); return res.status(200).json({ n: k.length, storms: k.map(s => ({ name: s.name, nameKo: s.nameKo, num: s.num, lat: s.lat, lon: s.lon, at: s.at, wind: s.wind, track: s.track.length, forecast: s.forecast.length })) }); } catch (e) { return res.status(200).json({ error: String(e && e.message || e) }); } }
   if ((req.query || {}).debug === 'kma') { const key = process.env.KMA_API_KEY; const tm = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12); res.setHeader('Cache-Control', 'no-store');
     if (!key) return res.status(200).json({ hasKey: false });
     const c = new AbortController(); const t = setTimeout(() => c.abort(), 10000);

@@ -210,6 +210,11 @@ module.exports = async function handler(req, res) {
   const force = (req.query || {}).force === '1';
   // [ADD] ?debug=kma : 기상청 API허브 원문 앞부분만 보여줘요(열 이름·형식 확인용. 키는 안 나와요)
   // [ADD] ?debug=kmaparse : 기상청 응답을 코드가 어떻게 읽었는지(파싱 결과) 보여줘요
+  // [ADD] ?debug=cwa : 대만 기상서 응답 원문 앞부분(필드 이름 확인용, 키는 안 나와요)
+  if ((req.query || {}).debug === 'cwa') { const key = process.env.CWA_API_KEY; res.setHeader('Cache-Control', 'no-store'); if (!key) return res.status(200).json({ hasKey: false });
+    const c = new AbortController(); const t = setTimeout(() => c.abort(), 10000);
+    try { const r = await fetch(`https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-005?Authorization=${encodeURIComponent(key)}&format=JSON`, { signal: c.signal }); const txt = await r.text(); return res.status(200).json({ hasKey: true, status: r.status, head: txt.slice(0, 4000) }); }
+    catch (e) { return res.status(200).json({ hasKey: true, error: String(e && e.message || e) }); } finally { clearTimeout(t); } }
   if ((req.query || {}).debug === 'cwaparse') { res.setHeader('Cache-Control', 'no-store'); try { const k = await cwa(); return res.status(200).json({ n: k.length, storms: k.map(s => ({ name: s.name, nameZh: s.nameZh, lat: s.lat, lon: s.lon, at: s.at, wind: s.wind, track: s.track.length, forecast: s.forecast.length })) }); } catch (e) { return res.status(200).json({ error: String(e && e.message || e) }); } }
   if ((req.query || {}).debug === 'kmaparse') { res.setHeader('Cache-Control', 'no-store'); try { const k = await kma(); return res.status(200).json({ n: k.length, storms: k.map(s => ({ name: s.name, nameKo: s.nameKo, num: s.num, lat: s.lat, lon: s.lon, at: s.at, wind: s.wind, track: s.track.length, forecast: s.forecast.length })) }); } catch (e) { return res.status(200).json({ error: String(e && e.message || e) }); } }
   if ((req.query || {}).debug === 'kma') { const key = process.env.KMA_API_KEY; const tm = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12); res.setHeader('Cache-Control', 'no-store');

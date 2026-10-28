@@ -50,7 +50,7 @@ async function kma() {
     try { const r = await fetch(url, { signal: c.signal }); if (!r.ok) return null; const buf = await r.arrayBuffer(); try { return new TextDecoder('euc-kr').decode(buf); } catch (_) { return new TextDecoder().decode(buf); } } catch (_) { return null; } finally { clearTimeout(t); } };
   const parse = (txt) => { const lines = String(txt || '').split(/\r?\n/); let cols = null; const rows = [];
     for (const ln of lines) { const t = ln.trim(); if (!t) continue;
-      if (t.startsWith('#')) { const c = t.replace(/^#\s*/, '').replace(/\(UTC\)/g, '').split(/-{3,}|\s+|,/).map(x => x.trim()).filter(Boolean); if (c.includes('LAT') && c.includes('LON') || c.includes('TYP') && c.length >= 4 && !/[가-힣:]/.test(t)) cols = c; continue; }
+      if (t.startsWith('#')) { const c = t.replace(/^#\s*/, '').replace(/\(UTC\)/g, '').split(/-{3,}|\s+|,/).map(x => x.trim()).filter(Boolean); if ((c.includes('LAT') && c.includes('LON')) || (c.includes('YY') && c.includes('SEQ') && c.length >= 4)) cols = c; continue; } // 열 이름 줄: typ_now(LAT·LON) 또는 typ_lst(YY·SEQ·TYP_EN…)
       if (!cols) continue; const v = t.replace(/,?=\s*$/, '').split(','); if (v.length < Math.min(cols.length, 8)) continue; const o = {}; cols.forEach((k, i) => { o[k] = (v[i] || '').trim(); }); rows.push(o); }
     return rows; };
   const tm = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12); // UTC YYYYMMDDHHMM
@@ -58,9 +58,9 @@ async function kma() {
   if (!rows.length) return [];
   const num = (x) => { const n = parseFloat(x); return Number.isFinite(n) && n > -900 ? n : null; };
   const ftTm = (s) => { const m = String(s || '').match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})?/); return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5] || '00'}:00Z` : null; };
-  // 이름은 이 API에 없어요 → 올해 태풍 목록(typ_lst.php)에서 번호로 찾기(영문·한글 열 이름은 EN/KO 가 들어간 것을 씀)
+  // 이름은 이 API에 없어요 → 올해 태풍 목록(typ_lst.php: YY, SEQ(=태풍번호), NOW(진행여부), EFF(한반도영향), TM_ST, TM_ED, TYP_NAME(한글), TYP_EN(영문), REM)에서 번호로 찾기
   const names = {}; try { const yy = new Date().getUTCFullYear(); const lst = parse(await getKr(`https://apihub.kma.go.kr/api/typ01/url/typ_lst.php?YY=${yy}&disp=1&help=1&authKey=${encodeURIComponent(key)}`));
-    lst.forEach(r => { const k = Object.keys(r), en = k.find(x => /EN/i.test(x)), ko = k.find(x => /KO|KR|HAN/i.test(x)), tp = r.TYP || r.TYP_NO || r.NO; if (tp) names[String(parseInt(tp, 10))] = { en: en ? r[en] : '', ko: ko ? r[ko] : '' }; }); } catch (_) {}
+    lst.forEach(r => { const tp = r.SEQ || r.TYP; if (tp && parseInt(tp, 10)) names[String(parseInt(tp, 10))] = { en: r.TYP_EN || '', ko: r.TYP_NAME || '', eff: /^(1|Y|y|true)$/.test(String(r.EFF || '').trim()), now: String(r.NOW || '').trim() }; }); } catch (_) {}
   const by = {}; rows.forEach(o => { const id = `${o.YY || ''}-${o.TYP || ''}`; (by[id] = by[id] || []).push(o); });
   const out = [];
   Object.entries(by).forEach(([id, rs]) => {
@@ -71,6 +71,7 @@ async function kma() {
     const nm = names[String(parseInt(an.TYP, 10))] || {}; const ws = num(an.WS);
     out.push({ id: 'kma:' + id, src: 'kma', name: String(nm.en || '').toUpperCase().trim(), nameKo: nm.ko || '', num: num(an.TYP), cat: ws != null && ws >= 17 ? 'TY' : 'TD', catKo: ws != null && ws >= 17 ? '태풍' : '열대저압부', intensity: '',
       pressure: num(an.PS), wind: ws, gust: null, lat, lon, at: ftTm(an.TYP_TM || an.FT_TM), issue: ftTm(an.TYP_TM),
+      effKr: !!nm.eff, // [ADD] 한국 기상청이 '한반도 영향' 으로 표시한 태풍
       move: { dir: an.DIR || '', kmh: num(an.SP) }, radii: { storm: num(an.RAD25), gale: num(an.RAD15) }, track: ana.map(r => [num(r.LAT), num(r.LON)]),
       forecast: fcs.map(r => ({ h: num(r.TMD), t: ftTm(r.FT_TM), lat: num(r.LAT), lon: num(r.LON), r: num(r.RAD), pressure: num(r.PS), wind: num(r.WS), cat: '', storm: num(r.RAD25) })), url: 'https://www.weather.go.kr/w/typhoon/typ-info.do' });
   });
@@ -164,7 +165,7 @@ async function build() {
   const storms = [];
   const add = (s) => { const x = storms.find(x => near(x, s)); if (!x) { s.tracks = {}; if (s.forecast && s.forecast.length) s.tracks[s.src] = s.forecast; s.agencies = [s.src]; storms.push(s); return; }
     if (s.forecast && s.forecast.length) x.tracks[s.src] = s.forecast; x.agencies.push(s.src);
-    if (s.nameKo && !x.nameKo) x.nameKo = s.nameKo; if (!x.num && s.num) x.num = s.num; if (!x.name && s.name) x.name = s.name;
+    if (s.nameKo && !x.nameKo) x.nameKo = s.nameKo; if (!x.num && s.num) x.num = s.num; if (!x.name && s.name) x.name = s.name; if (s.effKr) x.effKr = true;
     if (x.pressure == null && s.pressure != null) x.pressure = s.pressure; if (x.wind == null && s.wind != null) x.wind = s.wind;
     if (!x.radii.storm && s.radii.storm) x.radii.storm = s.radii.storm; if (!x.radii.gale && s.radii.gale) x.radii.gale = s.radii.gale;
     if (!x.track.length && s.track && s.track.length) x.track = s.track; if (s.alert && !x.alert) x.alert = s.alert; };

@@ -139,22 +139,24 @@ async function jtwc() {
 async function cwa() {
   const key = process.env.CWA_API_KEY; if (!key) return [];
   const j = await getJSON(`https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-005?Authorization=${encodeURIComponent(key)}&format=JSON`, 10000);
-  const list = j && j.records && j.records.tropicalCyclones && j.records.tropicalCyclones.tropicalCyclone; if (!Array.isArray(list)) return [];
+  // 필드는 PascalCase(TropicalCyclones.TropicalCyclone[].AnalysisData.Fix[] …). 대소문자 가리지 않고 읽어요
+  const g = (o, k) => { if (!o || typeof o !== 'object') return undefined; if (o[k] !== undefined) return o[k]; const lk = k.toLowerCase(); const kk = Object.keys(o).find(x => x.toLowerCase() === lk); return kk ? o[kk] : undefined; };
+  const list = g(g(g(j, 'records'), 'TropicalCyclones'), 'TropicalCyclone'); if (!Array.isArray(list)) return [];
   const num = (x) => { const n = parseFloat(x); return Number.isFinite(n) ? n : null; };
-  const ll = (c) => { const m = String(c || '').split(','); const lon = num(m[0]), lat = num(m[1]); return lat != null && lon != null ? [lat, lon] : null; };
-  const rad = (o) => o && (num(o.radius) != null ? num(o.radius) : null);
-  const tm = (s) => { const d = new Date(String(s || '').replace(' ', 'T')); return isNaN(d) ? null : d.toISOString(); }; // "2026-10-28T18:00:00+00:00" 또는 "2026-10-28 18:00:00"
+  const ll = (f) => { const lat = num(g(f, 'CoordinateLatitude')), lon = num(g(f, 'CoordinateLongitude')); return lat != null && lon != null ? [lat, lon] : null; };
+  const rad = (f, k) => { const c = g(f, k); return c ? num(g(c, 'Radius')) : null; };
+  const tm = (x) => { const d = new Date(String(x || '').replace(' ', 'T')); return isNaN(d) ? null : d.toISOString(); }; // "2026-10-23T08:00:00+08:00"
   const out = [];
   for (const tc of list) {
-    const fixes = (tc.analysisData && tc.analysisData.fix) || [], fcs = (tc.forecastData && tc.forecastData.fix) || [];
-    const an = fixes[fixes.length - 1]; if (!an) continue; const pos = ll(an.coordinate); if (!pos) continue;
-    const name = String(tc.typhoonName || '').toUpperCase().trim(), nameZh = String(tc.cwaTyphoonName || '').trim();
-    const w = num(an.maxWindSpeed), g = num(an.maxGustSpeed);
-    out.push({ id: 'cwa:' + (tc.cwaTyNo || tc.cwaTdNo || name), src: 'cwa', name, nameZh, num: tc.cwaTyNo ? parseInt(String(tc.cwaTyNo).slice(-2), 10) || null : null,
-      cat: w != null && w >= 17.2 ? 'TY' : 'TD', catKo: w != null && w >= 17.2 ? '태풍' : '열대저압부', intensity: '', pressure: num(an.pressure), wind: w, gust: g,
-      lat: pos[0], lon: pos[1], at: tm(an.fixTime), issue: tm(an.fixTime), move: { dir: num(an.movingDirection) != null ? num(an.movingDirection) : (an.movingDirection || ''), kmh: num(an.movingSpeed) },
-      radii: { storm: rad(an.circleOf25Ms), gale: rad(an.circleOf15Ms) }, track: fixes.map(f => ll(f.coordinate)).filter(Boolean),
-      forecast: fcs.map(f => { const p = ll(f.coordinate); const t = tm(f.initTime); const h = num(f.tau); return p ? { h, t: t && h != null ? new Date(Date.parse(t) + h * 3600e3).toISOString() : null, lat: p[0], lon: p[1], r: num(f.radiusOf70PercentProbability), pressure: num(f.pressure), wind: num(f.maxWindSpeed), cat: '', storm: rad(f.circleOf25Ms) } : null; }).filter(Boolean),
+    const fixes = g(g(tc, 'AnalysisData'), 'Fix') || [], fcs = g(g(tc, 'ForecastData'), 'Fix') || [];
+    const an = fixes[fixes.length - 1]; if (!an) continue; const pos = ll(an); if (!pos) continue;
+    const name = String(g(tc, 'TyphoonName') || '').toUpperCase().trim(), nameZh = String(g(tc, 'CwaTyphoonName') || '').trim(), tyNo = g(tc, 'CwaTyNo');
+    const w = num(g(an, 'MaxWindSpeed')), gu = num(g(an, 'MaxGustSpeed')), md = g(an, 'MovingDirection');
+    out.push({ id: 'cwa:' + (tyNo || g(tc, 'CwaTdNo') || name), src: 'cwa', name, nameZh, num: null, // 대만 번호(30호)는 일본·한국 번호(31호)와 달라서 안 써요
+      cat: w != null && w >= 17.2 ? 'TY' : 'TD', catKo: w != null && w >= 17.2 ? '태풍' : '열대저압부', intensity: '', pressure: num(g(an, 'Pressure')), wind: w, gust: gu,
+      lat: pos[0], lon: pos[1], at: tm(g(an, 'DateTime')), issue: tm(g(an, 'DateTime')), move: { dir: num(md) != null ? num(md) : (md || ''), kmh: num(g(an, 'MovingSpeed')) },
+      radii: { storm: rad(an, 'Circle25ms'), gale: rad(an, 'Circle15ms') }, track: fixes.map(ll).filter(Boolean),
+      forecast: fcs.map(f => { const p = ll(f); if (!p) return null; const t0 = tm(g(f, 'InitialTime')), h = num(g(f, 'ForecastHour')); return { h, t: t0 && h != null ? new Date(Date.parse(t0) + h * 3600e3).toISOString() : null, lat: p[0], lon: p[1], r: num(g(f, 'Radius70PercentProbability')), pressure: num(g(f, 'Pressure')), wind: num(g(f, 'MaxWindSpeed')), cat: '', storm: rad(f, 'Circle25ms') }; }).filter(Boolean),
       url: 'https://www.cwa.gov.tw/V8/C/P/Typhoon/TY_NEWS.html' });
   }
   return out;

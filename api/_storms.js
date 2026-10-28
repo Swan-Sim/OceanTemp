@@ -111,8 +111,12 @@ async function build() {
     if (!x.radii.storm && s.radii.storm) x.radii.storm = s.radii.storm; if (!x.radii.gale && s.radii.gale) x.radii.gale = s.radii.gale;
     if (!x.track.length && s.track && s.track.length) x.track = s.track; if (s.alert && !x.alert) x.alert = s.alert; };
   [...j, ...k, ...n, ...gd].forEach(add);
-  storms.forEach(s => { s.forecast = s.tracks.jma || s.tracks.kma || s.tracks.nhc || s.forecast || []; });
-  return { ok: true, at: Date.now(), storms };
+  storms.forEach(s => { s.forecast = s.tracks.jma || s.tracks.kma || s.tracks.nhc || s.forecast || [];
+    // [ADD] 어느 기관도 예보 경로를 내지 않으면 '예보 종료'(약해졌거나 온대저기압으로 바뀜). JMA 등급 LOW 도 같아요
+    s.ended = !Object.values(s.tracks).some(v => v && v.length) || s.cat === 'LOW'; });
+  // [ADD] GDACS 목록에만 남아 있고 마지막 갱신이 36시간 넘은 건 빼요(소멸된 태풍이 한동안 '현재'로 남아 있던 문제)
+  const now = Date.now(), kept = storms.filter(s => !(s.ended && s.agencies.every(a => a === 'gdacs') && now - (Date.parse(s.at) || now) > 36 * 3600e3));
+  return { ok: true, at: now, storms: kept };
 }
 module.exports = async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');

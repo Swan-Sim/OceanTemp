@@ -190,8 +190,8 @@ ${s.ended ? `<p class="note warn">${t.ended}</p>` : ''}${s.noTrack ? `<p class="
 <p class="sub">${t.sstWhy}</p>
 ${(() => { const o = sstSummary(sst, s, trs, t); if (!o || o.cur == null) return `<p class="sub">${t.sstNa}</p>`;
   const vlab = (v) => `<span style="color:${v === 'up' ? '#fb7185' : v === 'keep' ? '#fbbf24' : '#7dd3fc'}">${t.sstV[v]}</span>`;
-  return `<p class="lead">${esc(t.sstNow(o.cur))}${o.warm ? ` · ${esc(t.warm(o.warm.d, o.warm.v))}` : ''} <button type="button" class="fold" data-t="sstbody" aria-expanded="true">${FOLD[lang] ? FOLD[lang][0] : FOLD.en[0]}</button></p>
-<div id="sstbody">
+  return `<p class="lead">${esc(t.sstNow(o.cur))}${o.warm ? ` · ${esc(t.warm(o.warm.d, o.warm.v))}` : ''} <button type="button" class="fold" data-t="sstbody" aria-expanded="false">${FOLD[lang] ? FOLD[lang][1] : FOLD.en[1]}</button></p>
+<div id="sstbody" style="display:none">
 <div class="sstg">${[7, 0, 1, 6, -1, 2, 5, 4, 3].map(i => { const x = i < 0 ? { d: ({ ko: '중심', en: 'Center', ja: '中心', es: 'Centro', zh: '中心' })[lang] || 'Center', v: o.cur } : o.dirs[i]; const w = i >= 0 && o.warm && x.d === o.warm.d; return `<div class="c${i < 0 ? ' ctr' : ''}"${w ? ' style="outline:2px solid #fb7185;font-weight:700"' : ''}><div class="l">${x.d}${w ? ' ▲' : ''}</div><div class="v">${x.v == null ? '–' : sstC(x.v)}</div></div>`; }).join('')}</div><p class="sub">${t.sstDir} · ${t.sstSrc}</p>
 ${o.paths.length ? (() => { const real = o.paths.filter(p => p.src !== 'avg'), hot = real.length > 1 ? real.reduce((a, b) => b.m > a.m ? b : a) : null;
     return `<ul class="off">${o.paths.map(p => { const isHot = hot && p.src === hot.src; return `<li${isHot ? ' style="font-weight:700"' : ''}><span style="color:${AG[p.src].c}">━ ━</span> ${esc(t.sstPath(AG[p.src].n[lang], p.m, p.mn))} → ${vlab(p.v)}${isHot ? ` <span style="color:#fb7185">${t.sstHot}</span>` : ''}</li>`; }).join('')}</ul>`; })() : ''}
@@ -201,8 +201,8 @@ ${o.paths.length ? (() => { const real = o.paths.filter(p => p.src !== 'avg'), h
 <script>document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('.fold');if(!b)return;var el=document.getElementById(b.dataset.t);if(!el)return;var L=${JSON.stringify(FOLD[lang] || FOLD.en)};var open=b.getAttribute('aria-expanded')==='true';el.style.display=open?'none':'';b.setAttribute('aria-expanded',open?'false':'true');b.textContent=open?L[1]:L[0]});</script>
 <style>#stmap{height:440px;border-radius:12px;border:1px solid var(--line);background:#0b1120;margin:8px 0 2px}@media(max-width:600px){#stmap{height:340px}}</style>
 <div id="stmap"></div><p class="sub">${t.mapNote}${avg ? ' ' + t.avgNote(avg.n) : ''}</p>
-<h2>${t.tableH} <button type="button" class="fold" data-t="tblbody" aria-expanded="true">${FOLD[lang] ? FOLD[lang][0] : FOLD.en[0]}</button></h2>
-<div id="tblbody">${table}</div>
+<h2>${t.tableH} <button type="button" class="fold" data-t="tblbody" aria-expanded="false">${FOLD[lang] ? FOLD[lang][1] : FOLD.en[1]}</button></h2>
+<div id="tblbody" style="display:none">${table}</div>
 <h2>${t.spotsH}</h2>
 ${aff.length ? `<p class="sub">${t.spotsNote(aff.length)}</p><div class="tw"><table class="rt"><tr>${t.sth.map(h => `<th>${h}</th>`).join('')}</tr>${spotRows}</table></div>` : `<p class="sub">${t.spotsNone}</p>`}
 <h2>${t.offH}</h2>

@@ -648,7 +648,9 @@
     function splice(modelArr, obsArr) {
       if (!obsArr.length) return modelArr;
       const last = obsArr[obsArr.length - 1].x;
-      return [...obsArr, ...modelArr.filter(o => o.x > last)];
+      // [FIX] 실측이 48시간치뿐인 곳(대만 CWA 등)은 그 이전 구간이 통째로 사라졌어요 → 실측 시작 전은 모델 값을 그대로 둡니다
+      const first = obsArr[0].x;
+      return [...modelArr.filter(o => o.x < first), ...obsArr, ...modelArr.filter(o => o.x > last)];
     }
     function recomputeExtremes(tide) {
       const ex = [];
@@ -670,7 +672,7 @@
       const modelAt = interpAt(d.tide, last);
       const delta = modelAt != null ? obs[obs.length - 1].y - modelAt : 0;
       const future = d.tide.filter(o => o.x > last).map(o => ({ x: o.x, y: +(o.y + delta * Math.exp(-(o.x - last) / (6 * HOUR_MS))).toFixed(2) }));
-      d.tide = [...obs, ...future];
+      d.tide = [...d.tide.filter(o => o.x < first), ...obs, ...future];
       d.extremes = recomputeExtremes(d.tide);
     }
 
@@ -867,7 +869,7 @@
         const last = obs.length ? obs[obs.length - 1].x : -Infinity;
         const future = r.predSeries.filter(p => p.x > last);
         const rest = d.tide.filter(o => o.x > Math.max(last, future.length ? future[future.length - 1].x : -Infinity));
-        d.tide = [...obs, ...future, ...rest];
+        d.tide = [...(obs.length ? d.tide.filter(o => o.x < obs[0].x) : []), ...obs, ...future, ...rest];
         const hiloFuture = r.hiloList.filter(e => e.x > last);
         d.extremes = [...recomputeExtremes(obs).filter(e => e.x < last - 2 * HOUR_MS), ...hiloFuture];
         d._tidePred = r.predSeries.length > 0;

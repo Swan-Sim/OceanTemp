@@ -72,6 +72,7 @@ const T = {
     pDelta: (d) => `較標準 1013 hPa 低 ${d} hPa`, sstMap: '底色 = 海水溫度', sstHot: '← 經過最暖海域的路徑（最可能增強）', avgNote: (n) => `白線 = otemp 平均：${n} 個機構在相同預報時間的平均值。並非官方預報；圓圈為各機構偏離平均的最大距離。`, sstH: '海水溫度與強度展望', sstWhy: '路徑主要由高空引導氣流（如太平洋高壓）決定，海水溫度則左右強度。26.5°C 以上可維持強度，超過 28°C 的暖海容易增強，進入較冷海域則減弱。',
     sstNow: (v) => `目前位置水溫 ${v}°C`, sstDir: '周圍 300 km 海水溫度（依方向）', sstPath: (n, m, mn) => `${n}路徑：平均 ${m}°C，最低 ${mn}°C`, sstV: { up: '海水夠暖，可能增強', keep: '維持強度', down: '海水較冷，減弱' }, sstNa: '尚無海水溫度資料', sstSrc: 'NOAA 衛星海表溫度（5 km，約延遲 2 天）', dirs: ['北', '東北', '東', '東南', '南', '西南', '西', '西北'], warm: (d, v) => `最暖的一側：${d}（${v}°C）` }
 };
+const FOLD = { ko: ['접기 ▲', '펼치기 ▼'], en: ['Collapse ▲', 'Expand ▼'], ja: ['たたむ ▲', '開く ▼'], es: ['Ocultar ▲', 'Mostrar ▼'], zh: ['收起 ▲', '展開 ▼'] };
 const KIND = { TY: { ko: '태풍', en: 'Typhoon', ja: '台風', es: 'Tifón', zh: '颱風' }, STS: { ko: '태풍', en: 'Severe tropical storm', ja: '台風', es: 'Tormenta tropical severa', zh: '強烈熱帶風暴' }, TS: { ko: '열대폭풍', en: 'Tropical storm', ja: '熱帯低気圧', es: 'Tormenta tropical', zh: '熱帶風暴' },
   TD: { ko: '열대저압부', en: 'Tropical depression', ja: '熱帯低気圧', es: 'Depresión tropical', zh: '熱帶性低氣壓' }, LOW: { ko: '온대저기압', en: 'Extratropical low', ja: '温帯低気圧', es: 'Baja extratropical', zh: '溫帶氣旋' }, HU: { ko: '허리케인', en: 'Hurricane', ja: 'ハリケーン', es: 'Huracán', zh: '颶風' }, MH: { ko: '허리케인', en: 'Major hurricane', ja: 'ハリケーン', es: 'Huracán mayor', zh: '強烈颶風' }, PTC: { ko: '열대저기압', en: 'Tropical cyclone', ja: '熱帯低気圧', es: 'Ciclón tropical', zh: '熱帶氣旋' } };
 const NUM = { ko: (n) => `${n}호`, en: (n) => `No.${n}`, ja: (n) => `${n}号`, es: (n) => `n.º ${n}`, zh: (n) => `第${n}號` };
@@ -189,15 +190,19 @@ ${s.ended ? `<p class="note warn">${t.ended}</p>` : ''}${s.noTrack ? `<p class="
 <p class="sub">${t.sstWhy}</p>
 ${(() => { const o = sstSummary(sst, s, trs, t); if (!o || o.cur == null) return `<p class="sub">${t.sstNa}</p>`;
   const vlab = (v) => `<span style="color:${v === 'up' ? '#fb7185' : v === 'keep' ? '#fbbf24' : '#7dd3fc'}">${t.sstV[v]}</span>`;
-  return `<p class="lead">${esc(t.sstNow(o.cur))}${o.warm ? ` · ${esc(t.warm(o.warm.d, o.warm.v))}` : ''}</p>
+  return `<p class="lead">${esc(t.sstNow(o.cur))}${o.warm ? ` · ${esc(t.warm(o.warm.d, o.warm.v))}` : ''} <button type="button" class="fold" data-t="sstbody" aria-expanded="true">${FOLD[lang] ? FOLD[lang][0] : FOLD.en[0]}</button></p>
+<div id="sstbody">
 <div class="sstg">${[7, 0, 1, 6, -1, 2, 5, 4, 3].map(i => { const x = i < 0 ? { d: ({ ko: '중심', en: 'Center', ja: '中心', es: 'Centro', zh: '中心' })[lang] || 'Center', v: o.cur } : o.dirs[i]; const w = i >= 0 && o.warm && x.d === o.warm.d; return `<div class="c${i < 0 ? ' ctr' : ''}"${w ? ' style="outline:2px solid #fb7185;font-weight:700"' : ''}><div class="l">${x.d}${w ? ' ▲' : ''}</div><div class="v">${x.v == null ? '–' : sstC(x.v)}</div></div>`; }).join('')}</div><p class="sub">${t.sstDir} · ${t.sstSrc}</p>
 ${o.paths.length ? (() => { const real = o.paths.filter(p => p.src !== 'avg'), hot = real.length > 1 ? real.reduce((a, b) => b.m > a.m ? b : a) : null;
-    return `<ul class="off">${o.paths.map(p => { const isHot = hot && p.src === hot.src; return `<li${isHot ? ' style="font-weight:700"' : ''}><span style="color:${AG[p.src].c}">━ ━</span> ${esc(t.sstPath(AG[p.src].n[lang], p.m, p.mn))} → ${vlab(p.v)}${isHot ? ` <span style="color:#fb7185">${t.sstHot}</span>` : ''}</li>`; }).join('')}</ul>`; })() : ''}`; })()}
+    return `<ul class="off">${o.paths.map(p => { const isHot = hot && p.src === hot.src; return `<li${isHot ? ' style="font-weight:700"' : ''}><span style="color:${AG[p.src].c}">━ ━</span> ${esc(t.sstPath(AG[p.src].n[lang], p.m, p.mn))} → ${vlab(p.v)}${isHot ? ` <span style="color:#fb7185">${t.sstHot}</span>` : ''}</li>`; }).join('')}</ul>`; })() : ''}
+</div>`; })()}
 <h2>${t.mapH}</h2>
+<style>.fold{font:inherit;font-size:12px;padding:2px 10px;margin-left:6px;border:1px solid var(--line);border-radius:999px;background:transparent;color:inherit;cursor:pointer;vertical-align:middle}</style>
+<script>document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('.fold');if(!b)return;var el=document.getElementById(b.dataset.t);if(!el)return;var L=${JSON.stringify(FOLD[lang] || FOLD.en)};var open=b.getAttribute('aria-expanded')==='true';el.style.display=open?'none':'';b.setAttribute('aria-expanded',open?'false':'true');b.textContent=open?L[1]:L[0]});</script>
 <style>#stmap{height:440px;border-radius:12px;border:1px solid var(--line);background:#0b1120;margin:8px 0 2px}@media(max-width:600px){#stmap{height:340px}}</style>
 <div id="stmap"></div><p class="sub">${t.mapNote}${avg ? ' ' + t.avgNote(avg.n) : ''}</p>
-<h2>${t.tableH}</h2>
-${table}
+<h2>${t.tableH} <button type="button" class="fold" data-t="tblbody" aria-expanded="true">${FOLD[lang] ? FOLD[lang][0] : FOLD.en[0]}</button></h2>
+<div id="tblbody">${table}</div>
 <h2>${t.spotsH}</h2>
 ${aff.length ? `<p class="sub">${t.spotsNote(aff.length)}</p><div class="tw"><table class="rt"><tr>${t.sth.map(h => `<th>${h}</th>`).join('')}</tr>${spotRows}</table></div>` : `<p class="sub">${t.spotsNone}</p>`}
 <h2>${t.offH}</h2>

@@ -499,12 +499,15 @@
           plugins: {
             legend: { display: false },
             tooltip: {
+              filter: (item) => item.parsed && Number.isFinite(item.parsed.y),
               callbacks: {
                 label: (ctx) => ctx.dataset._unit === 'vis'
                   ? `${ctx.dataset.label}: ${fmtVis(ctx.parsed.y)}`
-                  : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}`,
+                  : `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}`,
                 afterBody: (items) => {
+                  if (!items.length) return [];
                   const i = items[0].dataIndex, x = days[i], m = IM[i], out = [];
+                  if (!m.on && m.hmax > 0) out.push(`${t.visWaveWord} ${m.hmax.toFixed(1)}m`);
                   if (x.chl != null) out.push(`엽록소 ${x.chl.toFixed(2)} mg/m³`);
                   if (m.on) out.push(`${m.storm ? '🌀 ' + t.visStormWord + ' ' : ''}${m.hmax >= 1.5 ? t.visWaveWord + ' ' + m.hmax.toFixed(1) + 'm ' : ''}→ ${t.visStormWave}`);
                   if (x.est) out.push(t.visEst);

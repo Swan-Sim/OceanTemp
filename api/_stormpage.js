@@ -8,7 +8,8 @@ const { redisPipeline } = require('./_redis');
 const LANGS = H.LANGS, esc = H.esc;
 const km = (a, b, c, d) => { const r = Math.PI / 180, x = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2; return 12742 * Math.asin(Math.sqrt(x)); };
 const AG = { jma: { c: '#ffd27a', n: { ko: '일본 기상청', en: 'JMA (Japan)', ja: '気象庁', es: 'JMA (Japón)', zh: '日本氣象廳' } }, kma: { c: '#7dd3fc', n: { ko: '한국 기상청', en: 'KMA (Korea)', ja: '韓国気象庁', es: 'KMA (Corea)', zh: '韓國氣象廳' } },
-  jtwc: { c: '#c4b5fd', n: { ko: '미국 JTWC', en: 'JTWC (US Navy)', ja: '米JTWC', es: 'JTWC (EE. UU.)', zh: '美國 JTWC' } }, nhc: { c: '#fdba74', n: { ko: '미국 허리케인센터', en: 'NHC (US)', ja: '米ハリケーンセンター', es: 'NHC (EE. UU.)', zh: '美國颶風中心' } }, cwa: { c: '#86efac', n: { ko: '대만 기상서', en: 'CWA (Taiwan)', ja: '台湾中央気象署', es: 'CWA (Taiwán)', zh: '中央氣象署' } }, gdacs: { c: '#94a3b8', n: { ko: 'GDACS', en: 'GDACS', ja: 'GDACS', es: 'GDACS', zh: 'GDACS' } } };
+  jtwc: { c: '#c4b5fd', n: { ko: '미국 JTWC', en: 'JTWC (US Navy)', ja: '米JTWC', es: 'JTWC (EE. UU.)', zh: '美國 JTWC' } }, nhc: { c: '#fdba74', n: { ko: '미국 허리케인센터', en: 'NHC (US)', ja: '米ハリケーンセンター', es: 'NHC (EE. UU.)', zh: '美國颶風中心' } }, cwa: { c: '#86efac', n: { ko: '대만 기상서', en: 'CWA (Taiwan)', ja: '台湾中央気象署', es: 'CWA (Taiwán)', zh: '中央氣象署' } }, gdacs: { c: '#94a3b8', n: { ko: 'GDACS', en: 'GDACS', ja: 'GDACS', es: 'GDACS', zh: 'GDACS' } },
+  avg: { c: '#ffffff', n: { ko: 'otemp 평균', en: 'otemp consensus', ja: 'otemp平均', es: 'promedio otemp', zh: 'otemp 平均' } } };
 const T = {
   ko: { list: '태풍·허리케인', crumb: '태풍 목록', h1: (n) => `${n} 예상 경로 · 기관별 비교`, listH1: '지금 활동 중인 태풍·허리케인', listDesc: '한국·일본 기상청, 미국 JTWC·NHC 예보 경로를 한 지도에서 비교하고, 영향받는 다이빙·서핑 포인트를 확인하세요.',
     desc: (n, d) => `${n} 현재 위치·예상 경로를 한국 기상청, 일본 기상청, 미국 JTWC 예보로 비교. 영향권에 드는 다이빙·서핑 포인트와 다시 들어갈 수 있는 시기. ${d} 기준.`,
@@ -20,7 +21,7 @@ const T = {
     offH: '공식 발표', ended: '공식 예보가 끝났어요(약해졌거나 온대저기압으로 바뀜). 아래는 마지막 자료예요.', noTrack: '이 해역은 아직 예보 기관을 연결하지 못해서 현재 위치만 있어요. 공식 발표를 확인하세요.',
     upd: (s) => `${s} 발표 자료`, foot: '자료: 한국 기상청 · 일본 기상청 · 미국 JTWC·NHC · GDACS · Open-Meteo. 참고용이에요. 태풍 진로는 크게 바뀔 수 있으니 반드시 각 나라 기상청 공식 발표와 현지 안내를 따르세요.',
     past: '지난 태풍', active: '활동 중', peak: (w, p) => `최대 ${w}m/s${p ? ` · 최저 ${p}hPa` : ''}`, listNone: '지금 활동 중인 태풍·허리케인이 없어요.',
-    sstH: '바다 수온과 세력 전망', sstWhy: '태풍의 진로는 주로 상층 바람(북태평양 고기압 등)이 정하고, 바다 수온은 세력을 좌우해요. 26.5°C 이상이면 세력을 유지하고, 28°C가 넘는 따뜻한 바다에서는 더 강해지기 쉬워요. 차가운 바다로 들어가면 약해져요.',
+    avgNote: (n) => `흰 선 = otemp 평균: 기관 ${n}곳의 예보를 같은 시각끼리 평균한 값이에요. 공식 예보가 아니며, 원은 기관들이 평균에서 벗어난 최대 거리예요.`, sstH: '바다 수온과 세력 전망', sstWhy: '태풍의 진로는 주로 상층 바람(북태평양 고기압 등)이 정하고, 바다 수온은 세력을 좌우해요. 26.5°C 이상이면 세력을 유지하고, 28°C가 넘는 따뜻한 바다에서는 더 강해지기 쉬워요. 차가운 바다로 들어가면 약해져요.',
     sstNow: (v) => `지금 위치 수온 ${v}°C`, sstDir: '주변 300km 수온(방향별)', sstPath: (n, m, mn) => `${n} 경로: 평균 ${m}°C, 가장 낮은 곳 ${mn}°C`, sstV: { up: '더 강해질 수 있는 바다', keep: '세력 유지', down: '약해지는 바다' }, sstNa: '수온 자료가 아직 없어요', sstSrc: 'NOAA 위성 해수면온도(5km, 약 2일 지연)', dirs: ['북', '북동', '동', '남동', '남', '남서', '서', '북서'], warm: (d, v) => `가장 따뜻한 쪽: ${d} (${v}°C)` },
   en: { list: 'Typhoons & hurricanes', crumb: 'All storms', h1: (n) => `${n} forecast track · agency comparison`, listH1: 'Active typhoons & hurricanes', listDesc: 'Compare JMA, KMA, JTWC and NHC forecast tracks on one map and see which dive and surf spots are in the path.',
     desc: (n, d) => `${n}: current position and forecast track from KMA (Korea), JMA (Japan) and JTWC compared side by side. Dive and surf spots in the path, and when the sea calms down. As of ${d}.`,
@@ -32,7 +33,7 @@ const T = {
     offH: 'Official advisories', ended: 'Official forecasts have ended (weakened or became extratropical). Below is the last data.', noTrack: 'No forecast agency is connected for this basin yet; only the current position is shown. Check the official advisories.',
     upd: (s) => `Advisory ${s}`, foot: 'Data: KMA · JMA · JTWC · NHC · GDACS · Open-Meteo. For reference only. Storm tracks can change a lot; always follow your national weather service and local guidance.',
     past: 'Past storms', active: 'Active', peak: (w, p) => `peak ${w} m/s${p ? ` · min ${p} hPa` : ''}`, listNone: 'No active typhoons or hurricanes right now.',
-    sstH: 'Sea temperature & intensity outlook', sstWhy: 'Steering winds aloft (e.g. the subtropical high) decide where a storm goes; sea surface temperature decides how strong it gets. Above 26.5°C a storm holds its strength, above 28°C it can intensify, and over cooler water it weakens.',
+    avgNote: (n) => `White line = otemp consensus: the ${n} agency forecasts averaged at matching valid times. Not an official forecast; the circle is the largest distance any agency sits from the average.`, sstH: 'Sea temperature & intensity outlook', sstWhy: 'Steering winds aloft (e.g. the subtropical high) decide where a storm goes; sea surface temperature decides how strong it gets. Above 26.5°C a storm holds its strength, above 28°C it can intensify, and over cooler water it weakens.',
     sstNow: (v) => `Water at current position ${v}°C`, sstDir: 'Sea temperature 300 km around (by direction)', sstPath: (n, m, mn) => `${n} track: avg ${m}°C, coolest ${mn}°C`, sstV: { up: 'water warm enough to intensify', keep: 'holds strength', down: 'cooler water, weakening' }, sstNa: 'No sea temperature data yet', sstSrc: 'NOAA satellite SST (5 km, ~2-day lag)', dirs: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], warm: (d, v) => `Warmest side: ${d} (${v}°C)` },
   ja: { list: '台風・ハリケーン', crumb: '台風一覧', h1: (n) => `${n} 予報進路 · 機関別比較`, listH1: '現在活動中の台風・ハリケーン', listDesc: '気象庁・韓国気象庁・米JTWC・NHCの予報進路を一つの地図で比較し、影響を受けるダイビング・サーフポイントを確認。',
     desc: (n, d) => `${n}の現在位置と予報進路を気象庁・韓国気象庁・米JTWCで比較。進路付近のダイビング・サーフポイントと海が落ち着く時期。${d}時点。`,
@@ -44,7 +45,7 @@ const T = {
     offH: '公式発表', ended: '公式予報は終了しました（衰弱または温帯低気圧化）。以下は最後のデータです。', noTrack: 'この海域はまだ予報機関を接続していないため現在位置のみです。公式発表を確認してください。',
     upd: (s) => `${s}発表`, foot: 'データ：韓国気象庁・気象庁・米JTWC・NHC・GDACS・Open-Meteo。参考情報です。進路は大きく変わるため、必ず各国気象機関の公式発表と現地の案内に従ってください。',
     past: '過去の台風', active: '活動中', peak: (w, p) => `最大${w}m/s${p ? ` · 最低${p}hPa` : ''}`, listNone: '現在活動中の台風・ハリケーンはありません。',
-    sstH: '海水温と勢力の見通し', sstWhy: '進路は主に上空の風（太平洋高気圧など）が決め、海水温は勢力を左右します。26.5°C以上で勢力を維持、28°C超の海では発達しやすく、冷たい海に入ると衰弱します。',
+    avgNote: (n) => `白線 = otemp平均：${n}機関の予報を同じ時刻ごとに平均したものです。公式予報ではなく、円は各機関が平均から離れた最大距離です。`, sstH: '海水温と勢力の見通し', sstWhy: '進路は主に上空の風（太平洋高気圧など）が決め、海水温は勢力を左右します。26.5°C以上で勢力を維持、28°C超の海では発達しやすく、冷たい海に入ると衰弱します。',
     sstNow: (v) => `現在位置の水温 ${v}°C`, sstDir: '周囲300kmの海水温（方向別）', sstPath: (n, m, mn) => `${n}進路：平均${m}°C、最低${mn}°C`, sstV: { up: '発達しうる海', keep: '勢力維持', down: '衰弱する海' }, sstNa: '海水温データがまだありません', sstSrc: 'NOAA衛星海面水温（5km、約2日遅れ）', dirs: ['北', '北東', '東', '南東', '南', '南西', '西', '北西'], warm: (d, v) => `最も暖かい側：${d}（${v}°C）` },
   es: { list: 'Tifones y huracanes', crumb: 'Todas las tormentas', h1: (n) => `${n}: trayectoria prevista · comparación de agencias`, listH1: 'Tifones y huracanes activos', listDesc: 'Compara las trayectorias previstas por JMA, KMA, JTWC y NHC en un mapa y mira qué puntos de buceo y surf están en su camino.',
     desc: (n, d) => `${n}: posición actual y trayectoria prevista según KMA (Corea), JMA (Japón) y JTWC, comparadas. Puntos de buceo y surf en su camino y cuándo se calma el mar. A fecha de ${d}.`,
@@ -56,7 +57,7 @@ const T = {
     offH: 'Avisos oficiales', ended: 'Los pronósticos oficiales han terminado (se debilitó o se volvió extratropical). Abajo, los últimos datos.', noTrack: 'Aún no hay agencia de pronóstico conectada para esta cuenca; solo se muestra la posición actual. Consulta los avisos oficiales.',
     upd: (s) => `Aviso ${s}`, foot: 'Datos: KMA · JMA · JTWC · NHC · GDACS · Open-Meteo. Solo como referencia. Las trayectorias cambian mucho; sigue siempre a tu servicio meteorológico nacional y las indicaciones locales.',
     past: 'Tormentas pasadas', active: 'Activo', peak: (w, p) => `máx. ${w} m/s${p ? ` · mín. ${p} hPa` : ''}`, listNone: 'No hay tifones ni huracanes activos ahora.',
-    sstH: 'Temperatura del mar y perspectiva de intensidad', sstWhy: 'Los vientos en altura deciden hacia dónde va la tormenta; la temperatura del mar decide su fuerza. Por encima de 26,5 °C mantiene su fuerza, por encima de 28 °C puede intensificarse y sobre agua más fría se debilita.',
+    avgNote: (n) => `Línea blanca = promedio otemp: los pronósticos de ${n} agencias promediados a la misma hora. No es un pronóstico oficial; el círculo es la mayor distancia de una agencia al promedio.`, sstH: 'Temperatura del mar y perspectiva de intensidad', sstWhy: 'Los vientos en altura deciden hacia dónde va la tormenta; la temperatura del mar decide su fuerza. Por encima de 26,5 °C mantiene su fuerza, por encima de 28 °C puede intensificarse y sobre agua más fría se debilita.',
     sstNow: (v) => `Agua en la posición actual ${v} °C`, sstDir: 'Temperatura del mar a 300 km (por dirección)', sstPath: (n, m, mn) => `Trayectoria ${n}: media ${m} °C, mínima ${mn} °C`, sstV: { up: 'agua suficientemente cálida para intensificarse', keep: 'mantiene la fuerza', down: 'agua más fría, se debilita' }, sstNa: 'Aún no hay datos de temperatura del mar', sstSrc: 'SST satelital NOAA (5 km, ~2 días de retraso)', dirs: ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'], warm: (d, v) => `Lado más cálido: ${d} (${v} °C)` },
   zh: { list: '颱風與颶風', crumb: '所有颱風', h1: (n) => `${n} 預報路徑 · 各機構比較`, listH1: '目前活動中的颱風與颶風', listDesc: '在同一張地圖比較日本氣象廳、韓國氣象廳、美國 JTWC 與 NHC 的預報路徑，並查看受影響的潛點與衝浪點。',
     desc: (n, d) => `${n}目前位置與預報路徑：韓國氣象廳、日本氣象廳、美國 JTWC 並列比較。路徑附近的潛點與衝浪點，以及海況何時恢復。截至 ${d}。`,
@@ -68,7 +69,7 @@ const T = {
     offH: '官方發布', ended: '官方預報已結束（已減弱或轉為溫帶氣旋）。以下為最後資料。', noTrack: '此海域尚未連接預報機構，僅顯示目前位置。請確認官方發布。',
     upd: (s) => `${s} 發布資料`, foot: '資料：韓國氣象廳 · 日本氣象廳 · 美國 JTWC、NHC · GDACS · Open-Meteo。僅供參考。颱風路徑可能大幅改變，請務必遵循各國氣象機構官方發布與當地指引。',
     past: '過去的颱風', active: '活動中', peak: (w, p) => `最大 ${w} m/s${p ? ` · 最低 ${p} hPa` : ''}`, listNone: '目前沒有活動中的颱風或颶風。',
-    sstH: '海水溫度與強度展望', sstWhy: '路徑主要由高空引導氣流（如太平洋高壓）決定，海水溫度則左右強度。26.5°C 以上可維持強度，超過 28°C 的暖海容易增強，進入較冷海域則減弱。',
+    avgNote: (n) => `白線 = otemp 平均：${n} 個機構在相同預報時間的平均值。並非官方預報；圓圈為各機構偏離平均的最大距離。`, sstH: '海水溫度與強度展望', sstWhy: '路徑主要由高空引導氣流（如太平洋高壓）決定，海水溫度則左右強度。26.5°C 以上可維持強度，超過 28°C 的暖海容易增強，進入較冷海域則減弱。',
     sstNow: (v) => `目前位置水溫 ${v}°C`, sstDir: '周圍 300 km 海水溫度（依方向）', sstPath: (n, m, mn) => `${n}路徑：平均 ${m}°C，最低 ${mn}°C`, sstV: { up: '海水夠暖，可能增強', keep: '維持強度', down: '海水較冷，減弱' }, sstNa: '尚無海水溫度資料', sstSrc: 'NOAA 衛星海表溫度（5 km，約延遲 2 天）', dirs: ['北', '東北', '東', '東南', '南', '西南', '西', '西北'], warm: (d, v) => `最暖的一側：${d}（${v}°C）` }
 };
 const KIND = { TY: { ko: '태풍', en: 'Typhoon', ja: '台風', es: 'Tifón', zh: '颱風' }, STS: { ko: '태풍', en: 'Severe tropical storm', ja: '台風', es: 'Tormenta tropical severa', zh: '強烈熱帶風暴' }, TS: { ko: '열대폭풍', en: 'Tropical storm', ja: '熱帯低気圧', es: 'Tormenta tropical', zh: '熱帶風暴' },
@@ -91,6 +92,18 @@ const fmtD = (iso, lang) => { const d = new Date(iso); if (isNaN(d)) return ''; 
 
 // 기관별 예보 경로 → [{src, pts:[{t(ms), lat, lon, wind, r}]}] (현재 위치를 0시간째로 포함)
 function tracksOf(s) { const at = Date.parse(s.at) || Date.now(); return Object.entries(s.tracks || {}).filter(([src, v]) => v && v.length && AG[src]).map(([src, fc]) => ({ src, pts: [{ t: at, lat: s.lat, lon: s.lon, h: 0, wind: s.wind, r: 0 }].concat(fc.map(f => ({ t: (f.t && Date.parse(f.t)) || at + (f.h || 0) * 3600e3, lat: f.lat, lon: f.lon, h: f.h, wind: f.wind, r: f.r, pressure: f.pressure })).filter(p => p.lat != null && p.t > at)).sort((a, b) => a.t - b.t) })); }
+// [ADD] otemp 평균(합의) 경로: 기관 2곳 이상이 겹치는 6시간 단위 시각마다 각 기관 경로를 그 시각으로 보간해 평균. r = 평균에서 가장 멀리 떨어진 기관까지의 거리
+function consensus(trs, s) {
+  const real = trs.filter(t => t.src !== 'avg' && t.pts.length > 1); if (real.length < 2) return null;
+  const at = Date.parse(s.at) || Date.now(); const H6 = 6 * 3600e3;
+  const interp = (tr, t) => { const p = tr.pts; if (t < p[0].t || t > p[p.length - 1].t) return null; for (let i = 1; i < p.length; i++) if (t <= p[i].t) { const a = p[i - 1], b = p[i], f = (t - a.t) / (b.t - a.t || 1); return { lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + (b.lon - a.lon) * f, wind: a.wind != null && b.wind != null ? a.wind + (b.wind - a.wind) * f : (b.wind != null ? b.wind : a.wind) }; } return null; };
+  const times = [...new Set(real.flatMap(tr => tr.pts.filter(p => p.h).map(p => Math.round(p.t / H6) * H6)))].filter(t => t > at).sort((a, b) => a - b);
+  const pts = [{ t: at, lat: s.lat, lon: s.lon, h: 0, wind: s.wind, r: 0 }];
+  times.forEach(t => { const got = real.map(tr => interp(tr, t)).filter(Boolean); if (got.length < 2) return;
+    const lat = got.reduce((a, p) => a + p.lat, 0) / got.length, lon = got.reduce((a, p) => a + p.lon, 0) / got.length, ws = got.filter(p => p.wind != null);
+    pts.push({ t, lat: +lat.toFixed(2), lon: +lon.toFixed(2), h: Math.round((t - at) / 3600e3), wind: ws.length ? +(ws.reduce((a, p) => a + p.wind, 0) / ws.length).toFixed(1) : null, r: Math.round(Math.max(...got.map(p => km(lat, lon, p.lat, p.lon)))), n: got.length }); });
+  return pts.length > 1 ? { src: 'avg', pts, n: real.length } : null;
+}
 function spread(trs) { if (trs.length < 2) return null; let mx = 0; for (let i = 0; i < trs.length; i++) for (let j = i + 1; j < trs.length; j++) trs[i].pts.forEach(a => { if (!a.h) return; const b = trs[j].pts.reduce((best, p) => (best == null || Math.abs(p.t - a.t) < Math.abs(best.t - a.t)) ? p : best, null); if (b && Math.abs(b.t - a.t) <= 3 * 3600e3) mx = Math.max(mx, km(a.lat, a.lon, b.lat, b.lon)); }); return Math.round(mx); }
 // 시간별 보간(3시간 간격)으로 각 포인트까지 가장 가까운 거리·시각
 function closest(trs, s, spot) {
@@ -148,15 +161,15 @@ const affected = (trs, s, all) => all.map(spot => ({ spot, c: closest(trs, s, sp
 function renderStorm(lang, s, all, base, waves, sst) {
   const t = T[lang], TT = H.T[lang], name = label(s, lang), slug = s.slug;
   const hrefs = Object.fromEntries(LANGS.map(l => [l, tpath(l, slug)]));
-  const trs = tracksOf(s), sp = spread(trs), [la, lo] = fmtLL(s.lat, s.lon, lang), dstr = fmtT(s.at, lang);
-  const agreeTxt = t.agree(sp, trs.length);
+  const real = tracksOf(s), avg = consensus(real, s), trs = avg ? [...real, avg] : real, sp = spread(real), [la, lo] = fmtLL(s.lat, s.lon, lang), dstr = fmtT(s.at, lang);
+  const agreeTxt = t.agree(sp, real.length);
   const aff = affected(trs, s, all);
   const cards = [[t.cards[0], s.pressure ? `${s.pressure}<small> hPa</small>` : '–'], [t.cards[1], s.wind ? `${s.wind}<small> m/s</small>` : '–'], [t.cards[2], s.move && s.move.kmh ? `${s.move.kmh}<small> km/h</small>` : '–'], [t.cards[3], s.radii && s.radii.gale ? `${s.radii.gale}<small> km</small>` : '–']];
   // 기관별 표: 예보 시각(6시간 단위로 합침) × 기관
   const times = [...new Set(trs.flatMap(tr => tr.pts.filter(p => p.h).map(p => Math.round(p.t / (6 * 3600e3)) * 6 * 3600e3)))].sort((a, b) => a - b);
   const sstC = (v) => v == null ? '' : `<span style="color:${v >= 28 ? '#fb7185' : v >= 26.5 ? '#fbbf24' : '#7dd3fc'}">${r1(v)}°C</span>`;
   const cell = (tr, tm) => { const p = tr.pts.find(q => q.h && Math.abs(q.t - tm) <= 3 * 3600e3); if (!p) return '<td class="dim">–</td>'; const [a, b] = fmtLL(p.lat, p.lon, lang); const sv = sstAt(sst, p.lat, p.lon); return `<td><span style="color:${AG[tr.src].c}">●</span> ${a} ${b}${p.wind || sv != null ? `<br><small>${[p.wind ? p.wind + ' m/s' : '', p.pressure ? p.pressure + ' hPa' : '', p.r ? '±' + p.r + ' km' : '', sv != null ? sstC(sv) : ''].filter(Boolean).join(' · ')}</small>` : ''}</td>`; };
-  const table = trs.length ? `<div class="tw"><table class="rt"><tr><th>${t.th[0]}</th>${trs.map(tr => `<th><span style="color:${AG[tr.src].c}">━ ━</span> ${AG[tr.src].n[lang]}</th>`).join('')}</tr>${times.map(tm => `<tr><td>${fmtT(new Date(tm).toISOString(), lang)}</td>${trs.map(tr => cell(tr, tm)).join('')}</tr>`).join('')}</table></div>` : `<p class="sub">${t.none}</p>`;
+  const table = trs.length ? `<div class="tw"><table class="rt"><tr><th>${t.th[0]}</th>${trs.map(tr => `<th><span style="color:${AG[tr.src].c}">${tr.src === 'avg' ? '•••' : '━ ━'}</span> ${AG[tr.src].n[lang]}</th>`).join('')}</tr>${times.map(tm => `<tr><td>${fmtT(new Date(tm).toISOString(), lang)}</td>${trs.map(tr => cell(tr, tm)).join('')}</tr>`).join('')}</table></div>` : `<p class="sub">${t.none}</p>`;
   const spotRows = aff.map(({ spot, c }, i) => `<tr><td><a href="${H.pathOf(lang, spot)}">${esc(H.nameIn(spot, lang))}</a><br><small class="dim">${esc(H.regionName(spot.cc, lang, spot.country))}</small></td><td>${c.src ? fmtT(new Date(c.t).toISOString(), lang) : '<span class="dim">' + t.nowKm(Math.round(c.d)) + '</span>'}</td><td>${Math.round(c.d)} km</td><td>${waves[i] === undefined ? '<span class="dim">–</span>' : backText(waves[i], c.t, t, lang)}</td></tr>`).join('');
   const mapData = JSON.stringify({ s: { lat: s.lat, lon: s.lon, name, gale: s.radii && s.radii.gale, storm: s.radii && s.radii.storm, track: s.track || [] }, trs: trs.map(tr => ({ src: tr.src, c: AG[tr.src].c, n: AG[tr.src].n[lang], pts: tr.pts.map(p => [p.lat, p.lon, p.r || 0, p.h, p.wind]) })), spots: aff.map(({ spot, c }) => [spot.lat, spot.lon, H.nameIn(spot, lang), Math.round(c.d), H.pathOf(lang, spot)]) }).replace(/</g, '\\u003c');
   const jsonld = [{ '@context': 'https://schema.org', '@type': 'WebPage', name: t.h1(name), description: t.desc(name, dstr), url: base + hrefs[lang], dateModified: new Date(s.at).toISOString(), about: { '@type': 'Event', name, startDate: new Date(s.at).toISOString(), location: { '@type': 'Place', geo: { '@type': 'GeoCoordinates', latitude: s.lat, longitude: s.lon } } } }];
@@ -168,7 +181,7 @@ ${s.ended ? `<p class="note warn">${t.ended}</p>` : ''}${s.noTrack ? `<p class="
 <div class="cards g4">${cards.map(([l, v]) => `<div class="c"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('')}</div>
 <h2>${t.mapH}</h2>
 <style>#stmap{height:440px;border-radius:12px;border:1px solid var(--line);background:#0b1120;margin:8px 0 2px}@media(max-width:600px){#stmap{height:340px}}</style>
-<div id="stmap"></div><p class="sub">${t.mapNote}</p>
+<div id="stmap"></div><p class="sub">${t.mapNote}${avg ? ' ' + t.avgNote(avg.n) : ''}</p>
 <h2>${t.tableH}</h2>
 ${table}
 <h2>${t.sstH}</h2>
@@ -187,7 +200,7 @@ ${aff.length ? `<p class="sub">${t.spotsNote(aff.length)}</p><div class="tw"><ta
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>(function(){var D=${mapData};if(!window.L)return;var m=L.map('stmap',{worldCopyJump:true,scrollWheelZoom:false});L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:12}).addTo(m);L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{opacity:.7,maxZoom:12}).addTo(m);
 var b=[[D.s.lat,D.s.lon]];if(D.s.track.length>1){L.polyline(D.s.track,{color:'#fff',weight:2,opacity:.7}).addTo(m);D.s.track.forEach(function(p){b.push(p)})}
-D.trs.forEach(function(tr){var pts=tr.pts.map(function(p){return[p[0],p[1]]});L.polyline(pts,{color:tr.c,weight:3,dashArray:'7 6',opacity:.95}).addTo(m);tr.pts.forEach(function(p){b.push([p[0],p[1]]);if(p[2])L.circle([p[0],p[1]],{radius:p[2]*1000,color:tr.c,weight:1,opacity:.5,fillOpacity:.06}).addTo(m);if(p[3])L.circleMarker([p[0],p[1]],{radius:4,color:tr.c,fillColor:tr.c,fillOpacity:1,weight:1}).addTo(m).bindTooltip(tr.n+' +'+p[3]+'h'+(p[4]?' · '+p[4]+' m/s':''))})});
+D.trs.forEach(function(tr){var pts=tr.pts.map(function(p){return[p[0],p[1]]});var av=tr.src==='avg';L.polyline(pts,{color:tr.c,weight:av?4:3,dashArray:av?'2 6':'7 6',opacity:av?.9:.95}).addTo(m);tr.pts.forEach(function(p){b.push([p[0],p[1]]);if(p[2])L.circle([p[0],p[1]],{radius:p[2]*1000,color:tr.c,weight:1,opacity:.5,fillOpacity:.06}).addTo(m);if(p[3])L.circleMarker([p[0],p[1]],{radius:4,color:tr.c,fillColor:tr.c,fillOpacity:1,weight:1}).addTo(m).bindTooltip(tr.n+' +'+p[3]+'h'+(p[4]?' · '+p[4]+' m/s':''))})});
 if(D.s.gale)L.circle([D.s.lat,D.s.lon],{radius:D.s.gale*1000,color:'#ffd27a',weight:1,fillOpacity:.1}).addTo(m);if(D.s.storm)L.circle([D.s.lat,D.s.lon],{radius:D.s.storm*1000,color:'#f87171',weight:1,fillOpacity:.15}).addTo(m);
 L.marker([D.s.lat,D.s.lon],{icon:L.divIcon({className:'',html:'<div style="font-size:26px;line-height:1;text-shadow:0 0 6px #000">🌀</div>',iconSize:[26,26],iconAnchor:[13,13]})}).addTo(m).bindTooltip(D.s.name);
 D.spots.forEach(function(s){L.circleMarker([s[0],s[1]],{radius:5,color:'#0f172a',fillColor:'#4ade80',fillOpacity:.95,weight:1}).addTo(m).bindTooltip(s[2]+' · '+s[3]+' km').on('click',function(){location.href=s[4]})});
@@ -230,4 +243,4 @@ async function sitemapUrls(base) {
   idx.slice(0, 100).forEach(s => { const p = Object.fromEntries(LANGS.map(l => [l, tpath(l, s.slug)])); const live = Date.now() - (s.last || 0) < 2 * 86400e3; LANGS.forEach(l => out.push(`<url><loc>${base}${p[l]}</loc>${alt(p)}<lastmod>${new Date(s.last || Date.now()).toISOString().slice(0, 10)}</lastmod><changefreq>${live ? 'hourly' : 'yearly'}</changefreq></url>`)); });
   return out;
 }
-module.exports = { stormPage, stormIndex, sitemapUrls, tpath, label, _test: { renderStorm, closest, tracksOf, spread, backText, moveText, sstAt, sstSummary } };
+module.exports = { stormPage, stormIndex, sitemapUrls, tpath, label, _test: { renderStorm, closest, tracksOf, spread, backText, moveText, sstAt, sstSummary, consensus } };

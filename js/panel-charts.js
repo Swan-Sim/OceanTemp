@@ -446,10 +446,33 @@
       top.innerHTML = html;
     }
 
+    // [ADD] 큰 파도·태풍이 시야에 주는 영향(추정). 파고 1.5m부터 감점, 4m에서 최대 ×0.45(일 최대 파고 기준).
+    //  태풍 예보 경로가 정점 가까이(storm-layer의 stormNear) 지나는 날(±1일)은 추가로 ×0.6. 실측으로 맞춘 값이 아니라 경고용 추정이에요.
+    function visImpact(st, tMs) {
+      const wv = st && st._hourlyCache && st._hourlyCache.waves;
+      let mx = 0;
+      if (wv) for (const w of wv) { if (w.x >= tMs - 12 * 3600e3 && w.x < tMs + 12 * 3600e3 && w.height > mx) mx = w.height; }
+      let f = 1 - 0.55 * Math.max(0, Math.min(1, (mx - 1.5) / 2.5)), storm = null;
+      try {
+        const n = typeof window.stormNear === 'function' ? window.stormNear(st) : null;
+        if (n && n.h != null && Math.abs(tMs - (Date.now() + n.h * 3600e3)) <= 36 * 3600e3) { storm = n.s; f *= 0.6; }
+      } catch (_) {}
+      return { f: Math.max(0.25, f), hmax: mx, storm, on: f < 0.999 };
+    }
+
     // 90일 추이 - "시야 원인" 화면: 날짜별 탁한 정도를 원인별로 쌓은 막대 + 시야 선(= 1.7 ÷ 막대 높이)
     function renderVisCause(chartCanvas, legendBox, v) {
-      const days = v.days;
+      const DAY = 864e5, stC = selectedStation;
+      if (stC && !stC._hourlyCache && !stC._hourlyState) { ensureHourlyData(stC).then(() => { if (selectedStation === stC && forecastView === 'cause') updateChart(); }).catch(() => {}); }
+      // 관측(위성) 날짜 뒤로 앞으로 8일까지 "추정" 칸을 붙여서, 큰 파도·태풍 예보가 있으면 빨간 탁도로 보여줘요
+      const days = v.days.slice();
       const hasChl = v.hasChl && days.some(x => x.kc != null);
+      for (let tt = v.last.t + DAY; tt <= Date.now() + 8 * DAY; tt += DAY) {
+        const pr = v.projection.find(q => Math.abs(q.t - tt) < DAY / 2);
+        if (pr) days.push({ t: tt, d: new Date(tt).toISOString().slice(0, 10), vis: pr.vis, kd: 1.7 / pr.vis, est: true });
+      }
+      const IM = days.map(x => visImpact(stC, x.t));
+      const extra = days.map((x, i) => IM[i].on ? Math.max(0, 1.7 / Math.max(0.5, x.vis * IM[i].f) - 1.7 / x.vis) : 0);
       const bar = (label, key, color) => ({ label, data: days.map(x => x[key] != null ? +x[key].toFixed(3) : null), yAxisID: 'yk', backgroundColor: color, stack: 'k', barPercentage: 1, categoryPercentage: 0.9, order: 3, _unit: 'kd' });
       const datasets = [
         { type: 'line', label: t.visAxis, data: days.map(x => +x.vis.toFixed(1)), yAxisID: 'yv', borderColor: '#38BDF8', borderWidth: 2, pointRadius: 0, pointHitRadius: 8, tension: 0.3, order: 0, _unit: 'vis' }
@@ -459,8 +482,13 @@
       } else {
         datasets.push(bar(t.visTurbidity, 'kd', 'rgba(148,163,184,0.45)'));
       }
+      if (days.some(x => x.est)) datasets.push({ label: t.visEst, data: days.map(x => x.est ? +x.kd.toFixed(3) : null), yAxisID: 'yk', backgroundColor: 'rgba(148,163,184,0.25)', stack: 'k', barPercentage: 1, categoryPercentage: 0.9, order: 3, _unit: 'kd' });
+      if (extra.some(e => e > 0)) {
+        datasets.push({ label: t.visStormWave, data: extra.map(e => e > 0 ? +e.toFixed(3) : null), yAxisID: 'yk', backgroundColor: 'rgba(239,68,68,0.75)', stack: 'k', barPercentage: 1, categoryPercentage: 0.9, order: 3, _unit: 'kd' });
+        datasets.splice(1, 0, { type: 'line', label: t.visStormWaveVis, data: days.map((x, i) => IM[i].on ? +Math.max(0.5, x.vis * IM[i].f).toFixed(1) : null), yAxisID: 'yv', borderColor: 'rgba(239,68,68,0.95)', borderDash: [4, 3], borderWidth: 2.4, pointRadius: 2, tension: 0.3, order: 0, _unit: 'vis' });
+      }
       const maxVis = Math.max(...days.map(x => x.vis));
-      const maxKd = Math.max(...days.map(x => x.kd));
+      const maxKd = Math.max(...days.map((x, i) => x.kd + extra[i]));
       chartInstance = new Chart(chartCanvas, {
         type: 'bar',
         data: { labels: days.map(x => mmdd(x.d)), datasets },
@@ -476,8 +504,11 @@
                   ? `${ctx.dataset.label}: ${fmtVis(ctx.parsed.y)}`
                   : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}`,
                 afterBody: (items) => {
-                  const x = days[items[0].dataIndex];
-                  return x.chl != null ? [`엽록소 ${x.chl.toFixed(2)} mg/m³`] : [];
+                  const i = items[0].dataIndex, x = days[i], m = IM[i], out = [];
+                  if (x.chl != null) out.push(`엽록소 ${x.chl.toFixed(2)} mg/m³`);
+                  if (m.on) out.push(`${m.storm ? '🌀 ' + t.visStormWord + ' ' : ''}${m.hmax >= 1.5 ? t.visWaveWord + ' ' + m.hmax.toFixed(1) + 'm ' : ''}→ ${t.visStormWave}`);
+                  if (x.est) out.push(t.visEst);
+                  return out;
                 }
               }
             }
@@ -494,7 +525,8 @@
       const sq = (c) => `<span class="swatch sq" style="background:${c}"></span>`;
       legendBox.innerHTML = `<div class="item"><span class="swatch" style="background:#38BDF8"></span>${t.visFormula}</div>` +
         (hasChl ? `<div class="item">${sq('rgba(74,222,128,.8)')}${t.visPlankton}</div><div class="item">${sq('rgba(180,140,90,.8)')}${t.visOther}</div><div class="item">${sq('rgba(148,163,184,.6)')}${t.visWater}</div>`
-                : `<div class="item">${sq('rgba(148,163,184,.7)')}${t.visTurbidity}</div>`);
+                : `<div class="item">${sq('rgba(148,163,184,.7)')}${t.visTurbidity}</div>`) +
+        (extra.some(e => e > 0) ? `<div class="item">${sq('rgba(239,68,68,.8)')}${t.visStormWave}</div>` : '');
     }
 
     // [ADD] "Live 출처 병행 표기" - 정점명 옆 상태에 데이터 출처를 짧게 같이 적어요(KHOA / NOAA / Open-Meteo)
@@ -814,6 +846,15 @@
         // [ADD] 시야: 실측(위성 7일 평균) 실선 + 일별 점, 앞으로의 추세 점선 + 두꺼운 반투명 오차 범위
         if (vis) try {
           const P = vis.projection.map(p => ({ x: dateToWindowX(p.t), p }));
+          // [ADD] 큰 파도 예보가 있는 날은 하방(나쁜 쪽) 범위를 더 아래로 넓혀 주황 점선 + 옅은 주황 띠로 표시.
+          //  파고 1.5m 넘으면 감점 시작, 4m에서 최대(하한 ×0.45). 실측으로 맞춘 값이 아닌 추정이에요. 상방·기본 추세선은 그대로.
+          const stV = selectedStation;
+          if (!(stV && stV._hourlyCache) && stV && !stV._hourlyState) { ensureHourlyData(stV).then(() => { if (selectedStation === stV && activeMode === 'forecast') updateChart(); }).catch(() => {}); }
+          const IM = P.map(o => visImpact(stV, o.p.t));
+          if (IM.some(m => m.on)) datasets.push(
+            { label: t.visWaveLow, data: P.map((o, i) => IM[i].on ? { x: o.x, y: +(o.p.lo * IM[i].f).toFixed(2) } : { x: o.x, y: null }), yAxisID: 'yv', borderColor: 'rgba(239,68,68,0.95)', borderDash: [3, 3], borderWidth: 2.8, pointRadius: 0, pointHitRadius: 10, tension: 0.3, _unit: 'vis' },
+            { label: t.visWaveLow, data: P.map((o, i) => IM[i].on ? { x: o.x, y: +o.p.lo.toFixed(2) } : { x: o.x, y: null }), yAxisID: 'yv', borderWidth: 0, pointRadius: 0, fill: '-1', backgroundColor: 'rgba(239,68,68,0.26)', tension: 0.3, _noTip: true }
+          );
           datasets.push(
             { label: t.visBand, data: P.map(o => ({ x: o.x, y: +o.p.lo.toFixed(2) })), yAxisID: 'yv', borderWidth: 0, pointRadius: 0, fill: false, tension: 0.3, _noTip: true },
             { label: t.visBand, data: P.map(o => ({ x: o.x, y: +o.p.hi.toFixed(2) })), yAxisID: 'yv', borderWidth: 0, pointRadius: 0, fill: '-1', backgroundColor: 'rgba(56,189,248,0.16)', tension: 0.3, _noTip: true },

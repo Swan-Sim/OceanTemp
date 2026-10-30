@@ -87,5 +87,29 @@ async function fillNamesDeepL(spot, opt) {
   if (changed) { spot.names = names; spot.namesAuto = auto; }
   return changed;
 }
+// ───────── [ADD] 공지 번역 (Claude API 우선, 키가 없으면 DeepL) ─────────
+//  공지 안에 포인트·지명이 나오면 뜻으로 옮기지 않고 현지 발음대로 적어요 (Skull Cave → 스컬 케이브, 해골 동굴 X).
+const NOTICE_RULES = `You translate short notices for a diving / ocean-conditions map website into several languages.
+Translate naturally for ordinary readers (friendly, concise, same tone). Keep numbers, dates, URLs, emoji and the order of list items.
+IMPORTANT: names of dive spots, beaches, islands, cities and other places are NEVER translated by meaning. Write them by sound, the way local people pronounce them
+(e.g. "Skull Cave" -> ko "스컬 케이브", ja "スカル・ケイブ", zh "骷髏洞" is WRONG, use phonetic "斯庫爾洞穴" style only if no established name exists; "Pescador Island" -> ko "페스카도르섬").
+Only generic geographic words attached to a name (Island, Strait, Cape...) may be translated. Established names of well-known cities/countries use their normal name in that language.
+Chinese must be Traditional (繁體). Korean follows 외래어 표기법 for sounds.
+Input is JSON {"from":"<lang code>","texts":[...]}. Reply with JSON only: {"en":[...],"ko":[...],"es":[...],"zh":[...],"ja":[...]} where each array has exactly the same length and order as texts (leave the source language as given).`;
+async function noticeByClaude(texts, from, ms) {
+  const c = new AbortController(); const tm = setTimeout(() => c.abort(), ms || 25000);
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal: c.signal,
+      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5', max_tokens: 2000, system: NOTICE_RULES,
+        messages: [{ role: 'user', content: JSON.stringify({ from, texts }) }] }) });
+    if (!r.ok) throw new Error('claude ' + r.status);
+    const j = await r.json(); const t = ((j.content || [])[0] || {}).text || ''; const m = t.match(/\{[\s\S]*\}/);
+    const o = m ? JSON.parse(m[0]) : null; if (!o) return null;
+    const out = {};
+    for (const l of LANGS) if (Array.isArray(o[l]) && o[l].length === texts.length) out[l] = o[l].map(x => String(x == null ? '' : x).trim());
+    return out;
+  } catch (_) { return null; } finally { clearTimeout(tm); }
+}
 const needsNames = (sp) => { const n = sp.names || {}; return LANGS.some(l => !n[l]) || (sp.namesV !== NAMES_V && Object.values(sp.namesAuto || {}).some(Boolean)); };
-module.exports = { LANGS, NAMES_V, hasKey, hasNameKey, needsNames, translate, fillNames, srcOf };
+module.exports = { LANGS, NAMES_V, hasKey, hasNameKey, needsNames, translate, fillNames, srcOf, noticeByClaude };

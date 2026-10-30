@@ -42,22 +42,28 @@ function clean(c) {
     updated: num(c.updated)
   };
 }
-async function get() { let c; try { const [v] = await R(['GET', KEY]); c = clean(v ? JSON.parse(v) : {}); } catch (_) { c = clean({}); }
+async function get0() { let c; try { const [v] = await R(['GET', KEY]); c = clean(v ? JSON.parse(v) : {}); } catch (_) { c = clean({}); }
   // 예전 방식(공지 하나)으로 저장돼 있으면 게시판 목록으로 옮겨서 보여줘요(저장은 다음 관리 저장 때)
   if (!c.notices.length && c.notice.title) c.notices = [cleanNotice({ ...c.notice, id: 'legacy', created: c.updated || Date.now(), rev: c.updated || 0 })];
   const a = activeNotice(c.notices, Date.now());
   c.notice = a ? { show: a.show, title: a.title, sub: a.sub, items: a.items, start: a.start, end: a.end, tr: a.tr, id: a.id, rev: a.rev } : { ...c.notice, show: 'off', title: '', sub: '', items: [], tr: {} };
   return c; }
 // [ADD] 공지 자동 번역: 제목·부제·항목이 지난번과 같으면 이전 번역을 그대로, 바뀌었으면 DeepL 로 5개 언어를 다시 채워요(키가 없으면 비움)
+// [FIX] 예전에는 번역 키가 없을 때 저장하면 "빈 번역"이 같은 내용이라는 이유로 계속 재사용돼서, 키를 넣은 뒤에도 한국어만 보였어요 → 번역이 비어 있으면 다시 시도
+const hasTr = (n) => { const tr = n && n.tr || {}; const src = require('./_translate').srcOf(n.title || ''); return require('./_translate').LANGS.every(l => l === src || (tr[l] && tr[l].title)); };
 async function translateNotice(n, prev) {
   const key = JSON.stringify([n.title, n.sub, n.items]);
-  if (prev && prev.tr && prev.tr._key === key) return prev.tr;
+  if (prev && prev.tr && prev.tr._key === key && hasTr({ title: n.title, tr: prev.tr })) return prev.tr;
   const T = require('./_translate'); const tr = { _key: key };
-  if (!n.title || !T.hasKey()) return tr;
+  if (!n.title) return tr;
   const src = T.srcOf(n.title), texts = [n.title, n.sub || '', ...n.items];
+  // 1순위: Claude (포인트 이름은 발음으로) → 2순위: DeepL (키가 있을 때)
+  let by = T.hasNameKey() ? await T.noticeByClaude(texts, src) : null;
   for (const l of T.LANGS) {
     if (l === src) { tr[l] = { title: n.title, sub: n.sub, items: n.items }; continue; }
-    const out = await T.translate(texts, l, src, 8000); if (!out || out.length !== texts.length) continue;
+    let out = by && by[l];
+    if ((!out || out.length !== texts.length) && T.hasKey()) out = await T.translate(texts, l, src, 8000);
+    if (!out || out.length !== texts.length) continue;
     tr[l] = { title: out[0].slice(0, 60), sub: out[1].slice(0, 140), items: out.slice(2).map(x => x.slice(0, 80)) };
   }
   return tr;
@@ -71,5 +77,21 @@ async function save(input) {
     try { n.tr = await translateNotice(n, p); } catch (_) { n.tr = {}; } }
   c.notice = { show: 'off', title: '', sub: '', items: [], start: 0, end: 0, tr: {} }; // 예전 칸은 비워 두고(get()에서 목록으로 채움)
   await R(['SET', KEY, JSON.stringify(c)]); return await get();
+}
+// [ADD] 번역이 비어 있는 공지는 처음 읽힐 때 한 번 자동으로 채워 저장해요(관리 페이지에서 다시 저장하지 않아도 됨). 90초에 한 번만 시도
+async function get() {
+  const c = await get0();
+  try {
+    const T = require('./_translate');
+    if ((T.hasNameKey() || T.hasKey()) && c.notices.some(n => n.title && !hasTr(n))) {
+      const [lock] = await R(['SET', 'site:trlock', '1', 'NX', 'EX', '90']);
+      if (lock) {
+        for (const n of c.notices) if (n.title && !hasTr(n)) { try { n.tr = await translateNotice(n, n); } catch (_) {} }
+        await R(['SET', KEY, JSON.stringify({ ...c, notice: { show: 'off', title: '', sub: '', items: [], start: 0, end: 0, tr: {} } })]);
+        return await get0();
+      }
+    }
+  } catch (_) {}
+  return c;
 }
 module.exports = { get, save, clean };

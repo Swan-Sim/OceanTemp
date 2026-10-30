@@ -39,6 +39,18 @@
     }
     const surgeLevel = (u, ko) => u == null ? '' : u < 0.12 ? (ko ? '약함' : 'weak') : u < 0.35 ? (ko ? '보통' : 'moderate') : (ko ? '강함' : 'strong');
     // 수심 z(m) 흐름 추정: 수면 흐름 - 바람이 끄는 몫 + (그 몫이 깊이에 따라 줄고 오른쪽으로 도는 만큼, 에크만 나선·감쇠 깊이 10m)
+    // [ADD] 태풍·강풍일 때 표층 흐름 보정. 바다 모델(Open-Meteo)은 해상도가 거칠어 강풍이 표면을 미는 힘을 덜 담아요
+    //  (예: 바람 49m/s인데 표층 1.6kn). 바람 12m/s 이상이면, 표층 흐름이 "바람 밀림(풍속의 3%, 최대 40m/s 기준)"보다 약할 때
+    //  모자란 만큼을 바람 밀림 방향으로 보태요. 보정된 표층에서 5m·30m를 계산해서 깊이별 값도 앞뒤가 맞아요. 추정값이에요.
+    function windDialSurfaceFix(c, w, lat) {
+      if (!c || !w || w.speed == null || w.dir == null || w.speed < 12) return c;
+      const r = Math.PI / 180, sgn = lat >= 0 ? 1 : -1, ds = 0.03 * Math.min(w.speed, 40), d0 = (w.dir + 180 + sgn * 30) * r;
+      const ex = Math.sin(d0), ey = Math.cos(d0), u = c.speed * Math.sin(c.to * r), v = c.speed * Math.cos(c.to * r);
+      const along = u * ex + v * ey;
+      if (along >= ds) return c;
+      const add = ds - along, u2 = u + add * ex, v2 = v + add * ey;
+      return { ...c, speed: Math.hypot(u2, v2), to: (Math.atan2(u2, v2) / r + 360) % 360, windFix: true };
+    }
     function windDialCurrentAt(c, w, lat, z) {
       if (!c) return null;
       const r = Math.PI / 180, D = 10, sgn = lat >= 0 ? 1 : -1;
@@ -122,12 +134,13 @@
       if (cs) {
         const kn = (c) => (c.speed / KN).toFixed(1);
         const cols = [[ko ? '표층' : 'Surf', '#d9f99d', cs, X1]].concat(c5 ? [['5m', '#86d65e', c5, X2], ['30m', '#22c55e', c30, X3]] : []);
-        const rc = raw ? [raw.s, raw.c5, raw.c30] : null, bh = raw ? 74 : 54;
+        const rc = raw ? [raw.s, raw.c5, raw.c30] : null, bh = raw ? 86 : 64;
         rows += `<rect x="8" y="${y + 4}" width="18" height="${bh - 8}" rx="4" fill="rgba(74,222,128,.12)"/><text transform="translate(${8 + 13} ${y + bh / 2}) rotate(-90)" font-size="11" fill="#4ade80" font-weight="800" text-anchor="middle">${ko ? '흐름' : 'Current'}</text>`;
         cols.forEach((c, k) => { const cx = c[3];
           rows += `<text x="${cx}" y="${y + 18}" font-size="12.5" fill="${c[1]}" font-weight="800">${c[0]}</text>`
             + `<text x="${cx}" y="${y + 42}" font-size="16" fill="#fff" font-weight="800">${kn(c[2])}</text><text x="${cx + 4 + String(kn(c[2])).length * 8.8}" y="${y + 42}" font-size="10.5" fill="#94a3b8">kn</text>`
-            + (rc && rc[k] ? `<text x="${cx}" y="${y + 62}" font-size="12" fill="#94a3b8" font-weight="700">${kn(rc[k])}</text>${rc[k].to != null ? `<g transform="translate(${cx + 12 + String(kn(rc[k])).length * 7.2} ${y + 58}) rotate(${Math.round(rc[k].to)})"><path d="M0,-7 L5,5 L0,2 L-5,5 Z" fill="#cbd5e1"/></g>` : ''}${k === cols.length - 1 ? `<text x="${cx + 26 + String(kn(rc[k])).length * 7.2}" y="${y + 62}" font-size="10" fill="#94a3b8">${ko ? '원값' : 'raw'}</text>` : ''}` : ''); });
+            + `<text x="${cx}" y="${y + 57}" font-size="10.5" fill="#94a3b8">${c[2].speed.toFixed(2)} m/s</text>`
+            + (rc && rc[k] ? `<text x="${cx}" y="${y + 74}" font-size="12" fill="#94a3b8" font-weight="700">${kn(rc[k])}</text>${rc[k].to != null ? `<g transform="translate(${cx + 12 + String(kn(rc[k])).length * 7.2} ${y + 70}) rotate(${Math.round(rc[k].to)})"><path d="M0,-7 L5,5 L0,2 L-5,5 Z" fill="#cbd5e1"/></g>` : ''}${k === cols.length - 1 ? `<text x="${cx + 26 + String(kn(rc[k])).length * 7.2}" y="${y + 74}" font-size="10" fill="#94a3b8">${ko ? '원값' : 'raw'}</text>` : ''}` : ''); });
         y += bh;
       }
       // [ADD] fromDeg: 불어오는/들어오는 방향(도). 있으면 셋째 열 앞에 "가는 쪽" 화살표(실시간 표의 Dir 화살표와 같은 기준)
@@ -161,7 +174,7 @@
       if (!show) { if (windDialMarker && map) { map.removeLayer(windDialMarker); } windDialMarker = null; if (window.currentTerrainField) currentTerrainField(null, null); return; }
       const x = windDialX != null && windDialX >= d.from - 3600e3 && windDialX <= d.to + 3600e3 ? windDialX : d.nowLocalMs;
       const w = windDialNearest(d.wind, x), v = windDialNearest(d.waves, x);
-      const cs0 = windDialNearest(d.current, x);
+      const cs0 = windDialSurfaceFix(windDialNearest(d.current, x), w, st.coords[1]);
       let cs = cs0, c5 = windDialCurrentAt(cs0, w, st.coords[1], 5), c30 = windDialCurrentAt(cs0, w, st.coords[1], 30);
       // [ADD] 섬 주변 지형 반영(js/current-terrain.js): 정점 자리 흐름을 다시 계산 + 지도에 섬 둘레 흐름 화살표
       if (window.currentTerrainAdjust) { c5 = currentTerrainAdjust(st, c5); c30 = currentTerrainAdjust(st, c30); cs = currentTerrainAdjust(st, cs0); }

@@ -368,6 +368,7 @@ module.exports = async function admin(req, res) {
     const favRes = users.length ? await R(...users.map(u => ['SMEMBERS', 'ufav:' + u.id])) : [];
     const favOf = {}; users.forEach((u, i) => { favOf[u.id] = Array.isArray(favRes[i]) ? favRes[i] : []; });
     const crMap = await S.hgetallJSON('ucred:v1').catch(() => ({})); // uid → 크레딧
+    const useMap = await S.hgetallJSON('uuse:v1').catch(() => ({})); // uid → 누적 이용 초
     const crOf = (id) => Math.max(0, parseInt(crMap[id], 10) || 0);
     const now = Date.now(), D = 86400000;
     const byProvider = {}, rank = {};
@@ -381,7 +382,7 @@ module.exports = async function admin(req, res) {
     list.sort((a, z) => (z.last || z.created || 0) - (a.last || a.created || 0));
     const total = list.length, per = 50, page = Math.max(0, parseInt(b.page, 10) || 0);
     const mask = (e) => { e = String(e || ''); const i = e.indexOf('@'); return i < 1 ? '' : e.slice(0, Math.min(2, i)) + '***' + e.slice(i); }; // 목록에는 이메일 일부만(개인정보)
-    const items = list.slice(page * per, page * per + per).map(u => ({ id: u.id, name: u.name || '', avatar: u.avatar || '', email: mask(u.email), created: u.created || 0, last: u.last || 0,
+    const items = list.slice(page * per, page * per + per).map(u => ({ id: u.id, name: u.name || '', avatar: u.avatar || '', email: mask(u.email), created: u.created || 0, last: u.last || 0, nLogin: u.nLogin || 0, usedSec: Math.max(0, parseInt(useMap[u.id], 10) || 0),
       providers: (u.logins || []).map(l => l.p), favCount: favOf[u.id].length, favs: favOf[u.id].map(Number).filter(Boolean).slice(0, 30), blocked: !!u.blocked,
       role: u.role === 'admin' ? 'admin' : '', credits: crOf(u.id), level: C.info(crOf(u.id)).level }));
     return ok({ stats, topFavs, items, total, page, per });

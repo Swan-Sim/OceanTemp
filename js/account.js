@@ -119,6 +119,23 @@
     favSet = new Set(me.favs); paintBtn(); paintStar(); paintAdmin(); paintFavBar(); applyPrefs(); await loadSite(); paintVer(); showNotice();
     try { window.dispatchEvent(new Event('otemp:account')); } catch (_) {}
   }
+  // ── [ADD] 이용시간 집계: 화면이 보이고 최근 60초 안에 조작이 있을 때만 초를 모아서, 5분마다·화면을 떠날 때 한 번에 보내요(로그인 회원만, 서버 호출은 가끔) ──
+  (function () {
+    let acc = 0, lastTick = Date.now(), lastAct = Date.now();
+    const act = () => { lastAct = Date.now(); };
+    ['pointerdown', 'keydown', 'wheel', 'touchstart', 'mousemove'].forEach(e => addEventListener(e, act, { passive: true }));
+    const tick = () => { const now = Date.now(); if (document.visibilityState === 'visible' && now - lastAct < 60000) acc += Math.min(5, (now - lastTick) / 1000); lastTick = now; };
+    setInterval(tick, 5000);
+    const flush = () => {
+      tick(); const sec = Math.round(acc);
+      if (sec < 5 || !me || !me.user) return;
+      acc = 0;
+      try { if (!navigator.sendBeacon('/api/shops?svc=auth&a=use', new Blob([JSON.stringify({ sec })], { type: 'application/json' }))) acc += sec; } catch (_) { acc += sec; }
+    };
+    setInterval(flush, 300000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+    addEventListener('pagehide', flush);
+  })();
   // ── 설정 저장: 온도 단위·마지막으로 본 포인트를 계정에 저장하고 다른 기기에서도 이어서 ──
   function applyPrefs() {
     if (prefsApplied || !me.user) return; prefsApplied = true;

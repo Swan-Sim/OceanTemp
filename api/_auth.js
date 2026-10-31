@@ -104,7 +104,7 @@ async function isAdminReq(req) { const uid = await sessionUid(req); if (!uid) re
 async function deleteUser(uid) {
   const u = await getUser(uid);
   const [sessions] = await R(['SMEMBERS', 'usess:' + uid]);
-  const cmds = [['HDEL', 'users:v1', uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid, 'ulog:' + uid]];
+  const cmds = [['HDEL', 'users:v1', uid], ['HDEL', 'ucred:v1', uid], ['HDEL', 'uprefs:v1', uid], ['HDEL', 'uuse:v1', uid], ['DEL', 'ufav:' + uid, 'usess:' + uid, 'ufavseen:' + uid, 'ulog:' + uid]];
   (sessions || []).forEach(h => cmds.push(['DEL', 'sess:' + h]));
   ((u && u.logins) || []).forEach(l => cmds.push(['HDEL', 'uidx:v1', `${l.p}:${l.sub}`]));
   await R(...cmds);
@@ -185,7 +185,7 @@ module.exports = async function auth(req, res) {
     user.name = user.name || S.str(prof.name, 40) || '다이버';
     if (prof.avatar && /^https:\/\//.test(prof.avatar)) user.avatar = S.str(prof.avatar, 400);
     if (prof.email && !user.email) user.email = S.email(prof.email);
-    user.last = now;
+    user.last = now; user.nLogin = (user.nLogin || 0) + 1; // [ADD] 로그인 횟수(이 기능을 넣은 뒤부터 집계)
     const token = crypto.randomBytes(32).toString('base64url'), h = sha(token);
     await R(['HSET', 'users:v1', uid, JSON.stringify(user)], ['HSET', 'uidx:v1', key, uid],
       ['SET', 'sess:' + h, uid, 'EX', String(SESSION_DAYS * 86400)], ['SADD', 'usess:' + uid, h], ['EXPIRE', 'usess:' + uid, String(SESSION_DAYS * 86400)]);
@@ -220,6 +220,11 @@ module.exports = async function auth(req, res) {
   if (!uid) return json(401, { ok: false, error: 'login_required' });
   const b = bodyOf(req);
 
+  if (a === 'use') { // [ADD] 이용시간: 화면이 보이고 조작이 있던 초를 모아서 가끔 보내와요(한 번에 최대 30분). Redis uuse:v1 (회원 ID → 누적 초)
+    const sec = Math.max(0, Math.min(1800, parseInt(b.sec, 10) || 0));
+    if (sec) await R(['HINCRBY', 'uuse:v1', uid, String(sec)]);
+    return json(200, { ok: true });
+  }
   if (a === 'ownAccept' || a === 'ownSkip' || a === 'ownClaim' || a === 'ownEdit') { // [ADD] 샵 소유자 연결(api/_owner.js)
     const user = await getUser(uid); if (!user) return json(401, { ok: false, error: 'login_required' });
     const notify = async (sub, html) => { const to = await S.adminEmail(); if (to) await S.sendMail(to, sub, html); };

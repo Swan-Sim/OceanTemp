@@ -517,6 +517,7 @@
   let uPage = 0, uMergeFrom = null, uData = null;
   const fmtD = (t) => t ? new Date(t).toLocaleDateString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric' }) : '–';
   const PN = { google: '구글', kakao: '카카오', naver: '네이버', facebook: '페이스북' };
+  const fmtUse = (sec) => { sec = +sec || 0; if (sec < 60) return sec ? '1분 미만' : '<span class="muted">–</span>'; const m = Math.round(sec / 60); return m < 60 ? m + '분' : Math.floor(m / 60) + '시간 ' + (m % 60) + '분'; };
   async function loadUsers() {
     try { uData = await api('users', { q: $('uQ').value, page: uPage }); } catch (_) { return; }
     const st = uData.stats;
@@ -526,13 +527,13 @@
     $('uProv').innerHTML = Object.entries(st.byProvider).sort((a, z) => z[1] - a[1]).map(([p, n]) => `<span class="chip">${esc(PN[p] || p)} ${n} <span class="muted">(${Math.round(n / tot * 100)}%)</span></span>`).join('') || '<span class="muted">아직 없어요</span>';
     $('uTop').innerHTML = uData.topFavs.map(t => `<tr><td>${esc(spotNames[t.no] || ('#' + t.no))}</td><td class="n">${t.n}명</td></tr>`).join('') || '<tr><td class="muted">아직 즐겨찾기가 없어요</td></tr>';
     $('uCount').textContent = `${uData.total}명`;
-    $('uList').innerHTML = '<tr><th class="n" style="text-align:left">회원</th><th class="n" style="text-align:left">로그인</th><th class="n">가입</th><th class="n">최근 접속</th><th class="n">레벨·크레딧</th><th class="n">즐겨찾기</th><th></th></tr>' + (uData.items.map(u => {
+    $('uList').innerHTML = '<tr><th class="n" style="text-align:left">회원</th><th class="n" style="text-align:left">로그인</th><th class="n">가입</th><th class="n">최근 접속</th><th class="n" title="이 기능을 넣은 뒤의 로그인부터 집계해요">로그인 횟수</th><th class="n" title="화면을 보고 조작한 시간만 합산(이 기능을 넣은 뒤부터)">이용시간</th><th class="n">레벨·크레딧</th><th class="n">즐겨찾기</th><th></th></tr>' + (uData.items.map(u => {
       const fav = u.favs.map(no => esc(spotNames[no] || ('#' + no))).join(', ');
       const merge = uMergeFrom ? (uMergeFrom === u.id ? '<span class="muted">합칠 계정</span>' : `<button data-um-to="${esc(u.id)}">여기로 합치기</button>`) : `<button data-um="${esc(u.id)}" title="중복 계정을 이 계정으로 합치려면 먼저 합칠 쪽을 누르세요">합치기</button>`;
       return `<tr style="${u.blocked ? 'opacity:.55' : ''}"><td><div style="display:flex;gap:8px;align-items:center">${u.avatar ? `<img src="${esc(u.avatar)}" referrerpolicy="no-referrer" width="28" height="28" style="border-radius:50%;object-fit:cover">` : '<span style="width:28px;height:28px;border-radius:50%;background:#1e293b;display:inline-block"></span>'}<div><b>${esc(u.name || '(이름 없음)')}</b>${u.role === 'admin' ? ' <span class="tag">관리자</span>' : ''}${u.blocked ? ' <span class="tag off">차단</span>' : ''}<div class="muted" title="${esc(u.id)}">${esc(u.email || '이메일 없음')} · ID ${esc(u.id.slice(0, 6))}…</div></div></div></td>`
-        + `<td>${u.providers.map(p => `<span class="tag off">${esc(PN[p] || p)}</span>`).join(' ')}</td><td class="n">${fmtD(u.created)}</td><td class="n">${fmtD(u.last)}</td><td class="n">Lv.${u.level} · ${u.credits}<br><button data-uc="${esc(u.id)}" title="크레딧 수동 조정">조정</button></td><td class="n" title="${fav}">${u.favCount}</td>`
+        + `<td>${u.providers.map(p => `<span class="tag off">${esc(PN[p] || p)}</span>`).join(' ')}</td><td class="n">${fmtD(u.created)}</td><td class="n">${fmtD(u.last)}</td><td class="n">${u.nLogin ? u.nLogin + "회" : "<span class=\"muted\">–</span>"}</td><td class="n">${fmtUse(u.usedSec)}</td><td class="n">Lv.${u.level} · ${u.credits}<br><button data-uc="${esc(u.id)}" title="크레딧 수동 조정">조정</button></td><td class="n" title="${fav}">${u.favCount}</td>`
         + `<td class="act">${merge} <button data-ur="${esc(u.id)}" data-role="${u.role === 'admin' ? '' : 'admin'}">${u.role === 'admin' ? '관리자 해제' : '관리자 지정'}</button> <button data-ub="${esc(u.id)}" data-on="${u.blocked ? 0 : 1}">${u.blocked ? '차단 해제' : '차단'}</button> <button data-ud="${esc(u.id)}" style="color:#f87171">삭제</button></td></tr>`;
-    }).join('') || '<tr><td class="muted" colspan="7">회원이 없어요</td></tr>');
+    }).join('') || '<tr><td class="muted" colspan="9">회원이 없어요</td></tr>');
     const pages = Math.max(1, Math.ceil(uData.total / uData.per));
     $('uPage').textContent = `${uPage + 1} / ${pages}`; $('uPrev').disabled = uPage <= 0; $('uNext').disabled = uPage >= pages - 1;
     const mb = $('uMergeBar');

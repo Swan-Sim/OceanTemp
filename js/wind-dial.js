@@ -62,6 +62,18 @@
       let i = 0; SZ.forEach((z, k) => { if (Math.abs(z - raw) < Math.abs(SZ[i] - raw)) i = k; });
       return { size: SZ[i], lo: SZ[Math.max(0, i - 1)], hi: SZ[Math.min(SZ.length - 1, i + 1)] };
     }
+    // [ADD] 카이트 크기 추천(참고용). 카이트 면적(m²) ≈ 2.3 × 몸무게(kg) ÷ 바람(kn). 공개된 두 자료에 맞춘 어림식이에요:
+    //  thekitespot(트윈팁: 입문 ×2.2, 중급 ×2.4)과 Airush 크기표(70~80kg 기준 14~17kn → 11~12m², 18~22kn → 9~10m², 23~28kn → 7~8m²).
+    //  돌풍은 윙과 같이 "돌풍의 70%와 평균 중 큰 값"으로 계산. 8kn 미만은 약풍, 35kn 초과는 너무 강풍. 보드·실력·카이트 종류에 따라 ±1~2m² 달라져요.
+    function windDialKite(kg, w) {
+      if (!kg || !w || w.speed == null) return null;
+      const kn = w.speed / KN, gk = w.gust != null ? w.gust / KN : kn, eff = Math.max(kn, 0.7 * gk);
+      if (eff < 8) return { low: true };
+      if (eff > 35) return { high: true };
+      const SZ = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17], raw = 2.3 * kg / eff;
+      let i = 0; SZ.forEach((z, k) => { if (Math.abs(z - raw) < Math.abs(SZ[i] - raw)) i = k; });
+      return { size: SZ[i], lo: SZ[Math.max(0, i - 1)], hi: SZ[Math.min(SZ.length - 1, i + 1)] };
+    }
     function windDialCurrentAt(c, w, lat, z) {
       if (!c) return null;
       const r = Math.PI / 180, D = 10, sgn = lat >= 0 ? 1 : -1;
@@ -167,6 +179,9 @@
           const wr = windDialWing(kgW, w);
           if (wr && wr.size) tr('#fbbf24', ko ? '윙 추천' : 'Wing', wr.size.toFixed(1), 'm²', `${wr.lo}–${wr.hi}m² ${ko ? '참고' : 'guide'}`);
           else if (wr) tr('#fbbf24', ko ? '윙 추천' : 'Wing', null, '', wr.low ? (ko ? '바람이 약해요(8kn 미만)' : 'too light (<8 kn)') : (ko ? '너무 강해요(32kn 초과)' : 'too strong (>32 kn)'));
+          const kr = windDialKite(kgW, w);
+          if (kr && kr.size) tr('#fbbf24', ko ? '카이트 추천' : 'Kite', kr.size, 'm²', `${kr.lo}–${kr.hi}m² ${ko ? '참고' : 'guide'}`);
+          else if (kr) tr('#fbbf24', ko ? '카이트 추천' : 'Kite', null, '', kr.low ? (ko ? '바람이 약해요(8kn 미만)' : 'too light (<8 kn)') : (ko ? '너무 강해요(35kn 초과)' : 'too strong (>35 kn)'));
         }
       } catch (_) {}
       if (v && v.height != null) {

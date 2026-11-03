@@ -317,7 +317,7 @@
       // 요청에 항목만 더해서(요청 수 그대로), 바람은 Open-Meteo 날씨 API에서
       // 1건 더 받아옵니다. 바람 요청이 실패해도 수온·조석·파도는 그대로 보여요.
       const url = `${LIVE_DATA_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature,sea_level_height_msl,wave_height,wave_direction,wave_period,ocean_current_velocity,ocean_current_direction,wind_wave_height,swell_wave_height,swell_wave_period,swell_wave_direction&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
-      const windUrl = `${WEATHER_API_BASE}?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
+      const windUrl = `${WEATHER_API_BASE}?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m&wind_speed_unit=ms&past_days=${NOW_PAST_DAYS}&forecast_days=${NOW_FORECAST_DAYS}&timezone=auto`;
       const [marineSettled, windSettled] = await Promise.allSettled([fetchJSON(url), fetchJSON(windUrl)]);
       if (marineSettled.status !== 'fulfilled') throw marineSettled.reason;
       const res = marineSettled.value;
@@ -360,7 +360,7 @@
           const x = Date.parse(ts + ':00Z');
           if (x < from - 3600 * 1000 || x > to + 3600 * 1000) return;
           const sp = num(wh.wind_speed_10m, i), dir = num(wh.wind_direction_10m, i);
-          if (sp != null && dir != null) wind.push({ x, speed: sp, gust: num(wh.wind_gusts_10m, i), dir });
+          if (sp != null && dir != null) wind.push({ x, speed: sp, gust: num(wh.wind_gusts_10m, i), dir, air: num(wh.temperature_2m, i) });
         });
       }
       let seoulSrc = null;

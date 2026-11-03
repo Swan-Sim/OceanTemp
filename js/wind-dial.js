@@ -185,7 +185,12 @@
         if (typeof window.sportCur === 'function' && window.sportCur() === 'dive') {
           const cold = window.otAccount && window.otAccount.prefs && (window.otAccount.prefs() || {}).cold;
           const su = tempNow != null ? windDialSuit(tempNow, cold) : null; // 수온은 windDialUpdate가 그 시각 값으로 넘겨줘요
-          if (su) {
+          const tech = typeof window.diveSub === 'function' && window.diveSub() === 'tech';
+          // 테크니컬 + 추위 매우 많이 탐: 드라이슈트만 추천(공기 온도 30°C 이하일 때). 내피는 수온 기준
+          if (tech && cold === 'vcold' && tempNow != null && !(w && w.air != null && w.air > 30)) {
+            const ug = tempNow <= 5 ? 'BZ400' : tempNow <= 10 ? 'BZ300' : tempNow < 20 ? 'BZ200' : (ko ? '얇은' : 'thin');
+            tr('#fbbf24', ko ? '추천 슈트' : 'Suit', ko ? '드라이' : 'Dry', '', ko ? `${ug} 내피` : `${ug} undergarment`);
+          } else if (su) {
             const NM = ko ? [['스킨', '래시가드'], ['2mm', '쇼티'], ['3mm', '풀슈트'], ['5mm', '풀슈트'], ['7mm', '/세미드라이'], ['세미드라이', '/드라이'], ['드라이슈트', '']]
                           : [['Skin', 'rash guard'], ['2mm', 'shorty'], ['3mm', 'full'], ['5mm', 'full'], ['7mm', '/semi-dry'], ['Semi-dry', '/dry'], ['Drysuit', '']];
             const z = NM[su.lv];

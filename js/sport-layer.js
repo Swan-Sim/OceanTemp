@@ -8,16 +8,21 @@
       const KN = 1.94384;
       const ORDER = ['dive', 'paddle', 'wind', 'surf', 'row'];
       const NAME = {
-        ko: { dive: '스쿠버 다이빙', paddle: '카약·SUP', wind: '바람 스포츠', windSub: '윈드서핑·카이트·윙', ws: { windsurf: '윈드서핑', kite: '카이트', wing: '윙' }, surf: '서핑', row: '조정', good: '가능', ok: '비추천', no: '불가', loading: '날씨 불러오는 중…', none: '자료 없음', visible: (g, o, n) => `화면 안 포인트: 가능 ${g} · 비추천 ${o} · 불가 ${n}`, now: '지금' },
-        en: { dive: 'Scuba diving', paddle: 'Kayak · SUP', wind: 'Wind sports', windSub: 'Windsurf · Kite · Wing', ws: { windsurf: 'Windsurf', kite: 'Kite', wing: 'Wing' }, surf: 'Surfing', row: 'Rowing', good: 'Go', ok: 'Caution', no: 'No-go', loading: 'Loading weather…', none: 'No data', visible: (g, o, n) => `On screen: go ${g} · caution ${o} · no-go ${n}`, now: 'Now' },
-        ja: { dive: 'スキューバ', paddle: 'カヤック・SUP', wind: '風のスポーツ', windSub: 'ウィンド・カイト・ウイング', ws: { windsurf: 'ウィンドサーフィン', kite: 'カイト', wing: 'ウイング' }, surf: 'サーフィン', row: 'ボート(漕艇)', good: '可', ok: '注意', no: '不可', loading: '天気を読み込み中…', none: 'データなし', visible: (g, o, n) => `画面内: 可 ${g} · 注意 ${o} · 不可 ${n}`, now: '今' },
-        es: { dive: 'Buceo', paddle: 'Kayak · SUP', wind: 'Deportes de viento', windSub: 'Windsurf · Kite · Wing', ws: { windsurf: 'Windsurf', kite: 'Kite', wing: 'Wing' }, surf: 'Surf', row: 'Remo', good: 'Apto', ok: 'Precaución', no: 'No apto', loading: 'Cargando el tiempo…', none: 'Sin datos', visible: (g, o, n) => `En pantalla: apto ${g} · precaución ${o} · no apto ${n}`, now: 'Ahora' },
-        zh: { dive: '潛水', paddle: '獨木舟 · SUP', wind: '風力運動', windSub: '風浪板 · 風箏 · 翼板', ws: { windsurf: '風浪板', kite: '風箏', wing: '翼板' }, surf: '衝浪', row: '划船', good: '可', ok: '注意', no: '不宜', loading: '載入天氣中…', none: '無資料', visible: (g, o, n) => `畫面內：可 ${g} · 注意 ${o} · 不宜 ${n}`, now: '現在' }
+        ko: { dive: '스쿠버 다이빙', paddle: '카약·SUP', wind: '바람 스포츠', windSub: '윙+포일보드 · 카이트+트윈팁보드', ws: { windsurf: '윈드서핑', kite: '카이트+트윈팁보드', wing: '윙+포일보드' }, surf: '서핑', row: '조정', good: '가능', ok: '비추천', no: '불가', loading: '날씨 불러오는 중…', none: '자료 없음', visible: (g, o, n) => `화면 안 포인트: 가능 ${g} · 비추천 ${o} · 불가 ${n}`, now: '지금' },
+        en: { dive: 'Scuba diving', paddle: 'Kayak · SUP', wind: 'Wind sports', windSub: 'Wing + foil board · Kite + twin-tip', ws: { windsurf: 'Windsurf', kite: 'Kite + twin-tip board', wing: 'Wing + foil board' }, surf: 'Surfing', row: 'Rowing', good: 'Go', ok: 'Caution', no: 'No-go', loading: 'Loading weather…', none: 'No data', visible: (g, o, n) => `On screen: go ${g} · caution ${o} · no-go ${n}`, now: 'Now' },
+        ja: { dive: 'スキューバ', paddle: 'カヤック・SUP', wind: '風のスポーツ', windSub: 'ウイング+フォイルボード · カイト+ツインチップ', ws: { windsurf: 'ウィンドサーフィン', kite: 'カイト+ツインチップ', wing: 'ウイング+フォイルボード' }, surf: 'サーフィン', row: 'ボート(漕艇)', good: '可', ok: '注意', no: '不可', loading: '天気を読み込み中…', none: 'データなし', visible: (g, o, n) => `画面内: 可 ${g} · 注意 ${o} · 不可 ${n}`, now: '今' },
+        es: { dive: 'Buceo', paddle: 'Kayak · SUP', wind: 'Deportes de viento', windSub: 'Ala + tabla foil · Kite + twin-tip', ws: { windsurf: 'Windsurf', kite: 'Kite + twin-tip', wing: 'Ala + tabla foil' }, surf: 'Surf', row: 'Remo', good: 'Apto', ok: 'Precaución', no: 'No apto', loading: 'Cargando el tiempo…', none: 'Sin datos', visible: (g, o, n) => `En pantalla: apto ${g} · precaución ${o} · no apto ${n}`, now: 'Ahora' },
+        zh: { dive: '潛水', paddle: '獨木舟 · SUP', wind: '風力運動', windSub: '翼板+水翼板 · 風箏+雙向板', ws: { windsurf: '風浪板', kite: '風箏+雙向板', wing: '翼板+水翼板' }, surf: '衝浪', row: '划船', good: '可', ok: '注意', no: '不宜', loading: '載入天氣中…', none: '無資料', visible: (g, o, n) => `畫面內：可 ${g} · 注意 ${o} · 不宜 ${n}`, now: '現在' }
       };
       const T = () => NAME[typeof lang !== 'undefined' && NAME[lang] ? lang : 'en'];
       const WSUBS = ['windsurf', 'kite', 'wing'];
       let wsub = (() => { try { const v = localStorage.getItem('otemp.windSub'); return WSUBS.includes(v) ? v : 'wing'; } catch (_) { return 'wing'; } })(); // [ADD] 바람 스포츠 세부 종목
       window.sportSub = () => wsub;
+      const DSUBS = ['rec', 'tech']; // [ADD] 스쿠버 다이빙 세부: 레크리에이션 / 테크니컬
+      const DSL = { ko: { rec: '레크리에이션', tech: '테크니컬', hint: '레크리에이션 · 테크니컬' }, en: { rec: 'Recreational', tech: 'Technical', hint: 'Recreational · Technical' }, ja: { rec: 'レクリエーション', tech: 'テクニカル', hint: 'レクリエーション · テクニカル' }, es: { rec: 'Recreativo', tech: 'Técnico', hint: 'Recreativo · Técnico' }, zh: { rec: '休閒潛水', tech: '技術潛水', hint: '休閒 · 技術' } };
+      const DL = () => DSL[typeof lang !== 'undefined' && DSL[lang] ? lang : 'en'];
+      let dsub = (() => { try { const v = localStorage.getItem('otemp.diveSub'); return DSUBS.includes(v) ? v : 'rec'; } catch (_) { return 'rec'; } })();
+      window.diveSub = () => dsub;
       let sport = (() => { try { const v = localStorage.getItem('otemp.sport'); return ORDER.includes(v) ? v : 'dive'; } catch (_) { return 'dive'; } })();
 
       // ── 판단 기준(일반적인 초중급 기준). c = { w 풍속 m/s, g 돌풍, d 풍향(불어오는 쪽), h 파고 m, p 주기 s, cur 조류 kn } ──
@@ -150,7 +155,7 @@
       // ── 셀렉트 박스(열 때만 종목별 신호등 + 설명) ──
       let wrap = null, btn = null, menu = null;
       const light = (g) => `<span class="sg-light"><i class="${g === 'good' ? 'on good' : ''}"></i><i class="${g === 'ok' ? 'on ok' : ''}"></i><i class="${g === 'no' ? 'on no' : ''}"></i></span>`;
-      function renderBtn() { if (btn) btn.innerHTML = `<span class="sg-dot"></span>${T()[sport]}${sport === 'wind' ? ' · ' + T().ws[wsub] : ''} <span class="sg-car">▾</span>`; }
+      function renderBtn() { if (btn) btn.innerHTML = `<span class="sg-dot"></span>${T()[sport]}${sport === 'wind' ? ' · ' + T().ws[wsub] : sport === 'dive' ? ' · ' + DL()[dsub] : ''} <span class="sg-car">▾</span>`; }
       function renderMenu() {
         const L0 = T(), st = typeof selectedStation !== 'undefined' && selectedStation && selectedStation.isBeach ? selectedStation : null;
         const ms = targetMs(), c = st ? condAt(st, ms) : null;
@@ -163,8 +168,9 @@
         if (st && !c) head += `<div class="sg-why">${pending.size ? L0.loading : L0.none}</div>`;
         menu.innerHTML = head + ORDER.map(k => {
           const r = st && c ? rate(k, c, face) : null;
-          return `<button type="button" class="sg-item${k === sport ? ' cur' : ''}" data-sp="${k}">${st ? light(r && r[0]) : ''}<span class="sg-nm">${L0[k]}${k === 'wind' ? `<small>${L0.windSub}</small>` : ''}</span>` +
+          return `<button type="button" class="sg-item${k === sport ? ' cur' : ''}" data-sp="${k}">${st ? light(r && r[0]) : ''}<span class="sg-nm">${L0[k]}${k === 'wind' ? `<small>${L0.windSub}</small>` : k === 'dive' ? `<small>${DL().hint}</small>` : ''}</span>` +
             (r ? `<span class="sg-why ${r[0]}">${L0[r[0]]} · ${r[1]}</span>` : '') + `</button>` +
+            (k === 'dive' && sport === 'dive' ? `<div class="sg-sub"><select data-dsub aria-label="${L0.dive}">${DSUBS.map(x => `<option value="${x}"${x === dsub ? ' selected' : ''}>${DL()[x]}</option>`).join('')}</select></div>` : '') +
             (k === 'wind' && sport === 'wind' ? `<div class="sg-sub"><select data-wsub aria-label="${L0.wind}">${WSUBS.map(x => `<option value="${x}"${x === wsub ? ' selected' : ''}>${L0.ws[x]}</option>`).join('')}</select></div>` : '');
         }).join('') + `<div class="sg-lg"><i class="good"></i>${L0.good}<i class="ok"></i>${L0.ok}<i class="no"></i>${L0.no}</div>`;
       }
@@ -185,8 +191,9 @@
               btn = L.DomUtil.create('button', 'sg-btn', wrap); btn.type = 'button';
               btn.onclick = () => openMenu(menu.style.display === 'none');
               menu.addEventListener('click', (e) => { const b = e.target.closest('[data-sp]'); if (!b) return; sport = b.dataset.sp;
-                try { localStorage.setItem('otemp.sport', sport); } catch (_) {} renderBtn(); if (sport === 'wind') renderMenu(); else openMenu(false); paint(); try { if (typeof windDialUpdate === 'function') windDialUpdate(); } catch (_) {} });
-              menu.addEventListener('change', (e) => { const sel = e.target.closest && e.target.closest('[data-wsub]'); if (!sel || !WSUBS.includes(sel.value)) return; wsub = sel.value;
+                try { localStorage.setItem('otemp.sport', sport); } catch (_) {} renderBtn(); if (sport === 'wind' || sport === 'dive') renderMenu(); else openMenu(false); paint(); try { if (typeof windDialUpdate === 'function') windDialUpdate(); } catch (_) {} });
+              menu.addEventListener('change', (e) => { const ds = e.target.closest && e.target.closest('[data-dsub]');
+                if (ds) { if (!DSUBS.includes(ds.value)) return; dsub = ds.value; try { localStorage.setItem('otemp.diveSub', dsub); } catch (_) {} renderBtn(); openMenu(false); paint(); try { if (typeof windDialUpdate === 'function') windDialUpdate(); } catch (_) {} return; } const sel = e.target.closest && e.target.closest('[data-wsub]'); if (!sel || !WSUBS.includes(sel.value)) return; wsub = sel.value;
                 try { localStorage.setItem('otemp.windSub', wsub); } catch (_) {} renderBtn(); openMenu(false); paint(); try { if (typeof windDialUpdate === 'function') windDialUpdate(); } catch (_) {} });
               renderBtn(); return wrap; } });
             new Ctl({ position: 'bottomleft' }).addTo(leafletMap);

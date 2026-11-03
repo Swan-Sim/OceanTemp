@@ -108,7 +108,7 @@
       return (typeof lang !== 'undefined' && lang === 'ko') ? ko[i] : en[i];
     };
 
-    function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0, raw) {
+    function windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0, raw, tempNow) {
       const R = 74, ko = typeof lang !== 'undefined' && lang === 'ko';
       // [CHANGE] 원은 반투명(50%)으로, N·E·S·W 글자는 뺐어요(지도가 북쪽 위 고정이라 불필요)
       let g = `<g opacity="0.5"><circle r="${R}" fill="rgba(2,6,23,0.18)" stroke="rgba(255,255,255,0.55)" stroke-width="1.3"/>` +
@@ -183,8 +183,8 @@
       // [ADD] 스쿠버 다이빙을 고른 상태에서는 지금 수온 + 추위 타는 정도(회원 설정, 없으면 보통)로 추천 슈트 한 줄
       try {
         if (typeof window.sportCur === 'function' && window.sportCur() === 'dive') {
-          const tp = windDialNearest(d.temp, x), cold = window.otAccount && window.otAccount.prefs && (window.otAccount.prefs() || {}).cold;
-          const su = tp && windDialSuit(tp.y, cold);
+          const cold = window.otAccount && window.otAccount.prefs && (window.otAccount.prefs() || {}).cold;
+          const su = tempNow != null ? windDialSuit(tempNow, cold) : null; // 수온은 windDialUpdate가 그 시각 값으로 넘겨줘요
           if (su) {
             const NM = ko ? [['스킨', '래시가드'], ['2mm', '쇼티'], ['3mm', '풀슈트'], ['5mm', '풀슈트'], ['7mm', '/세미드라이'], ['세미드라이', '/드라이'], ['드라이슈트', '']]
                           : [['Skin', 'rash guard'], ['2mm', 'shorty'], ['3mm', 'full'], ['5mm', 'full'], ['7mm', '/semi-dry'], ['Semi-dry', '/dry'], ['Drysuit', '']];
@@ -254,7 +254,8 @@
       // [ADD] 관리자: 해협 보정 전 모델 원값(표층·5m·30m)도 같은 크기로 아래 줄에
       let raw = null; try { const u = window.otAccount && window.otAccount.user && window.otAccount.user();
         if (u && u.role === 'admin' && cs0 && cs0.bg) raw = { s: cs0.bg, c5: windDialCurrentAt(cs0.bg, w, st.coords[1], 5), c30: windDialCurrentAt(cs0.bg, w, st.coords[1], 30) }; } catch (_) {}
-      const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0, raw);
+      const tpNow = windDialNearest(d.temp, x);
+      const html = windDialSVG(w, v, timeLabel, cs, c5, c30, tzLabel, vis, cs0, raw, tpNow ? tpNow.y : null);
       const size = windDialLastSize || [2 * (74 + 200), 2 * (74 + 70)];
       const icon = L.divIcon({ className: 'wind-dial', html, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
       const ll = [st.coords[1], st.coords[0]];

@@ -256,7 +256,7 @@ module.exports = async function auth(req, res) {
     if (Array.isArray(b.favOrder)) cur.favOrder = b.favOrder.map(Number).filter(n => n > 0 && n < 100000).slice(0, 30); // [ADD] 즐겨찾기 순서(드래그로 바꾼 것)
     if (b.last && typeof b.last === 'object') { const no = parseInt(b.last.no, 10); if (no > 0 && no < 100000) cur.last = { no, at: Date.now() }; }
     if (b.consent && typeof b.consent === 'object') cur.consent = { use: !!b.consent.use, open: !!b.consent.open, photo: !!b.consent.photo, at: Date.now() }; // 로그북 동의(정보 사용·기록 공개·사진 공개)
-    if (['cold', 'normal', 'warm'].includes(b.cold)) cur.cold = b.cold; // [ADD] 추위 타는 정도(추천 슈트용)
+    if (['vcold', 'cold', 'normal', 'warm'].includes(b.cold)) cur.cold = b.cold; // [ADD] 추위 타는 정도(추천 슈트용)
     if (b.body && typeof b.body === 'object') { // [ADD] 맞춤 추천용 몸무게(선택). 비우면 지워요. 30~160kg 밖의 값은 무시
       if (b.body.kg === null || b.body.kg === '') delete cur.body;
       else { const kg = Math.round(Number(b.body.kg)); if (kg >= 30 && kg <= 160) cur.body = { kg }; }

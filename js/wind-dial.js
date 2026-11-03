@@ -78,7 +78,7 @@
     //  추위를 많이 타면 수온을 3°C 낮게, 덜 타면 3°C 높게 보고 고르고, 그래서 한 단계 두껍게·얇게 나와요. 후드·장갑은 17°C 아래부터 같이 권해요.
     function windDialSuit(t, cold) {
       if (t == null || !isFinite(t)) return null;
-      const e = t + (cold === 'cold' ? -3 : cold === 'warm' ? 3 : 0);
+      const e = t + (cold === 'vcold' ? -10 : cold === 'cold' ? -3 : cold === 'warm' ? 3 : 0);
       const lv = e >= 28 ? 0 : e >= 25 ? 1 : e >= 22 ? 2 : e >= 17 ? 3 : e >= 10 ? 4 : e >= 5 ? 5 : 6;
       return { lv, hood: e < 17 };
     }

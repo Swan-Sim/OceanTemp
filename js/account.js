@@ -235,6 +235,10 @@
         const span = u.next ? (u.next - u.base) : 1, pct = u.next ? Math.max(0, Math.min(100, Math.round((u.credits - u.base) / span * 100))) : 100;
         h += `<div class="a-lv"><b>${T.lv(u.level)}</b> · ${u.credits} ${T.credits}<div class="bar"><i style="width:${pct}%"></i></div>${u.next ? T.toNext(u.next - u.credits) : T.maxLv}<br>${T.creditHint}</div>`;
       }
+      { const WT = { ko: ['맞춤 추천 (선택)', '몸무게', '저장', '비우면 지워져요. 입력하면 "바람 스포츠"를 고른 상태에서 포인트 팝업에 추천 윙 크기가 나와요(참고용).'], en: ['Personal tips (optional)', 'Weight', 'Save', 'Leave empty to remove. With "Wind sports" selected, spot popups show a suggested wing size (a guide only).'], ja: ['おすすめ（任意）', '体重', '保存', '空にすると削除。「風のスポーツ」選択中、ポイントのポップアップにウイングサイズの目安が出ます。'], es: ['Recomendaciones (opcional)', 'Peso', 'Guardar', 'Vacío = borrar. Con "Deportes de viento" elegido, el popup muestra un tamaño de ala orientativo.'], zh: ['個人化建議（選填）', '體重', '儲存', '留空即刪除。選擇「風力運動」時，點位彈窗會顯示建議翼板尺寸（僅供參考）。'] }[L] || null;
+        const W = WT || ['Personal tips (optional)', 'Weight', 'Save', 'Leave empty to remove. With "Wind sports" selected, spot popups show a suggested wing size (a guide only).'];
+        const kg0 = me.prefs && me.prefs.body && me.prefs.body.kg || '';
+        h += `<div class="a-sec">${W[0]}</div><div class="a-row" style="align-items:center;gap:6px"><span style="font-size:13px">${W[1]}</span><input id="a-kg" type="number" min="30" max="160" inputmode="numeric" placeholder="kg" value="${esc(String(kg0))}" style="width:76px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#fff;padding:0 8px"><span style="font-size:13px">kg</span><button class="a-kgs" data-t="${W[2]}" type="button" style="height:30px;padding:0 12px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#cbd5e1;cursor:pointer">${W[2]}</button></div><div class="a-sub" style="margin:6px 0 0">${W[3]}</div>`; }
       h += `<div class="a-sec">${T.favs}</div>`;
       const favs = sortedFavs().map(stationByNo).filter(Boolean);
       h += favs.length ? `<div class="a-list" id="a-favs">${favs.map(s => `<button class="a-fav" data-no="${s.no}"><span class="hd">⋮⋮</span><span class="nm">★ ${esc(s.name)}</span><span class="tr" role="button" title="${esc(T.favDel)}" aria-label="${esc(T.favDel)}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/></svg></span></button>`).join('')}</div>` : `<div class="a-sub">${T.noFav}</div>`;
@@ -256,6 +260,12 @@
     box.querySelectorAll('.a-fav').forEach(b => b.onclick = async (e) => { if (e.target.closest('.hd') || dragMoved) return; if (e.target.closest('.tr')) { const no = +b.dataset.no; try { await post('fav', { no, on: false }); favSet.delete(no); me.favs = [...favSet]; b.remove(); paintStar(); paintFavBar(); } catch (_) {} return; } const s = stationByNo(+b.dataset.no); if (!s) return; close(); goTo(s); });
     setupFavDrag(box.querySelector('#a-favs'));
     loadLogsInto(box.querySelector('#a-logs'));
+    const kgBtn = box.querySelector('.a-kgs'); // [ADD] 몸무게 저장(비우면 삭제)
+    if (kgBtn) kgBtn.onclick = async () => {
+      const raw = (box.querySelector('#a-kg').value || '').trim(), kg = raw === '' ? null : Math.round(Number(raw));
+      if (kg !== null && !(kg >= 30 && kg <= 160)) { toast('30–160 kg'); return; }
+      try { const j = await post('prefs', { body: { kg } }); if (j && j.prefs) me.prefs = j.prefs; kgBtn.textContent = '✓'; setTimeout(() => { kgBtn.textContent = kgBtn.dataset.t || kgBtn.textContent; }, 1200); try { if (typeof windDialUpdate === 'function') windDialUpdate(); } catch (_) {} } catch (_) { toast('error'); }
+    };
     const out = box.querySelector('.a-out'); if (out) out.onclick = async () => { try { await post('logout'); } catch (_) {} close(); await load(); };
     const del = box.querySelector('.a-del'); if (del) del.onclick = async () => { if (!confirm(T.delAsk)) return; try { await post('delete'); } catch (_) {} close(); await load(); };
   }

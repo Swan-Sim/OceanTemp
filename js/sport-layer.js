@@ -63,6 +63,7 @@
         return null;
       }
       window.sportRate = rate;
+      window.sportCur = () => sport; // [ADD] 윙 추천 줄(js/wind-dial.js)이 지금 고른 종목을 알아야 해서
 
       // ── 날씨 자료(포인트별 시간대) ──
       const data = new Map(); // key → { at, t:[ms], w, g, d, h, p, cur }
@@ -180,7 +181,7 @@
               btn = L.DomUtil.create('button', 'sg-btn', wrap); btn.type = 'button';
               btn.onclick = () => openMenu(menu.style.display === 'none');
               menu.addEventListener('click', (e) => { const b = e.target.closest('[data-sp]'); if (!b) return; sport = b.dataset.sp;
-                try { localStorage.setItem('otemp.sport', sport); } catch (_) {} renderBtn(); openMenu(false); paint(); });
+                try { localStorage.setItem('otemp.sport', sport); } catch (_) {} renderBtn(); openMenu(false); paint(); try { if (typeof windDialUpdate === 'function') windDialUpdate(); } catch (_) {} });
               renderBtn(); return wrap; } });
             new Ctl({ position: 'bottomleft' }).addTo(leafletMap);
             leafletMap.on('moveend zoomend', () => { loadVisible(); schedulePaint(); });

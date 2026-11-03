@@ -51,6 +51,17 @@
       const add = ds - along, u2 = u + add * ex, v2 = v + add * ey;
       return { ...c, speed: Math.hypot(u2, v2), to: (Math.atan2(u2, v2) / r + 360) % 360, windFix: true };
     }
+    // [ADD] 윙 크기 추천(참고용). 윙 면적(m²) ≈ 1.05 × 몸무게(kg) ÷ 바람(kn). 제조사 크기표(예: Slingshot 5.4m² = 9~19kn, 4.0m² = 13~26kn, 75kg 안팎 기준)와 대체로 맞게 맞춘 어림식이에요.
+    //  돌풍이 세면 평균 바람보다 조금 더 센 쪽으로(돌풍의 70%와 평균 중 큰 값) 계산해요. 8kn 미만은 약풍, 32kn 초과는 너무 강풍. 실제 선택은 브랜드·실력·보드에 따라 달라요.
+    function windDialWing(kg, w) {
+      if (!kg || !w || w.speed == null) return null;
+      const kn = w.speed / KN, gk = w.gust != null ? w.gust / KN : kn, eff = Math.max(kn, 0.7 * gk);
+      if (eff < 8) return { low: true };
+      if (eff > 32) return { high: true };
+      const SZ = [2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 7, 8], raw = 1.05 * kg / eff;
+      let i = 0; SZ.forEach((z, k) => { if (Math.abs(z - raw) < Math.abs(SZ[i] - raw)) i = k; });
+      return { size: SZ[i], lo: SZ[Math.max(0, i - 1)], hi: SZ[Math.min(SZ.length - 1, i + 1)] };
+    }
     function windDialCurrentAt(c, w, lat, z) {
       if (!c) return null;
       const r = Math.PI / 180, D = 10, sgn = lat >= 0 ? 1 : -1;
@@ -149,6 +160,15 @@
         + (fromDeg != null ? `<g transform="translate(${X3 + 5} ${y - 4}) rotate(${Math.round((fromDeg + 180) % 360)})"><path d="M0,-6.5 L4.5,4.5 L0,2 L-4.5,4.5 Z" fill="${color}"/></g>` : '')
         + (rest ? `<text x="${X3 + (fromDeg != null ? 14 : 0)}" y="${y}" font-size="12" fill="#cbd5e1">${rest}</text>` : ''); };
       if (w && w.speed != null) tr('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s', `${w.gust != null ? (ko ? '돌풍 ' : 'gust ') + Math.round(w.gust) : ''}`, w.dir); // 방향은 화살표로만
+      // [ADD] 바람 스포츠를 고른 상태에서 몸무게를 입력한 회원에게는 추천 윙 크기를 바람 아래에 보여줘요
+      try {
+        const kgW = window.otAccount && window.otAccount.prefs && (window.otAccount.prefs().body || {}).kg;
+        if (kgW && w && typeof window.sportCur === 'function' && window.sportCur() === 'wind') {
+          const wr = windDialWing(kgW, w);
+          if (wr && wr.size) tr('#fbbf24', ko ? '윙 추천' : 'Wing', wr.size.toFixed(1), 'm²', `${wr.lo}–${wr.hi}m² ${ko ? '참고' : 'guide'}`);
+          else if (wr) tr('#fbbf24', ko ? '윙 추천' : 'Wing', null, '', wr.low ? (ko ? '바람이 약해요(8kn 미만)' : 'too light (<8 kn)') : (ko ? '너무 강해요(32kn 초과)' : 'too strong (>32 kn)'));
+        }
+      } catch (_) {}
       if (v && v.height != null) {
         // 주기(초)는 파고가 0.1m 이상일 때만 - 파도가 없는데 "2초"만 남으면 뜻이 헷갈려요
         tr('#7dd3fc', ko ? '파도' : 'Waves', v.height.toFixed(1), 'm', `${v.swellPeriod != null && v.height >= 0.1 ? `${Math.round(v.swellPeriod)}${ko ? '초' : 's'}` : ''}`, v.height >= 0.1 ? vdir : null); // 방향은 화살표로만, 파고 0.1m 미만이면 방향·주기 없음

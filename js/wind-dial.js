@@ -176,10 +176,11 @@
       try {
         const kgW = window.otAccount && window.otAccount.prefs && (window.otAccount.prefs().body || {}).kg;
         if (kgW && w && typeof window.sportCur === 'function' && window.sportCur() === 'wind') {
-          const wr = windDialWing(kgW, w);
+          const sub = typeof window.sportSub === 'function' ? window.sportSub() : 'wing';
+          const wr = sub === 'wing' ? windDialWing(kgW, w) : null;
           if (wr && wr.size) tr('#fbbf24', ko ? '윙 추천' : 'Wing', wr.size.toFixed(1), 'm²', `${wr.lo}–${wr.hi}m² ${ko ? '참고' : 'guide'}`);
           else if (wr) tr('#fbbf24', ko ? '윙 추천' : 'Wing', null, '', wr.low ? (ko ? '바람이 약해요(8kn 미만)' : 'too light (<8 kn)') : (ko ? '너무 강해요(32kn 초과)' : 'too strong (>32 kn)'));
-          const kr = windDialKite(kgW, w);
+          const kr = sub === 'kite' ? windDialKite(kgW, w) : null;
           if (kr && kr.size) tr('#fbbf24', ko ? '카이트 추천' : 'Kite', kr.size, 'm²', `${kr.lo}–${kr.hi}m² ${ko ? '참고' : 'guide'}`);
           else if (kr) tr('#fbbf24', ko ? '카이트 추천' : 'Kite', null, '', kr.low ? (ko ? '바람이 약해요(8kn 미만)' : 'too light (<8 kn)') : (ko ? '너무 강해요(35kn 초과)' : 'too strong (>35 kn)'));
         }

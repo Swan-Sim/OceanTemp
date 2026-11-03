@@ -70,7 +70,7 @@
       const kn = w.speed / KN, gk = w.gust != null ? w.gust / KN : kn, eff = Math.max(kn, 0.7 * gk);
       if (eff < 8) return { low: true };
       if (eff > 35) return { high: true };
-      const SZ = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17], raw = 2.3 * kg / eff;
+      const SZ = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], raw = 2.3 * kg / eff;
       let i = 0; SZ.forEach((z, k) => { if (Math.abs(z - raw) < Math.abs(SZ[i] - raw)) i = k; });
       return { size: SZ[i], lo: SZ[Math.max(0, i - 1)], hi: SZ[Math.min(SZ.length - 1, i + 1)] };
     }

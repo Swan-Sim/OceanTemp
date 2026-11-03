@@ -78,7 +78,7 @@
   .a-log{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;background:#111a30;border:1px solid rgba(255,255,255,.08);color:#e2e8f0;border-radius:8px;padding:6px 10px;margin:4px 0;cursor:pointer;font-size:12.5px} .a-log b{flex:0 0 auto;color:#FFB000;font-weight:600} .a-log .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .a-log .dt{flex:0 0 auto;color:#94a3b8}
   .a-fav{display:flex;width:100%;text-align:left;background:#111a30;border:1px solid rgba(255,255,255,.08);color:#e2e8f0;border-radius:8px;padding:7px 10px;margin:4px 0;cursor:pointer;font-size:13px}
   .a-row{display:flex;gap:8px;margin-top:14px} .a-row button{flex:1;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e2e8f0;cursor:pointer}
-  .a-row .a-del{color:#f87171;border-color:rgba(248,113,113,.35)}
+  .a-deltxt{text-align:center;margin-top:22px} .a-deltxt .a-del{background:none;border:0;padding:2px 4px;color:#64748b;font-size:11px;text-decoration:underline;cursor:pointer} .a-deltxt .a-del:hover{color:#f87171}
   .tab-btn.tab-fav{flex:0 0 auto;min-width:38px;padding:0 10px;font-size:16px;line-height:1}
   .tab-btn.tab-fav.on{color:#FFB000}
   #btn-admin{position:fixed;top:12px;left:12px;z-index:57;height:30px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,176,0,.6);background:rgba(11,17,32,.85);color:#FFB000;font-size:12.5px;font-weight:700;letter-spacing:.3px;cursor:pointer;text-decoration:none;display:none;align-items:center;backdrop-filter:blur(6px)}
@@ -245,7 +245,7 @@
       h += `<div class="a-sec">${T.mylogs}</div><div class="a-list" id="a-logs"><div class="a-sub">${T.more}</div></div>`;
       h += `<div class="a-sec">${T.linked}</div><div class="a-tags">${u.providers.map(p => `<span>${PNAME[p] || p}</span>`).join('')}</div>`;
       if (more.length) h += `<div class="a-sec">${T.link}</div><div class="a-small">${pbtns(more)}</div>`;
-      h += `<div class="a-row"><button class="a-out">${T.logout}</button><button class="a-del">${T.del}</button></div>`;
+      h += `<div class="a-row"><button class="a-out">${T.logout}</button></div><div class="a-deltxt"><button type="button" class="a-del">${T.del}</button></div>`; // [CHANGE] 탈퇴는 버튼이 아니라 로그아웃 아래 작은 글자로(실수로 누르지 않게)
     }
     if (verText() && site.ver.pos === 'acct') h += `<div class="a-ver">${esc(verText())}</div>`;
     hideNotice(); box.innerHTML = h; ov.classList.add('show');

@@ -199,11 +199,11 @@
             tr('#fbbf24', ko ? '추천 슈트' : 'Suit', z[0], '', `${z[1]}${su.hood ? (ko ? ' +후드' : ' +hood') : ''}`);
             dlt = [-2, -1, 0, 1.5, 3, 4, 5][su.lv];
           }
-          // [ADD] 추천 웨이트: 회원이 적은 "내 기준 웨이트"에 슈트·탱크 차이만 더하고 빼요(테크니컬일 때만 탱크 반영)
+          // [ADD] 추천 웨이트: 회원이 적은 기준 웨이트(3mm + 알루미늄 11L ×1)에 슈트·탱크 차이만 더하고 빼요
           const pf = (window.otAccount && window.otAccount.prefs && window.otAccount.prefs()) || {};
           if (dlt != null && pf.wt != null) {
             const TK = { al11: 0, st12: -2, al22: 2, st24: -4 };
-            const td = tech && TK[pf.tank] != null ? TK[pf.tank] : 0;
+            const td = TK[pf.tank] != null ? TK[pf.tank] : 0; // 탱크 차이는 레크리에이션·테크니컬 모두 반영
             const kgw = Math.max(0, Math.round((pf.wt + dlt + td) * 2) / 2);
             tr('#fbbf24', ko ? '추천 웨이트' : 'Weight', kgw, 'kg', ko ? '참고용·부력 체크로 확인' : 'guide only · check buoyancy');
           }

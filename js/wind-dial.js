@@ -74,6 +74,14 @@
       let i = 0; SZ.forEach((z, k) => { if (Math.abs(z - raw) < Math.abs(SZ[i] - raw)) i = k; });
       return { size: SZ[i], lo: SZ[Math.max(0, i - 1)], hi: SZ[Math.min(SZ.length - 1, i + 1)] };
     }
+    // [ADD] 오늘 추천 슈트(스쿠버 다이빙, 참고용). 수온별 두께는 공개된 일반 기준표(Divernet · scuba.com): 28°C↑ 스킨/래시가드 · 25~28 2mm 쇼티(또는 1mm 풀) · 22~25 3mm · 17~22 5mm · 10~17 7mm(8/7 세미드라이) · 5~10 세미드라이/드라이 · 5↓ 드라이.
+    //  추위를 많이 타면 수온을 3°C 낮게, 덜 타면 3°C 높게 보고 고르고, 그래서 한 단계 두껍게·얇게 나와요. 후드·장갑은 17°C 아래부터 같이 권해요.
+    function windDialSuit(t, cold) {
+      if (t == null || !isFinite(t)) return null;
+      const e = t + (cold === 'cold' ? -3 : cold === 'warm' ? 3 : 0);
+      const lv = e >= 28 ? 0 : e >= 25 ? 1 : e >= 22 ? 2 : e >= 17 ? 3 : e >= 10 ? 4 : e >= 5 ? 5 : 6;
+      return { lv, hood: e < 17 };
+    }
     function windDialCurrentAt(c, w, lat, z) {
       if (!c) return null;
       const r = Math.PI / 180, D = 10, sgn = lat >= 0 ? 1 : -1;
@@ -172,6 +180,19 @@
         + (fromDeg != null ? `<g transform="translate(${X3 + 5} ${y - 4}) rotate(${Math.round((fromDeg + 180) % 360)})"><path d="M0,-6.5 L4.5,4.5 L0,2 L-4.5,4.5 Z" fill="${color}"/></g>` : '')
         + (rest ? `<text x="${X3 + (fromDeg != null ? 14 : 0)}" y="${y}" font-size="12" fill="#cbd5e1">${rest}</text>` : ''); };
       if (w && w.speed != null) tr('#fbbf24', ko ? '바람' : 'Wind', Math.round(w.speed), 'm/s', `${w.gust != null ? (ko ? '돌풍 ' : 'gust ') + Math.round(w.gust) : ''}`, w.dir); // 방향은 화살표로만
+      // [ADD] 스쿠버 다이빙을 고른 상태에서는 지금 수온 + 추위 타는 정도(회원 설정, 없으면 보통)로 추천 슈트 한 줄
+      try {
+        if (typeof window.sportCur === 'function' && window.sportCur() === 'dive') {
+          const tp = windDialNearest(d.temp, x), cold = window.otAccount && window.otAccount.prefs && (window.otAccount.prefs() || {}).cold;
+          const su = tp && windDialSuit(tp.y, cold);
+          if (su) {
+            const NM = ko ? [['스킨', '래시가드'], ['2mm', '쇼티'], ['3mm', '풀슈트'], ['5mm', '풀슈트'], ['7mm', '/세미드라이'], ['세미드라이', '/드라이'], ['드라이슈트', '']]
+                          : [['Skin', 'rash guard'], ['2mm', 'shorty'], ['3mm', 'full'], ['5mm', 'full'], ['7mm', '/semi-dry'], ['Semi-dry', '/dry'], ['Drysuit', '']];
+            const z = NM[su.lv];
+            tr('#fbbf24', ko ? '추천 슈트' : 'Suit', z[0], '', `${z[1]}${su.hood ? (ko ? ' +후드' : ' +hood') : ''}`);
+          }
+        }
+      } catch (_) {}
       // [ADD] 바람 스포츠를 고른 상태에서 몸무게를 입력한 회원에게는 추천 윙 크기를 바람 아래에 보여줘요
       try {
         const kgW = window.otAccount && window.otAccount.prefs && (window.otAccount.prefs().body || {}).kg;

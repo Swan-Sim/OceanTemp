@@ -257,6 +257,9 @@ module.exports = async function auth(req, res) {
     if (b.last && typeof b.last === 'object') { const no = parseInt(b.last.no, 10); if (no > 0 && no < 100000) cur.last = { no, at: Date.now() }; }
     if (b.consent && typeof b.consent === 'object') cur.consent = { use: !!b.consent.use, open: !!b.consent.open, photo: !!b.consent.photo, at: Date.now() }; // 로그북 동의(정보 사용·기록 공개·사진 공개)
     if (['vcold', 'cold', 'normal', 'warm'].includes(b.cold)) cur.cold = b.cold; // [ADD] 추위 타는 정도(추천 슈트용)
+    if (b.wt === null || b.wt === '') delete cur.wt; // [ADD] 내 기준 웨이트(kg)와 탱크 종류(테크니컬 추천 웨이트용)
+    else if (b.wt !== undefined) { const wt = Math.round(Number(b.wt) * 2) / 2; if (wt >= 0 && wt <= 40) cur.wt = wt; }
+    if (['al11', 'st12', 'al22', 'st24'].includes(b.tank)) cur.tank = b.tank;
     if (b.body && typeof b.body === 'object') { // [ADD] 맞춤 추천용 몸무게(선택). 비우면 지워요. 30~160kg 밖의 값은 무시
       if (b.body.kg === null || b.body.kg === '') delete cur.body;
       else { const kg = Math.round(Number(b.body.kg)); if (kg >= 30 && kg <= 160) cur.body = { kg }; }

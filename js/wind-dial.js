@@ -185,16 +185,27 @@
         if (typeof window.sportCur === 'function' && window.sportCur() === 'dive') {
           const cold = window.otAccount && window.otAccount.prefs && (window.otAccount.prefs() || {}).cold;
           const su = tempNow != null ? windDialSuit(tempNow, cold) : null; // 수온은 windDialUpdate가 그 시각 값으로 넘겨줘요
+          let dlt = null; // 기준(3mm 풀슈트, 알루미늄 11L 1개)과 비교한 슈트 쪽 웨이트 차이(kg)
           const tech = typeof window.diveSub === 'function' && window.diveSub() === 'tech';
           // 테크니컬 + 추위 매우 많이 탐: 드라이슈트만 추천(공기 온도 30°C 이하일 때). 내피는 수온 기준
           if (tech && cold === 'vcold' && tempNow != null && !(w && w.air != null && w.air > 30)) {
             const ug = tempNow <= 5 ? 'BZ400' : tempNow <= 10 ? 'BZ300' : tempNow < 20 ? 'BZ200' : (ko ? '얇은' : 'thin');
             tr('#fbbf24', ko ? '추천 슈트' : 'Suit', ko ? '드라이' : 'Dry', '', ko ? `${ug} 내피` : `${ug} undergarment`);
+            dlt = ug === 'BZ400' ? 6 : ug === 'BZ300' ? 5 : ug === 'BZ200' ? 4 : 3;
           } else if (su) {
             const NM = ko ? [['스킨', '래시가드'], ['2mm', '쇼티'], ['3mm', '풀슈트'], ['5mm', '풀슈트'], ['7mm', '/세미드라이'], ['세미드라이', '/드라이'], ['드라이슈트', '']]
                           : [['Skin', 'rash guard'], ['2mm', 'shorty'], ['3mm', 'full'], ['5mm', 'full'], ['7mm', '/semi-dry'], ['Semi-dry', '/dry'], ['Drysuit', '']];
             const z = NM[su.lv];
             tr('#fbbf24', ko ? '추천 슈트' : 'Suit', z[0], '', `${z[1]}${su.hood ? (ko ? ' +후드' : ' +hood') : ''}`);
+            dlt = [-2, -1, 0, 1.5, 3, 4, 5][su.lv];
+          }
+          // [ADD] 추천 웨이트: 회원이 적은 "내 기준 웨이트"에 슈트·탱크 차이만 더하고 빼요(테크니컬일 때만 탱크 반영)
+          const pf = (window.otAccount && window.otAccount.prefs && window.otAccount.prefs()) || {};
+          if (dlt != null && pf.wt != null) {
+            const TK = { al11: 0, st12: -2, al22: 2, st24: -4 };
+            const td = tech && TK[pf.tank] != null ? TK[pf.tank] : 0;
+            const kgw = Math.max(0, Math.round((pf.wt + dlt + td) * 2) / 2);
+            tr('#fbbf24', ko ? '추천 웨이트' : 'Weight', kgw, 'kg', ko ? '참고용·부력 체크로 확인' : 'guide only · check buoyancy');
           }
         }
       } catch (_) {}

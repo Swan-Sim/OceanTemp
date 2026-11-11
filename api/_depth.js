@@ -855,4 +855,11 @@ async function islandsNear(lat, lon) {
   try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
   return out;
 }
-module.exports = { islandsNear, depthAt, depthCached, depthTile, depthVec, DTILE_Z, summarize, SRC, _t: { fromKhoa, fromEmodnet, fromNoaa, fromGmrt, gridFromPoints, inKorea, inEmodnet } };
+// [ADD] 예열 스크립트용: 받은 타일 목록 중 아직 저장본(dvec)이 없는 것만 돌려줘요(Redis EXISTS 한 묶음 → 함수 호출 1번으로 끝)
+async function dvecMissing(list) {
+  const ks = (Array.isArray(list) ? list : []).map(String).filter(k => /^\d{1,5}_\d{1,5}$/.test(k)).slice(0, 1500);
+  if (!ks.length) return [];
+  const r = await redisPipeline(ks.map(k => ['EXISTS', 'dvec:v2:' + k]));
+  return ks.filter((k, i) => !(r[i] && r[i].result));
+}
+module.exports = { dvecMissing, islandsNear, depthAt, depthCached, depthTile, depthVec, DTILE_Z, summarize, SRC, _t: { fromKhoa, fromEmodnet, fromNoaa, fromGmrt, gridFromPoints, inKorea, inEmodnet } };

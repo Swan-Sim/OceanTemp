@@ -361,6 +361,14 @@ module.exports = async function handler(req, res) {
       return res.status(200).send(SDB.pngEncode(out.w, out.h, out.rgb));
     } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).replace(/client_secret=[^&\s]+/g, '***').slice(0, 400) }); }
   }
+  if (svc === 'dvhave') { // [ADD] 수심 타일 예열: 아직 저장 안 된 타일만 알려줘요(POST { tiles: ['x_y', ...] }, 한 번에 최대 1500장)
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      let b = req.body; if (typeof b === 'string') { try { b = JSON.parse(b); } catch (_) { b = {}; } }
+      const missing = await require('./_depth').dvecMissing((b && b.tiles) || []);
+      return res.status(200).json({ ok: true, missing });
+    } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).slice(0, 200) }); }
+  }
   if (svc === 'dtile' || svc === 'dvec') {
     try {
       const D = require('./_depth'), r = svc === 'dvec' ? await D.depthVec(req.query.x, req.query.y, { fill: req.query.fill === '1', mode: ['1', '2', '3'].includes(String(req.query.m)) ? +req.query.m : 0 }) : await D.depthTile(req.query.x, req.query.y);

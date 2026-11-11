@@ -46,9 +46,25 @@ async function warm([x, y]) {
   } catch (e) { return { x, y, ms: Date.now() - t0, ok: false, pending: true, err: String(e.message || e).slice(0, 80) }; }
 }
 
+// [ADD] 평소에는 "아직 저장 안 된 타일"만 계산해요(서버에 한 번에 물어봄). 이미 저장된 타일을 매일 다시 확인하느라
+//  함수가 수천 번 실행되던 것을 없앴어요. 일요일(UTC)이나 FULL=1 이면 예전처럼 전체를 다시 확인해요.
+async function onlyMissing(all) {
+  const out = [];
+  for (let k = 0; k < all.length; k += 1000) {
+    const part = all.slice(k, k + 1000);
+    const r = await fetch(`${SITE}/api/spotobs?svc=dvhave`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tiles: part.map(t => t[0] + '_' + t[1]) }), signal: AbortSignal.timeout(30000) });
+    const j = await r.json();
+    if (!j.ok || !Array.isArray(j.missing)) throw new Error(j.error || 'dvhave 실패');
+    const miss = new Set(j.missing); part.forEach(t => { if (miss.has(t[0] + '_' + t[1])) out.push(t); });
+  }
+  return out;
+}
 const spots = await loadSpots();
-const tiles = planTiles(spots);
-console.log(`포인트 ${spots.length}곳 → 수심 타일 ${tiles.length}장(둘레 ${RING}칸)`);
+const allTiles = planTiles(spots);
+const FULL = process.env.FULL === '1' || new Date().getUTCDay() === 0;
+let tiles = allTiles;
+if (!FULL) { try { tiles = await onlyMissing(allTiles); } catch (e) { console.error('저장 여부 확인 실패 → 오늘은 건너뜀:', e.message); tiles = []; } }
+console.log(`포인트 ${spots.length}곳 → 수심 타일 ${allTiles.length}장(둘레 ${RING}칸) 중 ${FULL ? '전체 다시 확인' : '아직 없는 ' + tiles.length + '장만 계산'}`);
 const t0 = Date.now(); let i = 0, done = 0, empty = 0, pending = 0, failed = 0, slow = 0;
 async function worker() {
   while (i < tiles.length && Date.now() - t0 < BUDGET_MS) {

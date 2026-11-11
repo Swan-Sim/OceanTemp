@@ -858,8 +858,13 @@ async function islandsNear(lat, lon) {
 // [ADD] 예열 스크립트용: 받은 타일 목록 중 아직 저장본(dvec)이 없는 것만 돌려줘요(Redis EXISTS 한 묶음 → 함수 호출 1번으로 끝)
 async function dvecMissing(list) {
   const ks = (Array.isArray(list) ? list : []).map(String).filter(k => /^\d{1,5}_\d{1,5}$/.test(k)).slice(0, 1500);
-  if (!ks.length) return [];
-  const r = await redisPipeline(ks.map(k => ['EXISTS', 'dvec:v2:' + k]));
-  return ks.filter((k, i) => !(r[i] && r[i].result));
+  if (!ks.length) return { missing: [], skipped: [] };
+  const r = await redisPipeline(ks.flatMap(k => [['EXISTS', 'dvec:v2:' + k], ['EXISTS', 'dvskip:v1:' + k]]));
+  const missing = [], skipped = [];
+  ks.forEach((k, i) => { if (r[2 * i] && r[2 * i].result) return; (r[2 * i + 1] && r[2 * i + 1].result ? skipped : missing).push(k); });
+  return { missing, skipped };
 }
-module.exports = { dvecMissing, islandsNear, depthAt, depthCached, depthTile, depthVec, DTILE_Z, summarize, SRC, _t: { fromKhoa, fromEmodnet, fromNoaa, fromGmrt, gridFromPoints, inKorea, inEmodnet } };
+// [ADD] 예열이 계산을 시도한 타일 표시(7일). 계산이 60초 제한에 걸려 저장이 안 되는 타일을 매일 다시 시도하지 않게 해요.
+//  성공하면 저장본이 생겨서 이 표시는 의미가 없어지고, 실패한 타일만 7일 뒤에 한 번 더 시도돼요.
+async function dvecMarkTried(x, y) { try { await redisPipeline([['SET', 'dvskip:v1:' + parseInt(x, 10) + '_' + parseInt(y, 10), '1', 'EX', String(7 * 86400)]]); } catch (_) {} }
+module.exports = { dvecMissing, dvecMarkTried, islandsNear, depthAt, depthCached, depthTile, depthVec, DTILE_Z, summarize, SRC, _t: { fromKhoa, fromEmodnet, fromNoaa, fromGmrt, gridFromPoints, inKorea, inEmodnet } };

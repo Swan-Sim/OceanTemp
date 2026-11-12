@@ -99,6 +99,7 @@
     //  응답이 없으면 55초에 끊고(서버 한도 60초), 서버가 "없음"이라고 확실히 답한 칸만 none 으로 둬요.
     const dFails = new Map(); // key → 실패 횟수
     const RETRY_MS = [15000, 45000, 120000, 240000];
+    const dRefresh = new Set(), dRefreshed = new Set(); // 새로 받기 중인 타일 / 이번 방문에서 이미 새로 받기를 요청한 타일
     function failTile(key, why) {
       const n = (dFails.get(key) || 0) + 1; dFails.set(key, n); dTiles.delete(key);
       if (n > RETRY_MS.length) { dTiles.set(key, { st: 'none', why }); return; }
@@ -109,11 +110,18 @@
         const key = dQueue.shift(), [x, y] = key.split('_');
         dActive++;
         const ac = typeof AbortController !== 'undefined' ? new AbortController() : null, tm = setTimeout(() => { try { ac && ac.abort(); } catch (_) {} }, 55000);
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=26${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}`, ac ? { signal: ac.signal } : undefined).then(r => r.json()).then(d => {
+        const rf = dRefresh.has(key); // [ADD] 낡은 저장본을 먼저 보여준 뒤, 뒤에서 한 번 새로 받기 요청(서버가 하루 한 번만 시도)
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=26${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}${rf ? '&rf=1' : ''}`, ac ? { signal: ac.signal } : undefined).then(r => r.json()).then(d => {
+          if (rf) { // 새로 받기 결과: 더 나은 그림이 오면 바꿔 끼우고, 아니면 지금 그림 그대로
+            if (d && d.ok && !d.empty && !d.stale && (d.F || d.fills || d.lines)) { const prev = dTiles.get(key); try { if (prev && prev.grp && leafletMap) leafletMap.removeLayer(prev.grp); } catch (_) {} if (d.v === 2) d = Object.assign({}, d, decodeTile(d)); const tl = { st: 'ok', raw: d, coarse: !!d.coarse, lbl: [] }; dTiles.set(key, tl); setTileMode(tl, 'lite'); placeDepthLabels(); syncModes(); }
+            return;
+          }
+          if (d && d.ok && d.stale && !d.tried && !dRefreshed.has(key)) { dRefreshed.add(key); setTimeout(() => { if (depthOn && leafletMap && isDetailMode) { dRefresh.add(key); dQueue.push(key); loadNext(); } }, 4000); }
+          if (d && d.wait) { dTiles.set(key, { st: 'none', why: 'tried_today' }); return; } // 저장본 없음 + 오늘 이미 시도 → 오늘은 다시 안 물어봄
           if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { if (d.v === 2) d = Object.assign({}, d, decodeTile(d)); const tl = { st: 'ok', raw: d, coarse: !!d.coarse, lbl: [] }; dTiles.set(key, tl); setTileMode(tl, 'lite'); placeDepthLabels(); syncModes(); dFails.delete(key); }
           else if (d && d.ok && d.empty) dTiles.set(key, { st: 'none' }); // 바다 없음(육지만)
           else failTile(key, d && d.error || (d && d.retry ? 'retry' : 'fail'));
-        }).catch((e) => failTile(key, String(e && e.name || e))).finally(() => { clearTimeout(tm); dActive--; loadNext(); });
+        }).catch((e) => { if (!rf) failTile(key, String(e && e.name || e)); }).finally(() => { clearTimeout(tm); dRefresh.delete(key); dActive--; loadNext(); });
       }
     }
 

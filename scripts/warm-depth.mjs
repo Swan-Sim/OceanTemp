@@ -85,4 +85,18 @@ async function worker() {
 }
 await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 console.log(`끝: ${done}/${tiles.length}장 확인 · 바다 없음 ${empty} · 임시 저장(다음에 다시) ${pending} · 실패 ${failed} · 20초 넘은 것 ${slow}${i < tiles.length ? ' · 시간 한도로 멈춤(내일 이어서)' : ''}`);
+// [ADD] 흐름 화살표용 해안선(포인트 둘레 약 4km)도 미리 받아 저장해요. 저장본이 없고 오늘 아직 시도 안 한 곳만, 하루 MAX_COAST곳까지(기본 40).
+try {
+  const MAX_COAST = process.env.MAX_COAST === undefined ? 40 : +process.env.MAX_COAST;
+  const keys = [...new Set(spots.map(s => (+s.lat.toFixed(2)) + '_' + (+s.lon.toFixed(2))))];
+  let miss = [];
+  for (let k = 0; k < keys.length; k += 1000) {
+    const j = await (await fetch(`${SITE}/api/spotobs?svc=dvhave`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tiles: [], coast: keys.slice(k, k + 1000) }), signal: AbortSignal.timeout(30000) })).json();
+    if (j.ok && Array.isArray(j.coast)) miss = miss.concat(j.coast);
+  }
+  const todo = miss.slice(0, MAX_COAST); let okN = 0;
+  for (const k of todo) { const [la, lo] = k.split('_');
+    try { const j = await (await fetch(`${SITE}/api/spotobs?svc=coast&lat=${(+la).toFixed(2)}&lon=${(+lo).toFixed(2)}&v=2&w=${stamp}`, { signal: AbortSignal.timeout(45000) })).json(); if (j && j.ok !== false) okN++; } catch (_) {} }
+  console.log(`해안선(흐름 화살표용): 없는 곳 ${miss.length} 중 ${todo.length}곳 시도, ${okN}곳 저장`);
+} catch (e) { console.log('해안선 미리 받기 실패:', e.message); }
 // 실패가 많아도 작업 자체는 성공으로 끝내요(내일 이어서 하므로)

@@ -28,6 +28,13 @@ const SRC = {
 const { AsyncLocalStorage } = require('async_hooks');
 const BUDGET = new AsyncLocalStorage();
 const timeLeft = () => { const s = BUDGET.getStore(); return s ? s.until - Date.now() : Infinity; };
+// [ADD] "하루에 한 번만 시도" 표시. 저장본이 없거나 낡았을 때 외부 서버에 새로 받기를 시도하면 표시를 남기고,
+//  잘 받아서 저장하면 지워요. 실패하거나 시간 초과로 끊기면 표시가 남아서 그날(UTC 자정까지)은 다시 시도하지 않아요.
+const dayLeftSec = () => Math.max(600, 86400 - Math.floor(Date.now() / 1000) % 86400);
+const triedKey = (kind, k) => `tried:v1:${kind}:${k}`;
+async function triedToday(kind, k) { try { const [r] = await redisPipeline([['EXISTS', triedKey(kind, k)]]); return !!(r && r.result); } catch (_) { return false; } }
+async function markTried(kind, k) { try { await redisPipeline([['SET', triedKey(kind, k), '1', 'EX', String(dayLeftSec())]]); } catch (_) {} }
+async function clearTried(kind, k) { try { await redisPipeline([['DEL', triedKey(kind, k)]]); } catch (_) {} }
 async function getText(url, opt = {}, ms = 15000) {
   const lf = timeLeft(); if (lf < 2500) throw new Error('time budget used up');
   ms = Math.min(ms, lf - 1500);
@@ -738,7 +745,16 @@ async function depthVec0(x, y, opt = {}) {
   if (!needRaw) try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) { const o = JSON.parse(result); const stale = (o.pf || '') !== curPf || (o.src === 'gmrt' && (o.coarse === undefined || (o.coarse && !o.sf12) || rawStale(o, rawC))) || (o.src === 'khoa' && !o.kp) || (!o.d150 && o.Ln && o.Ln['100']) || (!o.empty && !o.ld && !(o.landErr && Date.now() - (o.at || 0) < 600e3)); let stale2 = stale;
     // [ADD] 2·5m 얕은 등심선 추가 전 저장본: 10m보다 얕은 곳이 있고 원본 격자가 저장돼 있을 때만 다시 그림(외부 서버 다시 안 부르게)
     if (!stale2 && !o.sh5 && o.F && o.F.some(f => f[0] === 1)) { try { const [{ result: ex }] = await redisPipeline([['EXISTS', RAW_KEY(x, y)]]); if (ex) stale2 = true; } catch (_) {} }
+    if (!stale2 && (o.coarse && !o.coastFixed || o.tmp) && !o.empty) stale2 = true; // [ADD] 덜 보정된 저장본 → 낡은 것으로 취급(하루 한 번 다시 시도)
     if (!stale2) return o; old = o; /* 옛 방식 저장본·100m보다 깊은 곳(120·150m 선 추가)은 다시 계산 */ } } catch (_) {} // GMRT 옛 저장본은 고/저해상도 표시가 없어 다시 계산
+  // [ADD] 설계: ① 저장본이 있으면 그것부터 보여주고(낡았으면 stale 표시 → 화면이 뒤에서 새로고침 요청) ② 새로 받기는 하루 한 번만 시도
+  const tk = x + '_' + y + (MODE ? ':m' + MODE : '');
+  if (!needRaw) {
+    const tried = await triedToday('dvec', tk);
+    if (old && (tried || !opt.refresh)) return Object.assign({}, old, { stale: true, tried: tried || undefined }); // 낡은 저장본 먼저(오늘 이미 시도했으면 그대로 둠)
+    if (!old && tried) return { ok: false, x, y, wait: true, reason: 'tried_today' }; // 저장본 없음 + 오늘 이미 시도함 → 오늘은 더 안 받음
+    await markTried('dvec', tk); // 먼저 적어 둬야 시간 초과로 끊겨도 남아요
+  }
   let d = await depthTile(x, y, { noStore: true, fresh: true, mode: MODE }); // 격자는 따로 저장 안 함(벡터만 저장해서 저장 공간 절약)
   // [ADD] 국립해양조사원이 실패했고 예전 그림도 없으면(화면이 비어 보이는 상황) 거친 GMRT로 임시 그림을 만들어요(저장 안 함, 10분만 캐시 → 다음에 다시 KHOA)
   if (d && !d.ok && d.retry && !old) { try { const f = await depthTile(x, y, { noStore: true, fresh: true, mode: MODE, fallback: true }); if (f && f.ok) d = f; } catch (_) {} }
@@ -806,7 +822,9 @@ async function depthVec0(x, y, opt = {}) {
   const bad = (o) => !!(o && ((o.coarse && !o.coastFixed) || o.landErr || o.tmp));
   // [FIX] 해안선 서버가 실패해서 새 그림이 덜 보정됐으면, 잘 보정된 예전 그림을 지우지 않고 그대로 보여줘요(1시간 뒤 다시 시도)
   if (bad(out) && old && !bad(old) && !old.empty) return Object.assign({}, old, { tmp: true, keptOld: true });
-  try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(bad(out) ? 3600 : 180 * 86400)]]); } catch (_) {}
+  // [CHANGE] 덜 보정된 그림도 이틀은 보관(예전 1시간): 하루 한 번만 다시 시도하니까 그동안 이 그림이라도 보여줘야 해요
+  try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(bad(out) ? 2 * 86400 : 180 * 86400)]]); } catch (_) {}
+  if (!bad(out) && !needRaw) await clearTried('dvec', tk); // 잘 받았으면 표시 지움
   return out;
 }
 function joinSegs(segs) {
@@ -831,6 +849,13 @@ async function islandsNear(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const ck = `isl:v2:${lat}_${lon}`; // [CHANGE] v2 = 섬 + 본섬·육지 해안선(방파제 포함) 조각(walls)
   try { const [{ result }] = await redisPipeline([['GET', ck]]); if (result) return JSON.parse(result); } catch (_) {}
+  // [ADD] 저장본이 없을 때 해안선 받기는 하루 한 번만 시도(실패·시간 초과면 그날은 다시 안 받음), 한 번에 최대 25초
+  const tkc = lat + '_' + lon;
+  if (await triedToday('coast', tkc)) return { ok: false, wait: true, reason: 'tried_today' };
+  await markTried('coast', tkc);
+  return BUDGET.run({ until: Date.now() + 25000 }, () => islandsNear0(lat, lon, ck, tkc));
+}
+async function islandsNear0(lat, lon, ck, tkc) {
   const P = 0.035, lines = await coastLines({ s: lat - P, n: lat + P, w: lon - P, e: lon + P });
   const kx = Math.cos(lat * Math.PI / 180) * 111320, ky = 111320, K = (p) => p[0].toFixed(6) + ',' + p[1].toFixed(6);
   const isl = [], walls = [];
@@ -863,18 +888,26 @@ async function islandsNear(lat, lon) {
   });
   const out = { ok: true, lat, lon, islands: isl, walls };
   try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
+  await clearTried('coast', tkc);
   return out;
 }
 // [ADD] 예열 스크립트용: 받은 타일 목록 중 아직 저장본(dvec)이 없는 것만 돌려줘요(Redis EXISTS 한 묶음 → 함수 호출 1번으로 끝)
 async function dvecMissing(list) {
   const ks = (Array.isArray(list) ? list : []).map(String).filter(k => /^\d{1,5}_\d{1,5}$/.test(k)).slice(0, 1500);
   if (!ks.length) return { missing: [], skipped: [] };
-  const r = await redisPipeline(ks.flatMap(k => [['EXISTS', 'dvec:v2:' + k], ['EXISTS', 'dvskip:v1:' + k]]));
+  const r = await redisPipeline(ks.flatMap(k => [['EXISTS', 'dvec:v2:' + k], ['EXISTS', 'dvskip:v1:' + k], ['EXISTS', triedKey('dvec', k)]]));
   const missing = [], skipped = [];
-  ks.forEach((k, i) => { if (r[2 * i] && r[2 * i].result) return; (r[2 * i + 1] && r[2 * i + 1].result ? skipped : missing).push(k); });
+  ks.forEach((k, i) => { if (r[3 * i] && r[3 * i].result) return; ((r[3 * i + 1] && r[3 * i + 1].result) || (r[3 * i + 2] && r[3 * i + 2].result) ? skipped : missing).push(k); });
   return { missing, skipped };
 }
 // [ADD] 예열이 계산을 시도한 타일 표시(7일). 계산이 60초 제한에 걸려 저장이 안 되는 타일을 매일 다시 시도하지 않게 해요.
 //  성공하면 저장본이 생겨서 이 표시는 의미가 없어지고, 실패한 타일만 7일 뒤에 한 번 더 시도돼요.
+// [ADD] 예열용: 포인트 주변 해안선(흐름 화살표용) 저장본이 없고 오늘 아직 시도하지 않은 곳만 돌려줘요
+async function coastMissing(list) {
+  const ks = (Array.isArray(list) ? list : []).map(String).filter(k => /^-?\d{1,2}(\.\d{1,2})?_-?\d{1,3}(\.\d{1,2})?$/.test(k)).slice(0, 1500);
+  if (!ks.length) return [];
+  const r = await redisPipeline(ks.flatMap(k => [['EXISTS', 'isl:v2:' + k], ['EXISTS', triedKey('coast', k)]]));
+  return ks.filter((k, i) => !(r[2 * i] && r[2 * i].result) && !(r[2 * i + 1] && r[2 * i + 1].result));
+}
 async function dvecMarkTried(x, y) { try { await redisPipeline([['SET', 'dvskip:v1:' + parseInt(x, 10) + '_' + parseInt(y, 10), '1', 'EX', String(7 * 86400)]]); } catch (_) {} }
-module.exports = { dvecMissing, dvecMarkTried, islandsNear, depthAt, depthCached, depthTile, depthVec, DTILE_Z, summarize, SRC, _t: { fromKhoa, fromEmodnet, fromNoaa, fromGmrt, gridFromPoints, inKorea, inEmodnet } };
+module.exports = { dvecMissing, dvecMarkTried, coastMissing, islandsNear, depthAt, depthCached, depthTile, depthVec, DTILE_Z, summarize, SRC, _t: { fromKhoa, fromEmodnet, fromNoaa, fromGmrt, gridFromPoints, inKorea, inEmodnet } };

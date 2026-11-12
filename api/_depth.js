@@ -22,7 +22,15 @@ const SRC = {
   gmrt: { name: 'GMRT (Global Multi-Resolution Topography)', short: 'GMRT', res: 0, license: 'CC BY 4.0' }
 };
 
+// [ADD] 요청 한 건의 시간 예산. 함수 제한(60초)에 걸려 통째로 끊기면 아무것도 못 보여 주니까,
+//  예산이 다 되면 외부 서버(해안선 등) 기다리기를 그만두고 지금까지 만든 것(덜 보정된 그림)이라도 돌려줘요.
+//  덜 보정된 그림은 1시간만 저장돼서 나중에 다시 시도돼요. 요청마다 따로 세어야 해서 AsyncLocalStorage를 써요.
+const { AsyncLocalStorage } = require('async_hooks');
+const BUDGET = new AsyncLocalStorage();
+const timeLeft = () => { const s = BUDGET.getStore(); return s ? s.until - Date.now() : Infinity; };
 async function getText(url, opt = {}, ms = 15000) {
+  const lf = timeLeft(); if (lf < 2500) throw new Error('time budget used up');
+  ms = Math.min(ms, lf - 1500);
   const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), ms);
   try { const r = await fetch(url, { ...opt, signal: ctl.signal }); const t = await r.text(); if (!r.ok) throw new Error(`HTTP ${r.status} ${t.slice(0, 120)}`); return t; }
   finally { clearTimeout(tm); }
@@ -194,8 +202,9 @@ const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://maps.mail.
 async function overpass(q, ms = 20000) {
   let last = null;
   for (let round = 0; round < 2; round++) {
-    if (round) await new Promise(r => setTimeout(r, 1500));
+    if (round) { if (timeLeft() < 12000) break; await new Promise(r => setTimeout(r, 1500)); }
     for (const u of OVERPASS) {
+      if (timeLeft() < 3000) { last = last || new Error('time budget used up'); break; }
       try { const t = await getText(u, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'otemp.app depth layer' } }, ms);
         if (!/^\s*\{/.test(t)) throw new Error('overpass not json'); const r = JSON.parse(t);
         if (r.remark && /error|timed out|runtime/i.test(r.remark)) throw new Error('overpass ' + r.remark.slice(0, 80)); return r; }
@@ -717,7 +726,8 @@ async function landFor(x, y, t) {
   try { await redisPipeline([['SET', ck, JSON.stringify(out), 'EX', String(180 * 86400)]]); } catch (_) {}
   return out;
 }
-async function depthVec(x, y, opt = {}) {
+function depthVec(x, y, opt = {}) { return BUDGET.run({ until: Date.now() + (opt.budgetMs || 40000) }, () => depthVec0(x, y, opt)); }
+async function depthVec0(x, y, opt = {}) {
   x = parseInt(x, 10); y = parseInt(y, 10);
   const MODE = opt.mode | 0, rawC = MODE ? MODE === 1 : RAW_COARSE;
   const ck = 'dvec:v2:' + x + '_' + y + (MODE ? ':m' + MODE : '');

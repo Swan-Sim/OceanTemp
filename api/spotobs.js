@@ -372,7 +372,7 @@ module.exports = async function handler(req, res) {
   if (svc === 'dtile' || svc === 'dvec') {
     try {
       const D = require('./_depth'); if (svc === 'dvec' && req.query.mk === '1') await D.dvecMarkTried(req.query.x, req.query.y); // 예열이 시도한 타일 표시(먼저 적어 둬야 시간 초과로 끊겨도 남아요)
-      const r = svc === 'dvec' ? await D.depthVec(req.query.x, req.query.y, { fill: req.query.fill === '1', mode: ['1', '2', '3'].includes(String(req.query.m)) ? +req.query.m : 0 }) : await D.depthTile(req.query.x, req.query.y);
+      const r = svc === 'dvec' ? await D.depthVec(req.query.x, req.query.y, { budgetMs: req.query.w ? 50000 : 40000, fill: req.query.fill === '1', mode: ['1', '2', '3'].includes(String(req.query.m)) ? +req.query.m : 0 }) : await D.depthTile(req.query.x, req.query.y);
       if (!r) return res.status(400).json({ ok: false });
       res.setHeader('Cache-Control', r.ok && !r.tmp ? 'public, s-maxage=2592000, max-age=86400' : r.ok ? 'public, s-maxage=600, max-age=300' : r.retry ? 'no-store' : 's-maxage=3600'); // tmp = 해외 위치 보정 실패본(잠깐만 보관 후 다시 시도)
       return res.status(200).json(r);

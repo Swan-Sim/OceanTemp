@@ -25,17 +25,25 @@
     const SH = 0 /* 남쪽 이동은 서버에서 먼저 처리 */;
     function decodeTile(d) {
       const t = d.tile, dec = (a) => { const o = []; let x = 0, y = 0; for (let i = 0; i < a.length; i += 2) { x += a[i]; y += a[i + 1]; o.push([t.n - y / 4096 * (t.n - t.s) - SH, t.w + x / 4096 * (t.e - t.w)]); } return o; };
-      return { fills: (d.F || []).map(([dd, polys]) => ({ d: dd, p: polys.map(poly => poly.map(dec)) })),
+      return { t, fills: (d.F || []).map(([dd, polys]) => ({ d: dd, p: polys.map(poly => poly.map(dec)) })),
         lines: Object.fromEntries(Object.entries(d.Ln || {}).map(([k, ls]) => [k, ls.map(dec)])),
         land: (d.Ld || []).map(dec),
         lbl: (d.lb || []).map(([x, y, k]) => [t.n - y / 4096 * (t.n - t.s) - SH, t.w + x / 4096 * (t.e - t.w), k]) };
     }
     // [ADD] 두 단계 그리기: 'lite'(먼 화면·처음 받자마자: 점을 1/3로 줄이고 10·20·30·40m 선만) → 'full'(확대 14 이상, 가만히 있을 때 바꿔 끼움: 모든 선·숫자)
     const decim = (a, k) => k <= 1 ? a : a.filter((p, i) => i % k === 0 || i === a.length - 1);
+    // [FIX] 수심 띠(다각형)용 점 줄이기: 타일 테두리에 놓인 점(모서리 포함)은 반드시 남기고, 점이 적은 고리는 그대로 둬요.
+    //  예전에는 "타일 전체를 덮는 네모"(깊은 바다)도 3개 중 1개만 남겨서 세모로 찌그러졌고, 한 단계 축소하면 큰 삼각형 얼룩이 생겼어요.
+    const decimRing = (a, k, t) => {
+      if (k <= 1 || a.length < 24 || !t) return a;
+      const ey = (t.n - t.s) / 4096 * 1.5, ex = (t.e - t.w) / 4096 * 1.5;
+      const edge = (p) => Math.abs(p[0] - t.n) < ey || Math.abs(p[0] - t.s) < ey || Math.abs(p[1] - t.w) < ex || Math.abs(p[1] - t.e) < ex;
+      return a.filter((p, i) => i % k === 0 || i === a.length - 1 || edge(p));
+    };
     function buildTile(d, full) {
       const layers = [], K = full ? 1 : 3, SF = full ? 0.3 : 1.5;
       const cz = d.coarse; // 거친 자료(해외 일부): 서버에서 해안선에 맞춰 평행 이동한 뒤라 다른 지역과 같은 모양으로 그림
-      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1], pp = full ? f.p : f.p.map(poly => poly.map(r => decim(r, K)).filter(r => r.length >= 3)).filter(poly => poly.length); if (pp.length) layers.push(L.polygon(pp, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: SF, renderer: dRend() })); });
+      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1], pp = full ? f.p : f.p.map(poly => poly.map(r => decimRing(r, K, d.t)).filter(r => r.length >= 3)).filter(poly => poly.length); if (pp.length) layers.push(L.polygon(pp, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: SF, renderer: dRend() })); });
       const LN = {}; Object.keys(d.lines || {}).forEach(k => { if (full || ['10', '20', '30', '40'].includes(k)) LN[k] = full ? d.lines[k] : d.lines[k].map(l => decim(l, 2)).filter(l => l.length > 1); });
       Object.keys(LN).forEach(k => {
         const strong = k === '10' || k === '20' || k === '30' || k === '40'; // [CHANGE] 다이빙 계획에 중요한 10·20·30·40m를 진하게

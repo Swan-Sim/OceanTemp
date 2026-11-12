@@ -552,6 +552,15 @@
     async function fetchStationVisibility(st) {
       const lat = st.coords[1], lon = st.coords[0];
       const j = await fetchJSON(`/api/visibility?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&v=3`, 60000, 0);
+      // [ADD] 저장본이 24시간 넘게 오래됐으면(stale): 일단 그걸로 보여주고, 뒤에서 한 번만 새로 받기 요청(서버가 하루 한 번만 시도)
+      if (j && j.ok && j.stale && !j.tried && !st._visRefreshing) {
+        st._visRefreshing = true;
+        setTimeout(() => { fetchJSON(`/api/visibility?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&v=3&refresh=1`, 70000, 0).then(n => {
+          if (!n || !n.ok || n.stale || (n.nearestSeaKm != null && n.nearestSeaKm > 3)) return;
+          const nv = computeVisibility(n); if (!nv) return; if (st._visCache && st._visCache.ground) nv.ground = st._visCache.ground;
+          st._visCache = nv; try { if (typeof windDialUpdate === 'function') windDialUpdate(); } catch (_) {}
+        }).catch(() => {}); }, 3000);
+      }
       if (!j || !j.ok) { const err = new Error(j && j.reason || 'NO_DATA'); err.code = j && j.reason; throw err; }
       // [ADD] 정점 좌표가 바다에서 3km 넘게 떨어져 있으면(육지 안쪽 좌표) 시야를 보여주지 않음 - 근처 다른 바다 값을 그 자리 값처럼 보이게 하지 않으려고
       if (j.nearestSeaKm != null && j.nearestSeaKm > 3) { st._visFar = j.nearestSeaKm; const err = new Error('FAR_FROM_SEA'); err.code = 'FAR_FROM_SEA'; throw err; }

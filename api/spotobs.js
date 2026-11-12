@@ -361,6 +361,26 @@ module.exports = async function handler(req, res) {
       return res.status(200).send(SDB.pngEncode(out.w, out.h, out.rgb));
     } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).replace(/client_secret=[^&\s]+/g, '***').slice(0, 400) }); }
   }
+  if (svc === 'hot') { // [ADD] 최근 N일(기본 7) 안에 누군가 열어 본 포인트 번호 목록 → 예열은 이 포인트들만 매일 새로 받아요
+    try {
+      const n = Math.max(1, Math.min(30, parseInt(req.query.days, 10) || 7)), days = [];
+      for (let i = 0; i < n; i++) days.push(new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10));
+      const r = await redisPipeline(days.map(d => ['HKEYS', `sv:${d}`])), set = new Set();
+      r.forEach(x => (x && Array.isArray(x.result) ? x.result : []).forEach(k => { const v = parseInt(k, 10); if (v > 0) set.add(v); }));
+      res.setHeader('Cache-Control', 'public, s-maxage=1800, max-age=600');
+      return res.status(200).json({ ok: true, days: n, nos: [...set] });
+    } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).slice(0, 200) }); }
+  }
+  if (svc === 'vishave') { // [ADD] 시야 저장본이 아직 없고 오늘 시도도 안 한 좌표만 알려줘요(POST { pts: ['위도_경도'(소수 3자리), ...] })
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      let b = req.body; if (typeof b === 'string') { try { b = JSON.parse(b); } catch (_) { b = {}; } }
+      const ks = ((b && Array.isArray(b.pts)) ? b.pts : []).map(String).filter(k => /^-?\d{1,2}\.\d{3}_-?\d{1,3}\.\d{3}$/.test(k)).slice(0, 1500);
+      if (!ks.length) return res.status(200).json({ ok: true, missing: [] });
+      const r = await redisPipeline(ks.flatMap(k => [['EXISTS', 'vis3:' + k], ['EXISTS', 'tried:v1:vis:' + k]]));
+      return res.status(200).json({ ok: true, missing: ks.filter((k, i) => !(r[2 * i] && r[2 * i].result) && !(r[2 * i + 1] && r[2 * i + 1].result)) });
+    } catch (e) { return res.status(200).json({ ok: false, error: String(e && e.message || e).slice(0, 200) }); }
+  }
   if (svc === 'dvhave') { // [ADD] 수심 타일 예열: 아직 저장 안 된 타일만 알려줘요(POST { tiles: ['x_y', ...] }, 한 번에 최대 1500장)
     try {
       res.setHeader('Cache-Control', 'no-store');

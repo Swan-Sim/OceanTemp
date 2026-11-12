@@ -41,12 +41,12 @@ async function loadStations() {
     const lat = parseFloat(r[idx.lat]), lon = parseFloat(r[idx.lon]);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     if (/^n/i.test((r[idx.show] || '').trim())) continue;
-    out.push({ name: (r[idx.name] || '').trim(), lat, lon });
+    out.push({ no: parseInt(r[idx.no], 10) || 0, name: (r[idx.name] || '').trim(), lat, lon });
   }
   // [ADD] 승인된 사용자 등록 포인트도 미리 받아두기
   try {
     const j = await (await fetch(`${SITE}/api/shops?svc=spots`, { signal: AbortSignal.timeout(15000) })).json();
-    (j.spots || []).forEach(s => { if (Number.isFinite(+s.lat) && Number.isFinite(+s.lon)) out.push({ name: s.name, lat: +s.lat, lon: +s.lon }); });
+    (j.spots || []).forEach(s => { if (Number.isFinite(+s.lat) && Number.isFinite(+s.lon)) out.push({ no: +s.no || 0, name: s.name, lat: +s.lat, lon: +s.lon }); });
   } catch (_) {}
   return out;
 }
@@ -82,15 +82,18 @@ try {
 } catch (e) { console.log('위성 수온 격자 실패:', e.message); }
 
 const allStations = await loadStations();
-// [ADD] 돌아가며 받기: 포인트를 N묶음으로 나눠 하루에 한 묶음만 새로 받아요(함수 실행 시간 절약).
-//  N = 3일이 기본이고, 포인트가 늘면 하루 약 400곳을 넘지 않게 자동으로 늘어나요. ROTATE_DAYS 로 직접 정할 수도 있어요.
-//  묶음은 좌표로 정해서, 포인트가 추가돼도 기존 포인트의 순서는 안 바뀌어요.
-const uniq = []; { const seen = new Set(); for (const st of allStations) { const k = st.lat.toFixed(3) + ',' + st.lon.toFixed(3); if (!seen.has(k)) { seen.add(k); uniq.push(st); } } }
-const ROTATE = Math.max(1, +process.env.ROTATE_DAYS || Math.max(3, Math.ceil(uniq.length / 400)));
-const dayNo = Math.floor(Date.now() / 86400e3);
-const groupOf = (st) => (((Math.round(st.lat * 1000) * 73856093) ^ (Math.round(st.lon * 1000) * 19349663)) >>> 0) % ROTATE;
-const stations = uniq.filter(st => groupOf(st) === dayNo % ROTATE);
-console.log(`정점 ${uniq.length}곳 중 오늘 묶음 ${stations.length}곳 시야 자료 받기 시작 (${ROTATE}일에 한 번씩 돌아가며)`);
+// [CHANGE] 최적화: 시야(위성)는 매일 바뀌지만, 아무도 안 보는 포인트까지 매일 받을 필요는 없어요.
+//  ① 최근 7일 안에 누군가 열어 본 포인트만 매일 새로 받기  ② 저장본이 아예 없는 포인트는 하루 MAX_NEW_VIS곳(기본 60)씩 처음 받기
+//  ③ 그 밖의 포인트는 누가 열 때: 저장본을 먼저 보여주고 24시간이 지났으면 그때 한 번 새로 받아요(서버·화면 쪽 처리)
+const uniq = []; { const seen = new Set(); for (const st of allStations) { const k = st.lat.toFixed(3) + '_' + st.lon.toFixed(3); if (!seen.has(k)) { seen.add(k); uniq.push(Object.assign(st, { k })); } } }
+let hot = new Set(), missing = new Set();
+try { const j = await (await fetch(`${SITE}/api/spotobs?svc=hot&days=${+process.env.HOT_DAYS || 7}`, { signal: AbortSignal.timeout(20000) })).json(); if (j.ok) hot = new Set(j.nos); } catch (e) { console.log('최근 본 포인트 목록 실패:', e.message); }
+try { for (let i = 0; i < uniq.length; i += 1000) { const j = await (await fetch(`${SITE}/api/spotobs?svc=vishave`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pts: uniq.slice(i, i + 1000).map(s => s.k) }), signal: AbortSignal.timeout(30000) })).json(); if (j.ok) j.missing.forEach(k => missing.add(k)); } } catch (e) { console.log('시야 저장 여부 확인 실패:', e.message); }
+const MAX_NEW_VIS = process.env.MAX_NEW_VIS === undefined ? 60 : +process.env.MAX_NEW_VIS;
+const hotList = uniq.filter(st => st.no && hot.has(st.no) && !missing.has(st.k));
+const newList = uniq.filter(st => missing.has(st.k)).sort((a, b) => (hot.has(b.no) ? 1 : 0) - (hot.has(a.no) ? 1 : 0)).slice(0, MAX_NEW_VIS);
+const stations = hotList.concat(newList);
+console.log(`정점 ${uniq.length}곳 중 오늘 받을 곳 ${stations.length}곳 (최근 7일 안에 본 곳 ${hotList.length} · 처음 받는 곳 ${newList.length}/${missing.size})`);
 const results = [];
 let next = 0;
 await Promise.all(Array.from({ length: CONCURRENCY }, async () => {

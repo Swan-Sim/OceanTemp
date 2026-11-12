@@ -62,7 +62,7 @@ async function checkStored(all) { // → { missing: 저장 안 됨(시도할 것
 }
 const spots = await loadSpots();
 const allTiles = planTiles(spots);
-const FULL = process.env.FULL === '1' || new Date().getUTCDay() === 0;
+const FULL = process.env.FULL === '1'; // [CHANGE] 주 1회 전체 재확인은 없앰: 수심·해안선은 안 바뀌는 자료라 한 번 저장하면 끝. 낡은 저장본은 누가 열 때 한 번 새로 받아요
 let tiles = [], nSkip = 0, nLeft = 0; const missKey = new Set();
 try { const c = await checkStored(allTiles); c.missing.forEach(t => missKey.add(t[0] + '_' + t[1])); nSkip = c.skipped.size;
   // [ADD] 새로 계산할 타일은 하루 MAX_NEW장까지만(기본 80). 포인트를 한꺼번에 많이 넣어도 며칠에 걸쳐 나눠서 계산해요.

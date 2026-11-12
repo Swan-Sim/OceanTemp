@@ -30,8 +30,8 @@ const CHECK_DS = 'noaacwNPPVIIRSkd490Daily';
 // [CHANGE] 부산항처럼 항구(2~4m)와 바깥 바다(20m+)가 몇 km 사이에 갈리는 곳이 있어서 5km → 3km로 좁힘.
 // 3km 안에도 픽셀 7개쯤이라 튀는 픽셀 하나는 여전히 걸러져요. 값이 없으면 6km, 10km로 넓힘
 const RADII = [0.03, 0.06, 0.1], RCHECK = 0.11;
-const FRESH_MS = 8 * 86400e3, // [CHANGE] 20시간 → 8일: 예열이 포인트를 며칠에 한 번씩 돌아가며 새로 받게 바뀌어서, 그 사이에는 저장본을 그대로 보여줘요(방문자가 30~50초 기다리지 않게)
-   KEEP_SEC = 400 * 86400; // [CHANGE] 받은 자료는 1년 넘게 보관 - 원본(NOAA)이 막혀도 마지막 받은 값과 날짜를 보여줘요
+const FRESH_MS = 24 * 3600e3, // 저장한 지 24시간 안이면 새것으로 봄. 더 오래됐으면: 저장본을 먼저 보여주고, 새로 받기는 하루 한 번만 시도
+  KEEP_SEC = 400 * 86400; // [CHANGE] 받은 자료는 1년 넘게 보관 - 원본(NOAA)이 막혀도 마지막 받은 값과 날짜를 보여줘요
 
 async function fetchText(url, timeoutMs) {
   const controller = new AbortController();
@@ -173,16 +173,25 @@ module.exports = async function handler(req, res) {
     if (r[0].result) stored = JSON.parse(r[0].result);
     legacy = r[1].result ? JSON.parse(r[1].result) : (r[2].result ? JSON.parse(r[2].result) : null);
   } catch (_) { /* Redis가 없거나 실패해도 원본으로 진행 */ }
-  // 매일 미리 채우기(refresh=1)용 - 남용 방지로 저장한 지 6시간이 지난 것만 새로 받음
-  const force = req.query.refresh === '1' && stored && Date.now() - stored.savedAt > 6 * 3600e3;
-  if (stored && !force && Date.now() - stored.savedAt < FRESH_MS) return send(stored.body, 'redis', 21600);
-  // [ADD] 포인트 페이지(서버)용: 저장본이 조금 오래됐어도 바로 돌려줌(새로 받기는 30~50초 걸려서 페이지가 시야 없이 나가던 문제)
-  if (stored && stored.body && stored.body.ok && req.query.fast === '1') return send(stored.body, 'redis-fast', 600);
+  // [CHANGE] 설계: ① 저장본이 있으면 먼저 보여준다 ② 24시간이 지났으면 새로 받기를 "하루 한 번만" 시도한다
+  //  - 보통 요청: 저장본을 바로 돌려줌(오래됐으면 stale 표시 → 화면이 뒤에서 refresh=1 로 한 번 요청)
+  //  - refresh=1(예열·화면의 뒤 요청): 20시간 넘은 저장본만 새로 받음. 받으러 가기 전에 "오늘 시도함"을 적고, 성공하면 지움
+  const age = stored ? Date.now() - stored.savedAt : Infinity;
+  const tkey = `tried:v1:vis:${ll}`, dayLeft = Math.max(600, 86400 - Math.floor(Date.now() / 1000) % 86400);
+  let tried = false; try { tried = !!(await redisPipeline([['EXISTS', tkey]]))[0].result; } catch (_) {}
+  const wantRefresh = req.query.refresh === '1' && age > 20 * 3600e3 && !tried;
+  if (stored && !wantRefresh) {
+    if (age < FRESH_MS) return send(stored.body, 'redis', 21600);
+    if (req.query.fast === '1') return send(stored.body, 'redis-fast', 600);
+    return send(Object.assign({}, stored.body, { stale: true, tried: tried || undefined, savedAt: stored.savedAt }), 'redis-old', 600);
+  }
+  if (!stored && tried) { res.setHeader('Cache-Control', 'public, s-maxage=1800, max-age=600'); return res.status(200).json({ ok: false, reason: 'TRIED_TODAY', wait: true }); }
+  try { await redisPipeline([['SET', tkey, '1', 'EX', String(dayLeft)]]); } catch (_) {}
 
   // 2) NOAA 원본: 저장본이 있으면 최근 며칠만 이어 붙이고, 없으면 30일씩 나눠 처음부터
   try {
     const body = stored && stored.body && stored.body.ok ? await fetchUpdate(lat, lon, stored.body) : await fetchFull(lat, lon);
-    try { await redisPipeline([['SET', key, JSON.stringify({ savedAt: Date.now(), body }), 'EX', String(KEEP_SEC)]]); } catch (_) {}
+    try { await redisPipeline([['SET', key, JSON.stringify({ savedAt: Date.now(), body }), 'EX', String(KEEP_SEC)], ['DEL', tkey]]); } catch (_) {}
     return send(body, stored ? 'noaa-update' : 'noaa', body.ok ? 21600 : 86400);
   } catch (e) {
     // 3) 원본 실패 → 조금 오래된 저장본이라도, 그것도 없으면 예전 방식 저장본

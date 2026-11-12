@@ -81,8 +81,16 @@ try {
   console.log(`위성 수온 격자: ${r.status} ${r.headers.get('x-sst-cache') || ''}`);
 } catch (e) { console.log('위성 수온 격자 실패:', e.message); }
 
-const stations = await loadStations();
-console.log(`정점 ${stations.length}곳 시야 자료 미리 불러오기 시작`);
+const allStations = await loadStations();
+// [ADD] 돌아가며 받기: 포인트를 N묶음으로 나눠 하루에 한 묶음만 새로 받아요(함수 실행 시간 절약).
+//  N = 3일이 기본이고, 포인트가 늘면 하루 약 400곳을 넘지 않게 자동으로 늘어나요. ROTATE_DAYS 로 직접 정할 수도 있어요.
+//  묶음은 좌표로 정해서, 포인트가 추가돼도 기존 포인트의 순서는 안 바뀌어요.
+const uniq = []; { const seen = new Set(); for (const st of allStations) { const k = st.lat.toFixed(3) + ',' + st.lon.toFixed(3); if (!seen.has(k)) { seen.add(k); uniq.push(st); } } }
+const ROTATE = Math.max(1, +process.env.ROTATE_DAYS || Math.max(3, Math.ceil(uniq.length / 400)));
+const dayNo = Math.floor(Date.now() / 86400e3);
+const groupOf = (st) => (((Math.round(st.lat * 1000) * 73856093) ^ (Math.round(st.lon * 1000) * 19349663)) >>> 0) % ROTATE;
+const stations = uniq.filter(st => groupOf(st) === dayNo % ROTATE);
+console.log(`정점 ${uniq.length}곳 중 오늘 묶음 ${stations.length}곳 시야 자료 받기 시작 (${ROTATE}일에 한 번씩 돌아가며)`);
 const results = [];
 let next = 0;
 await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
@@ -110,7 +118,7 @@ try {
   const kh = await (await fetch(`${SITE}/api/khoa?svc=stations`, { signal: AbortSignal.timeout(130000) })).json();
   const nw = await (await fetch(`${SITE}/api/noaa?svc=stations`, { signal: AbortSignal.timeout(60000) })).json();
   const khoaCodes = new Set(), coopsIds = new Set();
-  for (const st of stations) {
+  for (const st of uniq) {
     const k = nearestWithin(kh.stations, st, 25, s => s.kind !== 'buoy'); if (k) khoaCodes.add(k.code);
     const n = nearestWithin(nw.coops, st, 25, s => s.wt); if (n) coopsIds.add(n.id); // 미국 정점: NOAA 4년치 수온 미리 받아 두기
   }

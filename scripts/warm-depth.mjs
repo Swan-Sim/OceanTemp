@@ -63,11 +63,16 @@ async function checkStored(all) { // → { missing: 저장 안 됨(시도할 것
 const spots = await loadSpots();
 const allTiles = planTiles(spots);
 const FULL = process.env.FULL === '1' || new Date().getUTCDay() === 0;
-let tiles = [], nSkip = 0; const missKey = new Set();
+let tiles = [], nSkip = 0, nLeft = 0; const missKey = new Set();
 try { const c = await checkStored(allTiles); c.missing.forEach(t => missKey.add(t[0] + '_' + t[1])); nSkip = c.skipped.size;
-  tiles = FULL ? allTiles.filter(t => !c.skipped.has(t[0] + '_' + t[1])) : c.missing;
+  // [ADD] 새로 계산할 타일은 하루 MAX_NEW장까지만(기본 80). 포인트를 한꺼번에 많이 넣어도 며칠에 걸쳐 나눠서 계산해요.
+  //  순서는 포인트가 들어 있는 타일 먼저, 그 둘레는 나중. 방문자가 먼저 연 타일은 그때 바로 계산돼요.
+  const MAX_NEW = process.env.MAX_NEW === undefined ? 80 : +process.env.MAX_NEW;
+  const fresh = c.missing.slice(0, MAX_NEW); nLeft = c.missing.length - fresh.length;
+  const freshKey = new Set(fresh.map(t => t[0] + '_' + t[1]));
+  tiles = FULL ? allTiles.filter(t => { const k = t[0] + '_' + t[1]; return !c.skipped.has(k) && (!missKey.has(k) || freshKey.has(k)); }) : fresh;
 } catch (e) { console.error('저장 여부 확인 실패 → 오늘은 건너뜀:', e.message); }
-console.log(`포인트 ${spots.length}곳 → 수심 타일 ${allTiles.length}장(둘레 ${RING}칸) 중 ${FULL ? '전체 다시 확인 ' + tiles.length + '장' : '아직 없는 ' + tiles.length + '장만 계산'} · 최근 실패로 건너뜀 ${nSkip}장`);
+console.log(`포인트 ${spots.length}곳 → 수심 타일 ${allTiles.length}장(둘레 ${RING}칸) 중 ${FULL ? '전체 다시 확인 ' + tiles.length + '장' : '아직 없는 ' + tiles.length + '장만 계산'} · 최근 실패로 건너뜀 ${nSkip}장 · 다음 날로 미룸 ${nLeft}장`);
 const t0 = Date.now(); let i = 0, done = 0, empty = 0, pending = 0, failed = 0, slow = 0;
 async function worker() {
   while (i < tiles.length && Date.now() - t0 < BUDGET_MS) {

@@ -28,7 +28,13 @@ let __adminChk=null;
 function isAdminLoggedIn(){
   let pw='';try{const o=JSON.parse(localStorage.getItem('otemp.admin')||'null');if(o&&o.pw&&o.exp>Date.now())pw=o.pw}catch(_){}
   if(!pw){try{pw=sessionStorage.getItem('adminPw')||''}catch(_){}}
-  if(!pw)return Promise.resolve(false);
+  if(!pw){ // [ADD] 저장된 관리 비밀번호가 없어도, 관리자 권한 회원으로 로그인한 상태면 통과(서버가 로그인 세션으로 다시 확인)
+    let adm=false;try{const u=window.otAccount&&window.otAccount.user&&window.otAccount.user();adm=!!(u&&u.role==='admin')}catch(_){}
+    if(!adm)return Promise.resolve(false);
+    if(__adminChk&&__adminChk.pw==='@session')return __adminChk.p;
+    const p=fetch('/api/stats?svc=settings',{credentials:'same-origin'}).then(r=>r.ok).catch(()=>false);
+    __adminChk={pw:'@session',p};return p;
+  }
   if(__adminChk&&__adminChk.pw===pw)return __adminChk.p;
   const p=fetch('/api/stats?svc=settings',{headers:{'x-admin-password':pw}}).then(r=>r.ok).catch(()=>false);
   __adminChk={pw,p};return p;

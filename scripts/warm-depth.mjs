@@ -65,9 +65,9 @@ const allTiles = planTiles(spots);
 const FULL = process.env.FULL === '1'; // [CHANGE] 주 1회 전체 재확인은 없앰: 수심·해안선은 안 바뀌는 자료라 한 번 저장하면 끝. 낡은 저장본은 누가 열 때 한 번 새로 받아요
 let tiles = [], nSkip = 0, nLeft = 0; const missKey = new Set();
 try { const c = await checkStored(allTiles); c.missing.forEach(t => missKey.add(t[0] + '_' + t[1])); nSkip = c.skipped.size;
-  // [ADD] 새로 계산할 타일은 하루 MAX_NEW장까지만(기본 80). 포인트를 한꺼번에 많이 넣어도 며칠에 걸쳐 나눠서 계산해요.
+  // [ADD] 새로 계산할 타일은 하루 MAX_NEW장까지만(기본 40). 포인트를 한꺼번에 많이 넣어도 며칠에 걸쳐 나눠서 계산해요.
   //  순서는 포인트가 들어 있는 타일 먼저, 그 둘레는 나중. 방문자가 먼저 연 타일은 그때 바로 계산돼요.
-  const MAX_NEW = process.env.MAX_NEW === undefined ? 80 : +process.env.MAX_NEW;
+  const MAX_NEW = process.env.MAX_NEW === undefined ? 40 : +process.env.MAX_NEW;
   const fresh = c.missing.slice(0, MAX_NEW); nLeft = c.missing.length - fresh.length;
   const freshKey = new Set(fresh.map(t => t[0] + '_' + t[1]));
   tiles = FULL ? allTiles.filter(t => { const k = t[0] + '_' + t[1]; return !c.skipped.has(k) && (!missKey.has(k) || freshKey.has(k)); }) : fresh;
@@ -85,9 +85,9 @@ async function worker() {
 }
 await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 console.log(`끝: ${done}/${tiles.length}장 확인 · 바다 없음 ${empty} · 임시 저장(다음에 다시) ${pending} · 실패 ${failed} · 20초 넘은 것 ${slow}${i < tiles.length ? ' · 시간 한도로 멈춤(내일 이어서)' : ''}`);
-// [ADD] 흐름 화살표용 해안선(포인트 둘레 약 4km)도 미리 받아 저장해요. 저장본이 없고 오늘 아직 시도 안 한 곳만, 하루 MAX_COAST곳까지(기본 40).
+// [ADD] 흐름 화살표용 해안선(포인트 둘레 약 4km)도 미리 받아 저장해요. 저장본이 없고 오늘 아직 시도 안 한 곳만, 하루 MAX_COAST곳까지(기본 20).
 try {
-  const MAX_COAST = process.env.MAX_COAST === undefined ? 40 : +process.env.MAX_COAST;
+  const MAX_COAST = process.env.MAX_COAST === undefined ? 20 : +process.env.MAX_COAST;
   const keys = [...new Set(spots.map(s => (+s.lat.toFixed(2)) + '_' + (+s.lon.toFixed(2))))];
   let miss = [];
   for (let k = 0; k < keys.length; k += 1000) {

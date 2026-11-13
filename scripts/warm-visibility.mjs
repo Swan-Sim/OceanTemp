@@ -83,13 +83,13 @@ try {
 
 const allStations = await loadStations();
 // [CHANGE] 최적화: 시야(위성)는 매일 바뀌지만, 아무도 안 보는 포인트까지 매일 받을 필요는 없어요.
-//  ① 최근 7일 안에 누군가 열어 본 포인트만 매일 새로 받기  ② 저장본이 아예 없는 포인트는 하루 MAX_NEW_VIS곳(기본 60)씩 처음 받기
+//  ① 최근 7일 안에 누군가 열어 본 포인트만 매일 새로 받기  ② 저장본이 아예 없는 포인트는 하루 MAX_NEW_VIS곳(기본 30)씩 처음 받기
 //  ③ 그 밖의 포인트는 누가 열 때: 저장본을 먼저 보여주고 24시간이 지났으면 그때 한 번 새로 받아요(서버·화면 쪽 처리)
 const uniq = []; { const seen = new Set(); for (const st of allStations) { const k = st.lat.toFixed(3) + '_' + st.lon.toFixed(3); if (!seen.has(k)) { seen.add(k); uniq.push(Object.assign(st, { k })); } } }
 let hot = new Set(), missing = new Set();
 try { const j = await (await fetch(`${SITE}/api/spotobs?svc=hot&days=${+process.env.HOT_DAYS || 7}`, { signal: AbortSignal.timeout(20000) })).json(); if (j.ok) hot = new Set(j.nos); } catch (e) { console.log('최근 본 포인트 목록 실패:', e.message); }
 try { for (let i = 0; i < uniq.length; i += 1000) { const j = await (await fetch(`${SITE}/api/spotobs?svc=vishave`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pts: uniq.slice(i, i + 1000).map(s => s.k) }), signal: AbortSignal.timeout(30000) })).json(); if (j.ok) j.missing.forEach(k => missing.add(k)); } } catch (e) { console.log('시야 저장 여부 확인 실패:', e.message); }
-const MAX_NEW_VIS = process.env.MAX_NEW_VIS === undefined ? 60 : +process.env.MAX_NEW_VIS;
+const MAX_NEW_VIS = process.env.MAX_NEW_VIS === undefined ? 30 : +process.env.MAX_NEW_VIS;
 const hotList = uniq.filter(st => st.no && hot.has(st.no) && !missing.has(st.k));
 const newList = uniq.filter(st => missing.has(st.k)).sort((a, b) => (hot.has(b.no) ? 1 : 0) - (hot.has(a.no) ? 1 : 0)).slice(0, MAX_NEW_VIS);
 const stations = hotList.concat(newList);

@@ -585,7 +585,7 @@ function seasonFor(lang, clim, climVis) {
   const basis = { ko: '기준: 시야 55% · 생물 활동 30% · 수온 15%, 플랑크톤 번성 달 제외. 생물 활동은 실측 자료가 없어 그 바다의 따뜻한 철로 추정한 값이에요.', en: 'Basis: visibility 55% · marine-life activity 30% · water temp 15%; plankton-bloom months excluded. Marine-life activity is estimated from the site’s warm season (no direct biodiversity data).', ja: '基準：透明度55%・生物活動30%・水温15%、プランクトン増殖月は除外。生物活動は実測データがないため、その海域の暖かい季節から推定しています。', es: 'Base: visibilidad 55% · actividad de vida marina 30% · temperatura del agua 15%; se excluyen los meses de floración de plancton. La actividad de vida marina se estima a partir de la temporada cálida del sitio (sin datos directos).', zh: '依據：能見度 55%・海洋生物活動 30%・水溫 15%，排除浮游植物增生月份。生物活動無實測資料，依該海域的暖季推估。' }[lang];
   const rec = m.map((_, i) => idxs.includes(i));
   const chlTxt = cm ? ({ ko: blTxt ? `플랑크톤(클로로필) 번성: ${blTxt}` : '플랑크톤 번성 달 없음(클로로필 연중 낮음)', en: blTxt ? `Plankton (chlorophyll) bloom: ${blTxt}` : 'No bloom months (chlorophyll low all year)', ja: blTxt ? `プランクトン（クロロフィル）増殖: ${blTxt}` : '増殖月なし（クロロフィル年中低い）', es: blTxt ? `Floración de plancton (clorofila): ${blTxt}` : 'Sin meses de floración (clorofila baja todo el año)', zh: blTxt ? `浮游植物（葉綠素）增生：${blTxt}` : '無增生月份（葉綠素全年偏低）' })[lang] : ({ ko: '클로로필 자료 준비 중', en: 'Chlorophyll data pending', ja: 'クロロフィルデータ準備中', es: 'Datos de clorofila pendientes', zh: '葉綠素資料準備中' })[lang];
-  return { avgT, avgV, range, why, basis, bloom: blTxt, rec, chlTxt };
+  return { avgT, avgV, range, why, basis, bloom: blTxt, rec, chlTxt, chlReady: !!cm };
 }
 const tempColor = (t) => t < 10 ? '#6366f1' : t < 16 ? '#3b82f6' : t < 20 ? '#0e9488' : t < 24 ? '#84cc16' : t < 27 ? '#facc15' : '#f97316';
 
@@ -599,7 +599,7 @@ a{color:inherit}.wrap{max-width:760px;margin:0 auto;padding:16px 16px 48px}
 .crumb{font-size:12px;color:var(--dim);margin:14px 0 4px}.crumb a{text-decoration:none}
 h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em;line-height:1.3}
 .sub{color:var(--muted);font-size:13px;margin:0 0 12px}
-.h1row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.h1row h1{margin:0}.altname{color:var(--muted);font-size:13.5px;margin:2px 0 8px}.lead{font-size:16px;line-height:1.55;margin:6px 0 10px}#storm-banner{margin:10px 0;padding:10px 12px;border-radius:10px;background:rgba(127,29,29,.45);border:1px solid rgba(248,113,113,.6);color:#fee2e2;font-size:14px;line-height:1.5}.shopline{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.shopline a{color:var(--accent);text-decoration:none}
+.h1row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.h1row h1{margin:0}.altname{color:var(--muted);font-size:13.5px;margin:2px 0 8px}.lead{font-size:16px;line-height:1.55;margin:6px 0 10px}.h1row .shopline{margin-left:auto}#storm-banner{margin:10px 0;padding:10px 12px;border-radius:10px;background:rgba(127,29,29,.45);border:1px solid rgba(248,113,113,.6);color:#fee2e2;font-size:14px;line-height:1.5}.shopline{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.shopline a{color:var(--accent);text-decoration:none}
 .plog{padding:8px 0;border-bottom:1px solid var(--line)}.plog:last-of-type{border-bottom:0}.plog .l1{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline}.plog .who{color:var(--accent);font-weight:600}.plog .m{color:var(--muted);font-size:13px}.plog .n{font-size:13.5px;margin-top:3px;white-space:pre-wrap}
 .phrow{display:flex;gap:6px;overflow-x:auto;margin:8px 0 2px;padding-bottom:2px}.phrow img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
 .cards.g4 .c.amb{border-color:#FFB000;background:rgba(255,176,0,.08)}.bar.dim{opacity:.38;filter:saturate(.35)}
@@ -740,10 +740,10 @@ function renderSpot(lang, st0, all, d, shops, clim, base, climVis, depth, warm, 
   const F = lang === 'en' ? (v) => ` <small>(${f(v)}°F)</small>` : () => '';
 
   const cards = `<div class="cards">
-<div class="c t"><div class="l">${t.nowT}</div><div class="v">${nowT ?? '–'}<small>°C</small></div><div class="s">${d.obs ? esc(t.obs(d.obs.name, d.obs.dist)) : t.model}${lang === 'en' && nowT != null ? ` · ${f(nowT)}°F` : ''}</div></div>
-${inland ? `<div class="c"><div class="l">${t.air}</div><div class="v">${d.now.air != null ? Math.round(d.now.air) : '–'}<small>°C</small></div><div class="s">${d.days[0] && d.days[0].airMin != null ? `${d.days[0].airMin}~${Math.round(d.days[0].airMax)}°C` : ''}</div></div>` : `<div class="c"><div class="l">${t.vis}</div><div class="v">${visToday ? fmtVis(visToday.v) : '–'}<small>m</small></div><div class="s">${visToday ? t.range(fmtVis(visToday.lo), fmtVis(visToday.hi)) : ''}</div></div>
-<div class="c"><div class="l">${t.wave}</div><div class="v">${r1(d.now.wave) ?? '–'}<small>m</small></div><div class="s">${d.now.period != null ? t.period(Math.round(d.now.period)) : ''}</div></div>`}
-<div class="c"><div class="l">${t.wind}</div><div class="v">${d.now.wind != null ? Math.round(d.now.wind) : '–'}<small>m/s</small></div><div class="s">${d.now.dir != null ? t.dirW(deg(d.now.dir)) : ''}${d.now.gust != null ? ' · ' + t.gust(Math.round(d.now.gust)) : ''}</div></div>
+<div class="c t"><div class="l">🌡️ ${t.nowT}</div><div class="v"${nowT != null ? ` style="color:${tempColor(nowT)}"` : ''}>${nowT ?? '–'}<small>°C</small></div><div class="s">${d.obs ? esc(t.obs(d.obs.name, d.obs.dist)) : t.model}${lang === 'en' && nowT != null ? ` · ${f(nowT)}°F` : ''}</div></div>
+${inland ? `<div class="c"><div class="l">☀️ ${t.air}</div><div class="v">${d.now.air != null ? Math.round(d.now.air) : '–'}<small>°C</small></div><div class="s">${d.days[0] && d.days[0].airMin != null ? `${d.days[0].airMin}~${Math.round(d.days[0].airMax)}°C` : ''}</div></div>` : `<div class="c"><div class="l">👁️ ${t.vis}</div><div class="v" style="color:var(--sky)">${visToday ? fmtVis(visToday.v) : '–'}<small>m</small></div><div class="s">${visToday ? t.range(fmtVis(visToday.lo), fmtVis(visToday.hi)) : ''}</div></div>
+<div class="c"><div class="l">🌊 ${t.wave}</div><div class="v" style="color:#7dd3fc">${r1(d.now.wave) ?? '–'}<small>m</small></div><div class="s">${d.now.period != null ? t.period(Math.round(d.now.period)) : ''}</div></div>`}
+<div class="c"><div class="l">💨 ${t.wind}</div><div class="v" style="color:#fbbf24">${d.now.wind != null ? Math.round(d.now.wind) : '–'}<small>m/s</small></div><div class="s">${d.now.dir != null ? t.dirW(deg(d.now.dir)) : ''}${d.now.gust != null ? ' · ' + t.gust(Math.round(d.now.gust)) : ''}</div></div>
 </div>`;
 
   let tide = '';
@@ -775,7 +775,7 @@ ${d.days.map((x, i) => { const v = d.vis && d.vis[x.date]; return `<tr><td>${t.d
     const recBar = (i) => sz && sz.rec[i];
     // [CHANGE] "한눈에 보기" + "월별 평균 수온"을 한 카드로: 왼쪽 위 추천 시즌 → 연평균 수온·시야·플랑크톤 → 월별 그래프(추천 달 호박색, 나머지는 채도 낮게) → 슈트 → 표
     climH = `<h2>${{ ko: '한눈에 보기', en: 'At a glance', ja: 'ひと目で', es: 'De un vistazo', zh: '一目了然' }[lang] || 'At a glance'}</h2><div class="card">
-${sz ? `<div class="cards g4"><div class="c amb"><div class="l">${L[0]}</div><div class="v" style="font-size:19px">${sz.range}</div></div><div class="c"><div class="l">${L[1]}</div><div class="v">${sz.avgT}<small>°C</small></div></div>${sz.avgV != null ? `<div class="c"><div class="l">${L[2]}</div><div class="v">${fmtVis(sz.avgV)}<small>m</small></div></div>` : (() => { const cv = d && d.vis && d.vis[d.today]; return `<div class="c"><div class="l">${{ ko: '시야 (현재·위성)', en: 'Visibility (now, satellite)', ja: '透明度（現在・衛星）', es: 'Visibilidad (ahora, satélite)', zh: '能見度（目前・衛星）' }[lang]}</div><div class="v">${cv ? fmtVis(cv.v) : '–'}<small>m</small></div><div class="s">${{ ko: '연평균은 준비 중', en: 'yearly average pending', ja: '年平均は準備中', es: 'media anual pendiente', zh: '年平均準備中' }[lang]}</div></div>`; })()}<div class="c"><div class="l">${L[3]}</div><div class="v" style="font-size:12.5px;font-weight:600;white-space:normal;line-height:1.35">${esc(sz.chlTxt)}</div></div></div>
+${sz ? `<div class="cards g4"><div class="c amb"><div class="l">⭐ ${L[0]}</div><div class="v" style="font-size:19px">${sz.range}</div></div><div class="c"><div class="l">🌡️ ${L[1]}</div><div class="v" style="color:${tempColor(sz.avgT)}">${sz.avgT}<small>°C</small></div></div>${sz.avgV != null ? `<div class="c"><div class="l">👁️ ${L[2]}</div><div class="v" style="color:var(--sky)">${fmtVis(sz.avgV)}<small>m</small></div></div>` : (() => { const cv = d && d.vis && d.vis[d.today]; return `<div class="c"><div class="l">${{ ko: '시야 (현재·위성)', en: 'Visibility (now, satellite)', ja: '透明度（現在・衛星）', es: 'Visibilidad (ahora, satélite)', zh: '能見度（目前・衛星）' }[lang]}</div><div class="v">${cv ? fmtVis(cv.v) : '–'}<small>m</small></div><div class="s">${{ ko: '연평균은 준비 중', en: 'yearly average pending', ja: '年平均は準備中', es: 'media anual pendiente', zh: '年平均準備中' }[lang]}</div></div>`; })()}${sz.chlReady ? `<div class="c"><div class="l">🦠 ${L[3]}</div><div class="v" style="font-size:12.5px;font-weight:600;white-space:normal;line-height:1.35">${esc(sz.chlTxt)}</div></div>` : ''}</div>
 <p class="txt" style="margin-top:4px"><b>${L[4]}:</b> ${sz.why}</p>` : ''}
 <div class="months">${m.map((v, i) => `<div class="bar${recBar(i) ? ' rec' : ' dim'}" style="height:${((v - floor) / span * 100).toFixed(0)}%;background:${recBar(i) ? '#FFB000' : tempColor(v)}" title="${t.month(i)} ${v}°C"><span>${Math.round(v)}°</span></div>`).join('')}</div>
 <div class="ml">${m.map((_, i) => `<span${recBar(i) ? ' style="color:#FFB000;font-weight:700"' : ''}>${t.month(i)}</span>`).join('')}</div>
@@ -814,14 +814,15 @@ ${d.obs && d.obs.kind === 'seoul' ? `<p class="note" style="margin:0 0 10px">${d
 <div class="cta"><a class="btn" href="/?no=${st.no}&lang=${lang}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>
 ${tide}${days}`;
   let regionLink = ''; try { const RG = require('./_region'); const r = RG.buildRegions(all).find(x => x.spots.some(o => o.no === st.no)); if (r) regionLink = `<p class="sub"><a href="${RG.rpath(lang, r)}">${esc(t.regionOf(r.key))}</a></p>`; } catch (_) {} // [ADD] 지역 페이지 링크
+  // [CHANGE] 제목 바로 아래에 "지금" 카드(수온·시야·파고·바람)를 올리고 문장형 요약은 뺐어요(문장은 검색 설명 meta description에 그대로 있어요)
   const body = `${header(lang, hrefs)}
 <nav class="crumb"><a href="/${lang}/s/">${t.links[1]}</a> › <a href="/${lang}/s/#${st.cc || 'xx'}">${esc(cname)}</a> › ${esc(st.name)}</nav>
 <div class="h1row"><h1>${esc(inland ? t.h1In(st.name) : t.h1(st.name))}</h1>${shopLine}</div>${st0.name && st0.name !== st.name ? `<div class="altname">${esc(st0.name)}</div>` : ''}
-${nowT != null && !d.pending ? `<p class="lead">${esc(t.lead(st.name, nowT, fmtDate(d.obs && d.obs.at ? d.obs.at : d.at, { dateStyle: 'medium', timeStyle: 'short' }), d.obs ? t.leadObs(d.obs.name, d.obs.dist) : t.leadModel, visToday ? fmtVis(visToday.v) : null, r1(d.now.wave)))}</p>` : ''}${regionLink}
+${regionLink}
 <div id="storm-banner" hidden></div>
+${partW('now', nowInner, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}&lang=${lang}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}
 ${photoHtml}
 ${partW('clim', climH)}${SHOW_DEPTH ? partW('depth', inland ? '' : depthHtml(lang, depth), inland ? '' : undefined) : ''}
-${partW('now', nowInner, `<p class="sub">${t.sub(st.lat.toFixed(3), st.lon.toFixed(3))}</p>${SPIN}<div class="cta"><a class="btn" href="/?no=${st.no}&lang=${lang}">${t.cta}</a><button class="btn g" id="share" type="button">${t.share}</button></div>`)}
 ${shopHtml}${partW('near', nearHtml, '')}
 <div id="plogs" hidden></div>
 <h2>${t.aboutH(esc(st.name))}</h2><p class="txt">${esc(inland ? t.aboutIn(st.name, cname) : t.about(st.name, cname))}</p>

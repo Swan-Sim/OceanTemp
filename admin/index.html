@@ -150,12 +150,13 @@
       <div class="card"><h2>포인트 바로 등록</h2><a href="/spot/" style="display:inline-block;color:var(--text);border:1px solid rgba(255,176,0,.5);border-radius:999px;padding:6px 14px;text-decoration:none">+ 새 포인트 바로 등록</a><div class="hint">이 브라우저에서 관리자로 로그인해 두면(7일 유지, 로그아웃하면 해제) 사이트 지도의 '포인트 등록' 버튼으로 열어도 승인 없이 바로 등록되고 하루 한도도 없어요.</div>
         <details style="margin-top:12px"><summary style="cursor:pointer">여러 개 한 번에 등록</summary>
           <textarea id="bulkSpots" class="f" rows="8" style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px" placeholder="한 줄에 하나: 이름, 위도, 경도, 짧은이름(선택), 나라(선택), 메모(선택)&#10;예) Tawala MPA (Panglao), 9.54887, 123.79789, Tawala MPA, Philippines, Reef wall"></textarea>
-          <div class="actions" style="margin-top:6px"><button id="khoaScuba" type="button">KHOA 스쿠버 포인트 불러오기</button> <button class="primary" id="bulkGo" type="button">등록</button><span class="muted" id="bulkMsg" style="margin-left:8px"></span></div>
+          <div class="actions" style="margin-top:6px"><button id="khoaScuba" type="button">KHOA 스쿠버 포인트 불러오기</button> <button id="bulkCheck" type="button">중복·형식 확인</button> <button class="primary" id="bulkGo" type="button">등록</button><span class="muted" id="bulkMsg" style="margin-left:8px"></span></div>
+          <div id="bulkOut" class="hint"></div>
           <div class="actions" style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.1)"><button id="trAll" type="button">언어별 이름 자동 채우기 (현지 발음 표기)</button><span class="muted" id="trMsg" style="margin-left:8px"></span></div>
           <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.1)"><b>지역 일괄 지정</b> <span class="hint">지역 페이지(/ko/r/…)는 이 지역 이름으로 묶여요. 한 줄에 하나: <code>지역명|번호,번호,…</code> 또는 <code>지역명|@중심번호|반경km</code> (예: <code>Cebu|@295|25</code> = 295번에서 25km 안 전부)</span>
             <textarea id="bulkRegion" class="f" rows="3" style="width:100%;margin-top:6px;font-family:ui-monospace,monospace;font-size:12px" placeholder="Cebu|@295|25&#10;제주|@254|40&#10;Malapascua|482,483,484"></textarea>
             <div class="actions" style="margin-top:6px"><button class="primary" id="bulkRegionGo" type="button">지정</button><span class="muted" id="bulkRegionMsg" style="margin-left:8px"></span></div></div>
-          <div class="hint">이름이 이미 있는 포인트는 건너뛰어요. 좌표는 소수(9.54887) 형식. 쉼표가 들어간 이름은 쓰지 마세요.</div>
+          <div class="hint">이름이 같거나 기존 포인트에서 250m 안이면 중복으로 자동 건너뛰어요. 좌표는 소수(9.54887) 형식. 세노테·풀장(<code>|</code> 형식)은 상단 <b>샵</b> 탭에서 등록하세요.</div>
         </details></div>
       <div class="card"><h2>승인 대기 (새 포인트)</h2><div id="spotReqs"></div><div class="hint">승인하면 기존 포인트와 겹치지 않는 다음 번호가 자동으로 붙어요. 이름·좌표는 승인 전에 고칠 수 있어요.</div></div>
       <div class="card" id="migrateCard" style="display:none"><h2>구글 시트 → 관리 페이지로 옮기기</h2>
@@ -450,36 +451,52 @@
     } catch (_) { msg.textContent = '불러오기 실패'; }
     btn.disabled = false;
   });
-  // [ADD] 포인트 여러 개 한 번에 바로 등록(관리자) - 줄마다 spotAdd
-  document.addEventListener('click', async (e) => {
-    if (!e.target || e.target.id !== 'bulkGo') return;
-    const btn = e.target, msg = $('bulkMsg'), lines = $('bulkSpots').value.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
-    const have = new Set(((mg && mg.spots) || []).map(s => String(s.name || '').trim().toLowerCase()));
-    let ok = 0, skip = 0, bad = [];
-    btn.disabled = true;
+  const normKey = (s) => String(s || '').toLowerCase().replace(/\([^)]*\)/g, '').replace(/\b(wreck|cenote|dive|site|beach)\b/g, '').replace(/[^a-z0-9가-힣ぁ-んァ-ン一-龥]+/g, '');
+  const distM = (a, b, c, d) => { const r = Math.PI / 180, q = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2; return Math.round(12742000 * Math.asin(Math.sqrt(q))); };
+  // [ADD] 포인트 여러 개 한 번에 바로 등록(관리자) - 이름·GPS 250m 중복 자동 필터
+  async function runBulkSpots(dry) {
+    const msg = $('bulkMsg'), out = $('bulkOut'), lines = $('bulkSpots').value.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+    if (lines.length && lines.every(l => l.includes('|'))) {
+      msg.textContent = '이 형식(| 구분)은 상단 「샵」 탭 → 「풀장 · 세노테/동굴 여러 개 한 번에 등록」에 넣어주세요';
+      if (out) out.innerHTML = ''; return;
+    }
+    const existing = ((mg && mg.spots) || []).map(s => ({ no: s.no, name: s.name || '', low: String(s.name || '').trim().toLowerCase(), nk: normKey(s.name), lat: +s.lat, lon: +s.lon }));
+    let ok = 0, skip = 0; const bad = [], rows = [];
+    $('bulkGo').disabled = $('bulkCheck').disabled = true;
     for (const [i, l] of lines.entries()) {
       const [name, la, lo, label, country, note] = l.split(',').map(x => (x || '').trim());
       const lat = parseFloat(la), lon = parseFloat(lo);
-      if (!name || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) { bad.push(i + 1); continue; }
-      if (have.has(name.toLowerCase())) { skip++; continue; }
+      if (!name || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) { bad.push(i + 1); rows.push(`✗ ${i + 1}줄 형식 오류: ${esc(l.slice(0, 60))}`); continue; }
+      const low = name.toLowerCase(), nk = normKey(name);
+      const dup = existing.find(x => x.low === low || (nk.length >= 4 && x.nk === nk) || (Number.isFinite(x.lat) && Number.isFinite(x.lon) && distM(x.lat, x.lon, lat, lon) <= 250));
+      if (dup) {
+        const dm = (Number.isFinite(dup.lat) && Number.isFinite(dup.lon)) ? distM(dup.lat, dup.lon, lat, lon) : null;
+        skip++; rows.push(`⊘ 중복 건너뜀: ${esc(name)} ≈ #${dup.no || '신규'} ${esc(dup.name)}${dm != null ? ` (${dm}m)` : ''}`); continue;
+      }
+      if (dry) { ok++; rows.push(`· 등록 예정: ${esc(name)} (${lat}, ${lon})`); existing.push({ no: '', name, low, nk, lat, lon }); continue; }
       msg.textContent = `${i + 1}/${lines.length} ${name}…`;
-      try { await api('spotAdd', { name, lat, lon, label: label || '', country: country || '', note: note || '' }); ok++; have.add(name.toLowerCase()); } catch (_) { bad.push(i + 1); }
+      try {
+        await api('spotAdd', { name, lat, lon, label: label || '', country: country || '', note: note || '' });
+        ok++; existing.push({ no: '', name, low, nk, lat, lon }); rows.push(`✓ ${esc(name)} (${lat}, ${lon})`);
+      } catch (_) { bad.push(i + 1); rows.push(`✗ 실패: ${esc(name)}`); }
     }
-    btn.disabled = false;
-    msg.textContent = `등록 ${ok} · 이미 있음 ${skip}` + (bad.length ? ` · 실패/형식 오류 줄: ${bad.join(', ')}` : '');
-    if (ok) loadMgmt();
-  });
+    $('bulkGo').disabled = $('bulkCheck').disabled = false;
+    if (out) out.innerHTML = rows.join('<br>');
+    msg.textContent = (dry ? `등록 가능 ${ok} · 중복 ${skip}` : `등록 ${ok} · 중복 건너뜀 ${skip}`) + (bad.length ? ` · 실패/형식 오류 줄: ${bad.join(', ')}` : '');
+    if (!dry && ok) loadMgmt();
+  }
+  document.addEventListener('click', (e) => { if (!e.target) return; if (e.target.id === 'bulkGo') runBulkSpots(false); else if (e.target.id === 'bulkCheck') runBulkSpots(true); });
   // [ADD] 풀장·세노테/동굴 여러 개 한 번에: 직접 좌표(lat,lon 또는 주소 @lat,lon) 또는 카카오 geocode → shopSave
   async function bulkPools(dry) {
     const type = ($('bulkPoolType') && $('bulkPoolType').value === 'cenote') ? 'cenote' : 'pool';
     const msg = $('bulkPoolMsg'), out = $('bulkPoolOut'), lines = $('bulkPools').value.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#') && !/^name\|/i.test(l));
-    const have = new Set(((mg && mg.shops) || []).map(s => String(s.name || '').trim().toLowerCase()));
+    const existing = ((mg && mg.shops) || []).map(s => ({ name: s.name || '', low: String(s.name || '').trim().toLowerCase(), nk: normKey(s.name), lat: +s.lat, lon: +s.lon }));
     let ok = 0, skip = 0; const bad = [], rows = [];
     $('bulkPoolGo').disabled = $('bulkPoolCheck').disabled = true;
     for (const [i, l] of lines.entries()) {
       const [name, addrRaw, depthMax, waterTemp, env, uses, entry, hours, price, phone, web, note] = l.split('|').map(x => (x || '').trim());
       if (!name || !addrRaw) { bad.push(i + 1); continue; }
-      if (!dry && have.has(name.toLowerCase())) { skip++; continue; }
+      const low = name.toLowerCase(), nk = normKey(name);
       msg.textContent = `${i + 1}/${lines.length} ${name}…`;
       let address = addrRaw, g = null;
       const cm = addrRaw.match(/^(.*?)\s*@\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)$/) || addrRaw.match(/^()(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)$/);
@@ -493,16 +510,18 @@
         if (!g || !g.found) { try { g = await apiQuiet('geocode', { q: name }); } catch (_) {} } // 주소로 못 찾으면 이름으로
       }
       if (!g || !g.found) { bad.push(i + 1); rows.push(`✗ ${esc(name)} — ${g && g.error ? '오류: ' + esc(g.error) : '좌표 못 찾음'} (${esc(address)})`); if (g && /kakao 40[13]/.test(g.error || '')) { msg.textContent = '카카오 API가 거부했어요(' + g.error + '). 카카오 개발자 콘솔 → 앱 → 카카오맵을 활성화했는지 확인하세요'; break; } continue; }
+      const dup = existing.find(x => x.low === low || (nk.length >= 4 && x.nk === nk) || (Number.isFinite(x.lat) && Number.isFinite(x.lon) && distM(x.lat, x.lon, g.lat, g.lon) <= 200));
+      if (dup) { skip++; rows.push(`⊘ 중복 건너뜀: ${esc(name)} ≈ ${esc(dup.name)}`); continue; }
       rows.push(`${dry ? '·' : '✓'} [${type === 'cenote' ? '세노테' : '풀장'}] ${esc(name)} → ${g.lat}, ${g.lon} (${esc(g.addr || g.place)}${g.src === 'keyword' ? ' · 이름 검색' : ''})`);
-      if (dry) continue;
+      if (dry) { existing.push({ name, low, nk, lat: g.lat, lon: g.lon }); continue; }
       try {
         await api('shopSave', { type, name, address, lat: g.lat, lon: g.lon, depthMax, waterTemp, env, uses: uses.replace(/\+/g, ','), entry, hours, price, phone, web, note, plan: 'friend', show: true });
-        ok++; have.add(name.toLowerCase());
+        ok++; existing.push({ name, low, nk, lat: g.lat, lon: g.lon });
       } catch (_) { bad.push(i + 1); }
     }
     $('bulkPoolGo').disabled = $('bulkPoolCheck').disabled = false;
     out.innerHTML = rows.join('<br>');
-    msg.textContent = (dry ? `확인 ${rows.length}` : `등록 ${ok} · 이미 있음 ${skip}`) + (bad.length ? ` · 실패 줄: ${bad.join(', ')}` : '');
+    msg.textContent = (dry ? `확인 ${rows.length} · 중복 ${skip}` : `등록 ${ok} · 중복 건너뜀 ${skip}`) + (bad.length ? ` · 실패 줄: ${bad.join(', ')}` : '');
     if (ok) loadMgmt();
   }
   document.addEventListener('click', (e) => { if (!e.target) return; if (e.target.id === 'bulkPoolGo') bulkPools(false); else if (e.target.id === 'bulkPoolCheck') bulkPools(true); });

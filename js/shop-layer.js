@@ -1,11 +1,12 @@
-    // [ADD] 상세 지도에 샵·리브어보드·풀장 표시 - 정점(동그라미)과 같은 크기의 네모, 색만 다르게
-    //  다이브샵 = 주황 네모, 리브어보드 = 보라 네모, 풀장 = 파란 네모. 위치(GPS)가 저장된 곳만, 확대 11 이상에서
-    //  누르면 연락 버튼·다니는 포인트(풀장은 수심·수온 등). 이름표는 정점과 같이 js/label-layout.js가 겹치지 않게 배치
+    // [ADD] 상세 지도에 샵·리브어보드·풀장·세노테/동굴 표시 - 정점(동그라미)과 같은 크기의 네모, 색만 다르게
+    //  다이브샵 = 주황 네모, 리브어보드 = 보라 네모, 풀장 = 파란 네모, 세노테·동굴 = 청록 네모. 위치(GPS)가 저장된 곳만, 확대 11 이상에서(풀장·세노테는 모든 확대)
+    //  누르면 연락 버튼·다니는 포인트(풀장·세노테는 수심·수온 등). 이름표는 정점과 같이 js/label-layout.js가 겹치지 않게 배치
     //  오른쪽 아래 "샵 ON/OFF"로 켜고 끄기(이 브라우저에 기억)
     (function () {
       const SHOP_MIN_ZOOM = 11;   // 다이브샵·리브어보드는 확대 11 이상에서
-      const POOL_MIN_ZOOM = 0;    // [CHANGE] 풀장은 정점과 똑같이 어느 확대에서나 보여요(풀장은 내륙에 있어 정점과 안 겹침)
-      const TYPE_NAME = { shop: () => t.shopTypeShop || '다이브샵', liveaboard: () => t.shopLiveaboard || '리브어보드', pool: () => t.shopTypePool || '다이빙 풀장' };
+      const POOL_MIN_ZOOM = 0;    // [CHANGE] 풀장·세노테는 정점과 똑같이 어느 확대에서나 보여요(내륙에 있어 바다 정점과 안 겹침)
+      const isFixed = (ty) => ty === 'pool' || ty === 'cenote';
+      const TYPE_NAME = { shop: () => t.shopTypeShop || '다이브샵', liveaboard: () => t.shopLiveaboard || '리브어보드', pool: () => t.shopTypePool || '다이빙 풀장', cenote: () => t.shopTypeCenote || '세노테·동굴' };
       let on = (() => { try { return localStorage.getItem('otemp.shopLayer') !== '0'; } catch (_) { return true; } })();
       let group = null, poolGroup = null, btn = null, built = false;
       window.__shopMarkers = {}; // label-layout.js가 이름표 배치에 같이 씀
@@ -13,7 +14,7 @@
       function popupHtml(s) {
         const esc = shopEsc, nm = (no) => { const st = stations.find(x => +x.no === +no); return st ? (st.label || st.name) : '#' + no; };
         let body = '';
-        if (s.type === 'pool') {
+        if (isFixed(s.type)) {
           const f = [];
           if (s.depthMax != null) f.push(`${t.poolDepth || '최대 수심'} ${s.depthMax}m`);
           if (s.waterTemp != null) f.push(`${t.poolTemp || '수온'} ${s.waterTemp}°C`);
@@ -24,7 +25,7 @@
         }
         const links = shopLinks(s);
         if (links.length) body += `<div class="shop-btns">${links.map(([k, href, label]) => `<a class="shop-btn${k === 'tel' ? ' call' : ''}" ${linkAttrs(s, k, href)}>${SHOP_ICON[k]}<span>${esc(label)}</span></a>`).join('')}</div>`;
-        if (s.type !== 'pool' && s.spots && s.spots.length) body += `<div class="sp-spots">${esc(t.shopSpots || '다니는 포인트')}: <b>${esc(s.spots.slice(0, 12).map(nm).join(' · '))}${s.spots.length > 12 ? ' …' : ''}</b></div>`;
+        if (!isFixed(s.type) && s.spots && s.spots.length) body += `<div class="sp-spots">${esc(t.shopSpots || '다니는 포인트')}: <b>${esc(s.spots.slice(0, 12).map(nm).join(' · '))}${s.spots.length > 12 ? ' …' : ''}</b></div>`;
         return `<div class="sp-card"><div class="sp-h"><b>${esc(s.name)}</b>${s.paid ? `<span class="shop-badge">${esc(t.shopPartner || '제휴')}</span>` : ''}</div>
           <div class="sp-t">${esc(TYPE_NAME[s.type] ? TYPE_NAME[s.type]() : '')}${s.lang ? ' · ' + esc(langLabel(s.lang)) : ''}</div>
           ${s.note ? `<div class="sp-note">${esc(s.note)}</div>` : ''}${body}
@@ -35,10 +36,10 @@
         if (built || !leafletMap) return; built = true;
         group = L.layerGroup(); poolGroup = L.layerGroup();
         list.filter(s => s.lat != null && s.lon != null).forEach(s => {
-          const ty = ['shop', 'liveaboard', 'pool'].includes(s.type) ? s.type : 'shop';
+          const ty = ['shop', 'liveaboard', 'pool', 'cenote'].includes(s.type) ? s.type : 'shop';
           const icon = L.divIcon({ className: 'lf-marker-wrap lf-shopmk', html: `<div class="lf-sq ${ty}"></div><span class="lf-label">${shopEsc(s.name)}</span>`, iconSize: [20, 20], iconAnchor: [7, 10] });
           const m = L.marker([s.lat, s.lon], { icon, zIndexOffset: 300 }).bindPopup(() => popupHtml(s), { maxWidth: 270, className: 'sp-pop' });
-          window.__shopMarkers['s' + s.id] = m; (ty === 'pool' ? poolGroup : group).addLayer(m);
+          window.__shopMarkers['s' + s.id] = m; (isFixed(ty) ? poolGroup : group).addLayer(m);
         });
         sync();
       }

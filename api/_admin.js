@@ -153,7 +153,7 @@ module.exports = async function admin(req, res) {
   }
   if (svc === 'shopSave') {
     const data = S.shopFields(b);
-    if (!S.shopValid(data)) return bad(data.type === 'pool' ? 'need_name_loc' : 'need_name_spots');
+    if (!S.shopValid(data)) return bad(S.isFixedSite(data.type) ? 'need_name_loc' : 'need_name_spots');
     let shop, id = b.id ? String(b.id) : '';
     if (id) { const [raw] = await R(['HGET', K.shops, id]); if (!raw) return bad('no_shop'); shop = JSON.parse(raw); }
     else { const [n] = await R(['INCR', K.seq]); id = String(n); shop = { id, created: Date.now() }; }

@@ -620,9 +620,9 @@ body:not(.detail-mode) .nt-sel { display: none; }
     /* [ADD] 떠 있는 범례(body에 붙음): 지도·지구·패널 위 어디로든 */
     .chart-legend-overlay.floating { position: fixed; right: auto; z-index: 3000; }
 
-    /* [ADD] 지도 위 샵·리브어보드·풀장: 정점 동그라미와 같은 크기의 네모, 색만 다르게 (js/shop-layer.js) */
+    /* [ADD] 지도 위 샵·리브어보드·풀장·세노테/동굴: 정점 동그라미와 같은 크기의 네모, 색만 다르게 (js/shop-layer.js) */
     .lf-sq { width: 14px; height: 14px; border-radius: 2px; border: 2px solid rgba(255,255,255,.9); box-sizing: border-box; flex-shrink: 0; box-shadow: 0 0 4px rgba(0,0,0,.6); }
-    .lf-sq.shop { background: #f59e0b; } .lf-sq.liveaboard { background: #8b5cf6; } .lf-sq.pool { background: #2563eb; }
+    .lf-sq.shop { background: #f59e0b; } .lf-sq.liveaboard { background: #8b5cf6; } .lf-sq.pool { background: #2563eb; } .lf-sq.cenote { background: #14b8a6; }
     .sp-pop .leaflet-popup-content-wrapper { background: #0f172a; color: #e2e8f0; border: 1px solid rgba(255,255,255,.15); border-radius: 12px; }
     .sp-pop .leaflet-popup-tip { background: #0f172a; }
     .sp-pop .leaflet-popup-content { margin: 12px 14px; }

@@ -135,11 +135,12 @@
         <div class="row" style="margin-bottom:10px"><button id="noMailBtn">이메일 없는 샵 수정 링크 → 내 메일로</button></div>
         <div id="linksOut"></div>
         <div id="shopEditor"></div>
-        <details style="margin:12px 0"><summary style="cursor:pointer">풀장 여러 개 한 번에 등록 (주소 → 좌표 자동)</summary>
-          <textarea id="bulkPools" class="f" rows="8" style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px" placeholder="한 줄에 하나, | 로 구분: 이름|주소|최대수심|수온|실내외(in/out/season)|용도(scuba+free+edu+photo)|입장(open/shop)|운영시간|요금|전화|웹|메모&#10;예) K26 잠수풀|경기 가평군 청평면 고재길 262-57|26||in|scuba+free+edu|open|평일 09-22|평일 33,000원|031-585-5757|https://k-26.com|일요일 휴무"></textarea>
+        <details style="margin:12px 0"><summary style="cursor:pointer">풀장 · 세노테/동굴 여러 개 한 번에 등록 (주소 또는 위도,경도)</summary>
+          <div class="row" style="margin-top:8px"><label class="muted" style="align-self:center">종류</label><select id="bulkPoolType" class="f"><option value="pool">다이빙 풀장</option><option value="cenote">세노테·동굴</option></select></div>
+          <textarea id="bulkPools" class="f" rows="8" style="width:100%;margin-top:8px;font-family:ui-monospace,monospace;font-size:12px" placeholder="한 줄에 하나, | 로 구분: 이름|주소 또는 위도,경도|최대수심|수온|실내외(in/out/season)|용도(scuba+free+edu+photo+cave)|입장(open/shop)|운영시간|요금|전화|웹|메모&#10;예) K26 잠수풀|경기 가평군 청평면 고재길 262-57|26||in|scuba+free+edu|open|평일 09-22|평일 33,000원|031-585-5757|https://k-26.com|일요일 휴무&#10;예) Cenote Dos Ojos|Tulum, Mexico @20.3247,-87.3911|10|25|in|scuba+free+cave|shop|08:00-17:00|MXN 400|||대표 세노테, 할로클라인"></textarea>
           <div class="actions" style="margin-top:6px"><button id="bulkPoolCheck" type="button">좌표만 확인</button> <button class="primary" id="bulkPoolGo" type="button">등록</button><span class="muted" id="bulkPoolMsg" style="margin-left:8px"></span></div>
           <div id="bulkPoolOut" class="hint"></div>
-          <div class="hint">주소는 카카오 지도로 좌표를 찾아요(Vercel 환경변수 KAKAO_REST_KEY 필요). 이름이 이미 있는 풀장은 건너뛰어요. 플랜은 "지인(무료)"으로 들어가요.</div>
+          <div class="hint">두 번째 칸에 <code>위도,경도</code>(또는 <code>주소 @위도,경도</code>)를 적으면 카카오 지오코딩 없이 바로 등록돼요(해외 풀장·멕시코 세노테용). 한국 주소만 적으면 카카오 지도로 좌표를 찾아요. 이름이 이미 있으면 건너뛰어요.</div>
         </details>
         <div id="shopList"></div>
         <div class="hint">· 무료(제한)·유료: 기본 1년. 만료 14일 전과 만료일에 결제 링크(PAYMENT_URL) 안내 메일이 가고(샵 이메일이 없으면 내 메일로), 만료되면 자동으로 숨겨져요. 결제 확인 후 수정에서 유료로 바꾸고 날짜를 늘리면 다시 보여요.<br>· 무료(지인): 만료일을 비워두면 계속 보여요.<br>· "수정 링크"를 누르면 새 링크가 만들어지고 예전 링크는 끊겨요. 샵에 카톡 등으로 보내주세요.</div>
@@ -468,25 +469,34 @@
     msg.textContent = `등록 ${ok} · 이미 있음 ${skip}` + (bad.length ? ` · 실패/형식 오류 줄: ${bad.join(', ')}` : '');
     if (ok) loadMgmt();
   });
-  // [ADD] 풀장 여러 개 한 번에: 줄마다 geocode → shopSave(type=pool)
+  // [ADD] 풀장·세노테/동굴 여러 개 한 번에: 직접 좌표(lat,lon 또는 주소 @lat,lon) 또는 카카오 geocode → shopSave
   async function bulkPools(dry) {
+    const type = ($('bulkPoolType') && $('bulkPoolType').value === 'cenote') ? 'cenote' : 'pool';
     const msg = $('bulkPoolMsg'), out = $('bulkPoolOut'), lines = $('bulkPools').value.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#') && !/^name\|/i.test(l));
     const have = new Set(((mg && mg.shops) || []).map(s => String(s.name || '').trim().toLowerCase()));
     let ok = 0, skip = 0; const bad = [], rows = [];
     $('bulkPoolGo').disabled = $('bulkPoolCheck').disabled = true;
     for (const [i, l] of lines.entries()) {
-      const [name, address, depthMax, waterTemp, env, uses, entry, hours, price, phone, web, note] = l.split('|').map(x => (x || '').trim());
-      if (!name || !address) { bad.push(i + 1); continue; }
+      const [name, addrRaw, depthMax, waterTemp, env, uses, entry, hours, price, phone, web, note] = l.split('|').map(x => (x || '').trim());
+      if (!name || !addrRaw) { bad.push(i + 1); continue; }
       if (!dry && have.has(name.toLowerCase())) { skip++; continue; }
       msg.textContent = `${i + 1}/${lines.length} ${name}…`;
-      let g = null; try { g = await apiQuiet('geocode', { q: address }); } catch (_) {}
-      if (g && g.error === 'no_kakao_key') { msg.textContent = 'Vercel 환경변수 KAKAO_REST_KEY가 없어요'; break; }
-      if (!g || !g.found) { try { g = await apiQuiet('geocode', { q: name }); } catch (_) {} } // 주소로 못 찾으면 이름으로
+      let address = addrRaw, g = null;
+      const cm = addrRaw.match(/^(.*?)\s*@\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)$/) || addrRaw.match(/^()(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)$/);
+      if (cm) {
+        const la = parseFloat(cm[2]), lo = parseFloat(cm[3]);
+        if (Math.abs(la) <= 90 && Math.abs(lo) <= 180) { address = cm[1].trim(); g = { found: true, lat: +la.toFixed(5), lon: +lo.toFixed(5), addr: address || '직접 좌표', src: 'coord' }; }
+      }
+      if (!g) {
+        try { g = await apiQuiet('geocode', { q: address }); } catch (_) {}
+        if (g && g.error === 'no_kakao_key') { msg.textContent = 'Vercel 환경변수 KAKAO_REST_KEY가 없어요 (해외는 위도,경도로 입력)'; break; }
+        if (!g || !g.found) { try { g = await apiQuiet('geocode', { q: name }); } catch (_) {} } // 주소로 못 찾으면 이름으로
+      }
       if (!g || !g.found) { bad.push(i + 1); rows.push(`✗ ${esc(name)} — ${g && g.error ? '오류: ' + esc(g.error) : '좌표 못 찾음'} (${esc(address)})`); if (g && /kakao 40[13]/.test(g.error || '')) { msg.textContent = '카카오 API가 거부했어요(' + g.error + '). 카카오 개발자 콘솔 → 앱 → 카카오맵을 활성화했는지 확인하세요'; break; } continue; }
-      rows.push(`${dry ? '·' : '✓'} ${esc(name)} → ${g.lat}, ${g.lon} (${esc(g.addr || g.place)}${g.src === 'keyword' ? ' · 이름 검색' : ''})`);
+      rows.push(`${dry ? '·' : '✓'} [${type === 'cenote' ? '세노테' : '풀장'}] ${esc(name)} → ${g.lat}, ${g.lon} (${esc(g.addr || g.place)}${g.src === 'keyword' ? ' · 이름 검색' : ''})`);
       if (dry) continue;
       try {
-        await api('shopSave', { type: 'pool', name, address, lat: g.lat, lon: g.lon, depthMax, waterTemp, env, uses: uses.replace(/\+/g, ','), entry, hours, price, phone, web, note, plan: 'friend', show: true });
+        await api('shopSave', { type, name, address, lat: g.lat, lon: g.lon, depthMax, waterTemp, env, uses: uses.replace(/\+/g, ','), entry, hours, price, phone, web, note, plan: 'friend', show: true });
         ok++; have.add(name.toLowerCase());
       } catch (_) { bad.push(i + 1); }
     }
@@ -756,9 +766,9 @@
     // 등록된 샵
     const today = new Date().toISOString().slice(0, 10);
     $('shopList').innerHTML = mg.shops.length ? `<table>${mg.shops.sort((a, b) => (b.created || 0) - (a.created || 0) || +b.id - +a.id).map(s => `<tr data-id="${esc(s.id)}">
-      <td><b>${esc(s.name)}</b> ${s.type === 'pool' ? '<span class="tag" style="background:rgba(34,211,238,.15);color:#67e8f9">풀장</span> ' : s.type === 'liveaboard' ? '<span class="tag">리브어보드</span> ' : ''}<span class="tag ${s.plan === 'paid' ? '' : 'off'}">${planKo(s.plan)}</span>
+      <td><b>${esc(s.name)}</b> ${s.type === 'cenote' ? '<span class="tag" style="background:rgba(20,184,166,.18);color:#2dd4bf">세노테·동굴</span> ' : s.type === 'pool' ? '<span class="tag" style="background:rgba(34,211,238,.15);color:#67e8f9">풀장</span> ' : s.type === 'liveaboard' ? '<span class="tag">리브어보드</span> ' : ''}<span class="tag ${s.plan === 'paid' ? '' : 'off'}">${planKo(s.plan)}</span>
         ${!s.live ? `<span class="tag off">${s.show === false ? '숨김' : '만료'}</span>` : ''}
-        <div class="muted">${s.type === 'pool' ? `위치 ${esc(s.lat)}, ${esc(s.lon)}${s.depthMax != null ? ` · 최대 ${esc(s.depthMax)}m` : ''}` : spotsText(s.spots)}${s.expires ? ` · ~${esc(s.expires)}${s.expires < today ? ' (지남)' : ''}` : ''} · ${esc(s.email || '이메일 없음')} · 확인 ${esc(s.checked || '')} · 약관 ${s.terms ? '동의 ' + esc(s.terms) : '<b style="color:#FB7185">미동의</b>'}</div>
+        <div class="muted">${['pool', 'cenote'].includes(s.type) ? `위치 ${esc(s.lat)}, ${esc(s.lon)}${s.depthMax != null ? ` · 최대 ${esc(s.depthMax)}m` : ''}${s.waterTemp != null ? ` · ${esc(s.waterTemp)}°C` : ''}` : spotsText(s.spots)}${s.expires ? ` · ~${esc(s.expires)}${s.expires < today ? ' (지남)' : ''}` : ''} · ${esc(s.email || '이메일 없음')} · 확인 ${esc(s.checked || '')} · 약관 ${s.terms ? '동의 ' + esc(s.terms) : '<b style="color:#FB7185">미동의</b>'}</div>
         ${s.notice && s.notice.for === s.expires ? `<div class="muted">만료 안내: ${s.notice.soon ? '14일 전 보냄' : ''}${s.notice.end ? ' · 종료 안내 보냄' : ''}</div>` : ''}
         ${lastLink && lastLink.id === String(s.id) ? `<div class="linkbox">${esc(lastLink.url)}${lastLink.mailed ? (lastLink.toAdmin ? ' (샵 이메일이 없어 내 메일로 보냈어요)' : ' (메일로도 보냈어요)') : ''}</div>` : ''}</td>
       <td class="act"><button data-act="edit">수정</button> <button data-act="link">수정 링크</button> <button data-act="del">삭제</button></td></tr>`).join('')}</table>` : '<div class="muted">아직 등록된 샵이 없어요</div>';
@@ -900,13 +910,13 @@
       ${FIELDS.map(([k, label]) => k === 'lang'
         ? `<label>${label} (최대 5개)</label><div><select class="f" id="edLangAdd"></select><div id="edLangChips" class="chips"></div></div>`
         : k === 'spots'
-        ? `<label>종류</label><select class="f" data-k="type" id="edType"><option value="shop"${!['liveaboard', 'pool'].includes(s.type) ? ' selected' : ''}>다이브샵 (포인트 20곳)</option><option value="liveaboard"${s.type === 'liveaboard' ? ' selected' : ''}>리브어보드 (포인트 40곳)</option><option value="pool"${s.type === 'pool' ? ' selected' : ''}>다이빙 풀장 (지도 위치)</option></select>
+        ? `<label>종류</label><select class="f" data-k="type" id="edType"><option value="shop"${!['liveaboard', 'pool', 'cenote'].includes(s.type) ? ' selected' : ''}>다이브샵 (포인트 20곳)</option><option value="liveaboard"${s.type === 'liveaboard' ? ' selected' : ''}>리브어보드 (포인트 40곳)</option><option value="pool"${s.type === 'pool' ? ' selected' : ''}>다이빙 풀장 (지도 위치)</option><option value="cenote"${s.type === 'cenote' ? ' selected' : ''}>세노테·동굴 (지도 위치)</option></select>
            <div id="edSpotsRow" style="display:contents"><label>${label}</label><div><input class="f" id="edSpotQ" placeholder="포인트 이름으로 찾기" autocomplete="off"><div id="edSugg" class="sugg"></div><div id="edChips" class="chips"></div></div></div>
-           <label>위치(위도, 경도)<div class="muted" style="font-weight:400">풀장 필수 · 샵은 선택</div></label><div class="row"><input class="f" data-k="lat" value="${esc(s.lat ?? '')}" placeholder="위도 37.12345"><input class="f" data-k="lon" value="${esc(s.lon ?? '')}" placeholder="경도 127.12345"><button type="button" id="edNear" title="이 위치에서 5km 안 포인트를 연결 목록에 넣어요">근처 포인트 넣기</button><span class="muted" id="edNearMsg" style="align-self:center"></span></div>
+           <label>위치(위도, 경도)<div class="muted" style="font-weight:400">풀장·세노테 필수 · 샵은 선택</div></label><div class="row"><input class="f" data-k="lat" value="${esc(s.lat ?? '')}" placeholder="위도 37.12345"><input class="f" data-k="lon" value="${esc(s.lon ?? '')}" placeholder="경도 127.12345"><button type="button" id="edNear" title="이 위치에서 5km 안 포인트를 연결 목록에 넣어요">근처 포인트 넣기</button><span class="muted" id="edNearMsg" style="align-self:center"></span></div>
            <div id="edPool" style="display:contents">
              <label>최대 수심 · 수온</label><div class="row"><input class="f" data-k="depthMax" value="${esc(s.depthMax ?? '')}" placeholder="최대 수심 m"><input class="f" data-k="waterTemp" value="${esc(s.waterTemp ?? '')}" placeholder="수온 °C"></div>
              <label>실내/실외 · 입장</label><div class="row"><select class="f" data-k="env">${[['', '-'], ['in', '실내'], ['out', '실외'], ['season', '계절 운영']].map(([v, n]) => `<option value="${v}"${(s.env || '') === v ? ' selected' : ''}>${n}</option>`).join('')}</select><select class="f" data-k="entry">${[['', '-'], ['open', '개인 입장 가능'], ['shop', '샵 통해서만']].map(([v, n]) => `<option value="${v}"${(s.entry || '') === v ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
-             <label>용도</label>${inp('uses', s.uses || '', 'scuba,free,edu,photo (스쿠버·프리다이빙·교육·수중촬영)')}
+             <label>용도</label>${inp('uses', s.uses || '', 'scuba,free,edu,photo,cave (스쿠버·프리다이빙·교육·수중촬영·동굴)')}
              <label>운영시간</label>${inp('hours', s.hours || '', '매일 09–22시')}
              <label>가격</label>${inp('price', s.price || '', '1회 입장 3–5만원대')}
            </div>`
@@ -919,7 +929,7 @@
       <span></span><div class="row"><button class="primary" data-act="esave">저장</button><button data-act="ecancel">취소</button></div></div>`;
     edSpots = (s.spots || []).slice();
     renderEdChips();
-    { const sync = () => { const pool = $('edType').value === 'pool'; $('edSpotsRow').style.display = pool ? 'none' : 'contents'; $('edPool').style.display = pool ? 'contents' : 'none'; }; $('edType').addEventListener('change', sync); sync(); } // [ADD] 풀장이면 포인트 대신 위치·풀장 칸
+    { const sync = () => { const fixed = ['pool', 'cenote'].includes($('edType').value); $('edSpotsRow').style.display = fixed ? 'none' : 'contents'; $('edPool').style.display = fixed ? 'contents' : 'none'; }; $('edType').addEventListener('change', sync); sync(); } // [ADD] 풀장·세노테면 포인트 대신 위치·수심/수온 칸
     edLangs = parseLangs(s.lang); renderEdLangs();
     $('edLangAdd').onchange = () => { const c = $('edLangAdd').value; if (c && edLangs.length < 5 && !edLangs.includes(c)) edLangs.push(c); renderEdLangs(); };
     $('edLangChips').onclick = (e) => { const b = e.target.closest('[data-rmlang]'); if (b) { edLangs = edLangs.filter(c => c !== b.dataset.rmlang); renderEdLangs(); } };
@@ -958,7 +968,7 @@
     const m = latEl.value.match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/); if (m) { latEl.value = m[1]; lonEl.value = m[2]; }
     const la = parseFloat(latEl.value), lo = parseFloat(lonEl.value), msg = $('edNearMsg');
     if (!Number.isFinite(la) || !Number.isFinite(lo)) { if (!auto) msg.textContent = '위도·경도를 먼저 넣어주세요'; return; }
-    if ($('edType') && $('edType').value === 'pool') { msg.textContent = ''; return; }
+    if ($('edType') && ['pool', 'cenote'].includes($('edType').value)) { msg.textContent = ''; return; }
     const R = 6371, r = Math.PI / 180, km = (s) => 2 * R * Math.asin(Math.sqrt(Math.sin((s.lat - la) * r / 2) ** 2 + Math.cos(la * r) * Math.cos(s.lat * r) * Math.sin((s.lon - lo) * r / 2) ** 2));
     const mx = $('edType') && $('edType').value === 'liveaboard' ? 40 : 20;
     const list = (mg.spots || []).filter(s => s.show !== false && Number.isFinite(+s.lat) && Number.isFinite(+s.lon)).map(s => ({ no: +s.no, d: km({ lat: +s.lat, lon: +s.lon }) })).sort((a, b) => a.d - b.d);

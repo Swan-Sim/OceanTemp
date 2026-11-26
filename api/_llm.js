@@ -24,7 +24,13 @@ function buildProvider(name) {
   if (name === 'gemini') {
     const key = env.GEMINI_API_KEY || env.GOOGLE_API_KEY;
     if (!key) return null;
-    return { name: 'gemini', kind: 'gemini', key: key.trim(), model: (env.GEMINI_MODEL || 'gemini-2.5-flash').trim() };
+    return {
+      name: 'gemini',
+      kind: 'gemini',
+      key: key.trim(),
+      model: (env.GEMINI_MODEL || 'gemini-2.5-flash').trim(),
+      baseUrl: (env.GEMINI_BASE_URL || '').trim(),
+    };
   }
   if (name === 'llm') {
     const key = env.LLM_API_KEY;
@@ -123,8 +129,21 @@ async function fetchWithTimeout(url, init, ms) {
   }
 }
 
+function geminiUrl(baseUrl, model) {
+  const m = encodeURIComponent(model);
+  if (!baseUrl) return `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
+  const b = baseUrl.replace(/\/+$/, '');
+  if (/:generateContent$/.test(b)) return b;
+  if (/aiplatform\.googleapis\.com/i.test(b)) {
+    if (/\/publishers\/google$/i.test(b)) return `${b}/models/${m}:generateContent`;
+    if (/\/v1(?:beta1)?$/i.test(b)) return `${b}/publishers/google/models/${m}:generateContent`;
+    return `${b}/v1/publishers/google/models/${m}:generateContent`;
+  }
+  if (/\/v1(?:beta|alpha)?$/i.test(b)) return `${b}/models/${m}:generateContent`;
+  return `${b}/v1beta/models/${m}:generateContent`;
+}
+
 async function callGemini(p, opt, ms) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(p.model)}:generateContent`;
   const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': p.key };
   const makeBody = (useThinkingCfg, useJsonMime) => {
     const genCfg = {
@@ -144,10 +163,19 @@ async function callGemini(p, opt, ms) {
   };
 
   const deadline = Date.now() + ms;
-  let r = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(makeBody(true, true)) }, ms);
-  if (r.status === 400 && deadline - Date.now() > 2000) {
-    // 모델에 따라 thinkingConfig 또는 responseMimeType 미지원 시 안전 재시도
-    r = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(makeBody(false, false)) }, deadline - Date.now());
+  const runAt = async (url) => {
+    let r = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(makeBody(true, true)) }, Math.max(1500, deadline - Date.now()));
+    if (r.status === 400 && deadline - Date.now() > 2000) {
+      // 모델에 따라 thinkingConfig 또는 responseMimeType 미지원 시 안전 재시도
+      r = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(makeBody(false, false)) }, deadline - Date.now());
+    }
+    return r;
+  };
+
+  let r = await runAt(geminiUrl(p.baseUrl, p.model));
+  // AQ. 키가 Vertex AI Express(aiplatform.googleapis.com)에 바인딩된 경우 자동 폴백
+  if ((r.status === 403 || r.status === 401) && !p.baseUrl && p.key.startsWith('AQ.') && deadline - Date.now() > 2000) {
+    r = await runAt(geminiUrl('https://aiplatform.googleapis.com', p.model));
   }
   if (!r.ok) throw new Error(`gemini ${r.status}`);
   const j = await r.json();

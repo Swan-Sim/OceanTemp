@@ -1,68 +1,31 @@
-    // [ADD] 지도(위성) 위에 수심을 "지도처럼" 이어서 깔기 - api/_depth.js 수심 벡터 타일(줌 13 격자, 한 장 약 4~5km)
-    //  서버가 등심선·수심 띠를 미리 다각형/선으로 만들어 저장해 두고(180일, CDN 30일), 앱은 그리기만 해서 빠르고 확대해도 선명해요
-    //  자료: 한국 국립해양조사원 150m · 유럽 EMODnet 115m · 미국 NOAA(약 90m 간격으로 뽑음) · 그 밖 GMRT
-    //  - 확대 12 이상에서 화면에 걸친 타일을 받아(서버 180일 저장) 반투명 수심 색 + 10m 간격 등심선(30·40·60m 진하게) + 숫자
-    //  - 타일마다 경계 밖까지 조금 더 받아 계산한 뒤 경계에서 잘라 그려서 이음새가 안 보여요
-    //  - 선과 숫자는 그림이 아니라 지도 위 선·글자라 확대해도 선명해요
+    // [ADD] 지도(위성) 위에 수심을 "타일 이미지"처럼 부드럽게 깔기 - api/_depth.js 수심 타일(줌 13 격자, 한 장 약 4~5km)
+    //  서버가 등심선·수심 띠를 0~4096 타일 좌표로 미리 계산·압축해 저장(Redis 180일, CDN 30일)해 두고,
+    //  앱은 Leaflet 네이티브 L.GridLayer로 각 화면 타일을 <canvas> 비트맵 이미지로 한 번만 그려 GPU로 이동·확대해요.
+    //  - 드래그·핀치줌 중에는 벡터를 다시 그리지 않아 모바일에서도 60fps 유지(updateWhenIdle / updateWhenZooming: false)
+    //  - 배율별 순차 표시: 줌 12(색상 띠 + 10·20·30·40m 주요선) → 줌 13(+60·80·100m) → 줌 14+(2·5m 얕은 점선 + 전체 등심선 + 고해상도)
+    //  - 화면 밖으로 나간 타일은 Leaflet이 자동 정리해 메모리가 쌓이지 않아요.
     //  - 오른쪽 아래 "수심" 버튼으로 켜고 끄기(이 브라우저에 기억)
-    const DEPTH_MIN_ZOOM = 12, DTILE_Z = 13, DTILE_MAX = 500, DTILE_PAR = 6;
-    let dRenderer = null; // 칸이 많아도 가볍게: 등심선·띠는 캔버스 한 장에 그림
-    const dRend = () => dRenderer || (dRenderer = L.canvas({ padding: 0.5 }));
-    const dTiles = new Map(); // "x_y" → { st: 'load'|'ok'|'none', grp, lbl: [[위도, 경도, 수심]] }
-    let dQueue = [], dActive = 0, dLabels = null;
+    const DEPTH_MIN_ZOOM = 12, DTILE_Z = 13, DCACHE_MAX = 120;
+    const DTILE_PAR = (typeof window !== 'undefined' && window.innerWidth < 600) ? 4 : 6;
+    const dCache = new Map(); // "x_y" → { st: 'load'|'ok'|'none', raw, lbl, touched }
+    const dWaiters = new Map(); // "x_y" → Set<fn> (현재 화면에 떠 있는 타일 캔버스 콜백)
+    const dFails = new Map(); // "x_y" → 실패 횟수
+    const RETRY_MS = [15000, 45000, 120000, 240000];
+    const dRefresh = new Set(), dRefreshed = new Set();
+    let dQueue = [], dActive = 0, dLabels = null, dLabelTimer = null;
+    let depthGridLayer = null, depthHooked = false, depthBtn = null;
     // [CHANGE] 임시: 서버 CPU 절약을 위해 수심 지도는 기본 꺼짐. 사용자가 [수심 OFF] 버튼을 눌러 켜야 보여요.
-    //  저장 키를 새로 바꿔서(otemp.depthLayer2) 예전에 켜 둔 사람도 모두 꺼진 상태에서 시작해요. 다시 기본 켜짐으로 돌리려면 !== '0' 으로.
     let depthOn = (() => { try { return localStorage.getItem('otemp.depthLayer2') === '1'; } catch (_) { return false; } })();
-    let depthHooked = false, depthBtn = null;
 
-    const tileX = (lon) => Math.floor((lon + 180) / 360 * 2 ** DTILE_Z);
-    const tileY = (lat) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** DTILE_Z); };
+    const tileX = (lon) => Math.floor((lon + 180) / 360 * (1 << DTILE_Z));
+    const tileY = (lat) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * (1 << DTILE_Z)); };
 
-    // 서버가 미리 만들어 둔 벡터(다각형·선)를 그대로 그리기만 해요 - 일러스트처럼 단색 띠가 깊을수록 겹쳐 진해짐
+    // 수심 띠 색 (깊을수록 반투명 단색이 겹쳐 진해짐)
     const DFILL = { 1: ['#a5f3fc', 0.10], 5: ['#7dd3fc', 0.12], 10: ['#38bdf8', 0.09], 20: ['#0ea5e9', 0.09], 30: ['#0284c7', 0.09], 40: ['#0369a1', 0.09], 50: ['#075985', 0.09], 60: ['#0c4a6e', 0.1], 80: ['#082f49', 0.1], 100: ['#041e33', 0.12], 120: ['#03182b', 0.12], 150: ['#021224', 0.14] };
-    // 서버 압축 형식(v2): 좌표 = 타일 안 0~4096 정수, 앞 점과의 차이만 → [위도, 경도]로 되돌리기
-    // [ADD] 위성 사진 섬이 등고선보다 약 200m 북쪽에 있어서, 그려진 수심(띠·등고선·해안선·숫자)을 전체적으로 남쪽으로 내려요. 값을 바꾸려면 아래 숫자(미터)만 고치세요.
-    const SH = 0 /* 남쪽 이동은 서버에서 먼저 처리 */;
-    function decodeTile(d) {
-      const t = d.tile, dec = (a) => { const o = []; let x = 0, y = 0; for (let i = 0; i < a.length; i += 2) { x += a[i]; y += a[i + 1]; o.push([t.n - y / 4096 * (t.n - t.s) - SH, t.w + x / 4096 * (t.e - t.w)]); } return o; };
-      return { t, fills: (d.F || []).map(([dd, polys]) => ({ d: dd, p: polys.map(poly => poly.map(dec)) })),
-        lines: Object.fromEntries(Object.entries(d.Ln || {}).map(([k, ls]) => [k, ls.map(dec)])),
-        land: (d.Ld || []).map(dec),
-        lbl: (d.lb || []).map(([x, y, k]) => [t.n - y / 4096 * (t.n - t.s) - SH, t.w + x / 4096 * (t.e - t.w), k]) };
-    }
-    // [ADD] 두 단계 그리기: 'lite'(먼 화면·처음 받자마자: 점을 1/3로 줄이고 10·20·30·40m 선만) → 'full'(확대 14 이상, 가만히 있을 때 바꿔 끼움: 모든 선·숫자)
-    const decim = (a, k) => k <= 1 ? a : a.filter((p, i) => i % k === 0 || i === a.length - 1);
-    // [FIX] 수심 띠(다각형)용 점 줄이기: 타일 테두리에 놓인 점(모서리 포함)은 반드시 남기고, 점이 적은 고리는 그대로 둬요.
-    //  예전에는 "타일 전체를 덮는 네모"(깊은 바다)도 3개 중 1개만 남겨서 세모로 찌그러졌고, 한 단계 축소하면 큰 삼각형 얼룩이 생겼어요.
-    const decimRing = (a, k, t) => {
-      if (k <= 1 || a.length < 24 || !t) return a;
-      const ey = (t.n - t.s) / 4096 * 1.5, ex = (t.e - t.w) / 4096 * 1.5;
-      const edge = (p) => Math.abs(p[0] - t.n) < ey || Math.abs(p[0] - t.s) < ey || Math.abs(p[1] - t.w) < ex || Math.abs(p[1] - t.e) < ex;
-      return a.filter((p, i) => i % k === 0 || i === a.length - 1 || edge(p));
-    };
-    function buildTile(d, full) {
-      const layers = [], K = full ? 1 : 3, SF = full ? 0.3 : 1.5;
-      const cz = d.coarse; // 거친 자료(해외 일부): 서버에서 해안선에 맞춰 평행 이동한 뒤라 다른 지역과 같은 모양으로 그림
-      (d.fills || []).forEach(f => { const c = DFILL[f.d] || ['#0c4a6e', 0.1], pp = full ? f.p : f.p.map(poly => poly.map(r => decimRing(r, K, d.t)).filter(r => r.length >= 3)).filter(poly => poly.length); if (pp.length) layers.push(L.polygon(pp, { stroke: false, fillColor: c[0], fillOpacity: c[1], interactive: false, smoothFactor: SF, renderer: dRend() })); });
-      const LN = {}; Object.keys(d.lines || {}).forEach(k => { if (full || ['10', '20', '30', '40'].includes(k)) LN[k] = full ? d.lines[k] : d.lines[k].map(l => decim(l, 2)).filter(l => l.length > 1); });
-      Object.keys(LN).forEach(k => {
-        const strong = k === '10' || k === '20' || k === '30' || k === '40'; // [CHANGE] 다이빙 계획에 중요한 10·20·30·40m를 진하게
-        const shallow = +k < 10; // [ADD] 2·5m: 가는 점선
-        layers.push(L.polyline(LN[k], { color: '#fff', weight: strong ? 1.6 : shallow ? 0.9 : 0.8, opacity: strong ? 0.85 : shallow ? 0.6 : 0.4, dashArray: shallow ? '3 4' : null, interactive: false, smoothFactor: SF, renderer: dRend() }));
-      });
-      // [CHANGE] 숫자 후보: 모든 등심선(10m 간격) 위 점들 - 화면에서 몇 m 선인지 바로 알 수 있게
-      const lbl = []; Object.keys(LN).forEach(k => (LN[k] || []).forEach(ln => ln.forEach((p, i) => { if (i % (full ? 6 : 3) === (full ? 3 : 1)) lbl.push([p[0], p[1], +k]); })));
-      // [CHANGE] 섬·바위(OSM 해안선, 반지름 15m 이상): 서버가 섬 안쪽은 수심 띠·등심선에서 빼 두었어요. 여기선 해안선만 흰 선으로(안쪽은 투명 → 위성 사진 그대로)
-      const land = full ? (d.land || []) : (d.land || []).map(r => decim(r, 2)).filter(r => r.length > 2);
-      land.forEach(r => layers.push(L.polygon(r, { stroke: true, color: '#fff', weight: 1, opacity: 0.85, fill: false, interactive: false, smoothFactor: 0.3, renderer: dRend() })));
-      const inLand = (la, lo) => land.some(r => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > lo) !== (b[1] > lo) && la < (b[0] - a[0]) * (lo - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; });
-      const lb2 = land.length ? lbl.filter(p => !inLand(p[0], p[1])) : lbl;
-      return { grp: L.layerGroup(layers), lbl: lb2.length ? lb2 : (land.length ? [] : (d.lbl || [])) };
-    }
 
-    // [ADD] 포인트 현지 지형(관리자 입력)이 이 타일에 걸리면 주소에 짧은 표시를 붙여요(서버 api/_depth.js profSig와 같은 계산) - 바꾸면 바로 새로 그림
+    // [ADD] 포인트 현지 지형(관리자 입력)이 이 타일에 걸리면 주소에 짧은 표시를 붙여요(서버 api/_depth.js profSig와 같은 계산)
     function profParam(x, y) {
-      const n = 2 ** 13, lon = (v) => v / n * 360 - 180, lat = (v) => Math.atan(Math.sinh(Math.PI * (1 - 2 * v / n))) * 180 / Math.PI;
+      const n = 1 << DTILE_Z, lon = (v) => v / n * 360 - 180, lat = (v) => Math.atan(Math.sinh(Math.PI * (1 - 2 * v / n))) * 180 / Math.PI;
       const b = { s: lat(y + 1), n: lat(y), w: lon(x), e: lon(x + 1) }, E = 0.02;
       const str = (typeof stations !== 'undefined' ? stations : []).filter(st => st.prof && st.no && st.coords && st.coords[1] >= b.s - E && st.coords[1] <= b.n + E && st.coords[0] >= b.w - E && st.coords[0] <= b.e + E)
         .map(st => { const q = st.prof; return `${st.no}:${q.top}/${q.r}/${(q.secs || []).map(x => [x.a0, x.a1, x.deg, x.max].join(',')).join(';')}/${q.els ? [q.els.deg, q.els.max].join(',') : ''}`; }).sort().join('|');
@@ -70,78 +33,352 @@
       let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
       return '&p=' + h.toString(36);
     }
-    // [ADD] 관리자 "최소 수심 구역"이 바뀌면 주소가 바뀌게(서버 api/_site.js depthFix, 계정 js/account.js가 읽어 옴)
     const fixParam = () => { const f = window.otDepthFix || [], o = window.otDepthOff || {}, off = (o.prof ? 'p' : '') + (o.fix ? 'f' : '') + (o.land ? 'l' : ''); if (!f.length && !off) return ''; const str = f.map(x => `${x.la}/${x.lo}/${x.r}/${x.min}`).sort().join(',') + '#' + off; let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return '&f=' + h.toString(36); };
     let lastFix = fixParam();
-    window.addEventListener('otemp:site', () => { const n = fixParam(); if (n === lastFix) return; lastFix = n; dTiles.forEach(tl => { if (tl.grp && leafletMap) leafletMap.removeLayer(tl.grp); }); dTiles.clear(); dQueue = []; refreshDepthLayers(); });
-    // [ADD] 시안 보기: 주소에 ?dv=1·2·3을 붙이면 옛 방식으로 그린 수심 지도를 따로 불러와요(1 섬 육지·방향 경사 전 · 2 거친 수심 원래 위치 전 · 3 현지 지형 입력 전)
+    window.addEventListener('otemp:site', () => {
+      const n = fixParam(); if (n === lastFix) return;
+      lastFix = n; dCache.clear(); dQueue = []; dFails.clear();
+      if (depthGridLayer && leafletMap && leafletMap.hasLayer(depthGridLayer)) depthGridLayer.redraw();
+      scheduleDepthLabels();
+    });
     const DV_MODE = (() => { try { const v = new URLSearchParams(location.search).get('dv'); return ['1', '2', '3'].includes(v) ? v : ''; } catch (_) { return ''; } })();
-    // [ADD] 타일 그림 방식 바꿔 끼우기: 확대 14 이상이면 full, 아니면 lite. 한 번 만든 그림은 보관(다시 줌아웃하면 가벼운 걸로 즉시 교체)
-    function setTileMode(tl, m) {
-      if (!tl.raw || tl.mode === m) return;
-      const old = tl.grp, wasOn = !!(old && leafletMap && leafletMap.hasLayer(old)); if (wasOn) leafletMap.removeLayer(old);
-      const c = tl['c_' + m] || (tl['c_' + m] = buildTile(tl.raw, m === 'full'));
-      tl.grp = c.grp; tl.lbl = c.lbl; tl.mode = m;
-      if (leafletMap && (wasOn || (depthOn && isDetailMode && leafletMap.getZoom() >= DEPTH_MIN_ZOOM))) tl.grp.addTo(leafletMap);
+
+    // 압축된 v2 등심선에서 숫자 후보([lat, lon, depth]) 한 번만 뽑아두기
+    function extractLabels(d) {
+      const t = d && d.tile; if (!t) return [];
+      const out = [];
+      const toLat = (qy) => t.n - qy / 4096 * (t.n - t.s);
+      const toLon = (qx) => t.w + qx / 4096 * (t.e - t.w);
+      if (d.v === 2 && d.Ln) {
+        Object.keys(d.Ln).forEach(k => {
+          const depth = +k; if (!depth || depth < 5) return;
+          (d.Ln[k] || []).forEach(arr => {
+            let x = 0, y = 0, pt = 0;
+            for (let i = 0; i < arr.length; i += 2, pt++) {
+              x += arr[i]; y += arr[i + 1];
+              if (pt % 6 === 3) out.push([toLat(y), toLon(x), depth]);
+            }
+          });
+        });
+      }
+      if (!out.length && Array.isArray(d.lb)) {
+        d.lb.forEach(([qx, qy, k]) => out.push([toLat(qy), toLon(qx), +k]));
+      }
+      return out;
     }
-    let syncTimer = null;
-    function syncModes() {
-      clearTimeout(syncTimer);
-      if (!leafletMap || !depthOn) return;
-      const m = leafletMap.getZoom() >= 14 ? 'full' : 'lite', vb = leafletMap.getBounds().pad(0.3), todo = [];
-      dTiles.forEach(tl => { if (!tl.raw || tl.mode === m) return; const t = tl.raw.tile; if (m === 'full' && t && !vb.intersects(L.latLngBounds([t.s, t.w], [t.n, t.e]))) return; todo.push(tl); });
-      if (!todo.length) return;
-      let i = 0;
-      const step = () => { const t0 = performance.now(); while (i < todo.length && performance.now() - t0 < 10) setTileMode(todo[i++], m); placeDepthLabels(); if (i < todo.length) syncTimer = setTimeout(step, 30); };
-      syncTimer = setTimeout(step, m === 'full' ? 300 : 0); // 가까이 볼 땐 지도가 멈춘 뒤(0.3초)에 교체
+
+    // LRU 정리 (최대 DCACHE_MAX장 유지)
+    function pruneCache() {
+      if (dCache.size <= DCACHE_MAX) return;
+      const entries = [...dCache.entries()].filter(([k, v]) => v.st !== 'load' && !(dWaiters.get(k) && dWaiters.get(k).size))
+        .sort((a, b) => (a[1].touched || 0) - (b[1].touched || 0));
+      let over = dCache.size - DCACHE_MAX;
+      for (let i = 0; i < entries.length && over > 0; i++, over--) dCache.delete(entries[i][0]);
     }
-    // [FIX] 타일이 영영 비던 문제: 실패(국립해양조사원 일시 오류·서버 시간 초과·네트워크)는 지도를 안 움직여도 15초·45초·2분 뒤 자동으로 다시 받아요(최대 4번).
-    //  응답이 없으면 55초에 끊고(서버 한도 60초), 서버가 "없음"이라고 확실히 답한 칸만 none 으로 둬요.
-    const dFails = new Map(); // key → 실패 횟수
-    const RETRY_MS = [15000, 45000, 120000, 240000];
-    const dRefresh = new Set(), dRefreshed = new Set(); // 새로 받기 중인 타일 / 이번 방문에서 이미 새로 받기를 요청한 타일
+
+    function notifyWaiters(key, entry) {
+      const ws = dWaiters.get(key);
+      if (!ws) return;
+      dWaiters.delete(key);
+      ws.forEach(fn => { try { fn(entry); } catch (_) {} });
+    }
+
     function failTile(key, why) {
-      const n = (dFails.get(key) || 0) + 1; dFails.set(key, n); dTiles.delete(key);
-      if (n > RETRY_MS.length) { dTiles.set(key, { st: 'none', why }); return; }
-      setTimeout(() => { if (!dTiles.has(key) && depthOn && leafletMap && isDetailMode) { dTiles.set(key, { st: 'load' }); dQueue.push(key); loadNext(); } }, RETRY_MS[n - 1]);
+      const n = (dFails.get(key) || 0) + 1; dFails.set(key, n);
+      dCache.delete(key);
+      notifyWaiters(key, { st: 'none', why });
+      if (n > RETRY_MS.length) { dCache.set(key, { st: 'none', why, touched: Date.now() }); return; }
+      setTimeout(() => {
+        if (!dCache.has(key) && depthOn && leafletMap && isDetailMode && depthGridLayer && leafletMap.hasLayer(depthGridLayer)) {
+          depthGridLayer.redraw();
+        }
+      }, RETRY_MS[n - 1]);
     }
+
     function loadNext() {
       while (dActive < DTILE_PAR && dQueue.length) {
-        const key = dQueue.shift(), [x, y] = key.split('_');
+        const key = dQueue.shift();
+        // 이미 화면에서 빠져 대기자가 없으면(단, rf 백그라운드 갱신 제외) 건너뜀
+        if (!dRefresh.has(key) && !(dWaiters.get(key) && dWaiters.get(key).size)) {
+          const cur = dCache.get(key);
+          if (cur && cur.st === 'load') dCache.delete(key);
+          continue;
+        }
+        const [x, y] = key.split('_');
         dActive++;
-        const ac = typeof AbortController !== 'undefined' ? new AbortController() : null, tm = setTimeout(() => { try { ac && ac.abort(); } catch (_) {} }, 55000);
-        const rf = dRefresh.has(key); // [ADD] 낡은 저장본을 먼저 보여준 뒤, 뒤에서 한 번 새로 받기 요청(서버가 하루 한 번만 시도)
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=26${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}${rf ? '&rf=1' : ''}`, ac ? { signal: ac.signal } : undefined).then(r => r.json()).then(d => {
-          if (rf) { // 새로 받기 결과: 더 나은 그림이 오면 바꿔 끼우고, 아니면 지금 그림 그대로
-            if (d && d.ok && !d.empty && !d.stale && (d.F || d.fills || d.lines)) { const prev = dTiles.get(key); try { if (prev && prev.grp && leafletMap) leafletMap.removeLayer(prev.grp); } catch (_) {} if (d.v === 2) d = Object.assign({}, d, decodeTile(d)); const tl = { st: 'ok', raw: d, coarse: !!d.coarse, lbl: [] }; dTiles.set(key, tl); setTileMode(tl, 'lite'); placeDepthLabels(); syncModes(); }
-            return;
-          }
-          if (d && d.ok && d.stale && !d.tried && !dRefreshed.has(key)) { dRefreshed.add(key); setTimeout(() => { if (depthOn && leafletMap && isDetailMode) { dRefresh.add(key); dQueue.push(key); loadNext(); } }, 4000); }
-          if (d && d.wait) { dTiles.set(key, { st: 'none', why: 'tried_today' }); return; } // 저장본 없음 + 오늘 이미 시도 → 오늘은 다시 안 물어봄
-          if (d && d.ok && !d.empty && (d.F || d.fills || d.lines)) { if (d.v === 2) d = Object.assign({}, d, decodeTile(d)); const tl = { st: 'ok', raw: d, coarse: !!d.coarse, lbl: [] }; dTiles.set(key, tl); setTileMode(tl, 'lite'); placeDepthLabels(); syncModes(); dFails.delete(key); }
-          else if (d && d.ok && d.empty) dTiles.set(key, { st: 'none' }); // 바다 없음(육지만)
-          else failTile(key, d && d.error || (d && d.retry ? 'retry' : 'fail'));
-        }).catch((e) => { if (!rf) failTile(key, String(e && e.name || e)); }).finally(() => { clearTimeout(tm); dRefresh.delete(key); dActive--; loadNext(); });
+        const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const tm = setTimeout(() => { try { ac && ac.abort(); } catch (_) {} }, 55000);
+        const rf = dRefresh.has(key);
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=26${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}${rf ? '&rf=1' : ''}`, ac ? { signal: ac.signal } : undefined)
+          .then(r => r.json())
+          .then(d => {
+            if (rf) {
+              if (d && d.ok && !d.empty && !d.stale && (d.F || d.Ln)) {
+                dCache.set(key, { st: 'ok', raw: d, lbl: extractLabels(d), touched: Date.now() });
+                if (depthGridLayer && leafletMap && leafletMap.hasLayer(depthGridLayer)) depthGridLayer.redraw();
+                scheduleDepthLabels();
+              }
+              return;
+            }
+            if (d && d.ok && d.stale && !d.tried && !dRefreshed.has(key)) {
+              dRefreshed.add(key);
+              setTimeout(() => {
+                if (depthOn && leafletMap && isDetailMode) { dRefresh.add(key); dQueue.push(key); loadNext(); }
+              }, 4000);
+            }
+            if (d && d.wait) {
+              const e = { st: 'none', why: 'tried_today', touched: Date.now() };
+              dCache.set(key, e); notifyWaiters(key, e); return;
+            }
+            if (d && d.ok && !d.empty && (d.F || d.Ln)) {
+              const e = { st: 'ok', raw: d, lbl: extractLabels(d), touched: Date.now() };
+              dCache.set(key, e); dFails.delete(key); pruneCache();
+              notifyWaiters(key, e);
+              scheduleDepthLabels();
+            } else if (d && d.ok && d.empty) {
+              const e = { st: 'none', touched: Date.now() };
+              dCache.set(key, e); notifyWaiters(key, e);
+            } else {
+              failTile(key, (d && d.error) || (d && d.retry ? 'retry' : 'fail'));
+            }
+          })
+          .catch((e) => { if (!rf) failTile(key, String(e && e.name || e)); })
+          .finally(() => { clearTimeout(tm); dRefresh.delete(key); dActive--; loadNext(); });
       }
     }
 
-    // 숫자: 화면 안 30·40·60m 선 위, 화면 가운데에서 가장 가까운 곳 하나씩(글자 크기는 확대와 상관없이 그대로)
+    function requestVecTile(key, onReady) {
+      const cur = dCache.get(key);
+      if (cur && cur.st !== 'load') {
+        cur.touched = Date.now();
+        let canceled = false;
+        Promise.resolve().then(() => { if (!canceled) onReady(cur); });
+        return () => { canceled = true; };
+      }
+      let ws = dWaiters.get(key);
+      if (!ws) { ws = new Set(); dWaiters.set(key, ws); }
+      ws.add(onReady);
+      if (!cur) {
+        dCache.set(key, { st: 'load', touched: Date.now() });
+        dQueue.push(key);
+        if (leafletMap) {
+          const c = leafletMap.getCenter(), cx = tileX(c.lng), cy = tileY(c.lat);
+          dQueue.sort((a, z) => {
+            const [ax, ay] = a.split('_'), [zx, zy] = z.split('_');
+            return Math.hypot(+ax - cx, +ay - cy) - Math.hypot(+zx - cx, +zy - cy);
+          });
+        }
+        loadNext();
+      }
+      return () => { const s = dWaiters.get(key); if (s) s.delete(onReady); };
+    }
+
+    // 0~4096 타일 좌표(delta-encoded)를 <canvas>의 [ox, oy, subW, subH] 영역에 직접 그리기 (투영/벡터객체 0)
+    function drawVecChunk(ctx, d, z, dpr, u0, v0, span, ox, oy, subW, subH) {
+      if (!d || d.v !== 2) return;
+      const kx = subW / span, ky = subH / span;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(ox, oy, subW, subH);
+      ctx.clip();
+
+      // 1) 수심 띠 채우기 (F: [depth, [poly, ...]], poly = [outerRing, hole...])
+      if (Array.isArray(d.F)) {
+        for (let fi = 0; fi < d.F.length; fi++) {
+          const [depth, polys] = d.F[fi];
+          const c = DFILL[depth] || ['#0c4a6e', 0.1];
+          ctx.fillStyle = c[0];
+          ctx.globalAlpha = c[1];
+          ctx.beginPath();
+          for (let pi = 0; pi < polys.length; pi++) {
+            const poly = polys[pi];
+            for (let ri = 0; ri < poly.length; ri++) {
+              const arr = poly[ri];
+              if (arr.length < 6) continue;
+              let x = arr[0], y = arr[1];
+              ctx.moveTo((x - u0) * kx + ox, (y - v0) * ky + oy);
+              for (let i = 2; i < arr.length; i += 2) {
+                x += arr[i]; y += arr[i + 1];
+                ctx.lineTo((x - u0) * kx + ox, (y - v0) * ky + oy);
+              }
+              ctx.closePath();
+            }
+          }
+          ctx.fill('evenodd');
+        }
+      }
+
+      // 2) 등심선 (배율별 순차 표시: 줌 12 → 10·20·30·40m / 줌 13 → +60·80·100m / 줌 14+ → 2·5m 점선 포함 전체)
+      if (d.Ln) {
+        const allowZ12 = { '10': 1, '20': 1, '30': 1, '40': 1 };
+        const allowZ13 = { '10': 1, '20': 1, '30': 1, '40': 1, '60': 1, '80': 1, '100': 1 };
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        const keys = Object.keys(d.Ln);
+        for (let ki = 0; ki < keys.length; ki++) {
+          const k = keys[ki];
+          if (z <= 12 && !allowZ12[k]) continue;
+          if (z === 13 && !allowZ13[k]) continue;
+          const lines = d.Ln[k];
+          if (!lines || !lines.length) continue;
+          const depth = +k;
+          const strong = k === '10' || k === '20' || k === '30' || k === '40';
+          const shallow = depth < 10;
+          ctx.lineWidth = (strong ? 1.5 : shallow ? 0.9 : 0.8) * dpr;
+          ctx.globalAlpha = strong ? 0.85 : shallow ? 0.6 : 0.42;
+          ctx.setLineDash(shallow ? [3 * dpr, 4 * dpr] : []);
+          ctx.beginPath();
+          for (let li = 0; li < lines.length; li++) {
+            const arr = lines[li];
+            if (arr.length < 4) continue;
+            let x = arr[0], y = arr[1];
+            ctx.moveTo((x - u0) * kx + ox, (y - v0) * ky + oy);
+            for (let i = 2; i < arr.length; i += 2) {
+              x += arr[i]; y += arr[i + 1];
+              ctx.lineTo((x - u0) * kx + ox, (y - v0) * ky + oy);
+            }
+          }
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      }
+
+      // 3) 섬·바위 해안선 (흰 실선)
+      if (Array.isArray(d.Ld) && d.Ld.length) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.globalAlpha = 0.85;
+        ctx.lineWidth = 1.0 * dpr;
+        ctx.beginPath();
+        for (let ri = 0; ri < d.Ld.length; ri++) {
+          const arr = d.Ld[ri];
+          if (arr.length < 6) continue;
+          let x = arr[0], y = arr[1];
+          ctx.moveTo((x - u0) * kx + ox, (y - v0) * ky + oy);
+          for (let i = 2; i < arr.length; i += 2) {
+            x += arr[i]; y += arr[i + 1];
+            ctx.lineTo((x - u0) * kx + ox, (y - v0) * ky + oy);
+          }
+          ctx.closePath();
+        }
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function createDepthGridLayer() {
+      const Layer = L.GridLayer.extend({
+        createTile(coords, done) {
+          const tile = document.createElement('canvas');
+          const z = coords.z;
+          const dpr = z >= 14 ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+          const sz = 256 * dpr;
+          tile.width = sz;
+          tile.height = sz;
+          tile.style.width = '256px';
+          tile.style.height = '256px';
+          const ctx = tile.getContext('2d');
+          const cancels = [];
+          tile._depthCancels = cancels;
+
+          if (!ctx || z < DEPTH_MIN_ZOOM) { setTimeout(() => done(null, tile), 0); return tile; }
+
+          if (z >= DTILE_Z) {
+            const scale = 1 << (z - DTILE_Z);
+            const x13 = Math.floor(coords.x / scale), y13 = Math.floor(coords.y / scale);
+            const rx = ((coords.x % scale) + scale) % scale, ry = ((coords.y % scale) + scale) % scale;
+            const span = 4096 / scale, u0 = rx * span, v0 = ry * span;
+            const key = x13 + '_' + y13;
+            const cancel = requestVecTile(key, (entry) => {
+              if (entry && entry.st === 'ok' && entry.raw) {
+                drawVecChunk(ctx, entry.raw, z, dpr, u0, v0, span, 0, 0, sz, sz);
+              }
+              done(null, tile);
+            });
+            if (cancel) cancels.push(cancel);
+          } else {
+            // z === 12: 2×2 개의 Z13 타일을 한 장의 256×256 이미지 타일에 합성
+            const half = sz / 2;
+            let left = 4;
+            const finishOne = () => { if (--left === 0) done(null, tile); };
+            for (let oy = 0; oy < 2; oy++) {
+              for (let ox = 0; ox < 2; ox++) {
+                const key = (coords.x * 2 + ox) + '_' + (coords.y * 2 + oy);
+                const px = ox * half, py = oy * half;
+                const cancel = requestVecTile(key, (entry) => {
+                  if (entry && entry.st === 'ok' && entry.raw) {
+                    drawVecChunk(ctx, entry.raw, z, dpr, 0, 0, 4096, px, py, half, half);
+                  }
+                  finishOne();
+                });
+                if (cancel) cancels.push(cancel);
+              }
+            }
+          }
+          return tile;
+        }
+      });
+      const layer = new Layer({
+        tileSize: 256,
+        minZoom: DEPTH_MIN_ZOOM,
+        maxZoom: 18,
+        keepBuffer: 1,
+        updateWhenIdle: true,
+        updateWhenZooming: false,
+        zIndex: 220
+      });
+      layer.on('tileunload', (ev) => {
+        const cs = ev && ev.tile && ev.tile._depthCancels;
+        if (cs) { cs.forEach(fn => fn()); ev.tile._depthCancels = null; }
+      });
+      return layer;
+    }
+
+    // 수심 숫자 라벨: 디바운스(160ms) + 현재 화면 안 Z13 타일만 스캔해 1ms 미만으로 가볍게 배치
+    function scheduleDepthLabels() {
+      if (dLabelTimer) clearTimeout(dLabelTimer);
+      dLabelTimer = setTimeout(placeDepthLabels, 160);
+    }
     function placeDepthLabels() {
+      dLabelTimer = null;
       if (!leafletMap) return;
       if (!dLabels) dLabels = L.layerGroup().addTo(leafletMap);
       dLabels.clearLayers();
-      if (!depthOn || leafletMap.getZoom() < DEPTH_MIN_ZOOM) return;
-      // 숫자: 10·20·30·40m는 늘(화면 가운데에서 가장 가까운 곳에 하나씩, 서로 40px 넘게) 먼저 놓고,
-      //  나머지 수심(50·60…150m)은 빈자리(60px 넘게)에 하나씩, 그다음 여유가 있으면 수심마다 하나 더(160px 넘게)
-      const b = leafletMap.getBounds().pad(-0.06), c = leafletMap.getCenter(), cand = {};
-      dTiles.forEach(tl => { if (tl.st !== 'ok') return; tl.lbl.forEach(p => { if (!b.contains([p[0], p[1]])) return; (cand[p[2]] = cand[p[2]] || []).push([c.distanceTo([p[0], p[1]]), p]); }); });
-      const placed = [], levels = Object.keys(cand).map(Number).sort((a, z) => a - z), KEY = [5, 10, 20, 30, 40]; // [ADD] 5m도 먼저(얕은 만에서 숫자가 보이게)
-      levels.forEach(k => cand[k].sort((a, z) => a[0] - z[0]));
-      const put = (k, gap) => { for (const [, p] of cand[k]) { const px = leafletMap.latLngToContainerPoint([p[0], p[1]]);
-        if (placed.every(q => q.distanceTo(px) > gap)) { placed.push(px);
-          dLabels.addLayer(L.marker([p[0], p[1]], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'depth-lbl' + (KEY.includes(k) ? '' : ' sm'), html: `${k}m`, iconSize: [30, 14], iconAnchor: [15, 7] }) })); return; } } };
-      KEY.forEach(k => { if (cand[k]) put(k, 40); });
-      levels.filter(k => !KEY.includes(k)).forEach(k => put(k, 60));
+      const z = leafletMap.getZoom();
+      if (!depthOn || !isDetailMode || z < DEPTH_MIN_ZOOM) return;
+      const b = leafletMap.getBounds().pad(-0.06), c = leafletMap.getCenter();
+      const x0 = tileX(b.getWest()), x1 = tileX(b.getEast()), y0 = tileY(b.getNorth()), y1 = tileY(b.getSouth());
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 64) return;
+      const cand = {};
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const tl = dCache.get(x + '_' + y);
+          if (!tl || tl.st !== 'ok' || !tl.lbl) continue;
+          for (let i = 0; i < tl.lbl.length; i++) {
+            const p = tl.lbl[i];
+            if (z <= 12 && p[2] > 40) continue;
+            if (!b.contains([p[0], p[1]])) continue;
+            (cand[p[2]] = cand[p[2]] || []).push([c.distanceTo([p[0], p[1]]), p]);
+          }
+        }
+      }
+      const placed = [], maxLbl = leafletMap.getSize().x < 520 ? 16 : 30;
+      const levels = Object.keys(cand).map(Number).sort((a, z2) => a - z2), KEY = [5, 10, 20, 30, 40];
+      levels.forEach(k => cand[k].sort((a, z2) => a[0] - z2[0]));
+      const put = (k, gap) => {
+        if (placed.length >= maxLbl) return;
+        for (const [, p] of cand[k]) {
+          const px = leafletMap.latLngToContainerPoint([p[0], p[1]]);
+          if (placed.every(q => q.distanceTo(px) > gap)) {
+            placed.push(px);
+            dLabels.addLayer(L.marker([p[0], p[1]], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'depth-lbl' + (KEY.includes(k) ? '' : ' sm'), html: `${k}m`, iconSize: [30, 14], iconAnchor: [15, 7] }) }));
+            return;
+          }
+        }
+      };
+      KEY.forEach(k => { if (cand[k]) put(k, 42); });
+      levels.filter(k => !KEY.includes(k)).forEach(k => put(k, 64));
       levels.forEach(k => put(k, 160));
     }
 
@@ -149,26 +386,15 @@
       if (!leafletMap || !isDetailMode) return;
       updateDepthBtn();
       const on = depthOn && leafletMap.getZoom() >= DEPTH_MIN_ZOOM;
-      dTiles.forEach(tl => { if (!tl.grp) return; const has = leafletMap.hasLayer(tl.grp); if (on && !has) tl.grp.addTo(leafletMap); else if (!on && has) leafletMap.removeLayer(tl.grp); });
-      if (!on) { placeDepthLabels(); return; }
-      const z = leafletMap.getZoom(), b = leafletMap.getBounds().pad(z >= 14 ? 0.6 : z >= 13 ? 0.3 : 0.1), x0 = tileX(b.getWest()), x1 = tileX(b.getEast()), y0 = tileY(b.getNorth()), y1 = tileY(b.getSouth());
-      const want = [];
-      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) want.push(x + '_' + y);
-      if (want.length > 400) return; // [FIX] 예전엔 60칸 넘으면(확대 12~13) 아예 안 받아서 빈칸이 생겼어요
-      const ctx = tileX(leafletMap.getCenter().lng), cty = tileY(leafletMap.getCenter().lat); // 화면 가운데 칸부터 받기
-      const add = want.filter(k => !dTiles.has(k)); add.forEach(k => dTiles.set(k, { st: 'load' }));
-      // 아직 시작 안 한 이전 대기 칸도 유지(안 그러면 '받는 중'으로 남아 영영 안 받아짐), 가운데 칸부터
-      const dist = (k) => { const [x, y] = k.split('_').map(Number); return Math.hypot(x - ctx, y - cty); };
-      dQueue = [...new Set(dQueue.concat(add))].sort((a, z) => dist(a) - dist(z));
-      loadNext();
-      // 오래된 타일 정리(화면에서 먼 것부터)
-      if (dTiles.size > DTILE_MAX) {
-        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-        [...dTiles.keys()].map(k => { const [x, y] = k.split('_').map(Number); return [k, Math.hypot(x - cx, y - cy)]; }).sort((a, z) => z[1] - a[1])
-          .slice(0, dTiles.size - DTILE_MAX).forEach(([k]) => { const tl = dTiles.get(k); if (tl.st === 'load') return; if (tl.grp) leafletMap.removeLayer(tl.grp); dTiles.delete(k); });
+      if (!depthGridLayer) depthGridLayer = createDepthGridLayer();
+      const has = leafletMap.hasLayer(depthGridLayer);
+      if (on && !has) depthGridLayer.addTo(leafletMap);
+      else if (!on && has) leafletMap.removeLayer(depthGridLayer);
+      if (!on) {
+        if (dLabels) dLabels.clearLayers();
+      } else {
+        scheduleDepthLabels();
       }
-      placeDepthLabels();
-      syncModes();
     }
 
     // 지도 오른쪽 아래 "수심" 켜기/끄기 버튼(확대 12 이상에서만 보임)
@@ -190,10 +416,13 @@
       window.showDetailMap = function () {
         const r = f.apply(this, arguments);
         try {
-          if (leafletMap && !depthHooked) { depthHooked = true; leafletMap.on('moveend zoomend', refreshDepthLayers);
+          if (leafletMap && !depthHooked) {
+            depthHooked = true;
+            leafletMap.on('moveend zoomend', refreshDepthLayers);
             // [ADD] 거리 가늠용 축척 막대(미터/킬로미터만) - 왼쪽 아래
-            L.control.scale({ position: 'bottomleft', metric: true, imperial: false, maxWidth: 110 }).addTo(leafletMap); }
-          setTimeout(refreshDepthLayers, 500);
+            L.control.scale({ position: 'bottomleft', metric: true, imperial: false, maxWidth: 110 }).addTo(leafletMap);
+          }
+          setTimeout(refreshDepthLayers, 250);
         } catch (_) {}
         return r;
       };

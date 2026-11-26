@@ -109,7 +109,7 @@
         const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const tm = setTimeout(() => { try { ac && ac.abort(); } catch (_) {} }, 55000);
         const rf = dRefresh.has(key);
-        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=26${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}${rf ? '&rf=1' : ''}`, ac ? { signal: ac.signal } : undefined)
+        fetch(`/api/spotobs?svc=dvec&x=${x}&y=${y}&v=27${profParam(+x, +y)}${fixParam()}${DV_MODE ? '&m=' + DV_MODE : ''}${rf ? '&rf=1' : ''}`, ac ? { signal: ac.signal } : undefined)
           .then(r => r.json())
           .then(d => {
             if (rf) {

@@ -71,7 +71,8 @@ function latLonToSpherePos(lat, lon, radius) {
         ctx.strokeStyle = selected ? '#f97316' : 'rgba(255, 255, 255, 0.45)';
         ctx.lineWidth = selected ? 2 : 1.5;
         ctx.beginPath();
-        ctx.roundRect(bx, -boxH / 2, boxW, boxH, 6);
+        if (ctx.roundRect) ctx.roundRect(bx, -boxH / 2, boxW, boxH, 6);
+        else ctx.rect(bx, -boxH / 2, boxW, boxH);
         ctx.fill();
         ctx.stroke();
         ctx.beginPath();
@@ -95,33 +96,223 @@ function latLonToSpherePos(lat, lon, radius) {
       return { texture: new THREE.CanvasTexture(canvas), dotX, dotY, canvasW: canvas.width, canvasH: canvas.height, hit };
     }
 
-    function createBeachSprite(station) {
-      const label = station.label;
-      const rightVariant = drawMarkerTexture(station, { selected: false, labelOnLeft: false, label });
-      const leftVariant = drawMarkerTexture(station, { selected: false, labelOnLeft: true, label });
+    // [PERF] 해변/다이빙 정점 2,000+개를 개별 260×260 CanvasTexture 스프라이트(4,000+장, 2GB+ VRAM)로
+    // 만들면 모바일 크롬에서 OOM 크래시가 발생합니다.
+    // 1) 모든 정점 점(dot)은 단 1개의 THREE.Points(ShaderMaterial)로 GPU 1드로우콜·0텍스처로 그리고,
+    // 2) 45° 이름표는 지구본 위 2D 캔버스 1장에 앞면·비겹침 정점만 선명하게 그려 메모리·로딩을 대폭 줄입니다.
+    let beachStationsRef = [];
+    let beachLocalPos = [];
+    let beachDotsMesh = null;
+    let globeLabelCanvas = null;
+    let globeLabelCtx = null;
+    let globeLabelCssW = 0, globeLabelCssH = 0;
+    let globeLabelHits = [];
+    let globeDotHits = [];
 
-      // [FIX] "정점 텍스트 뒤로 그림자가 벗겨진다" - 이 재질에 transparent를
-      // 안 켜뒀더니(불투명 취급) 라벨 텍스트의 투명한 배경 부분까지 포함해서
-      // 사각형 전체가 깊이버퍼에 그대로 찍혔어요. 그래서 나중에 그려지는
-      // 낮/밤 그림자가 그 사각형 영역에서는 깊이 테스트에 걸려 아예 안
-      // 그려졌던 거예요(그림자가 "벗겨진" 것처럼 보임). transparent:true +
-      // depthWrite:false로 고쳐서 실제로 보이는 부분만 영향을 주게 했습니다.
-      const material = new THREE.SpriteMaterial({ map: rightVariant.texture, transparent: true, depthTest: true, depthWrite: false });
-      const sprite = new THREE.Sprite(material);
-      sprite.userData.baseScale = [MARKER_CANVAS * MARKER_UNIT, MARKER_CANVAS * MARKER_UNIT]; // [CHANGE] 정사각형 캔버스(45도 이름표)
-      sprite.userData.stationId = station.id;
-      sprite.userData.rightVariant = rightVariant;
-      sprite.userData.leftVariant = leftVariant;
-      sprite.userData.labelOnLeft = false;
-      sprite.scale.set(MARKER_CANVAS * MARKER_UNIT, MARKER_CANVAS * MARKER_UNIT, 1);
+    function syncGlobeLabelCanvas() {
+      const container = document.getElementById('globe-canvas-container');
+      if (!container || !globeLabelCanvas) return;
+      const w = container.clientWidth || 1, h = container.clientHeight || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      globeLabelCssW = w;
+      globeLabelCssH = h;
+      const bw = Math.max(1, Math.round(w * dpr)), bh = Math.max(1, Math.round(h * dpr));
+      if (globeLabelCanvas.width !== bw || globeLabelCanvas.height !== bh) {
+        globeLabelCanvas.width = bw;
+        globeLabelCanvas.height = bh;
+      }
+      if (beachDotsMesh && beachDotsMesh.material && beachDotsMesh.material.uniforms) {
+        beachDotsMesh.material.uniforms.uSize.value = 11.5 * dpr;
+      }
+    }
 
-      // [FIX] 기준점을 캔버스 정중앙이 아니라 점(dot)의 실제 좌표로 이동
-      sprite.center.set(rightVariant.dotX / rightVariant.canvasW, 1 - rightVariant.dotY / rightVariant.canvasH);
+    function buildBeachDots(list) {
+      if (beachDotsMesh && globeGroup) {
+        globeGroup.remove(beachDotsMesh);
+        if (beachDotsMesh.geometry) beachDotsMesh.geometry.dispose();
+        if (beachDotsMesh.material) beachDotsMesh.material.dispose();
+        beachDotsMesh = null;
+      }
+      beachStationsRef = list;
+      beachLocalPos = new Array(list.length);
+      const n = list.length;
+      const positions = new Float32Array(n * 3);
+      const colors = new Float32Array(n * 3);
+      const visible = new Float32Array(n);
+      const colorHelper = new THREE.Color();
 
-      const pos = latLonToSpherePos(station.coords[1], station.coords[0], GLOBE_RADIUS + 0.3);
-      sprite.position.copy(pos);
-      sprite.stationData = station;
-      return sprite;
+      for (let i = 0; i < n; i++) {
+        const st = list[i];
+        st.__beachIndex = i;
+        const pos = latLonToSpherePos(st.coords[1], st.coords[0], GLOBE_RADIUS + 0.3);
+        beachLocalPos[i] = pos;
+        positions[i * 3] = pos.x;
+        positions[i * 3 + 1] = pos.y;
+        positions[i * 3 + 2] = pos.z;
+        colorHelper.setStyle(`rgb(${getTempColor(st.curTemp)})`);
+        colors[i * 3] = colorHelper.r;
+        colors[i * 3 + 1] = colorHelper.g;
+        colors[i * 3 + 2] = colorHelper.b;
+        visible[i] = (selectedStation && selectedStation.id === st.id) ? 0.0 : 1.0;
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geometry.setAttribute('aVisible', new THREE.BufferAttribute(visible, 1));
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const material = new THREE.ShaderMaterial({
+        uniforms: { uSize: { value: 11.5 * dpr } },
+        vertexShader: `
+          attribute vec3 color;
+          attribute float aVisible;
+          uniform float uSize;
+          varying vec3 vColor;
+          varying float vVisible;
+          void main() {
+            vColor = color;
+            vVisible = aVisible;
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mvPos;
+            gl_PointSize = aVisible > 0.5 ? uSize : 0.0;
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vColor;
+          varying float vVisible;
+          void main() {
+            if (vVisible < 0.5) discard;
+            float d = length(gl_PointCoord - vec2(0.5));
+            if (d > 0.5) discard;
+            float border = smoothstep(0.32, 0.38, d);
+            float alpha = (1.0 - smoothstep(0.45, 0.50, d)) * mix(0.88, 0.96, border);
+            vec3 col = mix(vColor, vec3(1.0), border);
+            gl_FragColor = vec4(col, alpha);
+          }
+        `,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false
+      });
+
+      const pts = new THREE.Points(geometry, material);
+      pts.renderOrder = 10;
+      pts.frustumCulled = false;
+      beachDotsMesh = pts;
+      return pts;
+    }
+
+    function renderGlobeLabels() {
+      if (!globeLabelCtx || !globeLabelCanvas) return;
+      const w = globeLabelCssW, h = globeLabelCssH;
+      const dpr = globeLabelCanvas.width / Math.max(1, w);
+      globeLabelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      globeLabelCtx.clearRect(0, 0, w, h);
+      globeLabelHits = [];
+      globeDotHits = [];
+      if (!globeGroup || !camera || isDetailMode || !beachStationsRef.length || cameraDistance > 460) return;
+
+      globeGroup.updateMatrixWorld(true);
+      camera.updateMatrixWorld();
+
+      const R = GLOBE_RADIUS + 0.3;
+      const horizonZ = (R * R) / Math.max(cameraDistance, R + 1) + 2.0;
+      const mw = globeGroup.matrixWorld;
+      const wp = new THREE.Vector3();
+      const proj = new THREE.Vector3();
+      const selId = selectedStation ? selectedStation.id : null;
+      const cx = w * 0.5, cy = h * 0.5;
+      const candidates = [];
+
+      for (let i = 0; i < beachStationsRef.length; i++) {
+        const st = beachStationsRef[i];
+        wp.copy(beachLocalPos[i]).applyMatrix4(mw);
+        if (wp.z <= horizonZ) continue;
+        proj.copy(wp).project(camera);
+        if (proj.x < -1.02 || proj.x > 1.02 || proj.y < -1.02 || proj.y > 1.02) continue;
+        const sx = (proj.x * 0.5 + 0.5) * w;
+        const sy = (-proj.y * 0.5 + 0.5) * h;
+        globeDotHits.push({ station: st, sx, sy });
+        if (st.id === selId || !st.label) continue;
+        const distC = Math.hypot(sx - cx, sy - cy);
+        candidates.push({ st, sx, sy, distC });
+      }
+
+      candidates.sort((a, b) => a.distC - b.distC);
+
+      const ctx = globeLabelCtx;
+      const isCompact = w < 520;
+      const fontSize = isCompact ? 10.5 : 11.5;
+      const boxH = isCompact ? 18 : 20;
+      const maxTextW = isCompact ? 86 : 112;
+      const maxLabels = isCompact ? 22 : 40;
+      const minDotSep = isCompact ? 34 : 42;
+      const gap = 9;
+      ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+      ctx.textBaseline = 'middle';
+
+      const placedBoxes = [];
+      const placedDots = [];
+
+      for (let i = 0; i < candidates.length && placedBoxes.length < maxLabels; i++) {
+        const { st, sx, sy } = candidates[i];
+        if (sx < 12 || sx > w - 12 || sy < 24 || sy > h - 12) continue;
+
+        let tooClose = false;
+        for (let k = 0; k < placedDots.length; k++) {
+          if (Math.hypot(sx - placedDots[k][0], sy - placedDots[k][1]) < minDotSep) { tooClose = true; break; }
+        }
+        if (tooClose) continue;
+
+        const label = st.label;
+        const textW = Math.min(ctx.measureText(label).width, maxTextW);
+        const boxW = textW + 10;
+        const labelOnLeft = sx < cx;
+        const ang = labelOnLeft ? Math.PI / 4 : -Math.PI / 4;
+        const bx = labelOnLeft ? -(gap + boxW) : gap;
+
+        // 45° 회전 상자의 화면 축정렬 경계(AABB)로 겹침 검사
+        const ca = Math.cos(ang), sa = Math.sin(ang);
+        const hh = boxH * 0.5;
+        const x1 = bx, x2 = bx + boxW, y1 = -hh, y2 = hh;
+        const ptsX = [sx + x1 * ca - y1 * sa, sx + x2 * ca - y1 * sa, sx + x1 * ca - y2 * sa, sx + x2 * ca - y2 * sa];
+        const ptsY = [sy + x1 * sa + y1 * ca, sy + x2 * sa + y1 * ca, sy + x1 * sa + y2 * ca, sy + x2 * sa + y2 * ca];
+        const aabb = {
+          minX: Math.min(...ptsX) - 3, maxX: Math.max(...ptsX) + 3,
+          minY: Math.min(...ptsY) - 3, maxY: Math.max(...ptsY) + 3
+        };
+        if (aabb.minX < 8 || aabb.maxX > w - 48 || aabb.minY < 48 || aabb.maxY > h - 30) continue;
+
+        let overlap = false;
+        for (let k = 0; k < placedBoxes.length; k++) {
+          const b = placedBoxes[k];
+          if (aabb.minX < b.maxX && aabb.maxX > b.minX && aabb.minY < b.maxY && aabb.maxY > b.minY) { overlap = true; break; }
+        }
+        if (overlap) continue;
+
+        placedBoxes.push(aabb);
+        placedDots.push([sx, sy]);
+        globeLabelHits.push({ station: st, sx, sy, ang, bx, boxW, boxH });
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(ang);
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(bx, -hh, boxW, boxH, 4);
+        else ctx.rect(bx, -hh, boxW, boxH);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.rect(bx + 3, -hh, boxW - 6, boxH);
+        ctx.clip();
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillText(label, bx + 5, 0.5);
+        ctx.restore();
+      }
     }
 
 // [ADD] "정점 클릭이 잘 안 됨" 문제 대응 - 클릭한 지점(임의의 월드 좌표)을
@@ -255,6 +446,7 @@ function getCurrentCenterLatLng() {
       if (!selectionMarker) return;
       if (!selectedStation) { selectionMarker.visible = false; return; }
       if (selectionMarker.userData.forId !== selectedStation.id) {
+        [selectionMarker.userData.rightVariant, selectionMarker.userData.leftVariant].forEach(v => v && v.texture && v.texture.dispose());
         selectionMarker.userData.forId = selectedStation.id;
         const label = selectedStation.label || selectedStation.name.split(' (')[0];
         selectionMarker.userData.rightVariant = drawMarkerTexture(selectedStation, { selected: true, labelOnLeft: false, label });
@@ -277,20 +469,8 @@ function getCurrentCenterLatLng() {
     // 왼쪽 반구에 있으면 라벨도 왼쪽으로) 뻗도록 매 프레임 방향을 다시 계산합니다.
     function updateLabelOrientation() {
       if (!camera) return;
-      const tmp = new THREE.Vector3();
-      beachSprites.forEach(s => {
-        s.getWorldPosition(tmp);
-        tmp.project(camera);
-        const wantLeft = tmp.x < 0;
-        if (s.userData.labelOnLeft !== wantLeft) {
-          s.userData.labelOnLeft = wantLeft;
-          const v = wantLeft ? s.userData.leftVariant : s.userData.rightVariant;
-          s.material.map = v.texture;
-          s.material.needsUpdate = true;
-          s.center.set(v.dotX / v.canvasW, 1 - v.dotY / v.canvasH);
-        }
-      });
       if (selectionMarker && selectionMarker.visible) {
+        const tmp = new THREE.Vector3();
         selectionMarker.getWorldPosition(tmp);
         tmp.project(camera);
         const wantLeft = tmp.x < 0;
@@ -311,20 +491,24 @@ function getCurrentCenterLatLng() {
     // 일정하게 유지합니다 (거리가 멀어질수록 실제 크기를 키우는 방식).
     function updateBeachSpriteScale() {
       const factor = cameraDistance / 170; // 170 = 기본(리셋) 거리 기준
-      beachSprites.forEach(s => {
-        const [bw, bh] = s.userData.baseScale;
-        s.scale.set(bw * factor, bh * factor, 1);
-        // [FIX] "선택하면 원래 있던 글씨가 안 사라지고 겹쳐 보임" - 선택된
-        // 해변 정점은 원래(작은) 마커를 숨기고, 그 자리엔 확대된 선택 마커
-        // 하나만 보이도록 합니다.
-        s.visible = !(selectedStation && s.userData.stationId === selectedStation.id);
-      });
+      if (beachDotsMesh && beachDotsMesh.geometry && beachDotsMesh.geometry.attributes.aVisible) {
+        const vis = beachDotsMesh.geometry.attributes.aVisible;
+        const arr = vis.array;
+        const selId = selectedStation ? selectedStation.id : null;
+        let dirty = false;
+        for (let i = 0; i < beachStationsRef.length; i++) {
+          const want = beachStationsRef[i].id === selId ? 0.0 : 1.0;
+          if (arr[i] !== want) { arr[i] = want; dirty = true; }
+        }
+        if (dirty) vis.needsUpdate = true;
+      }
       refreshSelectionMarker();
       if (selectionMarker && selectionMarker.visible) {
         const [bw, bh] = selectionMarker.userData.baseScale;
         selectionMarker.scale.set(bw * factor, bh * factor, 1);
       }
       updateLabelOrientation();
+      if (window.requestGlobeRender) window.requestGlobeRender();
     }
 
     function updateZoomGauge() {
@@ -707,10 +891,22 @@ function getCurrentCenterLatLng() {
       scene.add(buildStarfield());
       scene.add(buildMilkyWay());
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       container.appendChild(renderer.domElement);
+      renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); }, false);
+      renderer.domElement.addEventListener('webglcontextrestored', () => { if (window.requestGlobeRender) window.requestGlobeRender(); }, false);
+
+      globeLabelCanvas = document.getElementById('globe-labels-canvas');
+      if (!globeLabelCanvas) {
+        globeLabelCanvas = document.createElement('canvas');
+        globeLabelCanvas.id = 'globe-labels-canvas';
+        globeLabelCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;';
+        container.appendChild(globeLabelCanvas);
+      }
+      globeLabelCtx = globeLabelCanvas.getContext('2d');
+      syncGlobeLabelCanvas();
 
       globeGroup = new THREE.Group();
       scene.add(globeGroup);
@@ -809,6 +1005,7 @@ function getCurrentCenterLatLng() {
         if (sig !== lastSig || wake > 0 || ts - lastBeat > 1000) {
           lastSig = sig; lastBeat = ts; if (wake > 0) wake--;
           renderer.render(scene, camera);
+          renderGlobeLabels();
         }
       }
       animate(performance.now());
@@ -873,17 +1070,10 @@ function getCurrentCenterLatLng() {
       // 라벨을 가려버렸던 거예요(밤에는 그림자가 진하니 더 두드러졌고요).
       // 라벨을 그 무엇보다도 나중에(맨 위에) 그리도록 renderOrder를 높게 줍니다.
       const beachStations = stations.filter(d => d.isBeach);
-      for (let i = 0; i < beachStations.length; i++) {
-        const st = beachStations[i];
-        const sprite = createBeachSprite(st);
-        sprite.renderOrder = 10;
-        beachSprites.push(sprite);
-        globeGroup.add(sprite);
-        if (onProgress) onProgress(i + 1, beachStations.length);
-        // [ADD] 40개마다 한 번씩 브라우저에게 제어권을 넘겨서 그 사이
-        // 입력(클릭/타이핑)을 처리할 수 있게 합니다.
-        if (i % 40 === 39) await yieldToMain();
-      }
+      const beachDots = buildBeachDots(beachStations);
+      globeGroup.add(beachDots);
+      if (onProgress) onProgress(beachStations.length, beachStations.length);
+      await yieldToMain();
 
       // [ADD] 선택된 정점 표시용 링 (처음엔 숨김, selectStation 시 표시)
       selectionMarker = createSelectionMarker();
@@ -952,24 +1142,23 @@ function getCurrentCenterLatLng() {
         if (el) el.innerText = formatTemp(selectedStation.curTemp);
       }
     }
-    // 해변 정점 스프라이트(점+이름표)를 지금 수온 색으로 다시 그리기
+    // 해변 정점 점 색상을 지금 수온 색으로 즉시 갱신 (GPU 버퍼만 수정, 캔버스 재생성 없음)
     function refreshBeachSprites() {
-      const byId = new Map(stations.map(s => [s.id, s]));
-      beachSprites.forEach(sp => {
-        const st = byId.get(sp.userData.stationId);
-        if (!st) return;
-        const label = st.label;
-        const r = drawMarkerTexture(st, { selected: false, labelOnLeft: false, label });
-        const l = drawMarkerTexture(st, { selected: false, labelOnLeft: true, label });
-        [sp.userData.rightVariant, sp.userData.leftVariant].forEach(v => v && v.texture && v.texture.dispose());
-        sp.userData.rightVariant = r; sp.userData.leftVariant = l;
-        const v = sp.userData.labelOnLeft ? l : r;
-        sp.material.map = v.texture;
-        sp.material.needsUpdate = true;
-        sp.center.set(v.dotX / v.canvasW, 1 - v.dotY / v.canvasH);
-      });
+      if (beachDotsMesh && beachDotsMesh.geometry && beachDotsMesh.geometry.attributes.color) {
+        const colAttr = beachDotsMesh.geometry.attributes.color;
+        const arr = colAttr.array;
+        const colorHelper = new THREE.Color();
+        for (let i = 0; i < beachStationsRef.length; i++) {
+          colorHelper.setStyle(`rgb(${getTempColor(beachStationsRef[i].curTemp)})`);
+          arr[i * 3] = colorHelper.r;
+          arr[i * 3 + 1] = colorHelper.g;
+          arr[i * 3 + 2] = colorHelper.b;
+        }
+        colAttr.needsUpdate = true;
+      }
       if (selectionMarker) selectionMarker.userData.forId = null; // 선택 표시도 새 색으로
       try { refreshSelectionMarker(); } catch (_) {}
+      if (window.requestGlobeRender) window.requestGlobeRender();
     }
 
     // [ADD] "로딩 끝나면 화면 회전하면서 지구로 줌인" 요청 반영 - 멀리서
@@ -1168,6 +1357,7 @@ function getCurrentCenterLatLng() {
         return Math.sqrt(dx * dx + dy * dy);
       }
 
+      let downMousePos = { x: 0, y: 0 };
       function onPointerDown(e) {
         // [ADD] 손가락 두 개면 핀치 줌 시작, 드래그 회전은 하지 않음
         if (e.touches && e.touches.length === 2) {
@@ -1182,6 +1372,7 @@ function getCurrentCenterLatLng() {
           e.touches ? e.touches[0].clientX : e.clientX,
           e.touches ? e.touches[0].clientY : e.clientY);
         prevMousePos = { x: clientX, y: clientY };
+        downMousePos = { x: clientX, y: clientY };
       }
 
       function onPointerMove(e) {
@@ -1234,12 +1425,44 @@ function getCurrentCenterLatLng() {
             (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : e.clientX,
             (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : e.clientY);
 
-          mouse.x = ((clientX - rect.left) / width) * 2 - 1;
-          mouse.y = -((clientY - rect.top) / height) * 2 + 1;
+          if (Math.hypot(clientX - downMousePos.x, clientY - downMousePos.y) > 10) return;
+
+          const cw = container.clientWidth || width;
+          const ch = container.clientHeight || height;
+          const tapX = clientX - rect.left;
+          const tapY = clientY - rect.top;
+
+          // 1) 2D 45° 이름표 클릭 판정
+          let matched = false;
+          for (let i = globeLabelHits.length - 1; i >= 0; i--) {
+            const h = globeLabelHits[i];
+            const px = tapX - h.sx, py = tapY - h.sy;
+            const c = Math.cos(-h.ang), s = Math.sin(-h.ang);
+            const rx = px * c - py * s, ry = px * s + py * c;
+            if (rx >= h.bx - 5 && rx <= h.bx + h.boxW + 5 && Math.abs(ry) <= h.boxH * 0.5 + 5) {
+              selectStation(h.station);
+              matched = true;
+              break;
+            }
+          }
+
+          // 2) 앞면 해변/다이빙 정점 점(dot) 클릭 판정
+          if (!matched && globeDotHits.length) {
+            let best = null, bestD = 16;
+            for (let i = 0; i < globeDotHits.length; i++) {
+              const d = Math.hypot(tapX - globeDotHits[i].sx, tapY - globeDotHits[i].sy);
+              if (d < bestD) { bestD = d; best = globeDotHits[i].station; }
+            }
+            if (best) { selectStation(best); matched = true; }
+          }
+
+          if (matched) return;
+
+          mouse.x = (tapX / cw) * 2 - 1;
+          mouse.y = -(tapY / ch) * 2 + 1;
 
           raycaster.setFromCamera(mouse, camera);
           const intersects = raycaster.intersectObjects(globeGroup.children);
-          let matched = false;
           for (let hit of intersects) {
             // 지구본 표면을 직접 클릭했을 때 실제 텍스처 UV를 찍어볼 수 있는 보정용 로그.
             // (혹시 나중에 육지 텍스처와 정점 좌표가 다시 어긋나 보이면,

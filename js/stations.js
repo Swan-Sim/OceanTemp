@@ -140,13 +140,6 @@
       const beachSpots = await loadBeachSpots();
 
       beachSpots.forEach(s => {
-        // [QA] 저해상도(1:110m) 육지 데이터 특성상 해안선 바로 근처 좌표는
-        // 간혹 육지로 오판정될 수 있어, 실제 이런 경우가 있는지 콘솔에 남겨서
-        // 신뢰도를 눈으로 확인할 수 있게 합니다. (그 자체로 좌표를 바꾸진 않음 - 실제
-        // 해변인지 사람이 고른 명단이라 자동 제외 대상은 아닙니다.)
-        if (isOnLand(s.lon, s.lat)) {
-          console.warn('[QA] 해안선 저해상도 오차로 육지 판정된 해변 좌표 - 실제 해변 위치는 맞습니다:', s.name);
-        }
         // [ADD] 언어별 이름: 화면 언어(lang)의 이름이 있으면 그걸 쓰고, 없으면 영어 → 기본 이름. 원래 이름·다른 언어 이름은 검색용으로 남겨요
         const L = (typeof lang !== 'undefined' ? lang : 'en'), nm = s.names || null;
         const locName = (nm && (nm[L] || nm.en)) ? cleanSpotName(nm[L] || nm.en) : s.name;

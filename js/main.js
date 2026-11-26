@@ -164,6 +164,8 @@
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      if (typeof syncGlobeLabelCanvas === 'function') syncGlobeLabelCanvas();
+      if (window.requestGlobeRender) window.requestGlobeRender();
     }
 
     // [FIX] "핸드폰에서 가로세로로 여러 번 돌리니까 버그가 생김(비율이 이상해지고

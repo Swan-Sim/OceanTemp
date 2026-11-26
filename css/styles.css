@@ -243,8 +243,8 @@
     .lf-dot.beach { width: 14px; height: 14px; border-width: 2px; }
     .lf-label {
       margin-left: 6px; padding: 2px 6px; font-size: 12.5px; font-weight: 600; color: #f8fafc;
-      background: rgba(15, 23, 42, 0.72); border: 0.8px solid rgba(255, 255, 255, 0.4);
-      border-radius: 4px; backdrop-filter: blur(3px); pointer-events: none;
+      background: rgba(15, 23, 42, 0.86); border: 0.8px solid rgba(255, 255, 255, 0.42);
+      border-radius: 4px; pointer-events: none; contain: layout style;
       text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
   

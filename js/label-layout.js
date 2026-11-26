@@ -10,36 +10,62 @@
       const AX = 7, AY = 10; // 마커 안에서 점 가운데 위치(iconAnchor와 같음)
       let raf = 0;
       const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      // [PERF] getBoundingClientRect() 반복 호출로 인한 강제 동기 리플로우(Layout Thrashing) 제거:
+      // 오프스크린 2D 캔버스 measureText로 텍스트 너비를 0-리플로우로 측정해 캐시합니다.
+      const mCtx = (() => { try { const c = document.createElement('canvas').getContext('2d'); if (c) c.font = '600 12.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'; return c; } catch (_) { return null; } })();
+      const measureLabelW = (lab) => {
+        if (lab._w) return lab._w;
+        const txt = lab.textContent || '';
+        const w = mCtx ? Math.ceil(mCtx.measureText(txt).width) + 16 : Math.max(48, txt.length * 9 + 16);
+        lab._w = w;
+        return w;
+      };
 
       function layoutLabels() {
         raf = 0;
         if (typeof leafletMap === 'undefined' || !leafletMap || typeof isDetailMode === 'undefined' || !isDetailMode) return;
         const size = leafletMap.getSize(), bounds = leafletMap.getBounds().pad(0.05), z = leafletMap.getZoom();
+        const isCompact = size.x < 520;
+        const maxCand = isCompact ? 90 : 180;
+        const maxPlaced = isCompact ? 34 : 70;
         const items = [], dots = [];
         const all = Object.assign({}, leafletMarkersByStationId, window.__shopMarkers || {}); // 정점 + 샵·풀장(지도에 올라가 있을 때만)
+        const hideEl = (el) => {
+          const lab = el.querySelector('.lf-label');
+          if (lab && lab.style.display !== 'none') lab.style.display = 'none';
+          const th = el.querySelector('.ot-pth');
+          if (th && th.style.display !== 'none') th.style.display = 'none';
+          if (el._lead) { el._lead.remove(); el._lead = null; }
+        };
         Object.keys(all).forEach(id => {
           const m = all[id], el = m.getElement && m.getElement();
-          if (!el || !bounds.contains(m.getLatLng())) return;
+          if (!el) return;
+          if (!bounds.contains(m.getLatLng())) { hideEl(el); return; }
           const p = leafletMap.latLngToContainerPoint(m.getLatLng());
-          dots.push({ x: p.x - DOT, y: p.y - DOT, w: DOT * 2, h: DOT * 2 });
+          const ownDot = { x: p.x - DOT, y: p.y - DOT, w: DOT * 2, h: DOT * 2 };
+          dots.push(ownDot);
           const lab = el.querySelector('.lf-label'); if (!lab) return;
-          if (!lab._w) { lab.style.display = ''; const w = Math.ceil(lab.getBoundingClientRect().width); if (w) lab._w = w; } // 화면에 보일 때 한 번 재서 기억
           const th = el.querySelector('.ot-pth'); // [ADD] 사진 썸네일(이름표 아래 69px). 있으면 이름표+썸네일을 한 덩어리로 자리 잡아요
-          items.push({ id, el, lab, th, p, w: Math.max(lab._w || 60, th ? TH : 0), h: th ? H + TGAP + TH : H });
+          items.push({ id, el, lab, th, p, ownDot, w: Math.max(measureLabelW(lab), th ? TH : 0), h: th ? H + TGAP + TH : H });
         });
         const sel = typeof selectedStation !== 'undefined' && selectedStation ? String(selectedStation.id) : null;
         const cx = size.x / 2, cy = size.y / 2;
         items.sort((a, b) => (b.id === sel) - (a.id === sel) || Math.hypot(a.p.x - cx, a.p.y - cy) - Math.hypot(b.p.x - cx, b.p.y - cy));
+        if (items.length > maxCand) {
+          for (let i = maxCand; i < items.length; i++) hideEl(items[i].el);
+          items.length = maxCand;
+        }
         const placed = [], inView = (b) => b.x >= 0 && b.y >= 0 && b.x + b.w <= size.x && b.y + b.h <= size.y;
         const free = (b, own) => inView(b) && !placed.some(q => hit(b, q)) && !dots.some(q => q !== own && hit(b, q));
         const draw = (o, pos, lead) => {
-          const old = o.el.querySelector('svg.lf-lead'); if (old) old.remove();
+          if (o.el._lead) { o.el._lead.remove(); o.el._lead = null; }
+          else { const old = o.el.querySelector('svg.lf-lead'); if (old) old.remove(); }
           if (o.th) { o.th.style.display = (pos && o.h > H) ? '' : 'none'; if (pos && o.h > H) { o.th.style.left = (AX + pos[0]) + 'px'; o.th.style.top = (AY + pos[1] + H + TGAP) + 'px'; } }
           if (!pos) { o.lab.style.display = 'none'; return; }
           o.lab.style.display = ''; o.lab.style.left = (AX + pos[0]) + 'px'; o.lab.style.top = (AY + pos[1]) + 'px';
           if (lead) {
             const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('class', 'lf-lead'); s.setAttribute('width', '1'); s.setAttribute('height', '1');
-            s.innerHTML = `<line x1="${AX}" y1="${AY}" x2="${AX + lead[0]}" y2="${AY + lead[1]}"/>`; o.el.prepend(s);
+            s.innerHTML = `<line x1="${AX}" y1="${AY}" x2="${AX + lead[0]}" y2="${AY + lead[1]}"/>`; o.el.prepend(s); o.el._lead = s;
           }
         };
         // [D] 몰린 무리(서로 40px 안, 3개 이상)는 부채꼴로 먼저 자리 잡기
@@ -54,11 +80,13 @@
             c.sort((a, b) => Math.atan2(a.p.y - gy, a.p.x - gx) - Math.atan2(b.p.y - gy, b.p.x - gx)); // 놓인 방향 순서대로 → 선이 안 엇갈림
             const a0 = Math.atan2(c[0].p.y - gy, c[0].p.x - gx);
             c.forEach((o, k) => {
-              const own = dots.find(d => d.x === o.p.x - DOT && d.y === o.p.y - DOT); let pos = null, lead = null;
-              outer: for (const hh of (o.th ? [o.h, H] : [H])) for (const extra of [0, 22, 44]) for (const tw of [0, 0.5, -0.5]) { // 썸네일 포함 덩어리로 먼저, 안 되면 이름표만
-                const a = a0 + (k + tw) / c.length * 2 * Math.PI, ex = gx + Math.cos(a) * (rad + extra), ey = gy + Math.sin(a) * (rad + extra);
-                const lx = Math.cos(a) >= 0 ? ex : ex - o.w, b = { x: lx, y: ey - H / 2, w: o.w, h: hh };
-                if (free(b, own)) { placed.push(b); o.h = hh; pos = [lx - o.p.x, ey - H / 2 - o.p.y]; lead = [ex - o.p.x, ey - o.p.y]; break outer; }
+              let pos = null, lead = null;
+              if (placed.length < maxPlaced || o.id === sel) {
+                outer: for (const hh of (o.th ? [o.h, H] : [H])) for (const extra of [0, 22, 44]) for (const tw of [0, 0.5, -0.5]) { // 썸네일 포함 덩어리로 먼저, 안 되면 이름표만
+                  const a = a0 + (k + tw) / c.length * 2 * Math.PI, ex = gx + Math.cos(a) * (rad + extra), ey = gy + Math.sin(a) * (rad + extra);
+                  const lx = Math.cos(a) >= 0 ? ex : ex - o.w, b = { x: lx, y: ey - H / 2, w: o.w, h: hh };
+                  if (free(b, o.ownDot)) { placed.push(b); o.h = hh; pos = [lx - o.p.x, ey - H / 2 - o.p.y]; lead = [ex - o.p.x, ey - o.p.y]; break outer; }
+                }
               }
               if (!pos) o.h = H;
               if (!pos && o.id === sel) pos = [DOT + GAP, -H / 2];
@@ -68,19 +96,20 @@
         }
         items.forEach(o => {
           if (done.has(o)) return;
-          const own = dots.find(d => d.x === o.p.x - DOT && d.y === o.p.y - DOT);
           let pos = null, lead = null;
-          for (const hh of (o.th ? [o.h, H] : [H])) { // 썸네일 포함 덩어리로 먼저, 안 되면 이름표만(썸네일 숨김)
-            const near = [[DOT + GAP, -H / 2], [-DOT - GAP - o.w, -H / 2], [DOT - 2, -DOT - H + 2], [DOT - 2, DOT - 2], [-DOT - o.w + 2, -DOT - H + 2], [-DOT - o.w + 2, DOT - 2], [-o.w / 2, -DOT - GAP - H], [-o.w / 2, DOT + GAP]];
-            for (const [dx, dy] of near) { const b = { x: o.p.x + dx, y: o.p.y + dy, w: o.w, h: hh }; if (free(b, own)) { pos = [dx, dy]; placed.push(b); break; } }
-            if (!pos && z >= 8) { // 지시선: 바깥으로 점점 멀리, 16방향
-              outer: for (const r of [34]) for (let k = 0; k < 16; k++) { // 짧은 선만(길어질 곳은 위의 부채꼴이 맡음)
-                const a = k / 16 * 2 * Math.PI, ex = Math.cos(a) * r, ey = Math.sin(a) * r;
-                const dx = ex >= 0 ? ex : ex - o.w, dy = ey - H / 2, b = { x: o.p.x + dx, y: o.p.y + dy, w: o.w, h: hh };
-                if (free(b, own)) { pos = [dx, dy]; lead = [ex, ey]; placed.push(b); break outer; }
+          if (placed.length < maxPlaced || o.id === sel) {
+            for (const hh of (o.th ? [o.h, H] : [H])) { // 썸네일 포함 덩어리로 먼저, 안 되면 이름표만(썸네일 숨김)
+              const near = [[DOT + GAP, -H / 2], [-DOT - GAP - o.w, -H / 2], [DOT - 2, -DOT - H + 2], [DOT - 2, DOT - 2], [-DOT - o.w + 2, -DOT - H + 2], [-DOT - o.w + 2, DOT - 2], [-o.w / 2, -DOT - GAP - H], [-o.w / 2, DOT + GAP]];
+              for (const [dx, dy] of near) { const b = { x: o.p.x + dx, y: o.p.y + dy, w: o.w, h: hh }; if (free(b, o.ownDot)) { pos = [dx, dy]; placed.push(b); break; } }
+              if (!pos && z >= 8) { // 지시선: 바깥으로 점점 멀리, 16방향
+                outer: for (const r of [34]) for (let k = 0; k < 16; k++) { // 짧은 선만(길어질 곳은 위의 부채꼴이 맡음)
+                  const a = k / 16 * 2 * Math.PI, ex = Math.cos(a) * r, ey = Math.sin(a) * r;
+                  const dx = ex >= 0 ? ex : ex - o.w, dy = ey - H / 2, b = { x: o.p.x + dx, y: o.p.y + dy, w: o.w, h: hh };
+                  if (free(b, o.ownDot)) { pos = [dx, dy]; lead = [ex, ey]; placed.push(b); break outer; }
+                }
               }
+              if (pos) { o.h = hh; break; }
             }
-            if (pos) { o.h = hh; break; }
           }
           if (!pos) o.h = H;
           if (!pos && o.id === sel) pos = [DOT + GAP, -H / 2]; // 고른 정점은 겹쳐도 보이게
@@ -94,7 +123,7 @@
       const f = window.showDetailMap;
       if (typeof f === 'function') window.showDetailMap = function () {
         const r = f.apply(this, arguments);
-        try { if (leafletMap && !hooked) { hooked = true; leafletMap.on('zoomend moveend resize', schedule); } setTimeout(schedule, 450); } catch (_) {}
+        try { if (leafletMap && !hooked) { hooked = true; leafletMap.on('zoomend moveend resize', schedule); } setTimeout(schedule, 60); } catch (_) {}
         return r;
       };
       const u = window.updateLeafletSelection;

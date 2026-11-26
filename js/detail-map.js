@@ -1,6 +1,107 @@
 // [FIX] 지도 글자(지명) 층: CARTO가 키 없는 요청에 "API KEY REQUIRED" 그림을 돌려줘서 Esri 무료 지명 층으로 교체(출처 표시 켬)
 /*! otemp.app — © 2026 All rights reserved. Unauthorized copying or redistribution prohibited. See /LICENSE. */
-function showDetailMap(o,a,n=6){if(isDetailMode=!0,document.body.classList.add("detail-mode"),document.getElementById("globe-canvas-container").style.opacity="0",document.getElementById("globe-canvas-container").style.pointerEvents="none",document.getElementById("leafletMap").classList.add("active"),leafletMap)leafletMap.setView([o,a],n,{animate:!0,duration:.4});else{if(leafletMap=L.map("leafletMap",{zoomControl:!1,attributionControl:!0,minZoom:4,maxZoom:18}).setView([o,a],n),leafletMap.attributionControl.setPrefix(!1),setupCoordPicker(leafletMap),L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:18,attribution:"Imagery &copy; Esri, Maxar, Earthstar Geographics"}).addTo(leafletMap),L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:18,attribution:"Labels &copy; Esri"}).addTo(leafletMap),leafletMap.on("zoom",()=>{const e=leafletMap.getZoom();if(updateZoomGaugeByRatio((e-4)/14),e<5){const c=leafletMap.getCenter();switchToGlobe(c.lat,c.lng)}}),!fullGridLoaded){const e=generateOceanGridStations();stations=stations.concat(e),fullGridLoaded=!0,refreshMaxTempStation(),document.getElementById("point-counter").innerText=t.stationCount(stations.length)}stations.forEach(e=>{const c=getTempColor(e.curTemp),i=e.isBeach&&e.label?`<span class="lf-label">${String(e.label).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[ch])}</span>`:"",s=L.divIcon({className:"lf-marker-wrap",html:`<div class="lf-dot ${e.isBeach?"beach":""}" style="background-color: rgba(${c}, 0.78);"></div>${i}`,iconSize:[20,20],iconAnchor:[e.isBeach?7:5.5,10]}),r=L.marker([e.coords[1],e.coords[0]],{icon:s}).addTo(leafletMap).on("click",()=>selectStation(e));leafletMarkersByStationId[e.id]=r})}}function updateLeafletSelection(){Object.keys(leafletMarkersByStationId).forEach(o=>{const a=leafletMarkersByStationId[o],n=a.getElement&&a.getElement();if(!n)return;const l=n.querySelector(".lf-dot");if(!l)return;const e=selectedStation&&String(selectedStation.id)===o;l.classList.toggle("selected",!!e)})}function switchToGlobe(o,a){isDetailMode=!1,document.body.classList.remove("detail-mode"),document.getElementById("leafletMap").classList.remove("active");const n=document.getElementById("globe-canvas-container");if(n.style.opacity="1",n.style.pointerEvents="auto",cameraDistance=170,camera.position.z=cameraDistance,typeof o=="number"&&typeof a=="number"){const l=computeRotationForLatLon(o,a);globeGroup.rotation.set(l.x,l.y,0)}updateZoomGauge()}function locateUser(){
+let leafletMarkerGroup = null;
+function syncLeafletMarkers() {
+  if (!leafletMap || !leafletMarkerGroup || !isDetailMode) return;
+  const b = leafletMap.getBounds().pad(0.25);
+  const selId = selectedStation ? selectedStation.id : null;
+  let changed = false;
+  for (let i = 0; i < stations.length; i++) {
+    const e = stations[i];
+    if (!e || !e.coords) continue;
+    const id = e.id;
+    const want = (id === selId) || b.contains([e.coords[1], e.coords[0]]);
+    const cur = leafletMarkersByStationId[id];
+    if (want && !cur) {
+      let r = e._lfMarker;
+      if (!r) {
+        const c = getTempColor(e.curTemp);
+        const lb = e.isBeach && e.label ? `<span class="lf-label" style="display:none">${String(e.label).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch])}</span>` : '';
+        const s = L.divIcon({ className: 'lf-marker-wrap', html: `<div class="lf-dot ${e.isBeach ? 'beach' : ''}" style="background-color: rgba(${c}, 0.78);"></div>${lb}`, iconSize: [20, 20], iconAnchor: [e.isBeach ? 7 : 5.5, 10] });
+        r = L.marker([e.coords[1], e.coords[0]], { icon: s }).on('click', () => selectStation(e));
+        e._lfMarker = r;
+        e._lfTemp = e.curTemp;
+      }
+      leafletMarkerGroup.addLayer(r);
+      leafletMarkersByStationId[id] = r;
+      const el = r.getElement && r.getElement();
+      if (el) {
+        const dot = el.querySelector('.lf-dot');
+        if (dot) {
+          if (e._lfTemp !== e.curTemp) { dot.style.backgroundColor = `rgba(${getTempColor(e.curTemp)}, 0.78)`; e._lfTemp = e.curTemp; }
+          dot.classList.toggle('selected', id === selId);
+        }
+        const lab = el.querySelector('.lf-label');
+        if (lab) lab.style.display = 'none';
+      }
+      changed = true;
+    } else if (!want && cur) {
+      leafletMarkerGroup.removeLayer(cur);
+      delete leafletMarkersByStationId[id];
+      changed = true;
+    }
+  }
+  if (changed && typeof window.sportLayerRefresh === 'function') window.sportLayerRefresh();
+}
+function showDetailMap(o, a, n = 6) {
+  isDetailMode = true;
+  document.body.classList.add('detail-mode');
+  document.getElementById('globe-canvas-container').style.opacity = '0';
+  document.getElementById('globe-canvas-container').style.pointerEvents = 'none';
+  document.getElementById('leafletMap').classList.add('active');
+  if (leafletMap) {
+    leafletMap.setView([o, a], n, { animate: true, duration: 0.4 });
+    syncLeafletMarkers();
+  } else {
+    leafletMap = L.map('leafletMap', { zoomControl: false, attributionControl: true, minZoom: 4, maxZoom: 18 }).setView([o, a], n);
+    leafletMap.attributionControl.setPrefix(false);
+    setupCoordPicker(leafletMap);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }).addTo(leafletMap);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Labels &copy; Esri' }).addTo(leafletMap);
+    leafletMap.on('zoom', () => {
+      const e = leafletMap.getZoom();
+      updateZoomGaugeByRatio((e - 4) / 14);
+      if (e < 5) { const c = leafletMap.getCenter(); switchToGlobe(c.lat, c.lng); }
+    });
+    if (!fullGridLoaded) {
+      const e = generateOceanGridStations();
+      stations = stations.concat(e);
+      fullGridLoaded = true;
+      refreshMaxTempStation();
+      document.getElementById('point-counter').innerText = t.stationCount(stations.length);
+    }
+    leafletMarkerGroup = L.layerGroup().addTo(leafletMap);
+    leafletMap.on('moveend zoomend', syncLeafletMarkers);
+    syncLeafletMarkers();
+  }
+}
+function updateLeafletSelection() {
+  if (isDetailMode && leafletMap && selectedStation && !leafletMarkersByStationId[selectedStation.id]) syncLeafletMarkers();
+  Object.keys(leafletMarkersByStationId).forEach(o => {
+    const a = leafletMarkersByStationId[o], n = a.getElement && a.getElement();
+    if (!n) return;
+    const l = n.querySelector('.lf-dot');
+    if (!l) return;
+    const e = selectedStation && String(selectedStation.id) === o;
+    l.classList.toggle('selected', !!e);
+  });
+}
+function switchToGlobe(o, a) {
+  isDetailMode = false;
+  document.body.classList.remove('detail-mode');
+  document.getElementById('leafletMap').classList.remove('active');
+  const n = document.getElementById('globe-canvas-container');
+  n.style.opacity = '1';
+  n.style.pointerEvents = 'auto';
+  cameraDistance = 170;
+  camera.position.z = cameraDistance;
+  if (typeof o === 'number' && typeof a === 'number') {
+    const l = computeRotationForLatLon(o, a);
+    globeGroup.rotation.set(l.x, l.y, 0);
+  }
+  updateZoomGauge();
+}
+function locateUser(){
   // [FIX] "지도랑 GPS 값이랑 위치가 안맞아" - 예전엔 위치를 못 받으면 조용히 샌프란시스코(37.78,-122.45)로
   // 갔고, 10분 묵은 위치를 재사용했고, 내 위치 표시도 없었어요. 정밀 GPS로 새로 받고, 파란 점+오차 원을 그립니다.
   const msg=(txt)=>{let d=document.getElementById('locate-msg');if(!d){d=document.createElement('div');d.id='locate-msg';document.body.appendChild(d)}d.textContent=txt;d.classList.add('show');clearTimeout(d._t);d._t=setTimeout(()=>d.classList.remove('show'),3500)};

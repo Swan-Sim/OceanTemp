@@ -37,7 +37,7 @@
         group = L.layerGroup(); poolGroup = L.layerGroup();
         list.filter(s => s.lat != null && s.lon != null).forEach(s => {
           const ty = ['shop', 'liveaboard', 'pool', 'cenote'].includes(s.type) ? s.type : 'shop';
-          const icon = L.divIcon({ className: 'lf-marker-wrap lf-shopmk', html: `<div class="lf-sq ${ty}"></div><span class="lf-label">${shopEsc(s.name)}</span>`, iconSize: [20, 20], iconAnchor: [7, 10] });
+          const icon = L.divIcon({ className: 'lf-marker-wrap lf-shopmk', html: `<div class="lf-sq ${ty}"></div><span class="lf-label" style="display:none">${shopEsc(s.name)}</span>`, iconSize: [20, 20], iconAnchor: [7, 10] });
           const m = L.marker([s.lat, s.lon], { icon, zIndexOffset: 300 }).bindPopup(() => popupHtml(s), { maxWidth: 270, className: 'sp-pop' });
           window.__shopMarkers['s' + s.id] = m; (isFixed(ty) ? poolGroup : group).addLayer(m);
         });

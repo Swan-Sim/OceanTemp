@@ -57,8 +57,8 @@ async function translateNotice(n, prev) {
   const T = require('./_translate'); const tr = { _key: key };
   if (!n.title) return tr;
   const src = T.srcOf(n.title), texts = [n.title, n.sub || '', ...n.items];
-  // 1순위: Claude (포인트 이름은 발음으로) → 2순위: DeepL (키가 있을 때)
-  let by = T.hasNameKey() ? await T.noticeByClaude(texts, src) : null;
+  // 1순위: 통합 LLM (포인트 이름은 발음으로) → 2순위: DeepL (키가 있을 때)
+  let by = T.hasNameKey() ? await T.noticeByLLM(texts, src) : null;
   for (const l of T.LANGS) {
     if (l === src) { tr[l] = { title: n.title, sub: n.sub, items: n.items }; continue; }
     let out = by && by[l];

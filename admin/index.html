@@ -167,7 +167,7 @@
     <!-- [ADD] 관리 설정: 알림 이메일·비밀번호 바꾸기 -->
     <div id="secSettings" class="sec" style="display:none">
       <div class="card"><h2>공지 게시판</h2>
-        <div class="muted" style="margin-bottom:8px">공지를 여러 개 저장해 두면 각자 노출 기간에 맞춰 로그인 버튼 아래 카드로 떠요(기간이 겹치면 가장 최근 것부터, 사용자가 "다시 보지 않기"를 누르면 다음 공지). 저장하면 영어·한국어·스페인어·중국어·일본어로 자동 번역돼요(DeepL).</div>
+        <div class="muted" style="margin-bottom:8px">공지를 여러 개 저장해 두면 각자 노출 기간에 맞춰 로그인 버튼 아래 카드로 떠요(기간이 겹치면 가장 최근 것부터, 사용자가 "다시 보지 않기"를 누르면 다음 공지). 저장하면 영어·한국어·스페인어·중국어·일본어로 자동 번역돼요(LLM 우선 · DeepL 폴백).</div>
         <div id="noticeList" class="muted">불러오는 중…</div>
         <div class="actions" style="margin:8px 0"><button type="button" id="noticeNew">＋ 새 공지</button></div>
         <form id="noticeForm" class="ed" style="border-color:var(--line);display:none">
@@ -505,12 +505,12 @@
       catch (_) { out.push(`✗ ${esc(region)}`); } }
     msg.innerHTML = out.join('<br>'); loadMgmt();
   });
-  // [ADD] 언어별 이름 한꺼번에 채우기(15개씩 반복)
+  // [ADD] 언어별 이름 한꺼번에 채우기(8개씩 배치 호출 반복)
   document.addEventListener('click', async (e) => {
     if (!e.target || e.target.id !== 'trAll') return;
     const btn = e.target, msg = $('trMsg'); btn.disabled = true; let total = 0;
-    try { for (let i = 0; i < 120; i++) { const j = await api('spotsTranslate', { limit: 8 }); total += j.done; msg.textContent = `채움 ${total} · 남음 ${j.remaining}`; if (!j.remaining || !j.done) break; } }
-    catch (e) { msg.textContent = String(e && e.message || e).includes('no_anthropic_key') ? 'Vercel 환경변수 ANTHROPIC_API_KEY 가 없어요' : '실패: ' + (e && e.message || e); } btn.disabled = false; loadMgmt();
+    try { for (let i = 0; i < 120; i++) { const j = await api('spotsTranslate', { limit: 8 }); total += j.done; msg.textContent = `채움 ${total} · 남음 ${j.remaining}${j.provider ? ' (' + j.provider + ')' : ''}`; if (!j.remaining || !j.done) break; } }
+    catch (e) { const em = String(e && e.message || e); msg.textContent = (em.includes('no_llm_key') || em.includes('no_anthropic_key')) ? 'Vercel 환경변수에 LLM 키(GEMINI_API_KEY / OPENAI_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY / LLM_API_KEY 중 하나)가 없어요' : '실패: ' + em; } btn.disabled = false; loadMgmt();
   });
   function alertMsg(m) { const d = document.createElement('div'); d.className = 'err'; d.textContent = '오류: ' + m; document.querySelector('.nav').after(d); setTimeout(() => d.remove(), 5000); }
   // ───────── [ADD] 회원 관리 탭 ─────────

@@ -20,11 +20,13 @@ async function translate(texts, target, source, ms) {
 }
 
 // ───────── [CHANGE] 포인트 이름은 '뜻 번역'이 아니라 '현지 발음 표기' ─────────
-//  DeepL은 Skull Cave → 해골 동굴처럼 뜻으로 옮겨서, 포인트 이름은 Claude API(환경변수 ANTHROPIC_API_KEY)로
+//  DeepL은 Skull Cave → 해골 동굴처럼 뜻으로 옮겨서, 포인트 이름은 통합 LLM 어댑터(api/_llm.js)로
 //  현지 발음대로 적어요. Skull Cave → 스컬 케이브, Pescador Island → 페스카도르섬.
-//  (공지 번역은 그대로 DeepL)
+//  (지원 환경변수: GEMINI_API_KEY / LLM_API_KEY / OPENAI_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY)
+const LLM = require('./_llm');
 const NAMES_V = 2; // 이 규칙으로 만든 자동 이름 표시. 예전(DeepL) 자동 이름은 '채우기' 때 다시 만들어요
-const hasNameKey = () => !!process.env.ANTHROPIC_API_KEY;
+const hasNameKey = () => LLM.hasLLMKey();
+const activeProvider = () => LLM.activeProvider();
 const NAME_RULES = `You write names of dive/surf/water-sports spots in other languages for a map app.
 Rules:
 1. NEVER translate the meaning of a name. Write it by sound, the way local people pronounce it
@@ -40,17 +42,53 @@ Rules:
 5. Keep text in parentheses, numbers and brand-like parts by the same rules. Keep it short (max 60 chars).
 Reply with JSON only: {"en":"...","ko":"...","es":"...","zh":"...","ja":"..."}`;
 
-async function nameByClaude(text, ms) {
-  const c = new AbortController(); const tm = setTimeout(() => c.abort(), ms || 15000);
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal: c.signal,
-      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5', max_tokens: 400, system: NAME_RULES,
-        messages: [{ role: 'user', content: 'Spot name: ' + text }] }) });
-    if (!r.ok) throw new Error('claude ' + r.status);
-    const j = await r.json(); const t = ((j.content || [])[0] || {}).text || ''; const m = t.match(/\{[\s\S]*\}/);
-    return m ? JSON.parse(m[0]) : null;
-  } catch (_) { return null; } finally { clearTimeout(tm); }
+const NAME_BATCH_RULES = NAME_RULES.replace(
+  'Reply with JSON only: {"en":"...","ko":"...","es":"...","zh":"...","ja":"..."}',
+  'Input is a JSON object mapping string IDs to spot names, e.g. {"1":"Skull Cave","2":"Pescador Island"}.\nReply with JSON only mapping each exact same string ID to {"en":"...","ko":"...","es":"...","zh":"...","ja":"..."}.'
+);
+
+async function nameByLLM(text, ms) {
+  return await LLM.completeJSON({
+    system: NAME_RULES,
+    user: 'Spot name: ' + text,
+    maxTokens: 512,
+    ms: ms || 15000,
+  });
+}
+
+async function namesByLLMBatch(entries, ms) {
+  if (!entries.length) return null;
+  const input = {};
+  for (const e of entries) input[e.id] = e.text;
+  return await LLM.completeJSON({
+    system: NAME_BATCH_RULES,
+    user: JSON.stringify(input),
+    maxTokens: Math.min(4096, Math.max(800, entries.length * 260)),
+    ms: ms || 20000,
+  });
+}
+
+function prepSpotName(spot, opt) {
+  const names = Object.assign({}, spot.names || {}), auto = Object.assign({}, spot.namesAuto || {});
+  const redo = spot.namesV !== NAMES_V || opt.force;
+  const human = LANGS.filter(l => names[l] && !auto[l]);
+  let src = human.includes('ko') ? 'ko' : human.includes('en') ? 'en' : human[0] || null;
+  const text = src ? names[src] : String(spot.name || '').trim();
+  if (!src) { src = srcOf(text); if (!names[src]) { names[src] = text; auto[src] = false; } }
+  const todo = text ? LANGS.filter(l => l !== src && !(names[l] && !auto[l]) && (!names[l] || redo)) : [];
+  return { names, auto, text, todo };
+}
+
+function applyNameOut(spot, prep, out) {
+  if (!out || typeof out !== 'object') return false;
+  let filled = false;
+  for (const l of prep.todo) {
+    const v = String(out[l] || '').trim().slice(0, 80);
+    if (v) { prep.names[l] = v; prep.auto[l] = true; filled = true; }
+  }
+  if (!filled) return false;
+  spot.names = prep.names; spot.namesAuto = prep.auto; spot.namesV = NAMES_V;
+  return true;
 }
 
 // spot.names 를 채워요. 반환: 바뀐 게 있으면 true. 원문 = 사람이 넣은 칸 중 하나(ko → en → 그 외 순), 없으면 spot.name
@@ -58,20 +96,50 @@ async function nameByClaude(text, ms) {
 async function fillNames(spot, opt) {
   opt = opt || {};
   if (!hasNameKey()) return false;
-  const names = Object.assign({}, spot.names || {}), auto = Object.assign({}, spot.namesAuto || {});
-  const redo = spot.namesV !== NAMES_V || opt.force;
-  const human = LANGS.filter(l => names[l] && !auto[l]);
-  let src = human.includes('ko') ? 'ko' : human.includes('en') ? 'en' : human[0] || null, text = src ? names[src] : String(spot.name || '').trim();
-  if (!src) { src = srcOf(text); if (!names[src]) { names[src] = text; auto[src] = false; } }
-  if (!text) return false;
-  const todo = LANGS.filter(l => l !== src && !(names[l] && !auto[l]) && (!names[l] || redo));
-  if (!todo.length) { if (spot.namesV !== NAMES_V) { spot.namesV = NAMES_V; return true; } return false; }
-  const out = await nameByClaude(text, opt.ms && opt.ms > 12000 ? opt.ms : 15000); if (!out) return false;
-  let changed = false;
-  for (const l of todo) { const v = String(out[l] || '').trim().slice(0, 80); if (v && v !== names[l]) { names[l] = v; auto[l] = true; changed = true; } }
-  spot.names = names; spot.namesAuto = auto; spot.namesV = NAMES_V;
-  return true;
+  const prep = prepSpotName(spot, opt);
+  if (!prep.text) return false;
+  if (!prep.todo.length) { if (spot.namesV !== NAMES_V) { spot.namesV = NAMES_V; return true; } return false; }
+  const out = await nameByLLM(prep.text, opt.ms && opt.ms > 12000 ? opt.ms : 15000);
+  return applyNameOut(spot, prep, out);
 }
+
+// 여러 스팟을 한 번의 LLM 호출로 묶어 채워요(무료 티어 RPM 절약 + 속도 개선). 누락분은 개별 재시도
+async function fillNamesBatch(spots, opt) {
+  opt = opt || {};
+  if (!hasNameKey() || !spots.length) return [];
+  const updated = [], todoItems = [];
+  for (let i = 0; i < spots.length; i++) {
+    const sp = spots[i];
+    const prep = prepSpotName(sp, opt);
+    if (!prep.text) continue;
+    if (!prep.todo.length) {
+      if (sp.namesV !== NAMES_V) { sp.namesV = NAMES_V; updated.push(sp); }
+      continue;
+    }
+    todoItems.push({ id: String(sp.no != null ? sp.no : i), sp, prep, text: prep.text });
+  }
+  if (!todoItems.length) return updated;
+
+  const batchOut = todoItems.length > 1
+    ? await namesByLLMBatch(todoItems, opt.ms || 20000)
+    : null;
+  const missed = [];
+  for (const item of todoItems) {
+    if (batchOut && applyNameOut(item.sp, item.prep, batchOut[item.id])) updated.push(item.sp);
+    else missed.push(item);
+  }
+  // 배치 응답이 실패했거나 일부 빠진 항목은 4개씩 개별 호출로 보완
+  for (let i = 0; i < missed.length; i += 4) {
+    await Promise.all(missed.slice(i, i + 4).map(async (item) => {
+      try {
+        const out = await nameByLLM(item.text, opt.ms || 15000);
+        if (applyNameOut(item.sp, item.prep, out)) updated.push(item.sp);
+      } catch (_) {}
+    }));
+  }
+  return updated;
+}
+
 // [CHANGE] 이전 DeepL 방식(참고용으로 남김, 안 씀)
 async function fillNamesDeepL(spot, opt) {
   opt = opt || {};
@@ -87,7 +155,7 @@ async function fillNamesDeepL(spot, opt) {
   if (changed) { spot.names = names; spot.namesAuto = auto; }
   return changed;
 }
-// ───────── [ADD] 공지 번역 (Claude API 우선, 키가 없으면 DeepL) ─────────
+// ───────── [ADD] 공지 번역 (통합 LLM API 우선, 키가 없거나 실패하면 DeepL 폴백) ─────────
 //  공지 안에 포인트·지명이 나오면 뜻으로 옮기지 않고 현지 발음대로 적어요 (Skull Cave → 스컬 케이브, 해골 동굴 X).
 const NOTICE_RULES = `You translate short notices for a diving / ocean-conditions map website into several languages.
 Translate naturally for ordinary readers (friendly, concise, same tone). Keep numbers, dates, URLs, emoji and the order of list items.
@@ -96,20 +164,17 @@ IMPORTANT: names of dive spots, beaches, islands, cities and other places are NE
 Only generic geographic words attached to a name (Island, Strait, Cape...) may be translated. Established names of well-known cities/countries use their normal name in that language.
 Chinese must be Traditional (繁體). Korean follows 외래어 표기법 for sounds.
 Input is JSON {"from":"<lang code>","texts":[...]}. Reply with JSON only: {"en":[...],"ko":[...],"es":[...],"zh":[...],"ja":[...]} where each array has exactly the same length and order as texts (leave the source language as given).`;
-async function noticeByClaude(texts, from, ms) {
-  const c = new AbortController(); const tm = setTimeout(() => c.abort(), ms || 25000);
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal: c.signal,
-      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5', max_tokens: 2000, system: NOTICE_RULES,
-        messages: [{ role: 'user', content: JSON.stringify({ from, texts }) }] }) });
-    if (!r.ok) throw new Error('claude ' + r.status);
-    const j = await r.json(); const t = ((j.content || [])[0] || {}).text || ''; const m = t.match(/\{[\s\S]*\}/);
-    const o = m ? JSON.parse(m[0]) : null; if (!o) return null;
-    const out = {};
-    for (const l of LANGS) if (Array.isArray(o[l]) && o[l].length === texts.length) out[l] = o[l].map(x => String(x == null ? '' : x).trim());
-    return out;
-  } catch (_) { return null; } finally { clearTimeout(tm); }
+async function noticeByLLM(texts, from, ms) {
+  const o = await LLM.completeJSON({
+    system: NOTICE_RULES,
+    user: JSON.stringify({ from, texts }),
+    maxTokens: 2048,
+    ms: ms || 25000,
+  });
+  if (!o) return null;
+  const out = {};
+  for (const l of LANGS) if (Array.isArray(o[l]) && o[l].length === texts.length) out[l] = o[l].map(x => String(x == null ? '' : x).trim());
+  return Object.keys(out).length ? out : null;
 }
 const needsNames = (sp) => { const n = sp.names || {}; return LANGS.some(l => !n[l]) || (sp.namesV !== NAMES_V && Object.values(sp.namesAuto || {}).some(Boolean)); };
-module.exports = { LANGS, NAMES_V, hasKey, hasNameKey, needsNames, translate, fillNames, srcOf, noticeByClaude };
+module.exports = { LANGS, NAMES_V, hasKey, hasNameKey, activeProvider, needsNames, translate, fillNames, fillNamesBatch, srcOf, noticeByLLM };
